@@ -20,13 +20,16 @@ kubeconfig*
 # Node / Python
 node_modules/
 dist/
+*.tsbuildinfo
 __pycache__/
 .venv/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 
 # Editors / OS
 .vscode/settings.json
 .idea/
 .DS_Store
 Thumbs.db
+.claude/worktrees/

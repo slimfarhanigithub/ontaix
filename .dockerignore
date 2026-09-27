@@ -1,0 +1,17 @@
+# Applies to builds whose context is the repository root (the Studio image).
+.git/
+.github/
+.claude/
+docs/
+infra/
+reference/
+deploy/
+apps/api/
+apps/gateway/
+packages/
+**/node_modules/
+**/dist/
+**/.venv/
+.env
+.env.*
+!.env.example
