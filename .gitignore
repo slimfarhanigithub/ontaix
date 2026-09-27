@@ -1,0 +1,32 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+*_override.tf
+.terraform.lock.hcl
+
+# Secrets and local config — never committed
+.env
+.env.*
+!.env.example
+*.pem
+*.pfx
+kubeconfig*
+.claude/settings.local.json
+
+# Node / Python
+node_modules/
+dist/
+__pycache__/
+.venv/
+.pytest_cache/
+.mypy_cache/
+
+# Editors / OS
+.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
