@@ -103,18 +103,31 @@ SP_OBJECT_ID="$(az identity show --name "$CI_IDENTITY" --resource-group "$STATE_
 
 # Managed identities reject concurrent federated-credential writes; these run one at a time.
 ensure_trust() {
-  local name="$1" subject="$2"
-  if ! az identity federated-credential list --identity-name "$CI_IDENTITY" --resource-group "$STATE_RG" \
-      --query "[?name=='$name'].name" -o tsv | grep -q .; then
+  local name="$1" subject="$2" current
+  current="$(az identity federated-credential list --identity-name "$CI_IDENTITY" --resource-group "$STATE_RG" \
+    --query "[?name=='$name'].subject | [0]" -o tsv)"
+  if [ -z "$current" ]; then
     echo "Creating federated credential $name"
     az identity federated-credential create --name "$name" --identity-name "$CI_IDENTITY" \
       --resource-group "$STATE_RG" --issuer "$OIDC_ISSUER" --subject "$subject" \
       --audiences "$OIDC_AUDIENCE" --output none
+  elif [ "$current" != "$subject" ]; then
+    echo "Updating federated credential $name"
+    az identity federated-credential update --name "$name" --identity-name "$CI_IDENTITY" \
+      --resource-group "$STATE_RG" --issuer "$OIDC_ISSUER" --subject "$subject" \
+      --audiences "$OIDC_AUDIENCE" --output none
   fi
 }
-ensure_trust github-azure-dev   "repo:${GITHUB_REPO}:environment:azure-dev"
-ensure_trust github-main        "repo:${GITHUB_REPO}:ref:refs/heads/main"
-ensure_trust github-pull-request "repo:${GITHUB_REPO}:pull_request"
+# GitHub's OIDC subject names the repository as owner@<owner id>/name@<repo id> once the repository
+# exists, so a renamed or re-created repository with the same name is not trusted.
+SUBJECT_REPO="$GITHUB_REPO"
+if REPO_IDS="$(gh api "repos/$GITHUB_REPO" --jq '"\(.owner.id) \(.id)"' 2>/dev/null)"; then
+  read -r OWNER_ID REPO_ID <<<"$REPO_IDS"
+  SUBJECT_REPO="${GITHUB_REPO%%/*}@${OWNER_ID}/${GITHUB_REPO#*/}@${REPO_ID}"
+fi
+ensure_trust github-azure-dev   "repo:${SUBJECT_REPO}:environment:azure-dev"
+ensure_trust github-main        "repo:${SUBJECT_REPO}:ref:refs/heads/main"
+ensure_trust github-pull-request "repo:${SUBJECT_REPO}:pull_request"
 
 echo "Granting roles to the CI identity"
 assign() { az role assignment create --assignee-object-id "$SP_OBJECT_ID" --assignee-principal-type ServicePrincipal "$@" --output none 2>/dev/null || true; }
