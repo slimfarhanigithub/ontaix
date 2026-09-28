@@ -253,14 +253,20 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     null;
   const open = () => proposals.filter((p) => p.state === 'pending' || p.state === 'half_approved');
 
+  /** A decision entry: the proposal's company and the template key of its domain product. */
+  function addProposalAudit(p: MProposal, what: string, ok: boolean): T.AuditEntry {
+    return addAudit(p.type, what, ok, p.id, p.companyId ? [p.companyId] : [], domainById(p.domainId)?.key ?? null);
+  }
+
   function addAudit(
     kind: string,
     what: string,
     ok: boolean,
     proposalId: string | null = null,
     companyIds: string[] = [],
+    domainKey: T.DomainKey | null = null,
   ): T.AuditEntry {
-    const e: T.AuditEntry = { id: audit.length + 1, at: iso(), actor: ACTOR, kind, what, ok, proposalId, companyIds };
+    const e: T.AuditEntry = { id: audit.length + 1, at: iso(), actor: ACTOR, kind, what, ok, proposalId, companyIds, domainKey };
     audit.unshift(e);
     if (audit.length > 400) audit.pop();
     return e;
@@ -1265,14 +1271,14 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       p.second = true;
       p.state = 'half_approved';
       p.why = (p.why ? p.why + ' · ' : '') + '1 of 2 approvals · a Governor must approve too';
-      const entry = addAudit(p.type, `${p.title} · 1 of 2`, true, p.id);
+      const entry = addProposalAudit(p, `${p.title} · 1 of 2`, true);
       const result = decision(p, [], entry);
       emit('proposal.half_approved', { proposal: result.proposal, artefacts: result.artefacts, cascaded: [] }, bulk);
       return result;
     }
     p.state = 'approved';
     p.decidedAt = iso();
-    const entry = addAudit(p.type, p.title, true, p.id);
+    const entry = addProposalAudit(p, p.title, true);
     const c = conceptById(p.conceptId);
     if (c && p.type !== 'attr' && p.type !== 'change') c.pending = false;
     const r = relationById(p.relationId);
@@ -1295,7 +1301,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   function reject(p: MProposal, cascaded: MProposal[]): T.DecisionResult {
     p.state = 'rejected';
     p.decidedAt = iso();
-    const entry = addAudit(p.type, p.title, false, p.id);
+    const entry = addProposalAudit(p, p.title, false);
     const t = iso();
     const c = conceptById(p.conceptId);
     if (c && p.type !== 'attr' && p.type !== 'change') {
@@ -1399,7 +1405,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         emit('proposal.created', { proposal: toProposal(p), artefacts: artefactsOf(p), cascaded: [] });
       }
     }
-    addAudit('company', `${c.name} added`, true);
+    addAudit('company', `${c.name} added`, true, null, [c.id]);
     return { company: toCompany(c), root: toConcept(root), proposals: made.map(toProposal) };
   }
 

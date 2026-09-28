@@ -321,6 +321,7 @@ export interface AuditEntry {
   ok: boolean;
   proposalId?: string | null;
   companyIds: string[];
+  domainKey?: DomainKey | null;
 }
 
 export interface DecisionResult {

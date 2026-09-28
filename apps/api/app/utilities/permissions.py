@@ -107,14 +107,21 @@ def can_read_audit(grants: tuple[Grant, ...]) -> bool:
     return any(g.role in AUDIT_ROLES for g in grants)
 
 
-def can_read_audit_entry(grants: tuple[Grant, ...], company_ids: list[uuid.UUID]) -> bool:
-    """`audit.read` in one scope that contains every listed company; an empty list is
-    tenant-wide and needs `audit.read` at any scope."""
+def can_read_audit_entry(
+    grants: tuple[Grant, ...], company_ids: list[uuid.UUID], domain_key: str | None
+) -> bool:
+    """`audit.read` in one scope that contains every listed company, or on the domain scope
+    named by `domain_key`; an empty list is tenant-wide and needs `audit.read` at any scope.
+
+    A domain scope contains no whole company, so a domain-scoped reader sees the entries of its
+    domain in every company and the tenant-wide entries, never other company-level entries.
+    """
     audit_grants = [g for g in grants if g.role in AUDIT_ROLES]
     if not company_ids:
         return bool(audit_grants)
     return any(
-        all(g.contains(Scope(company_id=company_id)) for company_id in company_ids)
+        (g.scope_kind is ScopeKind.DOMAIN and domain_key is not None and g.domain_key == domain_key)
+        or all(g.contains(Scope(company_id=company_id)) for company_id in company_ids)
         for g in audit_grants
     )
 

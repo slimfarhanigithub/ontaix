@@ -83,6 +83,17 @@ async def _equivalence(client: httpx.AsyncClient, tenant: TenantFixture) -> dict
 
 
 async def _company_auditor(session: AsyncSession, tenant: TenantFixture) -> dict[str, str]:
+    return await _auditor(session, tenant, ScopeKind.COMPANY, company_id=tenant.company_id)
+
+
+async def _auditor(
+    session: AsyncSession,
+    tenant: TenantFixture,
+    scope_kind: ScopeKind,
+    *,
+    company_id: uuid.UUID | None = None,
+    domain_key: str | None = None,
+) -> dict[str, str]:
     subject = f"auditor-{uuid.uuid4().hex[:6]}@{tenant.slug}.test"
     user = await app_user_repository.create(
         session,
@@ -90,20 +101,22 @@ async def _company_auditor(session: AsyncSession, tenant: TenantFixture) -> dict
         issuer=DEV_ISSUER,
         subject=subject,
         email=subject,
-        name="Company Auditor",
+        name=f"{scope_kind.value} auditor",
         department=None,
         company_id=None,
     )
-    group = await user_group_repository.create(session, tenant.tenant_id, "home auditors", "")
+    group = await user_group_repository.create(
+        session, tenant.tenant_id, f"auditors {uuid.uuid4().hex[:6]}", ""
+    )
     await group_member_repository.add(session, tenant.tenant_id, group.id, user.id)
     await group_role_repository.create(
         session,
         tenant_id=tenant.tenant_id,
         group_id=group.id,
         role=RoleName.AUDITOR,
-        scope_kind=ScopeKind.COMPANY,
-        scope_company_id=tenant.company_id,
-        scope_domain_key=None,
+        scope_kind=scope_kind,
+        scope_company_id=company_id,
+        scope_domain_key=domain_key,
     )
     await session.commit()
     return {"X-Ontaix-User": subject}
@@ -142,6 +155,7 @@ async def test_audit_refuses_a_company_of_another_tenant(
             ok=True,
             proposal_id=None,
             company_ids=[foreign_company],
+            domain_key=None,
         )
     await session.rollback()
 
@@ -263,3 +277,59 @@ async def test_company_removal_events_and_audit_name_the_removed_company(
         select(AuditEntry).where(AuditEntry.proposal_id == uuid.UUID(proposed.json()["id"]))
     )
     assert entry is not None and entry.company_ids == [other_id]
+
+
+async def _approved_in(
+    client: httpx.AsyncClient, tenant: TenantFixture, company: dict, label: str, domain_key: str
+) -> None:
+    created = await client.post(
+        "/concepts",
+        json={
+            "type": "concept",
+            "companyId": company["id"],
+            "parentId": company["rootId"],
+            "label": label,
+            "domainKey": domain_key,
+            "action": "has",
+        },
+        headers=tenant.builder.headers,
+    )
+    assert created.status_code == 202, created.text
+    decided = await client.post(
+        f"/proposals/{created.json()['id']}/approve", headers=tenant.governor.headers
+    )
+    assert decided.status_code == 200, decided.text
+
+
+async def test_domain_auditor_reads_its_domain_in_every_company_and_tenant_wide_entries(
+    client: httpx.AsyncClient, tenant: TenantFixture, session: AsyncSession
+) -> None:
+    other = (await add_company(client, tenant, "Domain"))["company"]
+    home = {"id": str(tenant.company_id), "rootId": str(tenant.root_id)}
+    await _approved_in(client, tenant, home, "Home deal", "sales")
+    await _approved_in(client, tenant, other, "Other deal", "sales")
+    await _approved_in(client, tenant, home, "Home press", "production")
+    finalised = await client.post("/proposals/finalise-all", headers=tenant.governor.headers)
+    assert finalised.status_code == 200, finalised.text
+    auditor = await _auditor(session, tenant, ScopeKind.DOMAIN, domain_key="sales")
+
+    audit = await client.get("/audit?pageSize=200", headers=auditor)
+
+    assert audit.status_code == 200, audit.text
+    body = audit.json()
+    whats = {e["what"] for e in body["items"]}
+    assert {"Home deal", "Other deal"} <= whats
+    assert "Home press" not in whats
+    assert f"{other['name']} added" not in whats
+    assert "finalised all scenes" in whats
+    assert all(e["domainKey"] in ("sales", None) for e in body["items"])
+    assert all(e["domainKey"] == "sales" or e["companyIds"] == [] for e in body["items"])
+    assert body["total"] == len(body["items"])
+    rows = (
+        await session.scalars(
+            select(Outbox).where(Outbox.tenant_id == tenant.tenant_id, Outbox.aggregate == "audit")
+        )
+    ).all()
+    keyed = {r.payload["what"]: r.domain_key for r in rows}
+    assert keyed["Home deal"] == "sales" and keyed["Home press"] == "production"
+    assert keyed[f"{other['name']} added"] is None

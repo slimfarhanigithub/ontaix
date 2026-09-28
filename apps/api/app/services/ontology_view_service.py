@@ -206,6 +206,15 @@ class OntologyView:
         )
         return product.template_key if product else None
 
+    def proposal_domain_key(self, proposal: Proposal) -> str | None:
+        """The template key of the proposal's domain product, or None when it has none."""
+        product = (
+            self.domain_products.get(proposal.domain_product_id)
+            if proposal.domain_product_id
+            else None
+        )
+        return product.template_key if product else None
+
     def domain_product_dto(self, product: DomainProduct) -> DomainProductDto:
         template = self.templates[product.template_key]
         members = [c for c in self.live_concepts() if c.domain_product_id == product.id]

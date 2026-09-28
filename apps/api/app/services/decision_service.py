@@ -250,6 +250,7 @@ async def _half_approve(
         True,
         proposal.id,
         company_ids=proposal_company_ids(proposal),
+        domain_key=view.proposal_domain_key(proposal),
     )
     outcome = DecisionOutcome(artefacts=view.proposal_artefacts(proposal), audit=audit)
     await emit_proposal_event(
@@ -302,6 +303,7 @@ async def _complete_approval(
         True,
         proposal.id,
         company_ids=proposal_company_ids(proposal),
+        domain_key=view.proposal_domain_key(proposal),
     )
     await emit_proposal_event(session, caller, view, proposal, "proposal.approved", outcome, bulk)
     await delete_removed_company(session, caller, view, outcome)
