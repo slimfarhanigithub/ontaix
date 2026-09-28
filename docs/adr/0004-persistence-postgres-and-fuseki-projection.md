@@ -38,7 +38,8 @@ Other persistence rules:
 - Domain product versions are integer revisions (`revision`), rendered as `v1.<revision>`.
 - Positions (`x`, `y`, `pinned`) are stored per concept and per source so that "everything persists" holds across devices; the camera, focus and panel visibility stay client-side.
 - Audit is append-only: a row trigger rejects `UPDATE` and `DELETE`, a statement trigger rejects `TRUNCATE`, and the application role holds `INSERT` and `SELECT` only on `audit_entry`. No endpoint removes audit rows. Audit rows reference actors and proposals by id without a foreign key, so deletions elsewhere never touch the log; an immutable table cannot carry referential actions to mutable tables.
-- Persisted state has no expiry; the 12-hour rule of the reference is not carried over.
+- Document imports (`document_import`, `document_import_sentence`) are the only rows with an expiry: they serve teach parses and drafts until `expires_at`, one hour after creation, answer `410 import_expired` for 24 hours after that, and a purge job running every 15 minutes deletes every import whose `expires_at` is more than 24 hours old, using the `document_import_by_expiry` index; sentences cascade. Proposals keep their own copy of the file name, media type, sentence index and position in `origin_detail`.
+- Every other persisted state has no expiry; the 12-hour rule of the reference is not carried over.
 
 ## Consequences
 

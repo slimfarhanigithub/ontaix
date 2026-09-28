@@ -1231,7 +1231,7 @@ paths:
     post:
       tags: [Proposals]
       summary: Create several proposals in order
-      description: Drafts are created in array order in one transaction so that later drafts can depend on labels introduced by earlier ones. Any refusal fails the whole batch, including `409 channel_disabled` for a `speech` draft while `voice` is off or an `importRef` draft while `importDocs` is off. A call whose drafts all cite import sentences through `importRef` spends no proposal budget, because the import charged it. Each import sentence may be drafted by one successful call only, with at most 20 drafts citing it (`409 import_sentence_used` otherwise); `404` for an import of another tenant or actor, `410 import_expired` past its expiry.
+      description: Drafts are created in array order in one transaction so that later drafts can depend on labels introduced by earlier ones. Any refusal fails the whole batch, including `409 channel_disabled` for a `speech` draft while `voice` is off or an `importRef` draft while `importDocs` is off. Drafts citing an import are charged like every other draft, one proposal unit per draft at this call; the import prepays parse units only. Each import sentence may be drafted by one successful call only (`409 import_sentence_used` otherwise); `404` for an import of another tenant or actor, `410 import_expired` past its expiry.
       operationId: createProposalBatch
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1439,7 +1439,7 @@ paths:
     post:
       tags: [Teach]
       summary: Parse a sentence into intents and proposal drafts
-      description: Pure. Runs the rule-based grammar (domain prefix, specialisation patterns, verb lexicon, list splitting, passives) against the company's current labels and returns the intents, the drafts the client may submit to `POST /proposals/batch`, and the caption outcome (`understood`, `partly_understood`, `not_understood`). Nothing is written. The sentence comes from one of the three entry paths - `text` typed in the teach bar, `text` holding a speech transcript (the Studio transcribes the microphone and sends the final transcript, so speech has no endpoint of its own), or `importRef` citing a stored sentence of a document import, whose text the server reads from the import. Every path is parsed the same way. Writes nothing to the model; a call with `importRef` increments that sentence's parse counter, and a sentence may be parsed at most 3 times (`409 import_sentence_used` after that). A call with `importRef` spends no rate budget, because the import charged it; a call with `text` spends one parse unit. Refusals - `409 channel_disabled` when `text` is sent while the `liveTeaching` setting is off, when `origin` is `speech` while the `voice` setting is off, or when `importRef` is sent while the `importDocs` setting is off. `origin` is declared by the client, so the `voice` check stops only honest clients; the Studio also hides the microphone when `voice` is off. `404` for an import of another tenant or actor, `410 import_expired` past its expiry.
+      description: Writes nothing to the model. Runs the rule-based grammar (domain prefix, specialisation patterns, verb lexicon, list splitting, passives) against the company's current labels and returns the intents, the drafts the client may submit to `POST /proposals/batch`, and the caption outcome (`understood`, `partly_understood`, `not_understood`). No ontology row is written. The sentence comes from one of the three entry paths - `text` typed in the teach bar, `text` holding a speech transcript (the Studio transcribes the microphone and sends the final transcript, so speech has no endpoint of its own), or `importRef` citing a stored sentence of a document import, whose text the server reads from the import. Every path is parsed the same way. A call with `importRef` increments that sentence's parse counter, and a sentence may be parsed at most 3 times (`409 import_sentence_used` after that). A call with `importRef` spends no parse unit, because the import charged one per sentence; a call with `text` spends one parse unit. Refusals - `409 channel_disabled` when `text` is sent while the `liveTeaching` setting is off, when `origin` is `speech` while the `voice` setting is off, or when `importRef` is sent while the `importDocs` setting is off. `origin` is declared by the client, so the `voice` check stops only honest clients; the Studio also hides the microphone when `voice` is off. `404` for an import of another tenant or actor, `410 import_expired` past its expiry.
       operationId: parseTeach
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1539,7 +1539,7 @@ paths:
     post:
       tags: [Teach]
       summary: Extract sentences from a document
-      description: The only place documents are read - the Studio never extracts text itself and loads nothing from a CDN. Accepts at most 10 MiB with media type `text/plain`, `text/markdown`, `text/csv`, `application/json`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` or `application/pdf`; anything else is `415`. Splits on sentence punctuation or newlines and keeps sentences of 13 to 399 characters. Limits - at most 2,000,000 characters of extracted text and at most 2,000 sentences; DOCX is read with no DTD and no entity expansion and at most 1,000 archive members, PDF at most 2,000 pages, and decompression stops at the extracted-text limit. Past any limit the import is refused as a whole with `413 payload_too_large` and nothing is stored. Rate limit - the whole charge happens here - one parse unit and one proposal unit per sentence, taken before anything is stored; when either budget cannot cover every sentence the import is refused as a whole with `429 rate_limited`. Each per-user and per-agent budget allows at least 2,000 units per hour, so the largest document fits. Refused with `409 channel_disabled` when the `importDocs` setting is off. Stores one `document_import` row (tenant, actor, file name, media type, SHA-256 of the file, extracted sentences with their positions) that expires one hour after creation, and returns its `importId` and the sentences. The client teaches sentence by sentence, citing each as `importRef` (`importId`, `sentenceIndex`); the import is usable only by the actor that created it, in its tenant. Expired imports answer `410 import_expired` until a purge deletes them, then `404`.
+      description: The only place documents are read - the Studio never extracts text itself and loads nothing from a CDN. Accepts at most 10 MiB with media type `text/plain`, `text/markdown`, `text/csv`, `application/json`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` or `application/pdf`; anything else is `415`. Splits on sentence punctuation or newlines and keeps sentences of 13 to 399 characters. Limits - at most 2,000,000 characters of extracted text and at most 2,000 sentences; DOCX is read with no DTD and no entity expansion and at most 1,000 archive members, PDF at most 2,000 pages, and decompression stops at the extracted-text limit. Past any limit the import is refused as a whole with `413 payload_too_large` and nothing is stored. Rate limit - one import unit is charged from the per-user or per-agent import budget before the upload is read, and the call is refused with `429 rate_limited` when that budget is empty; the unit is spent even when extraction finds no sentence. After extraction one parse unit per sentence is charged, taken before anything is stored; when the parse budget cannot cover every sentence the import is refused as a whole with `429 rate_limited` and nothing is stored. The parse budget allows at least 2,000 units per hour, so the largest document fits. Proposals created from the sentences are charged per draft when they are created. Refused with `409 channel_disabled` when the `importDocs` setting is off, and with `422 validation_failed` when the file name, after its directory part is stripped, is empty, longer than 255 characters or 1020 bytes, or holds a refused character; a file name is refused, never rewritten. Stores one `document_import` row (tenant, actor, file name, media type, SHA-256 of the file, extracted sentences with their positions) that expires one hour after creation, and returns its `importId` and the sentences. The client teaches sentence by sentence, citing each as `importRef` (`importId`, `sentenceIndex`); the import is usable only by the actor that created it, in its tenant. Expired imports answer `410 import_expired` until the purge deletes them 24 hours after expiry, then `404`.
       operationId: importSentences
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1554,6 +1554,8 @@ paths:
                   type: string
                   contentMediaType: application/octet-stream
       responses:
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '409':
           $ref: '#/components/responses/Conflict'
         '429':
@@ -1573,7 +1575,7 @@ paths:
                     format: date-time
                   fileName:
                     type: string
-                    pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]{1,255}$'
+                    pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u061c\u2066-\u2069\ufeff]{1,255}$'
                     maxLength: 255
                     description: The basename of the uploaded file name, the same value as `originDetail.fileName`.
                   origin:
@@ -1588,7 +1590,7 @@ paths:
                       fileName:
                         type: string
                         maxLength: 255
-                        pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]{1,255}$'
+                        pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u061c\u2066-\u2069\ufeff]{1,255}$'
                       mediaType:
                         type: string
                         enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf]
@@ -3427,8 +3429,8 @@ components:
           type: string
           minLength: 1
           maxLength: 255
-          pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]{1,255}$'
-          description: The basename of the uploaded file name - the server strips any directory part and refuses `/`, `\`, `:`, C0 and C1 control characters, DEL, the bidirectional controls U+200E, U+200F, U+202A to U+202E and U+2066 to U+2069, and U+FEFF. At most 255 characters and at most 1020 bytes in UTF-8 (the byte bound is checked by the server, `422`). User-supplied text - HTML-escaped wherever the server interpolates it (`Proposal.html`, captions, audit `what`), and rendered by the Studio as text only.
+          pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u061c\u2066-\u2069\ufeff]{1,255}$'
+          description: The basename of the uploaded file name - the server strips any directory part and refuses `/`, `\`, `:`, C0 and C1 control characters, DEL, the bidirectional controls U+061C, U+200E, U+200F, U+202A to U+202E and U+2066 to U+2069, and U+FEFF. At most 255 characters and at most 1020 bytes in UTF-8 (the byte bound is checked by the server, `422`). User-supplied text - HTML-escaped wherever the server interpolates it (`Proposal.html`, captions, audit `what`), and rendered by the Studio as text only.
         mediaType:
           type: string
           enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf]

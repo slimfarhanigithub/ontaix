@@ -425,7 +425,7 @@ CREATE TABLE document_import (
   CONSTRAINT document_import_file_name CHECK (
     char_length(file_name) BETWEEN 1 AND 255
     AND octet_length(file_name) <= 1020
-    AND file_name !~ '[/\\:\x01-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]'
+    AND file_name !~ '[/\\:\x01-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u061c\u2066-\u2069\ufeff]'
   ),
   CONSTRAINT document_import_media_type CHECK (media_type IN (
     'text/plain', 'text/markdown', 'text/csv', 'application/json',
@@ -434,7 +434,8 @@ CREATE TABLE document_import (
   CONSTRAINT document_import_limits CHECK (sentence_count BETWEEN 0 AND 2000 AND extracted_chars BETWEEN 0 AND 2000000),
   CONSTRAINT document_import_one_hour CHECK (expires_at = created_at + interval '1 hour')
 );
-COMMENT ON TABLE document_import IS 'One uploaded document after server-side extraction: usable for one hour by the actor that created it, in its tenant. Proposals copy the file name, media type, sentence index and position into proposal.origin_detail, so they survive the purge of expired imports.';
+COMMENT ON TABLE document_import IS 'One uploaded document after server-side extraction: usable for one hour by the actor that created it, in its tenant. A purge every 15 minutes deletes imports whose expires_at is more than 24 hours old (their sentences cascade). Proposals copy the file name, media type, sentence index and position into proposal.origin_detail, so they survive the purge.';
+CREATE INDEX document_import_by_expiry ON document_import (expires_at);
 
 CREATE TABLE document_import_sentence (
   tenant_id       uuid NOT NULL,
@@ -449,7 +450,7 @@ CREATE TABLE document_import_sentence (
   FOREIGN KEY (tenant_id, import_id) REFERENCES document_import(tenant_id, id) ON DELETE CASCADE,
   CONSTRAINT document_import_sentence_position_pair CHECK ((position_unit IS NULL) = (position_index IS NULL))
 );
-COMMENT ON TABLE document_import_sentence IS 'Extracted sentences of an import in document order. parse_count caps teach parses per sentence at 3; drafted_at is set by the one proposal call allowed to cite the sentence.';
+COMMENT ON TABLE document_import_sentence IS 'Extracted sentences of an import in document order. parse_count caps teach parses per sentence at 3 and drafted_at marks the one proposal call allowed to cite the sentence; both are claimed with a conditional UPDATE ... RETURNING inside the calling transaction, and zero rows returned means the claim failed.';
 
 CREATE TABLE proposal (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -505,7 +506,7 @@ CREATE TABLE proposal (
       AND jsonb_typeof(origin_detail -> 'fileName') = 'string'
       AND char_length(origin_detail ->> 'fileName') BETWEEN 1 AND 255
       AND octet_length(origin_detail ->> 'fileName') <= 1020
-      AND (origin_detail ->> 'fileName') !~ '[/\\:\x01-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]'
+      AND (origin_detail ->> 'fileName') !~ '[/\\:\x01-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u061c\u2066-\u2069\ufeff]'
       AND jsonb_typeof(origin_detail -> 'mediaType') = 'string'
       AND (origin_detail ->> 'mediaType') IN (
         'text/plain', 'text/markdown', 'text/csv', 'application/json',
