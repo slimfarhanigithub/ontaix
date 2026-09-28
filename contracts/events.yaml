@@ -1330,6 +1330,10 @@ components:
         kind:
           type: string
           const: bind
+        seed:
+          type: [number, 'null']
+          minimum: 0
+          exclusiveMaximum: 1
         sourceId:
           type: string
           format: uuid

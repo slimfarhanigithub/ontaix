@@ -2635,6 +2635,12 @@ components:
       type: string
       pattern: '^#[0-9a-f]{6}$'
 
+    Seed:
+      type: number
+      minimum: 0
+      exclusiveMaximum: 1
+      description: Curve bend seed in the range of `relation.seed`. The Studio draws it from its single random stream at draft time so every client draws the same curve; the server stores what it receives and draws one only when the draft carries none.
+
     DomainKey:
       type: string
       enum: [production, supply, sales, logistics, quality, maintenance, finance, people, engineering]
@@ -2869,6 +2875,8 @@ components:
         caption:
           type: string
           maxLength: 300
+        seed:
+          $ref: '#/components/schemas/Seed'
 
     SpecDraft:
       type: object
@@ -2900,6 +2908,8 @@ components:
         caption:
           type: string
           maxLength: 300
+        seed:
+          $ref: '#/components/schemas/Seed'
 
     RelationDraft:
       type: object
@@ -2935,6 +2945,8 @@ components:
         caption:
           type: string
           maxLength: 300
+        seed:
+          $ref: '#/components/schemas/Seed'
 
     RelationEdit:
       type: object
@@ -3176,6 +3188,11 @@ components:
           type: string
           const: bind
           description: Discriminates a binding from a relation in `Scene.links`.
+        seed:
+          oneOf:
+            - $ref: '#/components/schemas/Seed'
+            - type: 'null'
+          description: Stored bend seed; null when the binding was created without one, in which case the client redraws the bend from its stream on reload.
         sourceId:
           $ref: '#/components/schemas/Id'
         sourceLabel:
@@ -3208,6 +3225,8 @@ components:
         caption:
           type: string
           maxLength: 300
+        seed:
+          $ref: '#/components/schemas/Seed'
 
     BindingRow:
       type: object

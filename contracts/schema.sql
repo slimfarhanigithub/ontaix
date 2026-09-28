@@ -256,6 +256,7 @@ CREATE TABLE binding (
   concept_id  uuid NOT NULL,
   records     bigint NOT NULL DEFAULT 0 CHECK (records >= 0),
   fresh       binding_freshness NOT NULL DEFAULT '2 min',
+  seed        double precision CHECK (seed >= 0 AND seed < 1),
   pending     boolean NOT NULL DEFAULT true,
   created_at  timestamptz NOT NULL DEFAULT now(),
   updated_at  timestamptz NOT NULL DEFAULT now(),
