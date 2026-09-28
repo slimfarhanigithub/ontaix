@@ -15,9 +15,11 @@ info:
     - Lists that can grow large (concepts, relations, bindings, users, groups, agents, audit) share one pagination, search, filter and sort convention: `page`, `pageSize`, `q`, `filter[<field>]=<value>`, `sort`, `order`, and return `{ items, page, pageSize, total }`.
     - The tenant is resolved from the token; no path carries a tenant id.
 
-    Live updates: `POST /api/v1/ws/ticket` mints a one-time ticket; `GET /api/v1/ws?ticket=` upgrades to a WebSocket that carries the events described in `contracts/events.yaml`, in the envelope `{ id, type, occurredAt, tenantId, sequence, actor, bulk, payload }`. A bearer token is never accepted in a query string. Reconnect with `?since=<sequence>` to receive missed events; a `snapshot.required` message means the client must reload `GET /api/v1/scene`. Each event is delivered only to callers holding the permission its channel declares as `x-ontaix-visibility`.
+    Live updates: `POST /api/v1/ws/ticket` mints a one-time ticket; `GET /api/v1/ws?ticket=` upgrades to a WebSocket that carries the events described in `contracts/events.yaml`, in the envelope `{ id, type, occurredAt, tenantId, companyIds, sequence, actor, bulk, payload }`. A bearer token is never accepted in a query string. Reconnect with `?since=<sequence>` to receive missed events; a `snapshot.required` message means the client must reload `GET /api/v1/scene`. Each event is delivered only to callers holding the permission its channel declares as `x-ontaix-visibility` in a scope that contains every company in the event's `companyIds` (any scope when the list is empty).
 
-    Authorisation: every operation declares the permission it needs as `x-ontaix-permission` (vocabulary in ADR 0003); QA contract tests assert it. Ontology reads and events are limited to the companies the caller may read.
+    Authorisation: every operation declares the permission it needs as `x-ontaix-permission` (vocabulary in ADR 0003); QA contract tests assert it. Ontology reads and events are limited to the companies the caller may read. Anything that spans several companies (a cross-company relation, a proposal touching two companies, its events and its audit entries) is returned only to a caller who may read every one of them.
+
+    Contention: every operation that creates or decides a proposal serialises on the tenant's decision lock. When that lock, or any row lock the same transaction waits for afterwards, is not granted within the lock timeout, or the transaction ends in a deadlock or serialisation failure, the operation writes nothing and answers `503` with code `busy` and a `Retry-After` header; the client retries the same request. `unavailable` is reserved for a capability or dependency that is down, which clients do not retry automatically.
 
     Rate limits: operations that parse text, import documents, create proposals or open outbound connections return `429` with code `rate_limited` when a per-user or per-agent budget is exceeded; the `Retry-After` header says when to retry.
 
@@ -217,7 +219,7 @@ paths:
     get:
       tags: [Scene]
       summary: Live-update WebSocket
-      description: Upgrades to a WebSocket. Authentication is the one-time ticket from `POST /ws/ticket`; the bearer schemes do not apply here and a token in the query string is refused with `401`. Every message is an `Envelope` from `contracts/events.yaml`; the server delivers only events whose channel `x-ontaix-visibility` permission the caller holds, and ontology events only for companies the caller may read. Pass `since` to resume; a `snapshot.required` message means the gap is too old and the client must reload `GET /scene`.
+      description: Upgrades to a WebSocket. Authentication is the one-time ticket from `POST /ws/ticket`; the bearer schemes do not apply here and a token in the query string is refused with `401`. Every message is an `Envelope` from `contracts/events.yaml`; the server delivers an event only when the caller holds its channel's `x-ontaix-visibility` permission in a scope that contains every company in the event's `companyIds`; an empty `companyIds` is tenant-wide. Pass `since` to resume; a `snapshot.required` message means the gap is too old and the client must reload `GET /scene`.
       operationId: connectWs
       x-ontaix-permission: model.read
       security: []
@@ -295,6 +297,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /companies/{companyId}:
     parameters:
@@ -334,6 +338,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /domain-products:
     get:
@@ -479,6 +485,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /concepts/{conceptId}:
     parameters:
@@ -532,6 +540,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
     delete:
       tags: [Concepts]
       summary: Propose deleting a concept and its descendants
@@ -549,6 +559,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /concepts/{conceptId}/lineage:
     parameters:
@@ -620,6 +632,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   # ---------------------------------------------------------------- Relations
   /relations:
@@ -681,6 +695,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /relations/{relationId}:
     parameters:
@@ -728,6 +744,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
     delete:
       tags: [Relations]
       summary: Propose removing a relation
@@ -745,6 +763,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /equivalences:
     get:
@@ -801,6 +821,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   # ---------------------------------------------------------------- Sources
   /connectors:
@@ -906,6 +928,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /sources/refresh-all:
     post:
@@ -997,6 +1021,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /sources/{sourceId}/enable:
     parameters:
@@ -1108,6 +1134,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /bindings/{bindingId}:
     parameters:
@@ -1132,6 +1160,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   # ---------------------------------------------------------------- Proposals
   /proposals:
@@ -1194,6 +1224,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /proposals/batch:
     post:
@@ -1237,6 +1269,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /proposals/approve-all:
     post:
@@ -1256,6 +1290,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /proposals/reject-all:
     post:
@@ -1275,6 +1311,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /proposals/finalise-all:
     post:
@@ -1294,6 +1332,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /proposals/{proposalId}:
     parameters:
@@ -1341,6 +1381,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /proposals/{proposalId}/second-approve:
     parameters:
@@ -1366,6 +1408,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /proposals/{proposalId}/reject:
     parameters:
@@ -1401,6 +1445,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   # ---------------------------------------------------------------- Teach
   /teach/parse:
@@ -2180,6 +2226,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /appearance:
     get:
@@ -2248,6 +2296,7 @@ paths:
     get:
       tags: [Audit]
       summary: Audit log, newest first
+      description: Returns only the entries the caller may read. An entry is readable when the caller holds `audit.read` in a scope that contains every company in the entry's `companyIds`; an entry with an empty `companyIds` is tenant-wide and readable with `audit.read` at any scope. A company-scoped Auditor or Governor therefore never sees an entry naming another company, including a company addition or a cross-company decision. `total` counts readable entries only.
       operationId: listAudit
       x-ontaix-permission: audit.read
       parameters:
@@ -2346,6 +2395,8 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '409':
           $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   /demo/reset:
     post:
@@ -2373,6 +2424,8 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '409':
           $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Busy'
 
 components:
   securitySchemes:
@@ -2554,6 +2607,18 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
 
+    Busy:
+      description: The tenant's decision lock or a row lock was not granted within the lock timeout, or the transaction hit a deadlock or serialisation failure (code `busy`). Nothing was written; retry the same request after `Retry-After`.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
   schemas:
     Problem:
       type: object
@@ -2605,6 +2670,7 @@ components:
             - duplicate_attribute
             - duplicate_agent
             - unavailable
+            - busy
         errors:
           type: array
           items:
@@ -4249,7 +4315,8 @@ components:
 
     AuditEntry:
       type: object
-      required: [id, at, actor, kind, what, ok]
+      description: One audit row. `companyIds` is its audience; `GET /audit` and the `audit.appended` event apply the same read rule.
+      required: [id, at, actor, kind, what, ok, companyIds]
       properties:
         id:
           type: integer
@@ -4269,6 +4336,12 @@ components:
         proposalId:
           type: [string, 'null']
           format: uuid
+        companyIds:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+          description: Every company whose name, labels or artefacts the entry mentions - both companies of a cross-company proposal, the added company of a `company` entry, the company of a role scope in a `roles` entry. Empty means tenant-wide. Readable by a caller holding `audit.read` in a scope containing every listed company; an empty list needs `audit.read` at any scope.
 
     DemoScene:
       type: object
