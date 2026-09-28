@@ -1,6 +1,7 @@
 /**
  * Typed client of the Ontaix API. The base URL comes from `VITE_ONTAIX_API_URL`; without one
- * the Studio talks to `/api/v1`, which the in-browser mock answers.
+ * the Studio talks to `/api/v1`, which the in-browser mock answers in dev and test-hook builds.
+ * Against a real API, `connectRealApi` (./real) adds the live events the responses carry.
  */
 import {
   ApiError,
@@ -26,10 +27,25 @@ import {
 
 export const API_BASE: string = (import.meta.env.VITE_ONTAIX_API_URL as string | undefined) || '/api/v1';
 
+/**
+ * Dev builds only: the user the API's dev environment resolves from `X-Ontaix-User`. `?user=<email>`
+ * overrides `VITE_ONTAIX_DEV_USER`, whose default is the seed's Governor. A production build
+ * compiles this away and sends no identity header.
+ */
+const IDENTITY: Record<string, string> = import.meta.env.DEV ? devIdentity() : {};
+
+function devIdentity(): Record<string, string> {
+  const user =
+    new URLSearchParams(location.search).get('user') ||
+    (import.meta.env.VITE_ONTAIX_DEV_USER as string | undefined) ||
+    'hugo.brandt@northwind.com';
+  return { 'X-Ontaix-User': user };
+}
+
 async function call<R>(method: string, path: string, body?: unknown): Promise<R> {
   const res = await fetch(API_BASE + path, {
     method,
-    headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+    headers: body === undefined ? { ...IDENTITY } : { ...IDENTITY, 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) {

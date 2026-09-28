@@ -14,6 +14,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.auth import DEV_USER_HEADER
 from app.clients.db_client import dispose_engine
 from app.config import get_settings
+
+# Every ontology table has a foreign key to `tenant`; its mapping must be registered before the
+# first flush, and no request path imports it otherwise.
+from app.models.storage import tenant as _tenant_mapping  # noqa: F401
 from app.routers import (
     audit,
     companies,

@@ -371,8 +371,23 @@ class StudioStore {
         this.ui.appearance = e.payload.appearance as Appearance;
         this.bump();
         break;
+      case 'snapshot.required':
+        void this.reloadScene();
+        break;
       default:
         break;
+    }
+  }
+
+  /** Brings the whole canvas back to the server snapshot, keeping the camera and the story position. */
+  async reloadScene(): Promise<void> {
+    try {
+      const scene = await api.getScene();
+      const sceneIdx = this.ui.sceneIdx;
+      this.applyScene(scene);
+      this.setScene(sceneIdx);
+    } catch (err) {
+      this.refused(err);
     }
   }
 
@@ -698,7 +713,7 @@ class StudioStore {
     try {
       await api.approve(p.id);
     } catch (err) {
-      if (!(err instanceof ApiError && err.status === 409)) throw err;
+      if (!(err instanceof ApiError && err.status === 409)) this.refused(err);
     }
   }
 
@@ -706,18 +721,32 @@ class StudioStore {
     try {
       await api.reject(p.id);
     } catch (err) {
-      if (!(err instanceof ApiError && err.status === 409)) throw err;
+      if (!(err instanceof ApiError && err.status === 409)) this.refused(err);
     }
   }
 
   async approveAll(): Promise<void> {
-    const res = await api.approveAll();
-    this.caption('Approved', res.caption || 'All pending proposals are now part of the model.');
+    try {
+      const res = await api.approveAll();
+      this.caption('Approved', res.caption || 'All pending proposals are now part of the model.');
+    } catch (err) {
+      this.refused(err);
+    }
   }
 
   async rejectAll(): Promise<void> {
-    const res = await api.rejectAll();
-    this.caption('Rejected', res.caption || 'All pending proposals were discarded.');
+    try {
+      const res = await api.rejectAll();
+      this.caption('Rejected', res.caption || 'All pending proposals were discarded.');
+    } catch (err) {
+      this.refused(err);
+    }
+  }
+
+  /** An API refusal (403, 503 for a change kind not served yet, …) as the reference's toast; anything else is rethrown. */
+  refused(err: unknown): void {
+    if (!(err instanceof ApiError)) throw err;
+    this.toast2('Refused', err.problem.detail || err.problem.title);
   }
 
   // ------------------------------------------------------------ toggles

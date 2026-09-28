@@ -36,4 +36,5 @@ Thumbs.db
 tests/screenshots/output/
 tests/screenshots/last-run.log
 tests/screenshots/test-results/
+tests/e2e/output/
 playwright-report/

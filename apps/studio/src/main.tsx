@@ -13,6 +13,7 @@ import './styles/reference.css';
 const TEST_HOOKS = import.meta.env.DEV || import.meta.env.VITE_ONTAIX_TEST_HOOKS === 'true';
 
 async function start(): Promise<void> {
+  let mock = false;
   if (TEST_HOOKS) {
     const params = new URLSearchParams(location.search);
     const { seedFromLocation, setSource, traceDraws } = await import('./runtime/rng');
@@ -26,10 +27,15 @@ async function start(): Promise<void> {
       (window as unknown as { __ontaix: unknown }).__ontaix = { store, draws };
     }
     // Without a configured API the in-browser mock answers; `?api=mock` forces it.
-    if (!import.meta.env.VITE_ONTAIX_API_URL || params.get('api') === 'mock') {
+    mock = !import.meta.env.VITE_ONTAIX_API_URL || params.get('api') === 'mock';
+    if (mock) {
       const { installMockFetch } = await import('./api/mock/install');
       installMockFetch(API_BASE);
     }
+  }
+  if (!mock) {
+    const { connectRealApi } = await import('./api/real');
+    connectRealApi();
   }
   const container = document.getElementById('root');
   if (!container) {

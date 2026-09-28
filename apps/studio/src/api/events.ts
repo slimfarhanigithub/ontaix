@@ -31,7 +31,9 @@ export type EventType =
   | 'settings.changed'
   | 'appearance.changed'
   | 'view_state.changed'
-  | 'demo.scene_played';
+  | 'demo.scene_played'
+  /** Control message: the client's state is behind and must reload `GET /scene`. */
+  | 'snapshot.required';
 
 export interface Envelope<P = Record<string, unknown>> {
   id: string;

@@ -430,7 +430,7 @@ export async function teach(text: string, fromImport = false): Promise<void> {
   const result = await api.teachParse({ companyId: co.sid, text, fromImport });
   if (result.outcome === 'scene') return playScene(store.ui.sceneIdx + 1);
   if (result.outcome === 'understood') {
-    await api.createProposalBatch(result.drafts.map(withSeed)).catch(() => undefined);
+    await api.createProposalBatch(result.drafts.map(withSeed)).catch((err) => store.refused(err));
     const n = result.statements?.length ?? result.drafts.length;
     store.caption(`Understood ${n === 1 ? 'one statement' : n + ' statements'}`, result.caption);
     return;

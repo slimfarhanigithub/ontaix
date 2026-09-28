@@ -1,0 +1,6 @@
+{
+  "name": "ontaix-e2e",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end test of the Studio against the real API on the local stack (scripts/dev-stack.mjs). Run with `pnpm --filter studio test:e2e`; dependencies come from apps/studio."
+}
