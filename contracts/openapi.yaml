@@ -53,9 +53,9 @@ tags:
   - name: Sources
     description: Connector catalogue, discovery, connected systems and bindings. Adding, removing, binding and unbinding are proposals; enable, disable and reconfigure are immediate.
   - name: Proposals
-    description: The approval queue - create, list, approve, second-approve, reject with cascade, approve-all, reject-all, finalise-all.
+    description: The approval queue - create, list, approve, second-approve, reject with cascade, approve-all, reject-all.
   - name: Teach
-    description: Rule-based teach parser, sentence import and action suggestion. The parser only drafts; it never writes.
+    description: The three ways content enters the model - text typed in the teach bar, speech from the teach bar microphone (transcribed on the client and sent as text), and documents (text extracted server-side). All three end in the same parser and produce proposal drafts; nothing is written without approval.
   - name: Identity
     description: Current user, native users directory, groups, memberships, roles and scopes.
   - name: Agents
@@ -64,8 +64,6 @@ tags:
     description: Tenant settings, the companies-may-interact switch and appearance.
   - name: Audit
     description: Append-only audit log.
-  - name: Demo
-    description: Scripted story layer, available only when the tenant flag demoStory is on.
   - name: System
     description: Health.
 
@@ -133,7 +131,7 @@ paths:
   /view-state:
     put:
       tags: [Scene]
-      summary: Store the shared view state (coverage flag, scene index)
+      summary: Store the shared view state (coverage flag)
       operationId: putViewState
       x-ontaix-permission: view.write
       requestBody:
@@ -1200,7 +1198,7 @@ paths:
     post:
       tags: [Proposals]
       summary: Create one proposal from a typed draft
-      description: The generic entry used by the teach bar, the MCP gateway and the demo story. Same refusals as the resource endpoints.
+      description: The generic entry used by the teach bar (typed text or a speech transcript), document import and the MCP gateway. Same refusals as the resource endpoints.
       operationId: createProposal
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1242,10 +1240,15 @@ paths:
               type: object
               required: [drafts]
               properties:
+                origin:
+                  $ref: '#/components/schemas/Origin'
+                originDetail:
+                  $ref: '#/components/schemas/OriginDetail'
                 drafts:
                   type: array
                   minItems: 1
                   maxItems: 200
+                  description: A draft's own `origin` and `originDetail` win over the batch-level values, which apply to every draft that sets none.
                   items:
                     $ref: '#/components/schemas/ProposalDraft'
       responses:
@@ -1307,27 +1310,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkResult'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '503':
-          $ref: '#/components/responses/Busy'
-
-  /proposals/finalise-all:
-    post:
-      tags: [Proposals]
-      summary: Play the remaining story and approve everything
-      description: Requires `proposal.finalise`, held by Governor at tenant scope, because it creates proposals for every company and approves everything. When `demoStory` is on, plays every remaining scene server-side, then runs approve-all rounds until nothing is ready. When the story is off it equals approve-all. Audited as `demo · finalised all scenes`.
-      operationId: finaliseAll
-      x-ontaix-permission: proposal.finalise
-      responses:
-        '200':
-          description: The finalise summary used by the caption.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FinaliseResult'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1453,7 +1435,7 @@ paths:
     post:
       tags: [Teach]
       summary: Parse a sentence into intents and proposal drafts
-      description: Pure. Runs the rule-based grammar (domain prefix, specialisation patterns, verb lexicon, list splitting, passives) against the company's current labels and returns the intents, the drafts the client may submit to `POST /proposals/batch`, and the caption outcome (`understood`, `partly_understood`, `not_understood`). Nothing is written. When `demoStory` is on and the text matches the next scene, `scene` is returned instead of drafts.
+      description: Pure. Runs the rule-based grammar (domain prefix, specialisation patterns, verb lexicon, list splitting, passives) against the company's current labels and returns the intents, the drafts the client may submit to `POST /proposals/batch`, and the caption outcome (`understood`, `partly_understood`, `not_understood`). Nothing is written. `text` is one sentence from any of the three entry paths - typed in the teach bar, a speech transcript (the Studio transcribes the microphone and sends the final transcript as text, so speech has no endpoint of its own), or a sentence returned by `POST /import/sentences`. Every path is parsed the same way.
       operationId: parseTeach
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1471,10 +1453,10 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 400
-                fromImport:
-                  type: boolean
-                  default: false
-                  description: True when the sentence comes from a document import; story interception is skipped.
+                origin:
+                  $ref: '#/components/schemas/Origin'
+                originDetail:
+                  $ref: '#/components/schemas/OriginDetail'
       responses:
         '429':
           $ref: '#/components/responses/RateLimited'
@@ -1568,14 +1550,27 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [fileName, sentences]
+                required: [fileName, sentences, origin, originDetail]
                 properties:
                   fileName:
                     type: string
+                  origin:
+                    type: string
+                    const: document
+                  originDetail:
+                    $ref: '#/components/schemas/OriginDetail'
+                    description: File name and media type without `position`; the client adds each sentence's `position` when it sends that sentence to `POST /teach/parse`.
                   sentences:
                     type: array
                     items:
                       type: string
+                  positions:
+                    type: array
+                    description: Present when extraction knows where sentences are; same length and order as `sentences`, null where unknown.
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/DocumentPosition'
+                        - type: 'null'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2326,107 +2321,6 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
-  # ---------------------------------------------------------------- Demo
-  /demo/scenes:
-    get:
-      tags: [Demo]
-      summary: The scene list and the current index
-      operationId: listDemoScenes
-      x-ontaix-permission: model.read
-      responses:
-        '200':
-          description: Scenes with name, placeholder sentence and match pattern.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [sceneIdx, scenes]
-                properties:
-                  sceneIdx:
-                    type: integer
-                  scenes:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/DemoScene'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          description: The demo story is off for this tenant.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-
-  /demo/next:
-    post:
-      tags: [Demo]
-      summary: Play the next scene
-      description: Creates the scene's proposals server-side in order and pacing; the Studio animates them from the events. Returns the scene played.
-      operationId: playNextDemoScene
-      x-ontaix-permission: demo.run
-      responses:
-        '200':
-          description: The scene that was played and the new index.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [sceneIdx, scene, proposals]
-                properties:
-                  sceneIdx:
-                    type: integer
-                  scene:
-                    $ref: '#/components/schemas/DemoScene'
-                  proposals:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Proposal'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          description: The demo story is off for this tenant.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '503':
-          $ref: '#/components/responses/Busy'
-
-  /demo/reset:
-    post:
-      tags: [Demo]
-      summary: Restart the story
-      description: Removes every company and proposal of the demo tenant and rebuilds the home company at scene 0. The audit log is never touched; the reset itself is appended as `demo · story restarted`. Refused outside dev tenants (`409 not_demo_tenant`).
-      operationId: resetDemo
-      x-ontaix-permission: demo.run
-      responses:
-        '200':
-          description: The fresh scene.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Scene'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          description: The demo story is off for this tenant.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '503':
-          $ref: '#/components/responses/Busy'
-
 components:
   securitySchemes:
     bearerAuth:
@@ -2662,8 +2556,6 @@ components:
             - confirmation_required
             - confirmation_mismatch
             - duplicate_role
-            - not_demo_tenant
-            - story_finished
             - payload_too_large
             - unsupported_media_type
             - rate_limited
@@ -2914,6 +2806,10 @@ components:
         type:
           type: string
           const: concept
+        origin:
+          $ref: '#/components/schemas/Origin'
+        originDetail:
+          $ref: '#/components/schemas/OriginDetail'
         companyId:
           $ref: '#/components/schemas/Id'
         parentId:
@@ -2955,6 +2851,10 @@ components:
         type:
           type: string
           const: spec
+        origin:
+          $ref: '#/components/schemas/Origin'
+        originDetail:
+          $ref: '#/components/schemas/OriginDetail'
         companyId:
           $ref: '#/components/schemas/Id'
         parentId:
@@ -2992,6 +2892,10 @@ components:
         type:
           type: string
           const: relation
+        origin:
+          $ref: '#/components/schemas/Origin'
+        originDetail:
+          $ref: '#/components/schemas/OriginDetail'
         companyId:
           $ref: '#/components/schemas/Id'
         aId:
@@ -3079,6 +2983,10 @@ components:
         type:
           type: string
           const: source
+        origin:
+          $ref: '#/components/schemas/Origin'
+        originDetail:
+          $ref: '#/components/schemas/OriginDetail'
         companyId:
           $ref: '#/components/schemas/Id'
         label:
@@ -3280,6 +3188,10 @@ components:
         type:
           type: string
           const: bind
+        origin:
+          $ref: '#/components/schemas/Origin'
+        originDetail:
+          $ref: '#/components/schemas/OriginDetail'
         sourceId:
           $ref: '#/components/schemas/Id'
         conceptIds:
@@ -3346,6 +3258,10 @@ components:
         type:
           type: string
           const: attr
+        origin:
+          $ref: '#/components/schemas/Origin'
+        originDetail:
+          $ref: '#/components/schemas/OriginDetail'
         conceptId:
           $ref: '#/components/schemas/Id'
         sourceId:
@@ -3373,6 +3289,10 @@ components:
         type:
           type: string
           const: change
+        origin:
+          $ref: '#/components/schemas/Origin'
+        originDetail:
+          $ref: '#/components/schemas/OriginDetail'
         changeKind:
           type: string
           enum: [rename, delete_concept, edit_relation, remove_relation, unbind, rename_source, remove_source, remove_company, resolve_conflict]
@@ -3429,9 +3349,43 @@ components:
           attr: '#/components/schemas/AttributeDraft'
           change: '#/components/schemas/ChangeDraft'
 
+    Origin:
+      type: string
+      enum: [text, speech, document]
+      default: text
+      description: How the content of a draft or proposal entered Ontaix - `text` typed in the teach bar or any dialog, `speech` from the teach bar microphone (sent as the final transcript), `document` from `POST /import/sentences`. Optional on input with default `text`; always present on output.
+
+    OriginDetail:
+      type: object
+      description: Where a `document` draft or proposal came from. Allowed only when `origin` is `document` (`422` otherwise), and optional even then.
+      required: [fileName, mediaType]
+      properties:
+        fileName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        mediaType:
+          type: string
+          enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf]
+        position:
+          $ref: '#/components/schemas/DocumentPosition'
+
+    DocumentPosition:
+      type: object
+      description: Where in the document the sentence was found, when extraction knows it - a 1-based page or a 1-based paragraph.
+      required: [unit, index]
+      properties:
+        unit:
+          type: string
+          enum: [page, paragraph]
+        index:
+          type: integer
+          minimum: 1
+          maximum: 100000
+
     Proposal:
       type: object
-      required: [id, type, state, title, color, html, ready, deps, proposer, createdAt, relationIds, bindingIds, approvals]
+      required: [id, type, state, title, color, html, ready, deps, proposer, origin, originDetail, createdAt, relationIds, bindingIds, approvals]
       properties:
         id:
           $ref: '#/components/schemas/Id'
@@ -3499,6 +3453,13 @@ components:
           format: uuid
         proposer:
           $ref: '#/components/schemas/Actor'
+        origin:
+          $ref: '#/components/schemas/Origin'
+        originDetail:
+          oneOf:
+            - $ref: '#/components/schemas/OriginDetail'
+            - type: 'null'
+          description: Set only when `origin` is `document` and the draft carried it.
         approvals:
           type: array
           maxItems: 2
@@ -3594,28 +3555,9 @@ components:
         caption:
           type: string
 
-    FinaliseResult:
-      type: object
-      required: [companies, concepts, bound, equivalences, approved, scenesPlayed]
-      properties:
-        companies:
-          type: integer
-        concepts:
-          type: integer
-        bound:
-          type: integer
-        equivalences:
-          type: integer
-        approved:
-          type: integer
-        scenesPlayed:
-          type: integer
-        caption:
-          type: string
-
     Scene:
       type: object
-      required: [sequence, serverTime, companies, nodes, links, proposals, settings, appearance, viewState, connectors, demoStory]
+      required: [sequence, serverTime, companies, nodes, links, proposals, settings, appearance, viewState, connectors]
       properties:
         sequence:
           type: integer
@@ -3670,26 +3612,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ConnectorType'
-        demoStory:
-          type: object
-          required: [enabled]
-          properties:
-            enabled:
-              type: boolean
-            sceneIdx:
-              type: integer
-            sceneCount:
-              type: integer
 
     ViewState:
       type: object
-      required: [coverage, sceneIdx]
+      required: [coverage]
       properties:
         coverage:
           type: boolean
-        sceneIdx:
-          type: integer
-          minimum: 0
 
     NodePosition:
       type: object
@@ -3826,11 +3755,17 @@ components:
 
     TeachResult:
       type: object
-      required: [outcome, domainKey, intents, drafts, caption]
+      required: [outcome, domainKey, intents, drafts, caption, origin, originDetail]
       properties:
+        origin:
+          $ref: '#/components/schemas/Origin'
+        originDetail:
+          oneOf:
+            - $ref: '#/components/schemas/OriginDetail'
+            - type: 'null'
         outcome:
           type: string
-          enum: [understood, partly_understood, not_understood, scene]
+          enum: [understood, partly_understood, not_understood]
         domainKey:
           oneOf:
             - $ref: '#/components/schemas/DomainKey'
@@ -3842,7 +3777,7 @@ components:
             $ref: '#/components/schemas/Intent'
         drafts:
           type: array
-          description: Proposal drafts in submission order, ready for `POST /proposals/batch`.
+          description: Proposal drafts in submission order, ready for `POST /proposals/batch`; each carries the request's `origin` and `originDetail`.
           items:
             $ref: '#/components/schemas/ProposalDraft'
         statements:
@@ -3852,10 +3787,6 @@ components:
             type: string
         caption:
           type: string
-        scene:
-          oneOf:
-            - $ref: '#/components/schemas/DemoScene'
-            - type: 'null'
 
     Intent:
       type: object
@@ -3894,7 +3825,7 @@ components:
           description: Coarse permissions the Studio uses to enable buttons; the server re-checks every call.
           items:
             type: string
-            enum: [model.read, view.write, proposal.create, proposal.approve, proposal.second_approve, proposal.reject, proposal.finalise, settings.write, appearance.write, company.create, source.manage, group.manage, directory.read, agent.manage, audit.read, demo.run]
+            enum: [model.read, view.write, proposal.create, proposal.approve, proposal.second_approve, proposal.reject, settings.write, appearance.write, company.create, source.manage, group.manage, directory.read, agent.manage, audit.read]
 
     User:
       type: object
@@ -4132,7 +4063,7 @@ components:
 
     Settings:
       type: object
-      required: [voice, importDocs, liveTeaching, everyoneTeaches, approvalRequired, twoApprovers, autoAttrs, notifyOwners, multiCompany, crossCompany, animations, coverageDefault, legend, readOnlyConnectors, refresh, agentAccess, costCap, demoStory]
+      required: [voice, importDocs, liveTeaching, everyoneTeaches, approvalRequired, twoApprovers, autoAttrs, notifyOwners, multiCompany, crossCompany, animations, coverageDefault, legend, readOnlyConnectors, refresh, agentAccess, costCap]
       properties:
         voice:
           type: boolean
@@ -4171,8 +4102,6 @@ components:
         agentAccess:
           type: boolean
         costCap:
-          type: boolean
-        demoStory:
           type: boolean
         egressAllowlist:
           type: array
@@ -4216,8 +4145,6 @@ components:
         agentAccess:
           type: boolean
         costCap:
-          type: boolean
-        demoStory:
           type: boolean
         egressAllowlist:
           type: array
@@ -4316,7 +4243,7 @@ components:
     AuditEntry:
       type: object
       description: One audit row. `companyIds` is its audience; `GET /audit` and the `audit.appended` event apply the same read rule.
-      required: [id, at, actor, kind, what, ok, companyIds]
+      required: [id, at, actor, kind, what, ok, companyIds, origin]
       properties:
         id:
           type: integer
@@ -4327,7 +4254,7 @@ components:
           $ref: '#/components/schemas/Actor'
         kind:
           type: string
-          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `demo`, `list`, `appearance`.
+          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`.
         what:
           type: string
         ok:
@@ -4336,6 +4263,11 @@ components:
         proposalId:
           type: [string, 'null']
           format: uuid
+        origin:
+          oneOf:
+            - $ref: '#/components/schemas/Origin'
+            - type: 'null'
+          description: The origin of the proposal the entry records; null for every entry without a proposal.
         companyIds:
           type: array
           uniqueItems: true
@@ -4347,18 +4279,3 @@ components:
             - $ref: '#/components/schemas/DomainKey'
             - type: 'null'
           description: Template key of the domain product of the proposal the entry records, when that proposal has one; null for every other entry. A caller holding `audit.read` on the domain scope with this key reads the entry whatever its `companyIds`, because that scope covers the domain product in every company and matches the proposals it may decide.
-
-    DemoScene:
-      type: object
-      required: [index, name, say, match]
-      properties:
-        index:
-          type: integer
-        name:
-          type: string
-        say:
-          type: string
-          description: The placeholder sentence shown in the teach input.
-        match:
-          type: string
-          description: Case-insensitive regular expression that intercepts a typed sentence.

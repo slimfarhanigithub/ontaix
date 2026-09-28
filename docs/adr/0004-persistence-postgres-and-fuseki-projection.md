@@ -37,8 +37,8 @@ Other persistence rules:
 - Tenant isolation is enforced by the schema, not only by application code: every table carries `tenant_id`, every parent table exposes `UNIQUE (tenant_id, id)`, and every child foreign key is composite on `(tenant_id, <parent>_id)`, so a relation, binding, approval or membership can never point at another tenant's row. `tenant_identity_provider` maps a token's `(issuer, audience)` to exactly one tenant, which is how a first-time sign-in lands in the right tenant. Row-level security can be switched on later without a redesign.
 - Domain product versions are integer revisions (`revision`), rendered as `v1.<revision>`.
 - Positions (`x`, `y`, `pinned`) are stored per concept and per source so that "everything persists" holds across devices; the camera, focus and panel visibility stay client-side.
-- Audit is append-only: a row trigger rejects `UPDATE` and `DELETE`, a statement trigger rejects `TRUNCATE`, and the application role holds `INSERT` and `SELECT` only on `audit_entry`. No endpoint removes audit rows; the demo reset keeps the log and appends `demo · story restarted`. Audit rows reference actors and proposals by id without a foreign key, so deletions elsewhere never touch the log; an immutable table cannot carry referential actions to mutable tables.
-- The demo state has no expiry; the 12-hour rule of the reference is not carried over.
+- Audit is append-only: a row trigger rejects `UPDATE` and `DELETE`, a statement trigger rejects `TRUNCATE`, and the application role holds `INSERT` and `SELECT` only on `audit_entry`. No endpoint removes audit rows. Audit rows reference actors and proposals by id without a foreign key, so deletions elsewhere never touch the log; an immutable table cannot carry referential actions to mutable tables.
+- Persisted state has no expiry; the 12-hour rule of the reference is not carried over.
 
 ## Consequences
 

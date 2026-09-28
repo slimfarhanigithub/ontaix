@@ -41,9 +41,9 @@ Roles and what they allow:
 |---|---|---|
 | Owner | company, domain | read; propose in scope; approve, second-approve and reject proposals in scope |
 | Builder | tenant, company, domain | read; propose in scope; bind and connect sources; never approve |
-| Governor | tenant, company, domain | read; approve, second-approve and reject `change` proposals in scope; resolve conflicts; finalise-all at tenant scope |
+| Governor | tenant, company, domain | read; approve, second-approve and reject `change` proposals in scope; resolve conflicts |
 | Member | tenant, company | read; teach when `everyoneTeaches` is on (proposes) |
-| Administrator | tenant only | tenant settings, appearance, sources, companies, groups, roles, agents, cost, demo controls |
+| Administrator | tenant only | tenant settings, appearance, sources, companies, groups, roles, agents, cost |
 | Auditor | tenant, company, domain | read the model, the directory and the audit log; time-boxed by `valid_until` on the group |
 | Agent | own row | read the certified model through the gateway; propose in its own scope |
 
@@ -54,12 +54,11 @@ Permissions are a fixed vocabulary. Every operation in `contracts/openapi.yaml` 
 | `none` | nobody is checked: the operation needs no token (the liveness probe only) |
 | `authenticated` | any valid user or agent token, no role required (`GET /me` only) |
 | `model.read` | any role in the company's scope; Auditor; Agent in scope |
-| `view.write` | any role with `model.read` in the company (positions, coverage flag, scene index, domain visibility) |
+| `view.write` | any role with `model.read` in the company (positions, coverage flag, domain visibility) |
 | `proposal.create` | Owner, Builder or Agent in the proposal's scope; Member when `everyoneTeaches` is on |
 | `proposal.approve`, `proposal.reject` | Owner in the proposal's scope, or Governor in an enclosing scope |
 | `proposal.second_approve` | Governor or Owner in scope, and a different user from the first approver |
-| `proposal.finalise` | Governor at tenant scope |
-| `settings.write`, `appearance.write`, `company.create`, `source.manage`, `group.manage`, `agent.manage`, `demo.run` | Administrator at tenant scope |
+| `settings.write`, `appearance.write`, `company.create`, `source.manage`, `group.manage`, `agent.manage` | Administrator at tenant scope |
 | `directory.read` | Administrator, Governor, Auditor |
 | `audit.read` | Administrator, Governor, Auditor |
 
@@ -74,9 +73,9 @@ Permission check points, each enforced in the router layer and returning `403 fo
 7. `model.read` requires any role in scope; the scene snapshot, the lists and the WebSocket return only the companies the caller can read. Anything spanning several companies (a cross-company relation, a proposal touching two companies, their events) is returned only when the caller can read every one of them.
 8. Locked settings (`approvalRequired`, `readOnlyConnectors`) reject every write with `409 locked_setting`, whatever the role.
 9. Bulk decisions act only on proposals the caller may decide under check points 2 to 4. `approve-all` approves every ready proposal in the caller's scope and skips the rest; `reject-all` rejects every open proposal in the caller's scope and skips the rest; skipped proposals are counted in `remaining`. A scoped Owner can never approve another company's, another domain's or a cross-company proposal through a bulk call.
-10. `finalise-all` requires `proposal.finalise` (Governor at tenant scope) because it creates proposals for every company and approves everything.
+10. There is no finalise-all and no demo operation, so no permission exists for either; `proposal.finalise` and `demo.run` are not in the vocabulary (decision row 62).
 11. `directory.read` guards the Users, Groups and Roles pages and every list that exposes email addresses. `model.read` alone never enumerates the directory.
-12. `view.write` guards the shared layout: positions, coverage flag, scene index and domain visibility are tenant-wide state that any reader of the company may change, and every change is audited as `list`.
+12. `view.write` guards the shared layout: positions, coverage flag and domain visibility are tenant-wide state that any reader of the company may change, and every change is audited as `list`.
 
 Two writes bypass check points 1 to 4 by design and are recorded in `docs/decisions.md`:
 
@@ -90,4 +89,4 @@ Group, membership and role changes are immediate and audited (kind `groups` or `
 - The Users, Groups and Roles pages read straight from the identity tables; effective roles per user are a join, not a cache.
 - Swapping the identity provider changes nothing in authorisation; adding one is a row in `tenant_identity_provider`.
 - The gateway maps a token to an agent row before it forwards anything, so an unknown or disabled agent never reaches the ontology.
-- The demo seed keeps the seven default groups so that the first Owner approval and the Governor second approval work out of the box.
+- The dev and test fixture seed keeps the seven default groups so that the first Owner approval and the Governor second approval work out of the box; a real tenant starts with none.

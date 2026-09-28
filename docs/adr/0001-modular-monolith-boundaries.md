@@ -36,7 +36,7 @@ flowchart LR
 | Module | Owns | Tables |
 |---|---|---|
 | `ontology` | companies, domain products, concepts, relations, equivalences, lineage, the scene snapshot, view state | `company`, `domain_product`, `concept`, `relation`, `tenant_view_state` |
-| `proposals` | proposal creation, readiness, approval state machine, cascade rejection, approve-all, finalise-all, conflict detection | `proposal`, `proposal_approval` |
+| `proposals` | proposal creation, readiness, approval state machine, cascade rejection, approve-all, reject-all, conflict detection | `proposal`, `proposal_approval` |
 | `identity` | OIDC login, tenant resolution, users, groups, roles, scopes, permission checks, WebSocket tickets, tenant settings, appearance, agents and cost | `tenant`, `tenant_identity_provider`, `tenant_settings`, `app_user`, `user_group`, `group_member`, `group_role`, `agent`, `agent_month_usage`, `cost_allocation` |
 | `bindings` | connector catalogue, sources, discovery, bindings, attributes, coverage, refresh | `connector_type`, `source`, `binding`, `attribute` |
 | `audit` | append-only audit log, outbox publishing | `audit_entry`, `outbox` |

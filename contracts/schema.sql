@@ -20,6 +20,7 @@ CREATE TYPE node_kind AS ENUM ('root', 'concept');
 CREATE TYPE relation_kind AS ENUM ('rel', 'isa', 'same', 'clash');
 CREATE TYPE proposal_type AS ENUM ('concept', 'spec', 'relation', 'source', 'bind', 'attr', 'change');
 CREATE TYPE proposal_state AS ENUM ('pending', 'half_approved', 'approved', 'rejected');
+CREATE TYPE proposal_origin AS ENUM ('text', 'speech', 'document');
 CREATE TYPE change_kind AS ENUM (
   'rename', 'delete_concept', 'edit_relation', 'remove_relation', 'unbind',
   'rename_source', 'remove_source', 'remove_company', 'resolve_conflict', 'remove_cross_company_links'
@@ -79,20 +80,18 @@ CREATE TABLE tenant_settings (
   refresh              refresh_interval NOT NULL DEFAULT '15 min',
   agent_access         boolean NOT NULL DEFAULT true,
   cost_cap             boolean NOT NULL DEFAULT true,
-  demo_story           boolean NOT NULL DEFAULT false,
   egress_allowlist     text[] NOT NULL DEFAULT '{}',
   updated_at           timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT tenant_settings_colors_is_object CHECK (jsonb_typeof(colors) = 'object')
 );
-COMMENT ON TABLE tenant_settings IS 'The 22 tenant settings plus appearance, the demo-story flag and the connector egress allowlist; the two locked settings are enforced by CHECK constraints.';
+COMMENT ON TABLE tenant_settings IS 'The 22 tenant settings plus appearance and the connector egress allowlist; the two locked settings are enforced by CHECK constraints.';
 
 CREATE TABLE tenant_view_state (
   tenant_id   uuid PRIMARY KEY REFERENCES tenant(id) ON DELETE CASCADE,
   coverage    boolean NOT NULL DEFAULT false,
-  scene_idx   integer NOT NULL DEFAULT 0 CHECK (scene_idx >= 0),
   updated_at  timestamptz NOT NULL DEFAULT now()
 );
-COMMENT ON TABLE tenant_view_state IS 'Shared canvas state that survives reload: the coverage flag and the demo scene index.';
+COMMENT ON TABLE tenant_view_state IS 'Shared canvas state that survives reload: the coverage flag.';
 
 -- ---------------------------------------------------------------------------
 -- Ontology: companies, domain products, concepts, relations
@@ -430,6 +429,8 @@ CREATE TABLE proposal (
   proposer_user_id   uuid,
   proposer_agent_id  uuid,
   bulk               boolean NOT NULL DEFAULT false,
+  origin             proposal_origin NOT NULL DEFAULT 'text',
+  origin_detail      jsonb,
   created_at         timestamptz NOT NULL DEFAULT now(),
   decided_at         timestamptz,
   UNIQUE (tenant_id, id),
@@ -443,6 +444,22 @@ CREATE TABLE proposal (
   FOREIGN KEY (tenant_id, proposer_agent_id) REFERENCES agent(tenant_id, id) ON DELETE SET NULL (proposer_agent_id),
   CONSTRAINT proposal_change_kind_only_for_change CHECK ((type = 'change') = (change_kind IS NOT NULL)),
   CONSTRAINT proposal_deps_is_array CHECK (jsonb_typeof(deps) = 'array'),
+  CONSTRAINT proposal_origin_detail_only_for_document CHECK (origin_detail IS NULL OR origin = 'document'),
+  CONSTRAINT proposal_origin_detail_shape CHECK (
+    origin_detail IS NULL OR (
+      jsonb_typeof(origin_detail) = 'object'
+      AND octet_length(origin_detail::text) <= 1024
+      AND jsonb_typeof(origin_detail -> 'fileName') = 'string'
+      AND char_length(origin_detail ->> 'fileName') BETWEEN 1 AND 255
+      AND jsonb_typeof(origin_detail -> 'mediaType') = 'string'
+      AND char_length(origin_detail ->> 'mediaType') <= 100
+      AND (origin_detail -> 'position' IS NULL OR (
+        origin_detail -> 'position' ->> 'unit' IN ('page', 'paragraph')
+        AND jsonb_typeof(origin_detail -> 'position' -> 'index') = 'number'
+        AND (origin_detail -> 'position' ->> 'index')::numeric BETWEEN 1 AND 100000
+      ))
+    )
+  ),
   CONSTRAINT proposal_decided_when_final CHECK ((state IN ('approved', 'rejected')) = (decided_at IS NOT NULL)),
   CONSTRAINT proposal_proposer_matches_kind CHECK (
     (proposer_kind = 'user'   AND proposer_user_id IS NOT NULL AND proposer_agent_id IS NULL) OR
@@ -485,9 +502,11 @@ CREATE TABLE audit_entry (
   what            text NOT NULL,
   ok              boolean NOT NULL,
   proposal_id     uuid,
+  origin          proposal_origin,
   company_ids     uuid[] NOT NULL DEFAULT '{}',
   domain_key      text REFERENCES domain_template(key),
-  CHECK (array_position(company_ids, NULL) IS NULL)
+  CHECK (array_position(company_ids, NULL) IS NULL),
+  CONSTRAINT audit_entry_origin_only_for_proposal CHECK (origin IS NULL OR proposal_id IS NOT NULL)
 );
 CREATE INDEX audit_entry_by_tenant_time ON audit_entry (tenant_id, at DESC);
 CREATE INDEX audit_entry_by_company_ids ON audit_entry USING gin (company_ids);

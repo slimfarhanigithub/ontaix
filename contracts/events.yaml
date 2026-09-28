@@ -15,7 +15,7 @@ info:
 
     Transport: the outbox row stores `visibility`, `company_ids` and, for `audit.appended` only, `domain_key`; the relay copies them into the NATS headers `Ontaix-Visibility`, `Ontaix-Company-Ids` and `Ontaix-Domain-Key` (trait `Audience`), and the WebSocket hub filters on them without re-deriving them and forwards `companyIds` in the `Envelope`.
 
-    Payloads carry the full new state of the affected artefacts, not a diff. Bulk operations (approve-all, finalise-all, companies-may-interact disable) set `bulk: true` so the Studio softens the flash and skips the toast.
+    Payloads carry the full new state of the affected artefacts, not a diff. Bulk operations (approve-all, companies-may-interact disable) set `bulk: true` so the Studio softens the flash and skips the toast.
   license:
     name: Proprietary
 defaultContentType: application/json
@@ -72,16 +72,6 @@ channels:
     messages:
       proposalRejected:
         $ref: '#/components/messages/ProposalRejected'
-  proposalFinalised:
-    address: ontaix.{tenantId}.proposal.finalised
-    x-ontaix-visibility: model.read
-    x-ontaix-audience: tenant
-    parameters:
-      tenantId:
-        $ref: '#/components/parameters/tenantId'
-    messages:
-      proposalFinalised:
-        $ref: '#/components/messages/ProposalFinalised'
   conceptBorn:
     address: ontaix.{tenantId}.concept.born
     x-ontaix-visibility: model.read
@@ -342,16 +332,6 @@ channels:
     messages:
       positionsChanged:
         $ref: '#/components/messages/PositionsChanged'
-  demoScenePlayed:
-    address: ontaix.{tenantId}.demo.scene_played
-    x-ontaix-visibility: model.read
-    x-ontaix-audience: tenant
-    parameters:
-      tenantId:
-        $ref: '#/components/parameters/tenantId'
-    messages:
-      demoScenePlayed:
-        $ref: '#/components/messages/DemoScenePlayed'
   studioStream:
     address: /api/v1/ws
     x-ontaix-visibility: model.read
@@ -381,10 +361,6 @@ operations:
     action: send
     channel:
       $ref: '#/channels/proposalRejected'
-  publishProposalFinalised:
-    action: send
-    channel:
-      $ref: '#/channels/proposalFinalised'
   publishConceptBorn:
     action: send
     channel:
@@ -489,10 +465,6 @@ operations:
     action: send
     channel:
       $ref: '#/channels/positionsChanged'
-  publishDemoScenePlayed:
-    action: send
-    channel:
-      $ref: '#/channels/demoScenePlayed'
   studioReceive:
     action: receive
     channel:
@@ -557,34 +529,6 @@ components:
       summary: A proposal was rejected; `cascaded` lists proposals rejected with it whose companies are all in this event's `companyIds`. Every other cascaded proposal is announced by its own `proposal.rejected` event with its own audience.
       payload:
         $ref: '#/components/schemas/ProposalEvent'
-    ProposalFinalised:
-      name: ProposalFinalised
-      traits:
-        - $ref: '#/components/messageTraits/Audience'
-      title: proposal.finalised
-      summary: Finalise-all or approve-all completed; summary counts for the caption. Tenant-wide audience; the payload carries counts only and `caption` names no company or label.
-      payload:
-        type: object
-        required: [approved, rejected, rounds, remaining, companies, concepts, bound, equivalences]
-        properties:
-          approved:
-            type: integer
-          rejected:
-            type: integer
-          rounds:
-            type: integer
-          remaining:
-            type: integer
-          companies:
-            type: integer
-          concepts:
-            type: integer
-          bound:
-            type: integer
-          equivalences:
-            type: integer
-          caption:
-            type: string
     ConceptBorn:
       name: ConceptBorn
       traits:
@@ -1023,15 +967,13 @@ components:
       traits:
         - $ref: '#/components/messageTraits/Audience'
       title: view_state.changed
-      summary: Coverage flag or scene index changed.
+      summary: Coverage flag changed.
       payload:
         type: object
-        required: [coverage, sceneIdx]
+        required: [coverage]
         properties:
           coverage:
             type: boolean
-          sceneIdx:
-            type: integer
     PositionsChanged:
       name: PositionsChanged
       traits:
@@ -1060,26 +1002,6 @@ components:
                   type: number
                 pinned:
                   type: boolean
-    DemoScenePlayed:
-      name: DemoScenePlayed
-      traits:
-        - $ref: '#/components/messageTraits/Audience'
-      title: demo.scene_played
-      summary: A story scene was played; its proposals were created.
-      payload:
-        type: object
-        required: [sceneIdx, name, proposalIds]
-        properties:
-          sceneIdx:
-            type: integer
-          name:
-            type: string
-          proposalIds:
-            type: array
-            items:
-              type: string
-              format: uuid
-
   messageTraits:
     Audience:
       headers:
@@ -1114,7 +1036,6 @@ components:
             - proposal.half_approved
             - proposal.approved
             - proposal.rejected
-            - proposal.finalised
             - concept.born
             - concept.changed
             - concept.dying
@@ -1141,7 +1062,6 @@ components:
             - audit.appended
             - view_state.changed
             - positions.changed
-            - demo.scene_played
         occurredAt:
           type: string
           format: date-time
@@ -1223,8 +1143,33 @@ components:
     Proposal:
       type: object
       description: Same shape as `Proposal` in contracts/openapi.yaml.
-      required: [id, type, state, title, color, html, ready]
+      required: [id, type, state, title, color, html, ready, origin, originDetail]
       properties:
+        origin:
+          type: string
+          enum: [text, speech, document]
+        originDetail:
+          description: Set only when `origin` is `document`; same shape as `OriginDetail` in contracts/openapi.yaml.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [fileName, mediaType]
+              properties:
+                fileName:
+                  type: string
+                  maxLength: 255
+                mediaType:
+                  type: string
+                position:
+                  type: object
+                  required: [unit, index]
+                  properties:
+                    unit:
+                      type: string
+                      enum: [page, paragraph]
+                    index:
+                      type: integer
+                      minimum: 1
         id:
           type: string
           format: uuid
@@ -1554,8 +1499,12 @@ components:
     AuditEntry:
       type: object
       description: Same shape as `AuditEntry` in contracts/openapi.yaml.
-      required: [id, at, actor, kind, what, ok, companyIds]
+      required: [id, at, actor, kind, what, ok, companyIds, origin]
       properties:
+        origin:
+          type: [string, 'null']
+          enum: [text, speech, document, null]
+          description: The origin of the proposal the entry records; null for every entry without a proposal.
         id:
           type: integer
         at:
