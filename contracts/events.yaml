@@ -9,6 +9,8 @@ info:
 
     WebSocket envelope: every message is one `Envelope`; `sequence` is the tenant-wide outbox id. A client reconnects with `?since=<sequence>`; when the gap is too old the server sends `snapshot.required` and the client reloads `GET /api/v1/scene`.
 
+    Visibility: every channel declares `x-ontaix-visibility`, the permission (vocabulary in ADR 0003) a subscriber must hold to receive its events. Channels marked `model.read` are further limited to the companies the subscriber may read. The outbox row stores the visibility and the company so the hub filters without re-deriving it.
+
     Payloads carry the full new state of the affected artefacts, not a diff. Bulk operations (approve-all, finalise-all, companies-may-interact disable) set `bulk: true` so the Studio softens the flash and skips the toast.
   license:
     name: Proprietary
@@ -23,11 +25,12 @@ servers:
     host: localhost:8000
     pathname: /api/v1/ws
     protocol: ws
-    description: Studio live-update channel; bearer token in the `Authorization` header or the `access_token` query parameter, `since` query parameter for resume.
+    description: Studio live-update channel. Authentication is a one-time ticket minted by `POST /api/v1/ws/ticket` and passed as the `ticket` query parameter; a bearer token is never accepted in the URL. The `since` query parameter resumes from a sequence.
 
 channels:
   proposalCreated:
     address: ontaix.{tenantId}.proposal.created
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -36,6 +39,7 @@ channels:
         $ref: '#/components/messages/ProposalCreated'
   proposalHalfApproved:
     address: ontaix.{tenantId}.proposal.half_approved
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -44,6 +48,7 @@ channels:
         $ref: '#/components/messages/ProposalHalfApproved'
   proposalApproved:
     address: ontaix.{tenantId}.proposal.approved
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -52,6 +57,7 @@ channels:
         $ref: '#/components/messages/ProposalApproved'
   proposalRejected:
     address: ontaix.{tenantId}.proposal.rejected
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -60,6 +66,7 @@ channels:
         $ref: '#/components/messages/ProposalRejected'
   proposalFinalised:
     address: ontaix.{tenantId}.proposal.finalised
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -68,6 +75,7 @@ channels:
         $ref: '#/components/messages/ProposalFinalised'
   conceptBorn:
     address: ontaix.{tenantId}.concept.born
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -76,6 +84,7 @@ channels:
         $ref: '#/components/messages/ConceptBorn'
   conceptChanged:
     address: ontaix.{tenantId}.concept.changed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -84,6 +93,7 @@ channels:
         $ref: '#/components/messages/ConceptChanged'
   conceptDying:
     address: ontaix.{tenantId}.concept.dying
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -92,6 +102,7 @@ channels:
         $ref: '#/components/messages/ConceptDying'
   conceptConflict:
     address: ontaix.{tenantId}.concept.conflict
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -100,6 +111,7 @@ channels:
         $ref: '#/components/messages/ConceptConflict'
   relationCreated:
     address: ontaix.{tenantId}.relation.created
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -108,6 +120,7 @@ channels:
         $ref: '#/components/messages/RelationCreated'
   relationChanged:
     address: ontaix.{tenantId}.relation.changed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -116,6 +129,7 @@ channels:
         $ref: '#/components/messages/RelationChanged'
   relationRemoved:
     address: ontaix.{tenantId}.relation.removed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -124,6 +138,7 @@ channels:
         $ref: '#/components/messages/RelationRemoved'
   sourceCreated:
     address: ontaix.{tenantId}.source.created
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -132,6 +147,7 @@ channels:
         $ref: '#/components/messages/SourceCreated'
   sourceChanged:
     address: ontaix.{tenantId}.source.changed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -140,6 +156,7 @@ channels:
         $ref: '#/components/messages/SourceChanged'
   sourceRemoved:
     address: ontaix.{tenantId}.source.removed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -148,6 +165,7 @@ channels:
         $ref: '#/components/messages/SourceRemoved'
   sourcesRefreshed:
     address: ontaix.{tenantId}.source.refreshed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -156,6 +174,7 @@ channels:
         $ref: '#/components/messages/SourcesRefreshed'
   bindingCreated:
     address: ontaix.{tenantId}.binding.created
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -164,6 +183,7 @@ channels:
         $ref: '#/components/messages/BindingCreated'
   bindingChanged:
     address: ontaix.{tenantId}.binding.changed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -172,6 +192,7 @@ channels:
         $ref: '#/components/messages/BindingChanged'
   bindingRemoved:
     address: ontaix.{tenantId}.binding.removed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -180,6 +201,7 @@ channels:
         $ref: '#/components/messages/BindingRemoved'
   attributeChanged:
     address: ontaix.{tenantId}.attribute.changed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -188,6 +210,7 @@ channels:
         $ref: '#/components/messages/AttributeChanged'
   domainProductChanged:
     address: ontaix.{tenantId}.domain_product.changed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -196,6 +219,7 @@ channels:
         $ref: '#/components/messages/DomainProductChanged'
   companyCreated:
     address: ontaix.{tenantId}.company.created
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -204,6 +228,7 @@ channels:
         $ref: '#/components/messages/CompanyCreated'
   companyRemoved:
     address: ontaix.{tenantId}.company.removed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -212,6 +237,7 @@ channels:
         $ref: '#/components/messages/CompanyRemoved'
   settingsChanged:
     address: ontaix.{tenantId}.settings.changed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -220,6 +246,7 @@ channels:
         $ref: '#/components/messages/SettingsChanged'
   appearanceChanged:
     address: ontaix.{tenantId}.appearance.changed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -228,6 +255,7 @@ channels:
         $ref: '#/components/messages/AppearanceChanged'
   crossCompanyDisabled:
     address: ontaix.{tenantId}.settings.cross_company_disabled
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -236,6 +264,7 @@ channels:
         $ref: '#/components/messages/CrossCompanyDisabled'
   groupChanged:
     address: ontaix.{tenantId}.group.changed
+    x-ontaix-visibility: group.manage
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -244,6 +273,7 @@ channels:
         $ref: '#/components/messages/GroupChanged'
   agentChanged:
     address: ontaix.{tenantId}.agent.changed
+    x-ontaix-visibility: agent.manage
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -252,6 +282,7 @@ channels:
         $ref: '#/components/messages/AgentChanged'
   auditAppended:
     address: ontaix.{tenantId}.audit.appended
+    x-ontaix-visibility: audit.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -260,6 +291,7 @@ channels:
         $ref: '#/components/messages/AuditAppended'
   viewStateChanged:
     address: ontaix.{tenantId}.view_state.changed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -268,6 +300,7 @@ channels:
         $ref: '#/components/messages/ViewStateChanged'
   positionsChanged:
     address: ontaix.{tenantId}.positions.changed
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -276,6 +309,7 @@ channels:
         $ref: '#/components/messages/PositionsChanged'
   demoScenePlayed:
     address: ontaix.{tenantId}.demo.scene_played
+    x-ontaix-visibility: model.read
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -284,6 +318,7 @@ channels:
         $ref: '#/components/messages/DemoScenePlayed'
   studioStream:
     address: /api/v1/ws
+    x-ontaix-visibility: model.read
     description: The WebSocket channel. Every message is an `Envelope` whose `type` names one of the NATS events above, or a `snapshot.required` control message.
     servers:
       - $ref: '#/servers/studio-websocket'
@@ -1099,6 +1134,7 @@ components:
           type: [string, 'null']
         html:
           type: string
+          description: Server-generated; every interpolated label is HTML-escaped and only `<b>`, `<i>` and `<span class="...">` may appear. Rendered by the Studio with those tags allow-listed.
         why:
           type: [string, 'null']
         caption:
@@ -1237,11 +1273,14 @@ components:
     Source:
       type: object
       description: Same shape as `Source` in contracts/openapi.yaml.
-      required: [id, companyId, label, kindText, anchorIndex, disabled, pending, x, y, pinned]
+      required: [id, kind, companyId, label, kindText, anchorIndex, disabled, pending, x, y, pinned]
       properties:
         id:
           type: string
           format: uuid
+        kind:
+          type: string
+          const: source
         companyId:
           type: string
           format: uuid
@@ -1283,11 +1322,18 @@ components:
     Binding:
       type: object
       description: Same shape as `Binding` in contracts/openapi.yaml.
-      required: [id, sourceId, sourceLabel, conceptId, records, fresh, pending]
+      required: [id, kind, sourceId, sourceLabel, conceptId, records, fresh, pending]
       properties:
         id:
           type: string
           format: uuid
+        kind:
+          type: string
+          const: bind
+        seed:
+          type: [number, 'null']
+          minimum: 0
+          exclusiveMaximum: 1
         sourceId:
           type: string
           format: uuid
