@@ -44,6 +44,9 @@ import { SCENES } from '../demo/scenes';
 import { now } from '../runtime/clock';
 import type { DialogSpec } from '../shell/Dialog';
 
+/** 409 codes that mean the proposal changed under the caller, so the scene is reloaded. */
+const STALE_PROPOSAL_CODES = new Set(['proposal_decided', 'proposal_not_ready']);
+
 /** A toast: a strong lead word and plain text, both rendered as text nodes. */
 export interface Toast {
   id: number;
@@ -725,10 +728,11 @@ class StudioStore {
     }
   }
 
-  /** A 409 means the proposal changed under the caller (decided elsewhere, not ready): reload the
-   * scene and its proposals; any other refusal is the reference's toast. */
+  /** A proposal decided elsewhere or no longer ready means the panel is stale: reload the scene
+   * and its proposals silently. Every other refusal, other 409s included, is the reference's toast. */
   private async decisionRefused(err: unknown): Promise<void> {
-    if (err instanceof ApiError && err.status === 409) await this.reloadScene();
+    if (err instanceof ApiError && err.status === 409 && STALE_PROPOSAL_CODES.has(err.problem.code))
+      await this.reloadScene();
     else this.refused(err);
   }
 
