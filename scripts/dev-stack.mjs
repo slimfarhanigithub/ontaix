@@ -30,7 +30,7 @@ const isWindows = process.platform === 'win32';
 const apiPort = Number(process.env.ONTAIX_API_PORT || 8000);
 const studioPort = Number(process.env.ONTAIX_STUDIO_PORT || 5173);
 const apiUrl = `http://127.0.0.1:${apiPort}`;
-const studioUrl = `http://localhost:${studioPort}`;
+const studioUrl = `http://127.0.0.1:${studioPort}`;
 
 /** Holds pgserver open until stdin closes, then stops the server and deletes its directory. */
 const EMBEDDED_POSTGRES = `
@@ -182,7 +182,7 @@ async function main() {
   log(`API ready at ${apiUrl}`);
 
   const vite = join(studioDir, 'node_modules', 'vite', 'bin', 'vite.js');
-  start('studio', process.execPath, [vite, '--port', String(studioPort), '--strictPort'], {
+  start('studio', process.execPath, [vite, '--host', '127.0.0.1', '--port', String(studioPort), '--strictPort'], {
     cwd: studioDir,
     env: { ...process.env, VITE_ONTAIX_API_URL: '/api/v1', ONTAIX_API_PROXY: apiUrl },
   });

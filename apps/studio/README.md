@@ -43,7 +43,7 @@ pnpm --filter studio dev            # http://localhost:5173, mock API in the bro
 pnpm --filter studio test           # vitest
 pnpm --filter studio build
 pnpm --filter studio test:screens   # Playwright: reference vs Studio at 1440x900, dark and light
-pnpm dev:stack                      # Studio on http://localhost:5173 against the real API (see the root README)
+pnpm dev:stack                      # Studio on http://127.0.0.1:5173 against the real API (see the root README)
 pnpm --filter studio test:e2e       # Playwright: the Studio against the real API on the local stack
 ```
 
