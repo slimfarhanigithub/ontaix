@@ -70,7 +70,7 @@ cd packages/connectors && uv sync && uv run pytest
 1. an embedded PostgreSQL 16 from the api's `pgserver` dev dependency, in a temporary directory deleted on exit (set `ONTAIX_DATABASE_URL` to use another server instead);
 2. `python -m app.seed`: migrations, then the demo tenant with Northwind Industries and Aurora Valves;
 3. the API under uvicorn on http://127.0.0.1:8000 with `ONTAIX_ENVIRONMENT=dev` (selector event loop on Windows);
-4. the Studio's Vite dev server on http://localhost:5173 with `VITE_ONTAIX_API_URL=/api/v1`, proxying `/api` to the API.
+4. the Studio's Vite dev server on http://127.0.0.1:5173 with `VITE_ONTAIX_API_URL=/api/v1`, proxying `/api` to the API.
 
 In this dev build the Studio identifies itself with `X-Ontaix-User`: `VITE_ONTAIX_DEV_USER`, else the seed's Builder (`sam.okafor@northwind.com`), who can teach and propose; `?user=<email>` switches user per tab, for example the Governor (`hugo.brandt@northwind.com`) to approve. Production builds send no such header. Ports come from `ONTAIX_API_PORT` and `ONTAIX_STUDIO_PORT`; Ctrl+C stops everything, the database included.
 
