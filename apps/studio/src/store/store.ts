@@ -1,0 +1,982 @@
+/**
+ * The Studio store: one scene state the verbatim canvas modules run on, the shell state React
+ * renders, and the actions that call the API. Every ontology change reaches the canvas through
+ * a live event (proposal created, approved, rejected, conflict noticed), never from the HTTP
+ * response, so the same path serves the in-browser mock and a WebSocket-fed API.
+ */
+import { api } from '../api/client';
+import { liveEvents, type ConceptConflictPayload, type Envelope, type ProposalEventPayload } from '../api/events';
+import {
+  ApiError,
+  isBinding,
+  isSource,
+  type Appearance,
+  type Artefacts,
+  type Company as ApiCompany,
+  type DomainProduct,
+  type Proposal,
+  type ProposalDraft,
+  type Scene,
+  type Settings,
+} from '../api/types';
+import { arrange as arrangeCanvas } from '../canvas/arrange';
+import { GREEN, RED, DEFAULT_BRASS, DEFAULT_COLORS, DOMAIN_TEMPLATES } from '../canvas/constants';
+import { divide } from '../canvas/division';
+import { focusOnCell, focusOnDomain } from '../canvas/focus';
+import { hideLineageState, showLineageState } from '../canvas/lineage';
+import type { Renderer } from '../canvas/renderer';
+import {
+  addCompany,
+  addLink,
+  addNode,
+  addSource,
+  bySid,
+  createScene,
+  domainOf,
+  find,
+  layoutCompanies,
+  linkBySid,
+  type SceneState,
+} from '../canvas/state';
+import type { Company, Domain, Link, Node } from '../canvas/types';
+import { SCENES } from '../demo/scenes';
+import { now, nowDate } from '../runtime/clock';
+
+export interface Toast {
+  id: number;
+  html: string;
+}
+
+export interface NewBoxState {
+  host: Node;
+  left: number;
+  top: number;
+}
+
+export interface LinkBoxState {
+  a: Node;
+  b: Node;
+  link: Link | null;
+  reverse: boolean;
+  left: number;
+  top: number;
+}
+
+export interface UiState {
+  status: 'loading' | 'ready' | 'error';
+  proposals: Proposal[];
+  sceneIdx: number;
+  caption: { kicker: string; text: string; seq: number };
+  say: string;
+  sayPlaceholder: string;
+  panelOff: boolean;
+  legendOff: boolean;
+  domainsOff: boolean;
+  adminOpen: boolean;
+  theme: 'dark' | 'light';
+  settings: Settings | null;
+  appearance: Appearance | null;
+  drawerNode: Node | null;
+  drawerSeq: number;
+  lineageOn: boolean;
+  newBox: NewBoxState | null;
+  linkBox: LinkBoxState | null;
+  toasts: Toast[];
+  finalising: boolean;
+  listening: boolean;
+}
+
+type Listener = () => void;
+
+const FRESH_CAPTION: [string, string] = [
+  'Say what your business does',
+  'Northwind Industries: industrial pumps, four plants, 2,300 people. Each part of the business will describe itself as a domain product: owned, versioned, and consumed by the others. Every concept is born by division.',
+];
+const DEFAULT_PLACEHOLDER = 'Teach the model something, or press Next to follow the story';
+
+class StudioStore {
+  readonly s: SceneState;
+  readonly ui: UiState;
+  renderer: Renderer | null = null;
+  private version = 0;
+  private listeners = new Set<Listener>();
+  private toastSeq = 0;
+  private refreshQueued = false;
+  private unsubscribeEvents: (() => void) | null = null;
+
+  constructor() {
+    this.s = createScene({
+      caption: (k, t) => this.caption(k, t),
+      arrangeTitle: () => this.bump(),
+      domainsChanged: () => this.bump(),
+      companiesChanged: () => this.renderCompanies(),
+    });
+    this.ui = {
+      status: 'loading',
+      proposals: [],
+      sceneIdx: 0,
+      caption: { kicker: 'Say what your business does', text: '', seq: 0 },
+      say: '',
+      sayPlaceholder: DEFAULT_PLACEHOLDER,
+      panelOff: false,
+      legendOff: false,
+      domainsOff: false,
+      adminOpen: false,
+      theme: 'dark',
+      settings: null,
+      appearance: null,
+      drawerNode: null,
+      drawerSeq: 0,
+      lineageOn: false,
+      newBox: null,
+      linkBox: null,
+      toasts: [],
+      finalising: false,
+      listening: false,
+    };
+  }
+
+  // ------------------------------------------------------------ subscription
+
+  subscribe = (fn: Listener): (() => void) => {
+    this.listeners.add(fn);
+    return () => {
+      this.listeners.delete(fn);
+    };
+  };
+
+  getVersion = (): number => this.version;
+
+  bump(): void {
+    this.version++;
+    for (const fn of this.listeners) fn();
+  }
+
+  // ------------------------------------------------------------ lifecycle
+
+  attachRenderer(r: Renderer): void {
+    this.renderer = r;
+    r.applyTheme(this.ui.theme);
+  }
+
+  /** Loads the scene and starts listening to live events. */
+  async load(): Promise<void> {
+    if (!this.unsubscribeEvents) this.unsubscribeEvents = liveEvents.subscribe((e) => this.handleEvent(e));
+    try {
+      const scene = await api.getScene();
+      this.applyScene(scene);
+      const fresh = scene.nodes.every((n) => !isSource(n) && n.kind === 'root') && scene.viewState.sceneIdx === 0;
+      if (fresh) this.caption(...FRESH_CAPTION);
+      else this.caption('Restored', 'Back where you left off.');
+      this.ui.status = 'ready';
+    } catch (err) {
+      console.error('scene load failed', err);
+      this.ui.status = 'error';
+    }
+    document.documentElement.dataset.ontaixReady = this.ui.status;
+    this.bump();
+  }
+
+  /** Fills the canvas arrays from a snapshot, the way the reference's `restore` does. */
+  applyScene(scene: Scene): void {
+    const s = this.s;
+    s.nodes.length = 0;
+    s.links.length = 0;
+    s.companies.length = 0;
+    s.DOMAINS = [];
+    s.activeCompany = null;
+    s.BRASS = scene.appearance.source || DEFAULT_BRASS;
+    for (const t of DOMAIN_TEMPLATES) t.color = scene.appearance.colors[t.key] || DEFAULT_COLORS[t.key];
+    for (const co of [...scene.companies].sort((a, b) => a.position - b.position)) {
+      const c = addCompany(s, co.name, co.sub);
+      this.bindCompany(c, co);
+    }
+    for (const n of scene.nodes) {
+      if (isSource(n)) {
+        const c = this.companyBySid(n.companyId);
+        if (!c) continue;
+        const src = addSource(s, c, n.label, n.kindText);
+        src.sid = n.id;
+        src.ai = n.anchorIndex;
+        src.pending = n.pending;
+        src.disabled = n.disabled;
+        src.alpha = 1;
+        continue;
+      }
+      if (n.kind === 'root') {
+        const c = this.companyBySid(n.companyId);
+        if (c?.root) c.root.sid = n.id;
+        continue;
+      }
+      const c = this.companyBySid(n.companyId);
+      if (!c) continue;
+      const node = addNode(s, {
+        sid: n.id,
+        label: n.label,
+        sub: n.sub || '',
+        kind: 'concept',
+        color: n.color || DEFAULT_BRASS,
+        finalColor: n.color || null,
+        company: c,
+        domain: n.domainKey ? domainOf(s, n.domainKey, c) : null,
+        x: n.x,
+        y: n.y,
+        pending: !!n.pending,
+        conflict: !!n.conflict,
+        pinned: !!n.pinned,
+      });
+      node._rule = n.rule || undefined;
+      node.attrs = n.attributes.map((a) => ({ sid: a.id, name: a.name, type: a.type, col: a.col, fill: a.fill, state: a.state }));
+      node.alpha = 1;
+      node.labelAlpha = 1;
+    }
+    for (const l of scene.links) {
+      if (isBinding(l)) {
+        const a = bySid(s, l.sourceId),
+          b = bySid(s, l.conceptId);
+        if (!a || !b) continue;
+        const link = addLink(s, a, b, 'bind', 300, 'bound to');
+        link.sid = l.id;
+        link.pending = l.pending;
+        link.alpha = 1;
+        if (!l.pending) b.bound = { source: a, records: l.records, fresh: l.fresh };
+        continue;
+      }
+      const a = bySid(s, l.aId),
+        b = bySid(s, l.bId);
+      if (!a || !b) continue;
+      const link = addLink(s, a, b, l.kind, l.rest, l.label);
+      link.sid = l.id;
+      link.seed = l.seed;
+      link.pending = l.pending;
+      link.alpha = 1;
+    }
+    for (const n of scene.nodes) {
+      if (isSource(n) || n.kind === 'root') continue;
+      const node = bySid(s, n.id);
+      if (!node) continue;
+      if (n.parentId) {
+        const parent = bySid(s, n.parentId);
+        if (parent) {
+          node.parent = parent;
+          node.birthLink = linkBySid(s, n.birthRelationId) || null;
+        }
+      }
+      node.bornAt = new Date(n.bornAt);
+    }
+    layoutCompanies(s);
+    s.activeCompany = s.companies[0] || null;
+    this.ui.proposals = scene.proposals;
+    this.ui.settings = scene.settings;
+    this.ui.appearance = scene.appearance;
+    this.setTheme(scene.appearance.theme, false);
+    this.applySettings();
+    this.setScene(Math.max(0, Math.min(scene.viewState.sceneIdx || 0, SCENES.length - 1)));
+    if (scene.viewState.coverage !== s.COVERAGE) s.COVERAGE = scene.viewState.coverage;
+    s.userZoomed = false;
+    this.renderCompanies();
+    this.bump();
+  }
+
+  private bindCompany(c: Company, co: ApiCompany): void {
+    c.sid = co.id;
+    if (c.root) c.root.sid = co.rootId;
+    for (const dp of co.domainProducts) {
+      const d = c.domains.find((x) => x.key === dp.key);
+      if (d) this.bindDomain(d, dp);
+    }
+  }
+
+  private bindDomain(d: Domain, dp: DomainProduct): void {
+    d.sid = dp.id;
+    d.version = Math.round((1 + dp.revision * 0.1) * 10) / 10;
+    d.hidden = dp.hidden;
+    d.color = dp.color;
+  }
+
+  companyBySid(sid: string | null | undefined): Company | null {
+    return sid ? this.s.companies.find((c) => c.sid === sid) || null : null;
+  }
+
+  domainBySid(sid: string | null | undefined): Domain | null {
+    return sid ? this.s.DOMAINS.find((d) => d.sid === sid) || null : null;
+  }
+
+  // ------------------------------------------------------------ events
+
+  handleEvent(e: Envelope): void {
+    switch (e.type) {
+      case 'proposal.created':
+        this.applyCreated((e.payload as unknown as ProposalEventPayload).proposal);
+        this.queueRefresh();
+        break;
+      case 'proposal.approved':
+        this.applyApproved(e.payload as unknown as ProposalEventPayload, e.bulk);
+        this.queueRefresh();
+        break;
+      case 'proposal.half_approved':
+        this.queueRefresh();
+        break;
+      case 'proposal.rejected':
+        this.applyRejected(e.payload as unknown as ProposalEventPayload);
+        this.queueRefresh();
+        break;
+      case 'concept.conflict': {
+        const p = e.payload as unknown as ConceptConflictPayload;
+        const a = bySid(this.s, p.concepts[0]?.id),
+          b = bySid(this.s, p.concepts[1]?.id);
+        if (a && b) {
+          a.conflict = b.conflict = true;
+          const l = addLink(this.s, a, b, 'clash', p.relation.rest, p.relation.label);
+          l.sid = p.relation.id;
+          this.caption('The model noticed', p.caption);
+        }
+        break;
+      }
+      case 'company.created': {
+        const co = e.payload.company as ApiCompany;
+        if (this.companyBySid(co.id)) break;
+        const c = addCompany(this.s, co.name, co.sub);
+        this.bindCompany(c, co);
+        this.bump();
+        break;
+      }
+      case 'domain_product.changed': {
+        const dp = e.payload.domainProduct as DomainProduct;
+        const d = this.domainBySid(dp.id);
+        if (d) this.bindDomain(d, dp);
+        this.bump();
+        break;
+      }
+      case 'settings.changed':
+        this.ui.settings = e.payload.settings as Settings;
+        this.applySettings();
+        break;
+      case 'appearance.changed':
+        this.ui.appearance = e.payload.appearance as Appearance;
+        this.bump();
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** Re-reads the open proposals once per burst of events, for their server-evaluated readiness. */
+  private queueRefresh(): void {
+    if (this.refreshQueued) return;
+    this.refreshQueued = true;
+    queueMicrotask(() => {
+      this.refreshQueued = false;
+      void this.refreshProposals();
+    });
+  }
+
+  async refreshProposals(): Promise<void> {
+    try {
+      const page = await api.listProposals();
+      this.ui.proposals = page.items;
+    } catch (err) {
+      console.error('proposal refresh failed', err);
+    }
+    this.bump();
+  }
+
+  /** A proposal's pending artefacts appear at once: a cell divides off its parent, a line grows lighter. */
+  applyCreated(p: Proposal): void {
+    const s = this.s;
+    const art = p.artefacts || {};
+    switch (p.type) {
+      case 'concept':
+      case 'spec': {
+        const c = art.concepts?.[0],
+          r = art.relations?.[0];
+        if (!c || !r || bySid(s, c.id)) return;
+        const parent = bySid(s, c.parentId);
+        if (!parent) return;
+        const isa = r.kind === 'isa';
+        const n = divide(s, parent, c.label, null, {
+          label: isa ? undefined : r.label,
+          domain: c.domainKey ?? null,
+          isa,
+          reverse: !isa && r.aId === c.id,
+        });
+        n.sid = c.id;
+        n.pending = true;
+        if (n.birthLink) {
+          n.birthLink.sid = r.id;
+          n.birthLink.pending = true;
+        }
+        if (p.type === 'spec') {
+          const rule = c.rule || '';
+          n._rule = rule;
+          setTimeout(
+            () => {
+              n.sub = rule;
+            },
+            s.SKIP ? 0 : 900,
+          );
+        }
+        break;
+      }
+      case 'relation': {
+        const r = art.relations?.[0];
+        if (!r || linkBySid(s, r.id)) return;
+        const a = bySid(s, r.aId),
+          b = bySid(s, r.bId);
+        if (!a || !b) return;
+        const l = addLink(s, a, b, r.kind, r.rest, r.label);
+        l.sid = r.id;
+        l.pending = true;
+        break;
+      }
+      case 'source': {
+        const src = art.sources?.[0];
+        if (!src || bySid(s, src.id)) return;
+        const c = this.companyBySid(src.companyId);
+        if (!c) return;
+        const n = addSource(s, c, src.label, src.kindText);
+        n.sid = src.id;
+        n.pending = true;
+        break;
+      }
+      case 'bind': {
+        for (const b of art.bindings || []) {
+          if (linkBySid(s, b.id)) continue;
+          const src = bySid(s, b.sourceId),
+            c = bySid(s, b.conceptId);
+          if (!src || !c) continue;
+          const l = addLink(s, src, c, 'bind', 300, 'bound to');
+          l.sid = b.id;
+          l.pending = true;
+        }
+        break;
+      }
+      case 'attr': {
+        for (const a of art.attributes || []) {
+          const n = bySid(s, a.conceptId);
+          if (!n || n.attrs.some((x) => x.sid === a.id)) continue;
+          n.attrs.push({ sid: a.id, name: a.name, type: a.type, col: a.col, fill: a.fill, state: 'proposed' });
+          if (this.ui.drawerNode === n) this.ui.drawerSeq++;
+        }
+        break;
+      }
+      case 'change':
+        break;
+    }
+  }
+
+  applyApproved(payload: ProposalEventPayload, bulk: boolean): void {
+    const s = this.s;
+    const p = payload.proposal;
+    if (!bulk) this.toast2(`<b>Approved</b> ${p.title}`);
+    const node = bySid(s, p.conceptId);
+    if (node && p.type !== 'attr' && p.type !== 'change') {
+      node.pending = false;
+      node.flash = { color: GREEN, start: now(), soft: !!bulk };
+    }
+    const link = linkBySid(s, p.relationId);
+    if (link && p.type !== 'change') link.pending = false;
+    for (const id of p.relationIds) {
+      const l = linkBySid(s, id);
+      if (l) l.pending = false;
+    }
+    for (const b of payload.artefacts.bindings || []) {
+      const l = linkBySid(s, b.id);
+      if (l) {
+        l.pending = false;
+        l.grow = { start: now() };
+      }
+    }
+    const src = bySid(s, p.sourceId);
+    if (src && p.type === 'source') {
+      src.pending = false;
+      src.flash = { color: GREEN, start: now(), soft: !!bulk };
+    }
+    this.reconcile(payload.artefacts, p.changeKind === 'edit_relation');
+    for (const q of payload.cascaded) {
+      if (q.state === 'pending') this.applyCreated(q);
+      else if (q.state === 'approved' && q.artefacts) this.reconcile(q.artefacts, false);
+    }
+    if (p.caption) this.caption('Approved', p.caption);
+    this.bump();
+  }
+
+  applyRejected(payload: ProposalEventPayload): void {
+    const s = this.s;
+    const apply = (p: Proposal) => {
+      const node = bySid(s, p.conceptId);
+      if (node && (p.type === 'concept' || p.type === 'spec')) {
+        node.dying = { start: now(), color: RED };
+        node.pending = false;
+      }
+      const dropLink = (id: string | null | undefined) => {
+        const l = linkBySid(s, id);
+        if (!l) return;
+        const j = s.links.indexOf(l);
+        if (j >= 0) s.links.splice(j, 1);
+      };
+      if (p.type !== 'change') dropLink(p.relationId);
+      for (const id of p.relationIds) dropLink(id);
+      for (const id of p.bindingIds) dropLink(id);
+      const src = bySid(s, p.sourceId);
+      if (src && p.type === 'source') src.dying = { start: now(), color: RED };
+      if (p.type === 'attr' && node) {
+        const i = node.attrs.findIndex((a) => a.sid === p.attributeId);
+        if (i >= 0) node.attrs.splice(i, 1);
+        if (this.ui.drawerNode === node) this.ui.drawerSeq++;
+      }
+    };
+    for (const q of payload.cascaded) apply(q);
+    apply(payload.proposal);
+    if (payload.caption) this.caption('Rejected', payload.caption);
+    this.bump();
+  }
+
+  /** Brings local cells, lines and domains to the server state of the artefacts a decision touched. */
+  private reconcile(art: Artefacts, regrow: boolean): void {
+    const s = this.s;
+    for (const c of art.concepts || []) {
+      const n = bySid(s, c.id);
+      if (!n) continue;
+      n.label = c.label;
+      if (c.sub) n.sub = c.sub;
+      n.conflict = c.conflict;
+      n.pending = c.pending;
+      if (c.dyingAt && !n.dying) n.dying = { start: now(), color: RED };
+      if (c.bound && !c.bound.pending) {
+        const source = bySid(s, c.bound.sourceId);
+        if (source) n.bound = { source, records: c.bound.records, fresh: c.bound.fresh };
+      } else if (!c.bound) n.bound = null;
+      n.attrs = c.attributes.map((a) => ({ sid: a.id, name: a.name, type: a.type, col: a.col, fill: a.fill, state: a.state }));
+      if (this.ui.drawerNode === n) this.ui.drawerSeq++;
+    }
+    for (const r of art.relations || []) {
+      let l = linkBySid(s, r.id);
+      if (!l) {
+        if (r.dyingAt) continue;
+        const a = bySid(s, r.aId),
+          b = bySid(s, r.bId);
+        if (!a || !b) continue;
+        l = addLink(s, a, b, r.kind, r.rest, r.label);
+        l.sid = r.id;
+        l.pending = r.pending;
+        continue;
+      }
+      l.label = r.label;
+      if (l.a.sid !== r.aId || l.b.sid !== r.bId) {
+        const a = bySid(s, r.aId),
+          b = bySid(s, r.bId);
+        if (a && b) {
+          l.a = a;
+          l.b = b;
+        }
+      }
+      if (regrow) l.grow = { start: now() };
+      l.pending = r.pending;
+      if (r.dyingAt && !l.dying) {
+        const link = l;
+        link.dying = { start: now() };
+        setTimeout(() => {
+          const j = s.links.indexOf(link);
+          if (j >= 0) s.links.splice(j, 1);
+        }, 700);
+      }
+    }
+    for (const dp of art.domainProducts || []) {
+      const d = this.domainBySid(dp.id);
+      if (d) this.bindDomain(d, dp);
+    }
+    for (const src of art.sources || []) {
+      const n = bySid(s, src.id);
+      if (!n) continue;
+      n.pending = src.pending;
+      n.disabled = src.disabled;
+      if (src.dyingAt && !n.dying) n.dying = { start: now(), color: RED };
+    }
+  }
+
+  // ------------------------------------------------------------ captions, toasts, scenes
+
+  caption(kicker: string, text: string): void {
+    this.ui.caption = { kicker, text, seq: this.ui.caption.seq + 1 };
+    this.bump();
+  }
+
+  toast2(html: string): void {
+    const id = ++this.toastSeq;
+    this.ui.toasts = [...this.ui.toasts, { id, html }];
+    this.bump();
+    setTimeout(() => {
+      this.ui.toasts = this.ui.toasts.filter((t) => t.id !== id);
+      this.bump();
+    }, 3000);
+  }
+
+  setScene(i: number): void {
+    this.ui.sceneIdx = i;
+    this.bump();
+  }
+
+  /** Company selector and teach placeholder follow the active company. */
+  renderCompanies(): void {
+    const s = this.s;
+    this.ui.sayPlaceholder =
+      s.companies.length > 1 && s.activeCompany ? `Teach ${s.activeCompany.name}…` : DEFAULT_PLACEHOLDER;
+    this.bump();
+  }
+
+  setActive(c: Company | null): void {
+    if (c && c !== this.s.activeCompany) {
+      this.s.activeCompany = c;
+      this.renderCompanies();
+    }
+  }
+
+  selectCompany(key: string): void {
+    this.s.activeCompany = this.s.companies.find((c) => c.key === key) || this.s.activeCompany;
+    this.renderCompanies();
+  }
+
+  setSay(value: string): void {
+    this.ui.say = value;
+    this.bump();
+  }
+
+  // ------------------------------------------------------------ proposals
+
+  /** Sends a draft; refusals surface as the reference's toast or caption. */
+  async propose(draft: ProposalDraft): Promise<Proposal | null> {
+    try {
+      return await api.createProposal(draft);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.problem.code === 'cross_company_disabled')
+          this.toast2('<b>Not allowed</b> companies may not interact · enable it in the admin portal');
+        else if (err.problem.code === 'duplicate_relation' || err.problem.code === 'duplicate_label')
+          this.caption('Already there', err.problem.detail || err.problem.title);
+        else if (err.status !== 404) this.toast2(`<b>Refused</b> ${err.problem.detail || err.problem.title}`);
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  async approve(p: Proposal): Promise<void> {
+    if (!p.ready) return;
+    try {
+      await api.approve(p.id);
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 409)) throw err;
+    }
+  }
+
+  async reject(p: Proposal): Promise<void> {
+    try {
+      await api.reject(p.id);
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 409)) throw err;
+    }
+  }
+
+  async approveAll(): Promise<void> {
+    const res = await api.approveAll();
+    this.caption('Approved', res.caption || 'All pending proposals are now part of the model.');
+  }
+
+  async rejectAll(): Promise<void> {
+    const res = await api.rejectAll();
+    this.caption('Rejected', res.caption || 'All pending proposals were discarded.');
+  }
+
+  // ------------------------------------------------------------ toggles
+
+  togglePanel(): void {
+    this.ui.panelOff = document.body.classList.toggle('panel-off');
+    this.bump();
+  }
+
+  toggleLegend(): void {
+    this.ui.legendOff = !this.ui.legendOff;
+    this.bump();
+  }
+
+  toggleDomainsCard(): void {
+    this.ui.domainsOff = !this.ui.domainsOff;
+    this.bump();
+  }
+
+  toggleSkip(): void {
+    this.s.SKIP = !this.s.SKIP;
+    this.bump();
+  }
+
+  toggleCoverage(): void {
+    this.s.COVERAGE = !this.s.COVERAGE;
+    this.bump();
+    void api.putViewState({ coverage: this.s.COVERAGE }).catch(() => undefined);
+  }
+
+  arrange(): void {
+    if (!this.renderer) return;
+    arrangeCanvas(this.s, this.renderer.v);
+    this.bump();
+  }
+
+  /** Title of the Arrange button for the current highlighted set. */
+  arrangeTitle(): string {
+    const s = this.s;
+    return s.lineageNode
+      ? `Arrange the lineage of ${s.lineageNode.label} (A)`
+      : s.cellFocus
+        ? `Arrange ${s.cellFocus.label} and its relations (A)`
+        : s.domainFocus
+          ? `Arrange ${s.domainFocus.name} and what it relates to (A)`
+          : 'Lay the model out for reading (A)';
+  }
+
+  setTheme(name: 'dark' | 'light', persist = true): void {
+    this.ui.theme = name;
+    this.renderer?.applyTheme(name);
+    document.documentElement.setAttribute('data-theme', name === 'light' ? 'light' : 'dark');
+    this.bump();
+    if (persist) void api.patchAppearance({ theme: name }).catch(() => undefined);
+  }
+
+  toggleTheme(): void {
+    this.setTheme(this.ui.theme === 'light' ? 'dark' : 'light');
+  }
+
+  openAdmin(): void {
+    this.ui.adminOpen = true;
+    this.bump();
+  }
+
+  closeAdmin(): void {
+    this.ui.adminOpen = false;
+    this.bump();
+  }
+
+  /** Mirrors the tenant settings onto the shell, the reference's `applySettings`. */
+  applySettings(): void {
+    const st = this.ui.settings;
+    if (!st) return;
+    this.ui.legendOff = !st.legend ? true : this.ui.legendOff;
+    if (this.s.SKIP === st.animations) this.toggleSkip();
+    this.bump();
+  }
+
+  // ------------------------------------------------------------ domains card
+
+  toggleDomainHidden(d: Domain): void {
+    d.hidden = !d.hidden;
+    this.s.focusDomain = null;
+    this.bump();
+    if (d.sid) void api.updateDomainProduct(d.sid, { hidden: d.hidden }).catch(() => undefined);
+  }
+
+  focusDomainFromCard(d: Domain): void {
+    const s = this.s;
+    if (s.focusDomain === d) {
+      for (const x of s.DOMAINS) x.hidden = false;
+      s.focusDomain = null;
+    } else {
+      const keep = new Set<Domain>([d]);
+      for (const l of s.links) {
+        if (l.a.domain === d && l.b.domain) keep.add(l.b.domain);
+        if (l.b.domain === d && l.a.domain) keep.add(l.a.domain);
+      }
+      for (const x of s.DOMAINS) x.hidden = !keep.has(x);
+      s.focusDomain = d;
+    }
+    this.bump();
+  }
+
+  toggleAllDomains(): void {
+    const s = this.s;
+    const allOn = s.DOMAINS.every((d) => !d.hidden);
+    for (const d of s.DOMAINS) d.hidden = allOn;
+    s.focusDomain = null;
+    this.bump();
+  }
+
+  toggleCompanyDomains(c: Company): void {
+    const s = this.s;
+    const live = c.domains.filter((d) => s.nodes.some((n) => n.domain === d && !n.dying));
+    const on = live.every((d) => d.hidden);
+    for (const d of c.domains) d.hidden = !on;
+    s.focusDomain = null;
+    this.bump();
+  }
+
+  // ------------------------------------------------------------ drawer, lineage, boxes
+
+  openDrawer(n: Node): void {
+    const s = this.s;
+    this.ui.drawerNode = n;
+    this.ui.drawerSeq++;
+    if (s.lineageNode && s.lineageNode !== n) {
+      if (n.kind === 'concept') this.showLineage(n);
+      else this.hideLineage();
+    } else if (s.lineageNode === n) this.showLineage(n);
+    this.bump();
+  }
+
+  closeDrawer(): void {
+    const s = this.s;
+    this.ui.drawerNode = null;
+    this.hideLineage();
+    if (s.cellFocus) {
+      s.cellFocus = null;
+      if (!s.domainFocus) {
+        s.stickyFocus = null;
+        s.focusSet = null;
+      }
+    }
+    this.bump();
+  }
+
+  showLineage(n: Node): void {
+    showLineageState(this.s, n);
+    this.ui.lineageOn = true;
+    this.bump();
+  }
+
+  hideLineage(): void {
+    hideLineageState(this.s, this.ui.drawerNode);
+    this.ui.lineageOn = false;
+    this.bump();
+  }
+
+  toggleLineage(): void {
+    const n = this.ui.drawerNode;
+    if (!n) return;
+    if (this.s.lineageNode === n) this.hideLineage();
+    else this.showLineage(n);
+  }
+
+  goTo(n: Node): void {
+    const s = this.s;
+    this.closeAdmin();
+    s.userZoomed = true;
+    s.cam.tx = n.x;
+    s.cam.ty = n.y;
+    s.cam.ts = 1.4;
+    s.hover = null;
+    if (!s.lineageNode) focusOnCell(s, n);
+    this.openDrawer(n);
+  }
+
+  private boxPosition(sx: number, sy: number): { left: number; top: number } {
+    const v = this.renderer?.v;
+    const W = v ? v.W : innerWidth,
+      H = v ? v.H : innerHeight;
+    const pw = W > 900 && !this.ui.panelOff ? 320 : 0;
+    return { left: Math.max(170, Math.min(W - pw - 170, sx)), top: Math.min(sy, H - 230) };
+  }
+
+  openNewBox(host: Node, sx: number, sy: number): void {
+    this.closeLinkBox();
+    this.ui.newBox = { host, ...this.boxPosition(sx, sy) };
+    this.bump();
+  }
+
+  closeNewBox(): void {
+    if (!this.ui.newBox) return;
+    this.ui.newBox = null;
+    this.bump();
+  }
+
+  openLinkBox(a: Node, b: Node, sx: number, sy: number, link: Link | null = null): void {
+    const st = this.ui.settings;
+    if (!link && a.company !== b.company && st && !st.crossCompany) {
+      this.toast2('<b>Not allowed</b> companies may not interact · enable it in the admin portal');
+      return;
+    }
+    if (!link && (a.kind === 'source' || b.kind === 'source')) {
+      const src = a.kind === 'source' ? a : b,
+        tgt = a.kind === 'source' ? b : a;
+      if (tgt.kind === 'concept' && src.sid && tgt.sid) {
+        void this.propose({ type: 'bind', sourceId: src.sid, conceptIds: [tgt.sid] });
+        this.caption('One proposal', `Binding ${tgt.label} to ${src.label} is waiting for your approval.`);
+      }
+      return;
+    }
+    this.closeNewBox();
+    this.ui.linkBox = { a, b, link, reverse: false, ...this.boxPosition(sx, sy) };
+    this.bump();
+  }
+
+  closeLinkBox(): void {
+    if (!this.ui.linkBox) return;
+    this.ui.linkBox = null;
+    this.bump();
+  }
+
+  reverseLinkBox(): void {
+    if (!this.ui.linkBox) return;
+    this.ui.linkBox = { ...this.ui.linkBox, reverse: !this.ui.linkBox.reverse };
+    this.bump();
+  }
+
+  // ------------------------------------------------------------ keyboard escape
+
+  /** Escape on the canvas: zoom, focus, boxes, drawer and lineage all release. */
+  escape(): void {
+    const s = this.s;
+    s.userZoomed = false;
+    s.cellFocus = null;
+    focusOnDomain(s, null);
+    this.closeNewBox();
+    this.closeLinkBox();
+    this.closeDrawer();
+    this.hideLineage();
+  }
+
+  /** Rebuilds the home company at scene 0, the reference's `reset`. */
+  async reset(): Promise<void> {
+    const s = this.s;
+    const scene = await api.demoReset();
+    s.lineageNode = null;
+    s.lineageSet = null;
+    s.cellFocus = null;
+    this.ui.drawerNode = null;
+    this.ui.lineageOn = false;
+    this.ui.newBox = null;
+    this.ui.linkBox = null;
+    if (s.COVERAGE) s.COVERAGE = false;
+    s.focusDomain = null;
+    s.stickyFocus = null;
+    s.domainFocus = null;
+    s.focusSet = null;
+    s.lastInteract = now();
+    s.userZoomed = false;
+    s.cam.ts = 1;
+    s.cam.s = 1;
+    s.cam.tx = s.cam.ty = s.cam.x = s.cam.y = 0;
+    s.hover = null;
+    this.applyScene(scene);
+    this.caption(...FRESH_CAPTION);
+  }
+
+  /** Label of a lineage stamp, `dd MMM HH:mm` in en-GB. */
+  when(x: Node): string {
+    return x.bornAt
+      ? x.bornAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) +
+          ' ' +
+          x.bornAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+      : '';
+  }
+
+  /** Time of the store's clock, exposed for the demo layer. */
+  clock(): Date {
+    return nowDate();
+  }
+
+  /** Company root lookup by label for the demo layer. */
+  findNode(label: string, company?: Company | null): Node | null {
+    return find(this.s, label, company);
+  }
+}
+
+export const store = new StudioStore();
+export type { StudioStore };
