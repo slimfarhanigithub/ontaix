@@ -15,19 +15,30 @@ info:
     - Lists that can grow large (concepts, relations, bindings, users, groups, agents, audit) share one pagination, search, filter and sort convention: `page`, `pageSize`, `q`, `filter[<field>]=<value>`, `sort`, `order`, and return `{ items, page, pageSize, total }`.
     - The tenant is resolved from the token; no path carries a tenant id.
 
-    Live updates: `GET /api/v1/ws` upgrades to a WebSocket that carries the events described in `contracts/events.yaml`, in the envelope `{ id, type, occurredAt, tenantId, sequence, actor, payload }`. Reconnect with `?since=<sequence>` to receive missed events; a `snapshot.required` message means the client must reload `GET /api/v1/scene`.
+    Live updates: `POST /api/v1/ws/ticket` mints a one-time ticket; `GET /api/v1/ws?ticket=` upgrades to a WebSocket that carries the events described in `contracts/events.yaml`, in the envelope `{ id, type, occurredAt, tenantId, sequence, actor, bulk, payload }`. A bearer token is never accepted in a query string. Reconnect with `?since=<sequence>` to receive missed events; a `snapshot.required` message means the client must reload `GET /api/v1/scene`. Each event is delivered only to callers holding the permission its channel declares as `x-ontaix-visibility`.
+
+    Authorisation: every operation declares the permission it needs as `x-ontaix-permission` (vocabulary in ADR 0003); QA contract tests assert it. Ontology reads and events are limited to the companies the caller may read.
+
+    Rate limits: operations that parse text, import documents, create proposals or open outbound connections return `429` with code `rate_limited` when a per-user or per-agent budget is exceeded; the `Retry-After` header says when to retry.
+
+    CORS: the API answers an explicit origin allow-list from configuration, never a wildcard. Authentication is bearer tokens only, no cookies, so there is no CSRF surface.
   license:
     name: Proprietary
     identifier: LicenseRef-Ontaix-Proprietary
   contact:
     name: Ontaix architect agent
 servers:
-  - url: http://localhost:8000/api/v1
-    description: Local development
-  - url: https://api.ontaix.dev/api/v1
-    description: Azure dev environment
+  - url: '{scheme}://{host}/api/v1'
+    description: Local development runs on http at port 8000 of the loopback host; the Azure dev environment is api.ontaix.dev over https.
+    variables:
+      scheme:
+        default: https
+        enum: [https, http]
+      host:
+        default: api.ontaix.dev
 security:
   - bearerAuth: []
+  - agentToken: []
 tags:
   - name: Scene
     description: One-call snapshot for the canvas, coverage, shared view state and stored positions.
@@ -62,6 +73,7 @@ paths:
       tags: [System]
       summary: Liveness probe
       operationId: getHealth
+      x-ontaix-permission: none
       security: []
       responses:
         '200':
@@ -85,6 +97,7 @@ paths:
       summary: Load the whole canvas state in one call
       description: Returns every company, domain product, node (concept and source), link (relation and binding), open proposal, settings, view state and the current event sequence, limited to the companies the caller may read. The Studio fills its arrays from this response and keeps them current from the WebSocket.
       operationId: getScene
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: The snapshot.
@@ -102,6 +115,7 @@ paths:
       tags: [Scene]
       summary: Coverage figures per company and domain product
       operationId: getCoverage
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: Coverage figures.
@@ -119,6 +133,7 @@ paths:
       tags: [Scene]
       summary: Store the shared view state (coverage flag, scene index)
       operationId: putViewState
+      x-ontaix-permission: view.write
       requestBody:
         required: true
         content:
@@ -145,6 +160,7 @@ paths:
       summary: Store node positions and pinned flags
       description: Called by the Studio after a drag or an Arrange, at most every 1500 ms. Positions belong to the tenant, so every user sees the same layout.
       operationId: putPositions
+      x-ontaix-permission: view.write
       requestBody:
         required: true
         content:
@@ -168,12 +184,77 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
+  /ws/ticket:
+    post:
+      tags: [Scene]
+      summary: Mint a one-time WebSocket ticket
+      description: Returns an opaque ticket bound to the caller's identity and permissions, valid for 30 seconds and for one connection. The Studio passes it as `?ticket=` when opening `GET /ws`, so a bearer token never appears in a URL.
+      operationId: createWsTicket
+      x-ontaix-permission: model.read
+      responses:
+        '201':
+          description: The ticket.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ticket, expiresAt]
+                properties:
+                  ticket:
+                    type: string
+                    maxLength: 128
+                  expiresAt:
+                    type: string
+                    format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /ws:
+    get:
+      tags: [Scene]
+      summary: Live-update WebSocket
+      description: Upgrades to a WebSocket. Authentication is the one-time ticket from `POST /ws/ticket`; the bearer schemes do not apply here and a token in the query string is refused with `401`. Every message is an `Envelope` from `contracts/events.yaml`; the server delivers only events whose channel `x-ontaix-visibility` permission the caller holds, and ontology events only for companies the caller may read. Pass `since` to resume; a `snapshot.required` message means the gap is too old and the client must reload `GET /scene`.
+      operationId: connectWs
+      x-ontaix-permission: model.read
+      security: []
+      parameters:
+        - name: ticket
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 128
+        - name: since
+          in: query
+          description: Last applied `sequence`; on a first connection pass the `sequence` of the `GET /scene` response.
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '101':
+          description: Switching protocols; the connection now carries Envelope messages.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Ticket missing, expired, already used, or a bearer token was passed in the query string.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   # ---------------------------------------------------------------- Companies
   /companies:
     get:
       tags: [Companies]
       summary: List companies with their counters
       operationId: listCompanies
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: Companies in display order.
@@ -192,6 +273,7 @@ paths:
       summary: Add a company
       description: 'Immediate and audited (kind `company`). Creates the nine domain products and the root cell. With `start` set to `starter_vocabulary` the thirteen starter concepts are created as proposals, awaiting approval.'
       operationId: createCompany
+      x-ontaix-permission: company.create
       requestBody:
         required: true
         content:
@@ -221,6 +303,7 @@ paths:
       tags: [Companies]
       summary: Get one company
       operationId: getCompany
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: The company.
@@ -239,6 +322,7 @@ paths:
       summary: Propose removing a company
       description: Creates a `change` proposal (`remove_company`). The home company cannot be removed (`409 home_company`).
       operationId: proposeRemoveCompany
+      x-ontaix-permission: proposal.create
       responses:
         '202':
           $ref: '#/components/responses/ProposalAccepted'
@@ -256,6 +340,7 @@ paths:
       tags: [Companies]
       summary: List domain products of every company
       operationId: listDomainProducts
+      x-ontaix-permission: model.read
       parameters:
         - name: companyId
           in: query
@@ -283,6 +368,7 @@ paths:
       tags: [Companies]
       summary: Get one domain product
       operationId: getDomainProduct
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: The domain product.
@@ -301,6 +387,7 @@ paths:
       summary: Show or hide a domain product
       description: Visibility is a display setting, immediate and audited. Versions are server-managed and never written here.
       operationId: updateDomainProduct
+      x-ontaix-permission: view.write
       requestBody:
         required: true
         content:
@@ -331,6 +418,7 @@ paths:
       tags: [Concepts]
       summary: List concepts (Entities page)
       operationId: listConcepts
+      x-ontaix-permission: model.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -364,6 +452,7 @@ paths:
       summary: Propose a new concept or specialisation
       description: Creates a `concept` or `spec` proposal. The pending cell and its birth relation are created at once and returned inside the proposal so the canvas can divide immediately. Refused with `409 duplicate_label` when the label exists in the company.
       operationId: proposeConcept
+      x-ontaix-permission: proposal.create
       requestBody:
         required: true
         content:
@@ -398,6 +487,7 @@ paths:
       tags: [Concepts]
       summary: Get one concept with binding and attributes
       operationId: getConcept
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: The concept.
@@ -416,6 +506,7 @@ paths:
       summary: Propose renaming a concept
       description: Creates a `change` proposal (`rename`). Uniqueness of the new label in the company is enforced (`409 duplicate_label`).
       operationId: proposeRenameConcept
+      x-ontaix-permission: proposal.create
       requestBody:
         required: true
         content:
@@ -446,6 +537,7 @@ paths:
       summary: Propose deleting a concept and its descendants
       description: Creates a `change` proposal (`delete_concept`). Approval marks the concept and every descendant dying; the root cell cannot be deleted (`409 root_concept`).
       operationId: proposeDeleteConcept
+      x-ontaix-permission: proposal.create
       responses:
         '202':
           $ref: '#/components/responses/ProposalAccepted'
@@ -465,6 +557,7 @@ paths:
       tags: [Concepts]
       summary: Ancestry, descendants and data lineage of a concept
       operationId: getConceptLineage
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: The lineage drawer content.
@@ -486,6 +579,7 @@ paths:
       tags: [Concepts]
       summary: List attributes of a concept
       operationId: listConceptAttributes
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: Approved and proposed attributes.
@@ -506,6 +600,7 @@ paths:
       summary: Propose an attribute discovered in data
       description: Creates an `attr` proposal; the attribute is stored with state `proposed`. Auto-approved when the tenant setting `autoAttrs` is on.
       operationId: proposeAttribute
+      x-ontaix-permission: proposal.create
       requestBody:
         required: true
         content:
@@ -532,6 +627,7 @@ paths:
       tags: [Relations]
       summary: List relations (Relationships page)
       operationId: listRelations
+      x-ontaix-permission: model.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -565,6 +661,7 @@ paths:
       summary: Propose a relation between two concepts
       description: Creates a `relation` proposal. Action `is a` produces an `isa` relation, `equivalent to` produces a `same` relation. Refused with `409 duplicate_relation` when the triple exists and `409 cross_company_disabled` when the ends belong to different companies and the switch is off.
       operationId: proposeRelation
+      x-ontaix-permission: proposal.create
       requestBody:
         required: true
         content:
@@ -592,6 +689,7 @@ paths:
       tags: [Relations]
       summary: Get one relation
       operationId: getRelation
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: The relation.
@@ -610,6 +708,7 @@ paths:
       summary: Propose changing the action or the direction of a relation
       description: Creates a `change` proposal (`edit_relation`). Relabelling an `isa` or `same` relation is refused (`409 structural_relation`); reversing an `isa` is allowed.
       operationId: proposeEditRelation
+      x-ontaix-permission: proposal.create
       requestBody:
         required: true
         content:
@@ -634,6 +733,7 @@ paths:
       summary: Propose removing a relation
       description: Creates a `change` proposal (`remove_relation`). `clash` relations cannot be removed this way; they leave through conflict resolution.
       operationId: proposeRemoveRelation
+      x-ontaix-permission: proposal.create
       responses:
         '202':
           $ref: '#/components/responses/ProposalAccepted'
@@ -651,6 +751,7 @@ paths:
       tags: [Relations]
       summary: List cross-company equivalences
       operationId: listEquivalences
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: Every `same` relation with both companies.
@@ -669,6 +770,7 @@ paths:
       summary: Propose an equivalence between two companies' concepts
       description: Creates a `relation` proposal with kind `same`. Refused with `409 cross_company_disabled` when the switch is off, and `409 same_company` when both concepts belong to one company.
       operationId: proposeEquivalence
+      x-ontaix-permission: proposal.create
       requestBody:
         required: true
         content:
@@ -705,6 +807,7 @@ paths:
       tags: [Sources]
       summary: Connector catalogue
       operationId: listConnectors
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: The fifteen connector types in catalogue order.
@@ -727,8 +830,9 @@ paths:
     post:
       tags: [Sources]
       summary: Verify a connection and preview the objects it exposes (wizard step 3)
-      description: Read-only. Returns the status text and the discovered objects with row counts; nothing is stored.
+      description: Read-only. Requires `source.manage`; agents are refused. Hosts that resolve to loopback, link-local or private ranges are refused with `422` unless they appear in the tenant's egress allowlist (`tenant_settings.egress_allowlist`). Returns the status text and the discovered objects with row counts; nothing is stored.
       operationId: discoverConnector
+      x-ontaix-permission: source.manage
       requestBody:
         required: true
         content:
@@ -736,6 +840,8 @@ paths:
             schema:
               $ref: '#/components/schemas/DiscoveryRequest'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '200':
           description: The discovery result.
           content:
@@ -756,6 +862,7 @@ paths:
       tags: [Sources]
       summary: List sources (Data sources page)
       operationId: listSources
+      x-ontaix-permission: model.read
       parameters:
         - name: companyId
           in: query
@@ -780,6 +887,7 @@ paths:
       summary: Propose a data source
       description: Creates a `source` proposal; the pending source is drawn at once. Connection secrets are never accepted by this API - `auth` names the method and the credential lives in Key Vault under the source id.
       operationId: proposeSource
+      x-ontaix-permission: proposal.create
       requestBody:
         required: true
         content:
@@ -804,6 +912,7 @@ paths:
       summary: Re-read counts and schemas of every enabled source
       description: Immediate and audited (`all sources refreshed`). Freshness of every bound concept of an enabled source becomes `just now`.
       operationId: refreshAllSources
+      x-ontaix-permission: source.manage
       responses:
         '200':
           description: Refresh outcome.
@@ -829,6 +938,7 @@ paths:
       tags: [Sources]
       summary: Get one source
       operationId: getSource
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: The source.
@@ -845,8 +955,9 @@ paths:
     patch:
       tags: [Sources]
       summary: Reconfigure a source
-      description: Immediate and audited (`<name> reconfigured`). Changes connection settings only; feeding and bindings are untouched.
+      description: Immediate and audited (`<name> reconfigured`). Changes connection settings only (host, scope, authentication method, credential reference, refresh); the label, feeding and bindings are untouched. Renaming goes through `POST /proposals` with `changeKind` `rename_source`.
       operationId: updateSource
+      x-ontaix-permission: source.manage
       requestBody:
         required: true
         content:
@@ -873,6 +984,7 @@ paths:
       summary: Propose removing a source
       description: Creates a `change` proposal (`remove_source`); on approval every binding to it is removed and attributes stay as declared.
       operationId: proposeRemoveSource
+      x-ontaix-permission: proposal.create
       responses:
         '202':
           $ref: '#/components/responses/ProposalAccepted'
@@ -893,6 +1005,7 @@ paths:
       summary: Enable a source
       description: Immediate and audited. Freshness of its bound concepts becomes `2 min`. Refused while the source is pending (`409 source_pending`).
       operationId: enableSource
+      x-ontaix-permission: source.manage
       responses:
         '200':
           description: The source.
@@ -917,6 +1030,7 @@ paths:
       summary: Disable a source
       description: Immediate and audited. Syncing stops; bound concepts keep their attributes and their freshness reads `paused`.
       operationId: disableSource
+      x-ontaix-permission: source.manage
       responses:
         '200':
           description: The source.
@@ -939,6 +1053,7 @@ paths:
       summary: List binding rows (Bindings page)
       description: One row per approved concept, bound or not.
       operationId: listBindings
+      x-ontaix-permission: model.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -972,6 +1087,7 @@ paths:
       summary: Propose binding concepts to a source
       description: Creates one `bind` proposal with one pending binding per concept. On approval the record count and freshness are set, declared attributes are written as approved and discovered ones become `attr` proposals. Refused with `409 already_bound` when a concept already has a binding.
       operationId: proposeBinding
+      x-ontaix-permission: proposal.create
       requestBody:
         required: true
         content:
@@ -1005,6 +1121,7 @@ paths:
       summary: Propose unbinding a concept
       description: Creates a `change` proposal (`unbind`); attributes stay as declared.
       operationId: proposeUnbind
+      x-ontaix-permission: proposal.create
       responses:
         '202':
           $ref: '#/components/responses/ProposalAccepted'
@@ -1021,6 +1138,7 @@ paths:
       tags: [Proposals]
       summary: List proposals
       operationId: listProposals
+      x-ontaix-permission: model.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1053,6 +1171,7 @@ paths:
       summary: Create one proposal from a typed draft
       description: The generic entry used by the teach bar, the MCP gateway and the demo story. Same refusals as the resource endpoints.
       operationId: createProposal
+      x-ontaix-permission: proposal.create
       requestBody:
         required: true
         content:
@@ -1060,6 +1179,8 @@ paths:
             schema:
               $ref: '#/components/schemas/ProposalDraft'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '202':
           $ref: '#/components/responses/ProposalAccepted'
         '401':
@@ -1079,6 +1200,7 @@ paths:
       summary: Create several proposals in order
       description: Drafts are created in array order in one transaction so that later drafts can depend on labels introduced by earlier ones. Any refusal fails the whole batch.
       operationId: createProposalBatch
+      x-ontaix-permission: proposal.create
       requestBody:
         required: true
         content:
@@ -1094,6 +1216,8 @@ paths:
                   items:
                     $ref: '#/components/schemas/ProposalDraft'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '202':
           description: The created proposals in order.
           content:
@@ -1117,8 +1241,9 @@ paths:
     post:
       tags: [Proposals]
       summary: Approve every ready proposal, repeatedly
-      description: Loops while any proposal is ready, at most 200 rounds. Events emitted carry `bulk` set to true.
+      description: Acts only on proposals the caller may approve under ADR 0003 check points 2 to 4; proposals outside the caller's scope are skipped and counted in `remaining`. Loops while any proposal in scope is ready, at most 200 rounds. Events emitted carry `bulk` set to true.
       operationId: approveAllProposals
+      x-ontaix-permission: proposal.approve
       responses:
         '200':
           description: What was approved.
@@ -1134,8 +1259,10 @@ paths:
   /proposals/reject-all:
     post:
       tags: [Proposals]
-      summary: Reject every open proposal
+      summary: Reject every open proposal in the caller's scope
+      description: Acts only on proposals the caller may reject under ADR 0003 check points 2 to 4; proposals outside the caller's scope are skipped and counted in `remaining`.
       operationId: rejectAllProposals
+      x-ontaix-permission: proposal.reject
       responses:
         '200':
           description: What was rejected.
@@ -1152,8 +1279,9 @@ paths:
     post:
       tags: [Proposals]
       summary: Play the remaining story and approve everything
-      description: When `demoStory` is on, plays every remaining scene server-side, then runs approve-all rounds until nothing is ready. When the story is off it equals approve-all. Audited as `demo · finalised all scenes`.
+      description: Requires `proposal.finalise`, held by Governor at tenant scope, because it creates proposals for every company and approves everything. When `demoStory` is on, plays every remaining scene server-side, then runs approve-all rounds until nothing is ready. When the story is off it equals approve-all. Audited as `demo · finalised all scenes`.
       operationId: finaliseAll
+      x-ontaix-permission: proposal.finalise
       responses:
         '200':
           description: The finalise summary used by the caption.
@@ -1173,6 +1301,7 @@ paths:
       tags: [Proposals]
       summary: Get one proposal with its readiness
       operationId: getProposal
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: The proposal.
@@ -1193,8 +1322,9 @@ paths:
     post:
       tags: [Proposals]
       summary: Approve a proposal
-      description: Requires Owner in scope or Governor in an enclosing scope. Refused when not ready (`409 proposal_not_ready`). When `twoApprovers` is on and the type is `change`, the proposal moves to `half_approved` and needs `second-approve` by a different user; otherwise it is applied - pending cleared, domain revision incremented, audit entry written, events emitted.
+      description: Requires Owner in scope or Governor in an enclosing scope. Refused when not ready (`409 proposal_not_ready`). When `twoApprovers` is on and the type is `change`, the proposal moves to `half_approved` and needs `second-approve` by a different user; calling this endpoint on a `half_approved` proposal behaves as `second-approve`. Otherwise it is applied - pending cleared, domain revision incremented, audit entry written, events emitted. A `rename` or `rename_source` re-checks label uniqueness at approval and is refused with `409 duplicate_label` when the label was taken meanwhile.
       operationId: approveProposal
+      x-ontaix-permission: proposal.approve
       responses:
         '200':
           description: The result, including the artefacts that changed.
@@ -1219,6 +1349,7 @@ paths:
       summary: Give the second approval on a half-approved change
       description: Requires Governor or Owner in scope and a different user from the first approver (`409 same_approver`). Refused unless the state is `half_approved` (`409 proposal_not_half_approved`).
       operationId: secondApproveProposal
+      x-ontaix-permission: proposal.second_approve
       responses:
         '200':
           description: The result.
@@ -1243,6 +1374,7 @@ paths:
       summary: Reject a proposal and cascade
       description: Marks the proposal rejected, its concept dying and removes its pending relations, bindings or attribute. Every open proposal whose concept descends from the rejected concept, or whose relation touches it, is rejected in the same transaction and listed in `cascaded`.
       operationId: rejectProposal
+      x-ontaix-permission: proposal.reject
       requestBody:
         required: false
         content:
@@ -1276,6 +1408,7 @@ paths:
       summary: Parse a sentence into intents and proposal drafts
       description: Pure. Runs the rule-based grammar (domain prefix, specialisation patterns, verb lexicon, list splitting, passives) against the company's current labels and returns the intents, the drafts the client may submit to `POST /proposals/batch`, and the caption outcome (`understood`, `partly_understood`, `not_understood`). Nothing is written. When `demoStory` is on and the text matches the next scene, `scene` is returned instead of drafts.
       operationId: parseTeach
+      x-ontaix-permission: proposal.create
       requestBody:
         required: true
         content:
@@ -1296,6 +1429,8 @@ paths:
                   default: false
                   description: True when the sentence comes from a document import; story interception is skipped.
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '200':
           description: The parse result.
           content:
@@ -1317,6 +1452,7 @@ paths:
       summary: Suggest an action between a subject and an object
       description: Pure. Order - the subject's own actions toward the object's domain, then the subject-name table, then the object-name table, then the subject's most common action, then the object's most common incoming action, then `relates to`. The suggestion is never submitted by itself.
       operationId: suggestAction
+      x-ontaix-permission: model.read
       parameters:
         - name: subjectId
           in: query
@@ -1362,8 +1498,9 @@ paths:
     post:
       tags: [Teach]
       summary: Extract sentences from a document
-      description: Accepts `.txt`, `.md`, `.csv`, `.json`, `.docx` and `.pdf`. Splits on sentence punctuation or newlines and keeps sentences of 13 to 399 characters. Nothing is stored; the client teaches sentence by sentence.
+      description: The only place documents are read - the Studio never extracts text itself and loads nothing from a CDN. Accepts at most 10 MiB with media type `text/plain`, `text/markdown`, `text/csv`, `application/json`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` or `application/pdf`; anything else is `415`. Splits on sentence punctuation or newlines and keeps sentences of 13 to 399 characters. Nothing is stored; the client teaches sentence by sentence.
       operationId: importSentences
+      x-ontaix-permission: proposal.create
       requestBody:
         required: true
         content:
@@ -1376,6 +1513,8 @@ paths:
                   type: string
                   contentMediaType: application/octet-stream
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '200':
           description: The sentences in document order.
           content:
@@ -1405,6 +1544,7 @@ paths:
       tags: [Identity]
       summary: The signed-in user, effective roles and permissions
       operationId: getMe
+      x-ontaix-permission: authenticated
       responses:
         '200':
           description: The current user.
@@ -1420,6 +1560,7 @@ paths:
       tags: [Identity]
       summary: List users (Users page)
       operationId: listUsers
+      x-ontaix-permission: directory.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1456,6 +1597,7 @@ paths:
       tags: [Identity]
       summary: Get one user
       operationId: getUser
+      x-ontaix-permission: directory.read
       responses:
         '200':
           description: The user.
@@ -1475,6 +1617,7 @@ paths:
       tags: [Identity]
       summary: List groups (Groups page)
       operationId: listGroups
+      x-ontaix-permission: directory.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1507,6 +1650,7 @@ paths:
       summary: Create a group
       description: Immediate and audited (`groups`). Requires Administrator.
       operationId: createGroup
+      x-ontaix-permission: group.manage
       requestBody:
         required: true
         content:
@@ -1536,6 +1680,7 @@ paths:
       tags: [Identity]
       summary: Get one group with members and roles
       operationId: getGroup
+      x-ontaix-permission: directory.read
       responses:
         '200':
           description: The group.
@@ -1553,6 +1698,7 @@ paths:
       tags: [Identity]
       summary: Rename or describe a group
       operationId: updateGroup
+      x-ontaix-permission: group.manage
       requestBody:
         required: true
         content:
@@ -1581,6 +1727,7 @@ paths:
       summary: Delete a group
       description: Members lose the role assignments the group carries; users themselves are not deleted.
       operationId: deleteGroup
+      x-ontaix-permission: group.manage
       responses:
         '204':
           description: Deleted.
@@ -1599,6 +1746,7 @@ paths:
       tags: [Identity]
       summary: Add a user to a group
       operationId: addGroupMember
+      x-ontaix-permission: group.manage
       responses:
         '204':
           description: The user is a member.
@@ -1612,6 +1760,7 @@ paths:
       tags: [Identity]
       summary: Remove a user from a group
       operationId: removeGroupMember
+      x-ontaix-permission: group.manage
       responses:
         '204':
           description: The user is no longer a member.
@@ -1630,6 +1779,7 @@ paths:
       summary: Give a group a role on a scope
       description: Duplicates of `{role, scope}` are refused (`409 duplicate_role`). Administrator only applies at Tenant scope (`422`).
       operationId: addGroupRole
+      x-ontaix-permission: group.manage
       requestBody:
         required: true
         content:
@@ -1667,6 +1817,7 @@ paths:
       tags: [Identity]
       summary: Remove one role assignment from a group
       operationId: removeGroupRole
+      x-ontaix-permission: group.manage
       responses:
         '204':
           description: Removed.
@@ -1682,6 +1833,7 @@ paths:
       tags: [Identity]
       summary: Role catalogue with descriptions and holder counts (Roles page)
       operationId: listRoles
+      x-ontaix-permission: directory.read
       responses:
         '200':
           description: The seven roles. The Agent row counts agents with access, or 0 when `agentAccess` is off.
@@ -1707,6 +1859,7 @@ paths:
       tags: [Identity]
       summary: Which groups hold a role and on which scope
       operationId: listRoleGroups
+      x-ontaix-permission: directory.read
       responses:
         '200':
           description: Every group with the assignments of this role (possibly none).
@@ -1737,6 +1890,7 @@ paths:
       summary: Scopes a role can be given on
       description: Tenant, then each company, then each domain product family, in the order the reference lists them.
       operationId: listScopes
+      x-ontaix-permission: directory.read
       responses:
         '200':
           description: The scopes.
@@ -1757,6 +1911,7 @@ paths:
       tags: [Agents]
       summary: Agent registry
       operationId: listAgents
+      x-ontaix-permission: agent.manage
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1798,6 +1953,7 @@ paths:
       tags: [Agents]
       summary: Get one agent
       operationId: getAgent
+      x-ontaix-permission: agent.manage
       responses:
         '200':
           description: The agent.
@@ -1816,6 +1972,7 @@ paths:
       summary: Grant or revoke an agent's access
       description: Immediate and audited (`agents`).
       operationId: updateAgent
+      x-ontaix-permission: agent.manage
       requestBody:
         required: true
         content:
@@ -1845,6 +2002,7 @@ paths:
       tags: [Agents]
       summary: Cost management KPIs and the by-platform table
       operationId: getCost
+      x-ontaix-permission: agent.manage
       parameters:
         - name: month
           in: query
@@ -1869,6 +2027,7 @@ paths:
       tags: [Agents]
       summary: Set the allocated amount for a month
       operationId: putCostAllocation
+      x-ontaix-permission: agent.manage
       requestBody:
         required: true
         content:
@@ -1903,6 +2062,7 @@ paths:
       tags: [Settings]
       summary: Tenant settings
       operationId: getSettings
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: Every setting.
@@ -1919,6 +2079,7 @@ paths:
       summary: Change settings
       description: Immediate; every changed key writes an audit entry `<key> enabled|disabled`. `approvalRequired` and `readOnlyConnectors` are locked (`409 locked_setting`). Turning `crossCompany` off here is refused with `409 confirmation_required` when cross-company relations exist; use the dedicated disable endpoint.
       operationId: updateSettings
+      x-ontaix-permission: settings.write
       requestBody:
         required: true
         content:
@@ -1946,6 +2107,7 @@ paths:
       tags: [Settings]
       summary: What disabling companies-may-interact would remove
       operationId: getCrossCompanyImpact
+      x-ontaix-permission: settings.write
       responses:
         '200':
           description: Company pairs, sample relations and totals for the confirmation dialog.
@@ -1964,6 +2126,7 @@ paths:
       summary: Disable companies-may-interact and remove every cross-company relation
       description: Requires the literal confirmation text `disable` (`409 confirmation_mismatch`). In one transaction - a bulk `change` proposal (`remove_cross_company_links`) is created and approved by this confirmation, every cross-company relation is marked dying, every open cross-company proposal is rejected, the setting is turned off, and the audit entry `companies may interact disabled · N cross-company relationships removed` is written. This cannot be undone by re-enabling.
       operationId: disableCrossCompany
+      x-ontaix-permission: settings.write
       requestBody:
         required: true
         content:
@@ -1994,6 +2157,7 @@ paths:
       tags: [Settings]
       summary: Appearance (theme, domain colours, accent, source colour)
       operationId: getAppearance
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: Appearance values.
@@ -2010,6 +2174,7 @@ paths:
       summary: Change appearance
       description: Immediate and audited. Domain colours are tenant-wide - a domain product keeps the same colour in every company.
       operationId: updateAppearance
+      x-ontaix-permission: appearance.write
       requestBody:
         required: true
         content:
@@ -2036,6 +2201,7 @@ paths:
       summary: Reset appearance to defaults
       description: Domain colours back to the templates, accent `#3fb8a9`, source colour `#d6bd8a`. Theme is unchanged.
       operationId: resetAppearance
+      x-ontaix-permission: appearance.write
       responses:
         '200':
           description: The defaults.
@@ -2054,6 +2220,7 @@ paths:
       tags: [Audit]
       summary: Audit log, newest first
       operationId: listAudit
+      x-ontaix-permission: audit.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -2087,6 +2254,7 @@ paths:
       tags: [Demo]
       summary: The scene list and the current index
       operationId: listDemoScenes
+      x-ontaix-permission: model.read
       responses:
         '200':
           description: Scenes with name, placeholder sentence and match pattern.
@@ -2119,6 +2287,7 @@ paths:
       summary: Play the next scene
       description: Creates the scene's proposals server-side in order and pacing; the Studio animates them from the events. Returns the scene played.
       operationId: playNextDemoScene
+      x-ontaix-permission: demo.run
       responses:
         '200':
           description: The scene that was played and the new index.
@@ -2153,8 +2322,9 @@ paths:
     post:
       tags: [Demo]
       summary: Restart the story
-      description: Removes every company, proposal and audit entry of the demo tenant and rebuilds the home company at scene 0. Refused outside dev tenants (`409 not_demo_tenant`).
+      description: Removes every company and proposal of the demo tenant and rebuilds the home company at scene 0. The audit log is never touched; the reset itself is appended as `demo · story restarted`. Refused outside dev tenants (`409 not_demo_tenant`).
       operationId: resetDemo
+      x-ontaix-permission: demo.run
       responses:
         '200':
           description: The fresh scene.
@@ -2181,7 +2351,12 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: OIDC ID token or access token from any provider the tenant trusts. Authentication only; roles come from Ontaix groups.
+      description: OIDC ID token or access token from any provider the tenant trusts (`tenant_identity_provider` maps issuer and audience to the tenant). Authentication only; roles come from Ontaix groups.
+    agentToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Agent bearer token (client credentials or workload identity). Its issuer and subject must match an `agent` row with `access` on, in a tenant whose `agentAccess` setting is on; otherwise `403`. An agent holds `model.read` and `proposal.create` in its own scope (tenant-wide or one company) and nothing else. Every agent read is logged.
 
   parameters:
     Page:
@@ -2218,6 +2393,7 @@ components:
         type: object
         additionalProperties:
           type: string
+          maxLength: 200
     Sort:
       name: sort
       in: query
@@ -2337,6 +2513,17 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    RateLimited:
+      description: The caller's budget for this operation is exhausted (code `rate_limited`); `Retry-After` says when to retry.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
 
   schemas:
     Problem:
@@ -2385,6 +2572,8 @@ components:
             - story_finished
             - payload_too_large
             - unsupported_media_type
+            - rate_limited
+            - duplicate_attribute
             - unavailable
         errors:
           type: array
@@ -2614,7 +2803,11 @@ components:
 
     ConceptDraft:
       type: object
-      required: [type, companyId, parentId, label, domainKey, action]
+      description: The parent is given by id, or by label when it is introduced by an earlier draft of the same batch.
+      required: [type, companyId, label, domainKey]
+      oneOf:
+        - required: [parentId]
+        - required: [parentLabel]
       properties:
         type:
           type: string
@@ -2625,6 +2818,7 @@ components:
           $ref: '#/components/schemas/Id'
         parentLabel:
           type: string
+          maxLength: 120
           description: Alternative to `parentId` for drafts that depend on a label introduced earlier in the same batch.
         label:
           type: string
@@ -2636,17 +2830,23 @@ components:
           type: string
           minLength: 1
           maxLength: 60
-          description: Lower-case action of the birth relation, default `relates to`.
+          default: relates to
+          description: Lower-case action of the birth relation.
         reverse:
           type: boolean
           default: false
           description: When true the birth relation reads child action parent.
         caption:
           type: string
+          maxLength: 300
 
     SpecDraft:
       type: object
-      required: [type, companyId, parentId, label, domainKey]
+      description: The parent is given by id, or by label when it is introduced by an earlier draft of the same batch.
+      required: [type, companyId, label, domainKey]
+      oneOf:
+        - required: [parentId]
+        - required: [parentLabel]
       properties:
         type:
           type: string
@@ -2657,6 +2857,7 @@ components:
           $ref: '#/components/schemas/Id'
         parentLabel:
           type: string
+          maxLength: 120
         label:
           type: string
           minLength: 1
@@ -2668,28 +2869,42 @@ components:
           $ref: '#/components/schemas/DomainKey'
         caption:
           type: string
+          maxLength: 300
 
     RelationDraft:
       type: object
-      required: [type, aId, bId, action]
+      description: Each end is given by id, or by label when it is introduced by an earlier draft of the same batch; `companyId` is required when a label is used.
+      required: [type, action]
+      allOf:
+        - oneOf:
+            - required: [aId]
+            - required: [aLabel]
+        - oneOf:
+            - required: [bId]
+            - required: [bLabel]
       properties:
         type:
           type: string
           const: relation
+        companyId:
+          $ref: '#/components/schemas/Id'
         aId:
           $ref: '#/components/schemas/Id'
         bId:
           $ref: '#/components/schemas/Id'
         aLabel:
           type: string
+          maxLength: 120
         bLabel:
           type: string
+          maxLength: 120
         action:
           type: string
           minLength: 1
           maxLength: 60
         caption:
           type: string
+          maxLength: 300
 
     RelationEdit:
       type: object
@@ -2764,9 +2979,11 @@ components:
           maxLength: 120
         kindText:
           type: string
+          maxLength: 60
           description: The catalogue category shown under the label, for example `ERP`.
         connectorCode:
           type: string
+          maxLength: 10
         host:
           type: string
           maxLength: 300
@@ -2775,19 +2992,19 @@ components:
           maxLength: 500
         auth:
           $ref: '#/components/schemas/SourceAuth'
+        credentialRef:
+          $ref: '#/components/schemas/CredentialRef'
         refresh:
           $ref: '#/components/schemas/RefreshInterval'
         caption:
           type: string
+          maxLength: 300
 
     SourceUpdate:
       type: object
+      description: Connection settings only. Renaming a source is a `change` proposal with `changeKind` `rename_source`.
       minProperties: 1
       properties:
-        label:
-          type: string
-          minLength: 1
-          maxLength: 120
         host:
           type: string
           maxLength: 300
@@ -2796,8 +3013,15 @@ components:
           maxLength: 500
         auth:
           $ref: '#/components/schemas/SourceAuth'
+        credentialRef:
+          $ref: '#/components/schemas/CredentialRef'
         refresh:
           $ref: '#/components/schemas/RefreshInterval'
+
+    CredentialRef:
+      type: string
+      pattern: '^[A-Za-z0-9-]{1,127}$'
+      description: Key Vault secret name that holds the source credential. A reference, never a value; the API refuses anything that is not a valid secret name and never returns or logs the secret.
 
     SourceAuth:
       type: string
@@ -2809,10 +3033,14 @@ components:
 
     Source:
       type: object
-      required: [id, companyId, label, kindText, anchorIndex, disabled, pending, refresh, x, y, pinned, feeds, records, state]
+      required: [id, kind, companyId, label, kindText, anchorIndex, disabled, pending, refresh, x, y, pinned, feeds, records, state]
       properties:
         id:
           $ref: '#/components/schemas/Id'
+        kind:
+          type: string
+          const: source
+          description: Discriminates a source from a concept in `Scene.nodes`.
         companyId:
           $ref: '#/components/schemas/Id'
         label:
@@ -2876,12 +3104,17 @@ components:
       properties:
         host:
           type: string
+          maxLength: 300
         scope:
           type: string
+          maxLength: 500
         auth:
           $ref: '#/components/schemas/SourceAuth'
+        credentialRef:
+          $ref: '#/components/schemas/CredentialRef'
         displayName:
           type: string
+          maxLength: 120
 
     Discovery:
       type: object
@@ -2905,10 +3138,14 @@ components:
 
     Binding:
       type: object
-      required: [id, sourceId, sourceLabel, conceptId, records, fresh, pending]
+      required: [id, kind, sourceId, sourceLabel, conceptId, records, fresh, pending]
       properties:
         id:
           $ref: '#/components/schemas/Id'
+        kind:
+          type: string
+          const: bind
+          description: Discriminates a binding from a relation in `Scene.links`.
         sourceId:
           $ref: '#/components/schemas/Id'
         sourceLabel:
@@ -2940,6 +3177,7 @@ components:
             $ref: '#/components/schemas/Id'
         caption:
           type: string
+          maxLength: 300
 
     BindingRow:
       type: object
@@ -3022,7 +3260,7 @@ components:
           const: change
         changeKind:
           type: string
-          enum: [rename, delete_concept, edit_relation, remove_relation, unbind, remove_source, remove_company, resolve_conflict]
+          enum: [rename, delete_concept, edit_relation, remove_relation, unbind, rename_source, remove_source, remove_company, resolve_conflict]
         payload:
           type: object
           properties:
@@ -3030,10 +3268,14 @@ components:
               $ref: '#/components/schemas/Id'
             newLabel:
               type: string
+              minLength: 1
+              maxLength: 120
             relationId:
               $ref: '#/components/schemas/Id'
             action:
               type: string
+              minLength: 1
+              maxLength: 60
             reverse:
               type: boolean
             bindingId:
@@ -3050,6 +3292,7 @@ components:
                 $ref: '#/components/schemas/Id'
         caption:
           type: string
+          maxLength: 300
 
     ProposalDraft:
       oneOf:
@@ -3082,7 +3325,7 @@ components:
           enum: [concept, spec, relation, source, bind, attr, change]
         changeKind:
           type: [string, 'null']
-          enum: [rename, delete_concept, edit_relation, remove_relation, unbind, remove_source, remove_company, resolve_conflict, remove_cross_company_links, null]
+          enum: [rename, delete_concept, edit_relation, remove_relation, unbind, rename_source, remove_source, remove_company, resolve_conflict, remove_cross_company_links, null]
         state:
           type: string
           enum: [pending, half_approved, approved, rejected]
@@ -3113,6 +3356,8 @@ components:
           description: Shown as `after <waitFor>` while blocked.
         html:
           type: string
+          maxLength: 2000
+          description: Server-generated; every interpolated label is HTML-escaped and only `<b>`, `<i>` and `<span class="...">` may appear. The Studio renders it with those three tags allow-listed and everything else as text.
         why:
           type: [string, 'null']
         caption:
@@ -3274,6 +3519,12 @@ components:
             oneOf:
               - $ref: '#/components/schemas/Concept'
               - $ref: '#/components/schemas/Source'
+            discriminator:
+              propertyName: kind
+              mapping:
+                root: '#/components/schemas/Concept'
+                concept: '#/components/schemas/Concept'
+                source: '#/components/schemas/Source'
         links:
           type: array
           description: Relations and bindings; a binding is drawn as a `bind` link from the source to the concept.
@@ -3281,6 +3532,14 @@ components:
             oneOf:
               - $ref: '#/components/schemas/Relation'
               - $ref: '#/components/schemas/Binding'
+            discriminator:
+              propertyName: kind
+              mapping:
+                rel: '#/components/schemas/Relation'
+                isa: '#/components/schemas/Relation'
+                same: '#/components/schemas/Relation'
+                clash: '#/components/schemas/Relation'
+                bind: '#/components/schemas/Binding'
         proposals:
           type: array
           description: Open proposals with `ready` and `waitFor` evaluated.
@@ -3520,7 +3779,7 @@ components:
           description: Coarse permissions the Studio uses to enable buttons; the server re-checks every call.
           items:
             type: string
-            enum: [model.read, proposal.create, proposal.approve, proposal.second_approve, proposal.reject, settings.write, appearance.write, company.create, source.manage, group.manage, agent.manage, audit.read]
+            enum: [model.read, view.write, proposal.create, proposal.approve, proposal.second_approve, proposal.reject, proposal.finalise, settings.write, appearance.write, company.create, source.manage, group.manage, directory.read, agent.manage, audit.read, demo.run]
 
     User:
       type: object
@@ -3615,6 +3874,7 @@ components:
         label:
           type: string
           description: '`Tenant`, the company name, or the domain product name.'
+      description: A domain scope names a domain product family by `domainKey` and covers that domain product in every company; `companyId` must be null for it and the API answers `422` otherwise. A company scope carries `companyId` only.
 
     RoleAssignmentInput:
       type: object
