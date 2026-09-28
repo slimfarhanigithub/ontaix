@@ -28,6 +28,21 @@ jobs:
     defaults:
       run:
         working-directory: ${{ matrix.package }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ontaix
+          POSTGRES_PASSWORD: ontaix
+          POSTGRES_DB: ontaix_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ontaix -d ontaix_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ONTAIX_TEST_DATABASE_URL: postgresql://ontaix:ontaix@localhost:5432/ontaix_test
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
