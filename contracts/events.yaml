@@ -1153,15 +1153,21 @@ components:
           oneOf:
             - type: 'null'
             - type: object
+              additionalProperties: false
               required: [fileName, mediaType]
               properties:
                 fileName:
                   type: string
+                  minLength: 1
                   maxLength: 255
+                  pattern: '^[^/\\:\x00-\x1f\x7f]{1,255}$'
+                  description: Basename only; HTML-escaped wherever interpolated, rendered as text.
                 mediaType:
                   type: string
+                  enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf]
                 position:
                   type: object
+                  additionalProperties: false
                   required: [unit, index]
                   properties:
                     unit:
@@ -1170,6 +1176,7 @@ components:
                     index:
                       type: integer
                       minimum: 1
+                      maximum: 100000
         id:
           type: string
           format: uuid

@@ -446,19 +446,28 @@ CREATE TABLE proposal (
   CONSTRAINT proposal_deps_is_array CHECK (jsonb_typeof(deps) = 'array'),
   CONSTRAINT proposal_origin_detail_only_for_document CHECK (origin_detail IS NULL OR origin = 'document'),
   CONSTRAINT proposal_origin_detail_shape CHECK (
-    origin_detail IS NULL OR (
+    origin_detail IS NULL OR COALESCE((
       jsonb_typeof(origin_detail) = 'object'
       AND octet_length(origin_detail::text) <= 1024
+      AND origin_detail ? 'fileName'
+      AND origin_detail ? 'mediaType'
+      AND (origin_detail - 'fileName' - 'mediaType' - 'position') = '{}'::jsonb
       AND jsonb_typeof(origin_detail -> 'fileName') = 'string'
       AND char_length(origin_detail ->> 'fileName') BETWEEN 1 AND 255
+      AND (origin_detail ->> 'fileName') !~ '[/\\:[:cntrl:]]'
       AND jsonb_typeof(origin_detail -> 'mediaType') = 'string'
-      AND char_length(origin_detail ->> 'mediaType') <= 100
-      AND (origin_detail -> 'position' IS NULL OR (
-        origin_detail -> 'position' ->> 'unit' IN ('page', 'paragraph')
+      AND (origin_detail ->> 'mediaType') IN (
+        'text/plain', 'text/markdown', 'text/csv', 'application/json',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/pdf')
+      AND (NOT (origin_detail ? 'position') OR (
+        jsonb_typeof(origin_detail -> 'position') = 'object'
+        AND (origin_detail -> 'position' - 'unit' - 'index') = '{}'::jsonb
+        AND (origin_detail -> 'position' ->> 'unit') IN ('page', 'paragraph')
         AND jsonb_typeof(origin_detail -> 'position' -> 'index') = 'number'
         AND (origin_detail -> 'position' ->> 'index')::numeric BETWEEN 1 AND 100000
+        AND (origin_detail -> 'position' ->> 'index')::numeric = trunc((origin_detail -> 'position' ->> 'index')::numeric)
       ))
-    )
+    ), false)
   ),
   CONSTRAINT proposal_decided_when_final CHECK ((state IN ('approved', 'rejected')) = (decided_at IS NOT NULL)),
   CONSTRAINT proposal_proposer_matches_kind CHECK (

@@ -1198,7 +1198,7 @@ paths:
     post:
       tags: [Proposals]
       summary: Create one proposal from a typed draft
-      description: The generic entry used by the teach bar (typed text or a speech transcript), document import and the MCP gateway. Same refusals as the resource endpoints.
+      description: The generic entry used by the teach bar (typed text or a speech transcript), document import and the MCP gateway. Same refusals as the resource endpoints, plus `409 channel_disabled` for a `speech` draft while `voice` is off or an `importRef` draft while `importDocs` is off.
       operationId: createProposal
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1229,7 +1229,7 @@ paths:
     post:
       tags: [Proposals]
       summary: Create several proposals in order
-      description: Drafts are created in array order in one transaction so that later drafts can depend on labels introduced by earlier ones. Any refusal fails the whole batch.
+      description: Drafts are created in array order in one transaction so that later drafts can depend on labels introduced by earlier ones. Any refusal fails the whole batch, including `409 channel_disabled` for a `speech` draft while `voice` is off or an `importRef` draft while `importDocs` is off. A batch whose drafts all carry a valid `importRef` does not spend the caller's proposal budget; the import already charged it.
       operationId: createProposalBatch
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1241,14 +1241,14 @@ paths:
               required: [drafts]
               properties:
                 origin:
-                  $ref: '#/components/schemas/Origin'
-                originDetail:
-                  $ref: '#/components/schemas/OriginDetail'
+                  $ref: '#/components/schemas/InputOrigin'
+                importRef:
+                  $ref: '#/components/schemas/ImportRef'
                 drafts:
                   type: array
                   minItems: 1
                   maxItems: 200
-                  description: A draft's own `origin` and `originDetail` win over the batch-level values, which apply to every draft that sets none.
+                  description: A draft's own `origin` and `importRef` win over the batch-level values, which apply to every draft that sets none.
                   items:
                     $ref: '#/components/schemas/ProposalDraft'
       responses:
@@ -1435,7 +1435,7 @@ paths:
     post:
       tags: [Teach]
       summary: Parse a sentence into intents and proposal drafts
-      description: Pure. Runs the rule-based grammar (domain prefix, specialisation patterns, verb lexicon, list splitting, passives) against the company's current labels and returns the intents, the drafts the client may submit to `POST /proposals/batch`, and the caption outcome (`understood`, `partly_understood`, `not_understood`). Nothing is written. `text` is one sentence from any of the three entry paths - typed in the teach bar, a speech transcript (the Studio transcribes the microphone and sends the final transcript as text, so speech has no endpoint of its own), or a sentence returned by `POST /import/sentences`. Every path is parsed the same way.
+      description: Pure. Runs the rule-based grammar (domain prefix, specialisation patterns, verb lexicon, list splitting, passives) against the company's current labels and returns the intents, the drafts the client may submit to `POST /proposals/batch`, and the caption outcome (`understood`, `partly_understood`, `not_understood`). Nothing is written. `text` is one sentence from any of the three entry paths - typed in the teach bar, a speech transcript (the Studio transcribes the microphone and sends the final transcript as text, so speech has no endpoint of its own), or a sentence returned by `POST /import/sentences`, sent with the `importRef` of that import. Every path is parsed the same way. Refused with `409 channel_disabled` when `origin` is `speech` and the `voice` setting is off, or when `importRef` is present and the `importDocs` setting is off. A call carrying a valid `importRef` does not spend the caller's parse budget, because the import already charged one unit per sentence.
       operationId: parseTeach
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1454,10 +1454,12 @@ paths:
                   minLength: 1
                   maxLength: 400
                 origin:
-                  $ref: '#/components/schemas/Origin'
-                originDetail:
-                  $ref: '#/components/schemas/OriginDetail'
+                  $ref: '#/components/schemas/InputOrigin'
+                importRef:
+                  $ref: '#/components/schemas/ImportRef'
       responses:
+        '409':
+          $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         '200':
@@ -1527,7 +1529,7 @@ paths:
     post:
       tags: [Teach]
       summary: Extract sentences from a document
-      description: The only place documents are read - the Studio never extracts text itself and loads nothing from a CDN. Accepts at most 10 MiB with media type `text/plain`, `text/markdown`, `text/csv`, `application/json`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` or `application/pdf`; anything else is `415`. Splits on sentence punctuation or newlines and keeps sentences of 13 to 399 characters. Nothing is stored; the client teaches sentence by sentence.
+      description: The only place documents are read - the Studio never extracts text itself and loads nothing from a CDN. Accepts at most 10 MiB with media type `text/plain`, `text/markdown`, `text/csv`, `application/json`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` or `application/pdf`; anything else is `415`. Splits on sentence punctuation or newlines and keeps sentences of 13 to 399 characters. Limits - at most 2,000,000 characters of extracted text and at most 2,000 sentences; an archive member or a PDF stream is decompressed only up to the extracted-text limit. Past either limit the import is refused as a whole with `413 payload_too_large` and no sentence is returned. Rate limit - the import charges the caller's parse budget one unit per sentence before it answers; when the budget cannot cover every sentence the whole import is refused with `429 rate_limited` and nothing is returned, so a document is never half-taught because of the rate limit. Refused with `409 channel_disabled` when the `importDocs` setting is off. Nothing is stored. The response carries an `importId`, a server-signed token bound to the tenant, the caller, the file name and the media type, valid for one hour; the client teaches sentence by sentence and sends `importRef` with each sentence, which is how the server marks every resulting draft and proposal `document`.
       operationId: importSentences
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1542,6 +1544,8 @@ paths:
                   type: string
                   contentMediaType: application/octet-stream
       responses:
+        '409':
+          $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         '200':
@@ -1550,23 +1554,30 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [fileName, sentences, origin, originDetail]
+                required: [importId, fileName, sentences, origin, originDetail]
                 properties:
+                  importId:
+                    $ref: '#/components/schemas/ImportId'
                   fileName:
                     type: string
+                    pattern: '^[^/\\:\x00-\x1f\x7f]{1,255}$'
+                    maxLength: 255
+                    description: The basename of the uploaded file name, the same value as `originDetail.fileName`.
                   origin:
                     type: string
                     const: document
                   originDetail:
                     $ref: '#/components/schemas/OriginDetail'
-                    description: File name and media type without `position`; the client adds each sentence's `position` when it sends that sentence to `POST /teach/parse`.
+                    description: File name and media type without `position`.
                   sentences:
                     type: array
+                    maxItems: 2000
                     items:
                       type: string
                   positions:
                     type: array
-                    description: Present when extraction knows where sentences are; same length and order as `sentences`, null where unknown.
+                    maxItems: 2000
+                    description: Present when extraction knows where sentences are; same length and order as `sentences`, null where unknown. The client sends a sentence's position as `importRef.position`.
                     items:
                       oneOf:
                         - $ref: '#/components/schemas/DocumentPosition'
@@ -2557,6 +2568,7 @@ components:
             - confirmation_mismatch
             - duplicate_role
             - payload_too_large
+            - channel_disabled
             - unsupported_media_type
             - rate_limited
             - duplicate_attribute
@@ -2807,9 +2819,9 @@ components:
           type: string
           const: concept
         origin:
-          $ref: '#/components/schemas/Origin'
-        originDetail:
-          $ref: '#/components/schemas/OriginDetail'
+          $ref: '#/components/schemas/InputOrigin'
+        importRef:
+          $ref: '#/components/schemas/ImportRef'
         companyId:
           $ref: '#/components/schemas/Id'
         parentId:
@@ -2852,9 +2864,9 @@ components:
           type: string
           const: spec
         origin:
-          $ref: '#/components/schemas/Origin'
-        originDetail:
-          $ref: '#/components/schemas/OriginDetail'
+          $ref: '#/components/schemas/InputOrigin'
+        importRef:
+          $ref: '#/components/schemas/ImportRef'
         companyId:
           $ref: '#/components/schemas/Id'
         parentId:
@@ -2893,9 +2905,9 @@ components:
           type: string
           const: relation
         origin:
-          $ref: '#/components/schemas/Origin'
-        originDetail:
-          $ref: '#/components/schemas/OriginDetail'
+          $ref: '#/components/schemas/InputOrigin'
+        importRef:
+          $ref: '#/components/schemas/ImportRef'
         companyId:
           $ref: '#/components/schemas/Id'
         aId:
@@ -2984,9 +2996,9 @@ components:
           type: string
           const: source
         origin:
-          $ref: '#/components/schemas/Origin'
-        originDetail:
-          $ref: '#/components/schemas/OriginDetail'
+          $ref: '#/components/schemas/InputOrigin'
+        importRef:
+          $ref: '#/components/schemas/ImportRef'
         companyId:
           $ref: '#/components/schemas/Id'
         label:
@@ -3189,9 +3201,9 @@ components:
           type: string
           const: bind
         origin:
-          $ref: '#/components/schemas/Origin'
-        originDetail:
-          $ref: '#/components/schemas/OriginDetail'
+          $ref: '#/components/schemas/InputOrigin'
+        importRef:
+          $ref: '#/components/schemas/ImportRef'
         sourceId:
           $ref: '#/components/schemas/Id'
         conceptIds:
@@ -3259,9 +3271,9 @@ components:
           type: string
           const: attr
         origin:
-          $ref: '#/components/schemas/Origin'
-        originDetail:
-          $ref: '#/components/schemas/OriginDetail'
+          $ref: '#/components/schemas/InputOrigin'
+        importRef:
+          $ref: '#/components/schemas/ImportRef'
         conceptId:
           $ref: '#/components/schemas/Id'
         sourceId:
@@ -3290,9 +3302,9 @@ components:
           type: string
           const: change
         origin:
-          $ref: '#/components/schemas/Origin'
-        originDetail:
-          $ref: '#/components/schemas/OriginDetail'
+          $ref: '#/components/schemas/InputOrigin'
+        importRef:
+          $ref: '#/components/schemas/ImportRef'
         changeKind:
           type: string
           enum: [rename, delete_concept, edit_relation, remove_relation, unbind, rename_source, remove_source, remove_company, resolve_conflict]
@@ -3352,18 +3364,44 @@ components:
     Origin:
       type: string
       enum: [text, speech, document]
+      description: How the content of a proposal entered Ontaix - `text` typed in the teach bar or any dialog, `speech` from the teach bar microphone (sent as the final transcript), `document` from `POST /import/sentences`. Always present on output. `text` and `speech` are declared by the client and are a display and audit label, not a trust signal; `document` is set by the server only, for drafts that carry a valid `importRef`.
+
+    InputOrigin:
+      type: string
+      enum: [text, speech]
       default: text
-      description: How the content of a draft or proposal entered Ontaix - `text` typed in the teach bar or any dialog, `speech` from the teach bar microphone (sent as the final transcript), `document` from `POST /import/sentences`. Optional on input with default `text`; always present on output.
+      description: The origin a client declares. Ignored when `importRef` is present, because the server then records `document` whatever the client sends.
+
+    ImportId:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      pattern: '^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*$'
+      description: Opaque token returned by `POST /import/sentences`, signed by the API, bound to the tenant, the caller, the file name and the media type, valid for one hour. An expired, foreign or altered token is `422`.
+
+    ImportRef:
+      type: object
+      additionalProperties: false
+      description: Marks a draft as coming from a document import. The server reads the file name and media type from `importId`, never from the client, and records `origin` `document` with that `originDetail`.
+      required: [importId]
+      properties:
+        importId:
+          $ref: '#/components/schemas/ImportId'
+        position:
+          $ref: '#/components/schemas/DocumentPosition'
 
     OriginDetail:
       type: object
-      description: Where a `document` draft or proposal came from. Allowed only when `origin` is `document` (`422` otherwise), and optional even then.
+      additionalProperties: false
+      description: Where a `document` proposal came from, taken from the signed `importId`. Output only; clients never send it.
       required: [fileName, mediaType]
       properties:
         fileName:
           type: string
           minLength: 1
           maxLength: 255
+          pattern: '^[^/\\:\x00-\x1f\x7f]{1,255}$'
+          description: The basename of the uploaded file name - the server strips any directory part and refuses `/`, `\`, `:` and control characters. User-supplied text - HTML-escaped wherever the server interpolates it (`Proposal.html`, captions, audit `what`), and rendered by the Studio as text only.
         mediaType:
           type: string
           enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf]
@@ -3372,6 +3410,7 @@ components:
 
     DocumentPosition:
       type: object
+      additionalProperties: false
       description: Where in the document the sentence was found, when extraction knows it - a 1-based page or a 1-based paragraph.
       required: [unit, index]
       properties:
@@ -3426,7 +3465,7 @@ components:
         html:
           type: string
           maxLength: 2000
-          description: Server-generated; every interpolated label is HTML-escaped and only `<b>`, `<i>` and `<span class="...">` may appear. The Studio renders it with those three tags allow-listed and everything else as text.
+          description: Server-generated; every interpolated user-supplied string (labels, actions, captions, `originDetail.fileName`) is HTML-escaped and only `<b>`, `<i>` and `<span class="...">` may appear. The Studio renders it with those three tags allow-listed and everything else as text.
         why:
           type: [string, 'null']
         caption:
@@ -3459,7 +3498,7 @@ components:
           oneOf:
             - $ref: '#/components/schemas/OriginDetail'
             - type: 'null'
-          description: Set only when `origin` is `document` and the draft carried it.
+          description: Set when `origin` is `document`, from the signed `importId`; null otherwise.
         approvals:
           type: array
           maxItems: 2
@@ -3777,7 +3816,7 @@ components:
             $ref: '#/components/schemas/Intent'
         drafts:
           type: array
-          description: Proposal drafts in submission order, ready for `POST /proposals/batch`; each carries the request's `origin` and `originDetail`.
+          description: Proposal drafts in submission order, ready for `POST /proposals/batch`; each carries the request's `origin` and `importRef`.
           items:
             $ref: '#/components/schemas/ProposalDraft'
         statements:
