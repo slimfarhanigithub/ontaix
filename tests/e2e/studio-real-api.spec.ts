@@ -1,7 +1,8 @@
 /**
  * The Studio against the real API on the local stack: both seeded companies render with the
  * concept counts the API reports, a Builder teaches one concept, a Governor approves it, and
- * the cell turns green while its domain product's revision goes up.
+ * the cell turns green while its domain product's revision goes up. A Builder then draws one
+ * relation between two approved cells through the link dialog and a Governor approves it.
  */
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -18,6 +19,8 @@ const GREEN = '#4fc98f';
 /** Names an existing Northwind concept and nothing the next story scene listens for. */
 const SENTENCE = 'Invoice has due date';
 const TAUGHT = 'Due date';
+/** The taught cell and the cell it divided off, joined by an action they do not hold yet. */
+const RELATION = { a: TAUGHT, b: 'Invoice', action: 'is printed on' };
 
 interface ApiCompany {
   id: string;
@@ -44,7 +47,7 @@ async function openStudio(page: Page, user: string): Promise<void> {
   expect(await page.evaluate(() => document.documentElement.dataset.ontaixReady)).toBe('ready');
 }
 
-test('Studio shows Northwind and Aurora from the real API, and a taught concept is approved', async ({ browser, request }) => {
+test('Studio shows Northwind and Aurora from the real API, a taught concept and a drawn relation are approved', async ({ browser, request }) => {
   const scene = await (await request.get('/api/v1/scene', { headers: { 'X-Ontaix-User': GOVERNOR } })).json();
   const companies = scene.companies as ApiCompany[];
   const expected = Object.fromEntries(companies.map((c) => [c.name, c.counts.concepts]));
@@ -93,4 +96,38 @@ test('Studio shows Northwind and Aurora from the real API, and a taught concept 
   expect(after?.flash).toBe(GREEN);
   expect(after?.version).toBeGreaterThan(before!.version as number);
   await governor.close();
+
+  // A Builder draws a relation through the link dialog; the draft reaches the API by ids.
+  const drawer = await browser.newPage();
+  await openStudio(drawer, BUILDER);
+  await drawer.evaluate(({ a, b }) => {
+    type N = { label: string; kind: string; company: { name: string } | null };
+    const { store } = (window as unknown as { __ontaix: { store: { s: { nodes: N[] }; openLinkBox(a: N, b: N, x: number, y: number): void } } }).__ontaix;
+    const find = (label: string) => store.s.nodes.find((n) => n.label === label && n.company?.name === 'Northwind Industries')!;
+    store.openLinkBox(find(a), find(b), 400, 300);
+  }, RELATION);
+  await drawer.locator('#lbAction').fill(RELATION.action);
+  await drawer.locator('#lbAction').press('Enter');
+  const drawn = drawer.locator('#propList .prop', { hasText: RELATION.action });
+  await expect(drawn).toHaveCount(1);
+  await drawer.close();
+
+  // The Governor approves it and the relation is no longer pending.
+  const approver = await browser.newPage();
+  await openStudio(approver, GOVERNOR);
+  const relationRow = approver.locator('#propList .prop', { hasText: RELATION.action });
+  await expect(relationRow).toHaveCount(1);
+  await relationRow.locator('button.ok').click();
+  await expect(relationRow).toHaveCount(0);
+  await expect
+    .poll(() =>
+      approver.evaluate(({ a, b, action }) => {
+        type L = { label: string; pending: boolean; a: { label: string }; b: { label: string } };
+        const { store } = (window as unknown as { __ontaix: { store: { s: { links: L[] } } } }).__ontaix;
+        const l = store.s.links.find((x) => x.label === action && x.a.label === a && x.b.label === b);
+        return l ? l.pending : null;
+      }, RELATION),
+    )
+    .toBe(false);
+  await approver.close();
 });

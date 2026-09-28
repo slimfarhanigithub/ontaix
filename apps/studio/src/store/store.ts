@@ -713,7 +713,7 @@ class StudioStore {
     try {
       await api.approve(p.id);
     } catch (err) {
-      if (!(err instanceof ApiError && err.status === 409)) this.refused(err);
+      await this.decisionRefused(err);
     }
   }
 
@@ -721,8 +721,15 @@ class StudioStore {
     try {
       await api.reject(p.id);
     } catch (err) {
-      if (!(err instanceof ApiError && err.status === 409)) this.refused(err);
+      await this.decisionRefused(err);
     }
+  }
+
+  /** A 409 means the proposal changed under the caller (decided elsewhere, not ready): reload the
+   * scene and its proposals; any other refusal is the reference's toast. */
+  private async decisionRefused(err: unknown): Promise<void> {
+    if (err instanceof ApiError && err.status === 409) await this.reloadScene();
+    else this.refused(err);
   }
 
   async approveAll(): Promise<void> {
@@ -743,7 +750,8 @@ class StudioStore {
     }
   }
 
-  /** An API refusal (403, 503 for a change kind not served yet, …) as the reference's toast; anything else is rethrown. */
+  /** An API refusal (403, 503 for a change kind not served yet or still busy after the client's
+   * retry, …) as the reference's toast; anything else is rethrown. */
   refused(err: unknown): void {
     if (!(err instanceof ApiError)) throw err;
     this.toast2('Refused', err.problem.detail || err.problem.title);

@@ -6,9 +6,6 @@
  * artefacts, a decision with its cascade). Bulk runs answer with counts only, so they are
  * followed by `snapshot.required`, which reloads `GET /scene`.
  *
- * Drafts: the contract accepts a concept or spec parent by id or by label, never both; the
- * story sends both, so the id wins and an empty id gives way to the label.
- *
  * Local fallbacks, clearly scoped to routes the API answers with 404 today:
  *   POST /teach/parse   parsed in the browser (./local-teach)
  *   POST /demo/reset    reloads the scene instead of rebuilding the home company
@@ -19,7 +16,7 @@ import { store } from '../store/store';
 import { api } from './client';
 import { liveEvents, type EventType } from './events';
 import { localTeachParse } from './local-teach';
-import { ApiError, type Actor, type DecisionResult, type Proposal, type ProposalDraft } from './types';
+import { ApiError, type Actor, type DecisionResult, type Proposal } from './types';
 
 const SYSTEM: Actor = { kind: 'system' };
 
@@ -29,12 +26,12 @@ export function connectRealApi(): void {
   const raw = { ...api };
 
   api.createProposal = async (draft) => {
-    const p = await raw.createProposal(contractDraft(draft));
+    const p = await raw.createProposal(draft);
     created(p);
     return p;
   };
   api.createProposalBatch = async (drafts) => {
-    const ps = await raw.createProposalBatch(drafts.map(contractDraft));
+    const ps = await raw.createProposalBatch(drafts);
     for (const p of ps) created(p);
     return ps;
   };
@@ -104,12 +101,6 @@ function emit(type: EventType, actor: Actor, payload: Record<string, unknown>): 
     bulk: false,
     payload,
   });
-}
-
-function contractDraft(draft: ProposalDraft): ProposalDraft {
-  if (draft.type !== 'concept' && draft.type !== 'spec') return draft;
-  const { parentId, parentLabel, ...rest } = draft;
-  return (parentId ? { ...rest, parentId } : { ...rest, parentLabel }) as ProposalDraft;
 }
 
 /** A bare 404 `not_found` (no resource-specific code): the route does not exist on this API. */

@@ -44,6 +44,8 @@ def configure_engine(url: str) -> AsyncEngine:
     _engine = create_async_engine(
         async_database_url(url),
         pool_pre_ping=True,
+        # Statement errors never carry bound values (labels, emails) into logs or responses.
+        hide_parameters=True,
         connect_args={"options": SEARCH_PATH_OPTION},
     )
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)

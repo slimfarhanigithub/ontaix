@@ -12,6 +12,7 @@ import { contentWords, domainPrefix, singular, title, understand } from '../../n
 import { nowDate } from '../../runtime/clock';
 import { random } from '../../runtime/rng';
 import { escapeHtml } from '../../shell/sanitize';
+import { mixedRelationEnd } from '../drafts';
 import { liveEvents, type EventBus, type EventType } from '../events';
 import type * as T from '../types';
 import { ATTR, CATALOG, generic, HOME_COMPANY, RECORDS, SEED, type AttrSpec } from './seed';
@@ -1009,6 +1010,14 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
     throw new Refusal(422, 'unsupported_change', `${draft.changeKind} is not available in the mock API`);
   }
 
+  /** Like the API, a relation end given by both id and label (or neither) refuses the whole request. */
+  function refuseMixedDrafts(drafts: T.ProposalDraft[]): void {
+    for (const draft of drafts) {
+      const end = mixedRelationEnd(draft);
+      if (end) throw new Refusal(422, 'validation_failed', `exactly one of ${end}Id or ${end}Label is required`);
+    }
+  }
+
   function createFromDraft(draft: T.ProposalDraft, cascade: MProposal[]): MProposal {
     switch (draft.type) {
       case 'concept': {
@@ -1354,6 +1363,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
       return json(200, { items, page: 1, pageSize: items.length || 1, total: items.length });
     }
     if (is('POST', 'proposals')) {
+      refuseMixedDrafts([body as T.ProposalDraft]);
       const cascade: MProposal[] = [];
       const p = createFromDraft(body as T.ProposalDraft, cascade);
       const out = toProposal(p);
@@ -1362,6 +1372,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
     }
     if (is('POST', 'proposals', 'batch')) {
       const drafts = (body as { drafts: T.ProposalDraft[] }).drafts || [];
+      refuseMixedDrafts(drafts);
       const outs: T.Proposal[] = [];
       for (const d of drafts) {
         const p = createFromDraft(d, []);

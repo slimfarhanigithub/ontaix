@@ -136,3 +136,21 @@ describe('mock API: propose, pending, approve, reject', () => {
     expect(scene.nodes).toHaveLength(1);
   });
 });
+
+describe('mock API: drafts in the contract shape', () => {
+  it('refuses a relation end given by both id and label with the same 422 as the API', () => {
+    const server = createMockServer(createEventBus());
+    const scene = body<Scene>(server.handle('GET', '/scene'));
+    const root = scene.companies[0].rootId;
+    const mixed = { type: 'relation', aId: root, bId: root, aLabel: 'Northwind Industries', action: 'runs' };
+
+    const single = server.handle('POST', '/proposals', mixed);
+    const batch = server.handle('POST', '/proposals/batch', { drafts: [mixed] });
+
+    for (const res of [single, batch]) {
+      expect(res.status).toBe(422);
+      expect(res.body).toMatchObject({ code: 'validation_failed', detail: 'exactly one of aId or aLabel is required' });
+    }
+    expect(body<Scene>(server.handle('GET', '/scene')).proposals).toHaveLength(0);
+  });
+});

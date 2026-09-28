@@ -112,7 +112,13 @@ async def _database_error_handler(request: Request, exc: Exception) -> JSONRespo
     server error."""
     if not is_contention(exc):
         raise exc
-    logger.warning("database contention on %s %s: %s", request.method, request.url.path, exc)
+    logger.warning(
+        "database contention on %s %s: sqlstate %s (%s)",
+        request.method,
+        request.url.path,
+        getattr(getattr(exc, "orig", None), "sqlstate", None),
+        type(exc).__name__,
+    )
     return _problem_response(busy(CONTENTION_DETAIL), request)
 
 
