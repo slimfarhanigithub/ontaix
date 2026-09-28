@@ -1,0 +1,63 @@
+name: ci
+
+# Application checks for every pull request and every push to main.
+#   Python packages (api, gateway, connectors): uv sync, ruff, pytest
+#   Studio: pnpm install, vitest, vite build
+# Infrastructure has its own workflow (infra.yml).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: ${{ matrix.package }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [apps/api, apps/gateway, packages/connectors]
+    defaults:
+      run:
+        working-directory: ${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: ${{ matrix.package }}/uv.lock
+      - name: uv sync
+        run: uv sync --frozen
+      - name: ruff
+        run: |
+          uv run ruff check
+          uv run ruff format --check
+      - name: pytest
+        run: uv run pytest
+
+  studio:
+    name: apps/studio
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+      - name: test
+        run: pnpm --filter studio test
+      - name: build
+        run: pnpm --filter studio build
