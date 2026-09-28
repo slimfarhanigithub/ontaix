@@ -47,7 +47,7 @@ from app.repositories import (
     tenant_settings_repository,
 )
 from app.utilities.layout import ROOT_COLOR
-from app.utilities.proposal_relations import own_relation_ids, touched_relation_ids
+from app.utilities.proposal_relations import own_relation_ids
 from app.utilities.versions import version_label
 
 logger = logging.getLogger(__name__)
@@ -417,20 +417,6 @@ class OntologyView:
                 self.domain_product_dto(self.domain_products[proposal.domain_product_id])
             )
         return Artefacts(concepts=concepts, relations=relations, domain_products=products)
-
-    def proposal_company_ids(self, proposal: Proposal) -> set[uuid.UUID]:
-        """The companies a proposal touches: its own, or both ends of a cross-company relation."""
-        if proposal.company_id is not None:
-            return {proposal.company_id}
-        companies: set[uuid.UUID] = set()
-        for rid in touched_relation_ids(proposal):
-            relation = self.relations.get(rid)
-            if relation is None:
-                continue
-            for end in (relation.a_id, relation.b_id):
-                if end in self.concepts:
-                    companies.add(self.concepts[end].company_id)
-        return companies
 
     def _both_ends_approved(self, proposal: Proposal) -> bool:
         relation = self.relations.get(proposal.relation_id) if proposal.relation_id else None

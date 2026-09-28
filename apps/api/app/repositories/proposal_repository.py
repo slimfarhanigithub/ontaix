@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.storage.base import ActorKind, ChangeKind, ProposalState, ProposalType
@@ -14,6 +15,12 @@ from app.models.storage.proposal import Proposal
 
 OPEN_STATES = (ProposalState.PENDING, ProposalState.HALF_APPROVED)
 DECISION_LOCK_NAMESPACE = "ontaix.proposal-decisions"
+DECISION_LOCK_TIMEOUT_MS = 5000
+LOCK_NOT_AVAILABLE = "55P03"
+
+
+class DecisionLockTimeoutError(Exception):
+    """The tenant's decision lock was not granted within `DECISION_LOCK_TIMEOUT_MS`."""
 
 
 async def list_for_tenant(session: AsyncSession, tenant_id: uuid.UUID) -> list[Proposal]:
@@ -69,13 +76,24 @@ async def get_for_update(
 
 
 async def lock_decisions(session: AsyncSession, tenant_id: uuid.UUID) -> None:
-    """Serialise every decision of one tenant until the transaction ends.
+    """Serialise every decision and proposal creation of one tenant until the transaction ends.
 
-    A decision reads the whole open queue and may cascade to other proposals, so two decisions
-    of one tenant never interleave: the second waits here until the first commits or rolls back.
+    A decision reads the whole open queue and may cascade to other proposals, and a new proposal
+    may depend on a pending one, so none of them interleave: the second waits here until the
+    first commits or rolls back. The wait, and every other lock wait of the transaction, is
+    bounded by `DECISION_LOCK_TIMEOUT_MS`; past it `DecisionLockTimeoutError` is raised and the
+    transaction must be rolled back.
     """
+    await session.execute(
+        select(func.set_config("lock_timeout", f"{DECISION_LOCK_TIMEOUT_MS}ms", True))
+    )
     key = func.hashtextextended(f"{DECISION_LOCK_NAMESPACE}:{tenant_id}", 0)
-    await session.execute(select(func.pg_advisory_xact_lock(key)))
+    try:
+        await session.execute(select(func.pg_advisory_xact_lock(key)))
+    except OperationalError as exc:
+        if getattr(exc.orig, "sqlstate", None) == LOCK_NOT_AVAILABLE:
+            raise DecisionLockTimeoutError(str(tenant_id)) from exc
+        raise
 
 
 async def mark_half_approved(session: AsyncSession, proposal: Proposal, why: str) -> None:

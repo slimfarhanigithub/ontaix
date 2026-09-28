@@ -3,9 +3,11 @@
 Every decision is one transaction: the state change, the ontology apply, the domain product
 revision bump, the audit entry and the outbox rows commit together or not at all.
 
-Decisions of one tenant never interleave. Each one first takes the tenant's decision lock, then
-row-locks the proposals it decides and re-reads their state under the lock, so of two concurrent
-decisions on one proposal exactly one wins and the other answers `409 proposal_decided`.
+Decisions of one tenant never interleave with each other or with proposal creation. Each one
+first takes the tenant's decision lock, then row-locks the proposals it decides and re-reads
+their state under the lock, so of two concurrent decisions on one proposal exactly one wins and
+the other answers `409 proposal_decided`. A lock that is not granted in time answers
+`503 unavailable`.
 """
 
 from __future__ import annotations
@@ -27,15 +29,22 @@ from app.repositories import (
     proposal_repository,
     relation_repository,
 )
-from app.services import audit_service, outbox_service
+from app.services import audit_service, decision_lock_service, outbox_service
 from app.services.decision_event_service import emit_finalised, emit_proposal_event
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.proposal_apply_service import apply
 from app.services.rejection_service import OPEN_STATES, reject_one
 from app.utilities.clock import get_clock
-from app.utilities.permissions import Scope, can_approve, can_finalise, holds_approving_role
+from app.utilities.permissions import (
+    Scope,
+    can_approve,
+    can_finalise,
+    can_read_proposal,
+    holds_approving_role,
+)
 from app.utilities.problems import conflict, forbidden, not_found
 from app.utilities.proposal_relations import own_relation_ids
+from app.utilities.proposal_scope import proposal_company_ids
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +72,7 @@ async def approve(
         outcome = await _half_approve(session, caller, view, proposal, bulk)
     else:
         outcome = await _complete_approval(session, caller, view, proposal, proposals, 1, bulk)
-    return _result(view, proposal, outcome)
+    return _result(caller, view, proposal, outcome, proposals)
 
 
 async def second_approve(
@@ -79,7 +88,7 @@ async def second_approve(
     if not ready:
         raise conflict("proposal_not_ready", f"after {wait_for}")
     outcome = await _complete_approval(session, caller, view, proposal, proposals, 2, False)
-    return _result(view, proposal, outcome)
+    return _result(caller, view, proposal, outcome, proposals)
 
 
 async def reject(
@@ -90,7 +99,7 @@ async def reject(
     view = await load_view(session, caller.tenant_id, proposals)
     _ensure_can_approve(caller, view, proposal)
     outcome = await reject_one(session, caller, view, proposal, proposals, reason, False)
-    return _result(view, proposal, outcome)
+    return _result(caller, view, proposal, outcome, proposals)
 
 
 async def approve_all(session: AsyncSession, caller: Caller) -> BulkResult:
@@ -172,7 +181,7 @@ async def _load_decidable(
     session: AsyncSession, caller: Caller, proposal_id: uuid.UUID
 ) -> Proposal:
     """Lock the tenant's decisions and the proposal row, then check its state under the lock."""
-    await proposal_repository.lock_decisions(session, caller.tenant_id)
+    await decision_lock_service.acquire(session, caller.tenant_id)
     proposal = await proposal_repository.get_for_update(session, caller.tenant_id, proposal_id)
     if proposal is None:
         raise not_found("proposal")
@@ -182,7 +191,7 @@ async def _load_decidable(
 
 
 async def _lock_open(session: AsyncSession, caller: Caller) -> list[Proposal]:
-    await proposal_repository.lock_decisions(session, caller.tenant_id)
+    await decision_lock_service.acquire(session, caller.tenant_id)
     return await proposal_repository.lock_open(session, caller.tenant_id)
 
 
@@ -331,11 +340,21 @@ async def _approve_rounds(
     return approved, rounds
 
 
-def _result(view: OntologyView, proposal: Proposal, outcome: DecisionOutcome) -> DecisionResult:
+def _result(
+    caller: Caller,
+    view: OntologyView,
+    proposal: Proposal,
+    outcome: DecisionOutcome,
+    open_proposals: list[Proposal],
+) -> DecisionResult:
+    """The response; cascaded proposals the caller may not read are left out."""
+    readable = {
+        p.id for p in open_proposals if can_read_proposal(caller.grants, proposal_company_ids(p))
+    }
     return DecisionResult(
         proposal=view.proposal_dto(proposal, outcome.artefacts),
         artefacts=outcome.artefacts,
-        cascaded=outcome.cascaded,
+        cascaded=[c for c in outcome.cascaded if c.id in readable],
         audit=outcome.audit,
         caption=outcome.caption,
     )

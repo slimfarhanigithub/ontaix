@@ -25,6 +25,7 @@ from app.models.api.drafts import (
     SpecDraft,
 )
 from app.models.storage.proposal import Proposal
+from app.services import decision_lock_service
 from app.services.change_proposal_service import propose_change
 from app.services.concept_proposal_service import propose_concept, propose_spec
 from app.services.ontology_view_service import OntologyView
@@ -57,8 +58,10 @@ async def create(
 ) -> Proposal:
     """Create one proposal with its pending artefacts; refusals are Problem+JSON errors.
 
-    `proposer` defaults to the caller; the starter vocabulary passes the system actor.
+    `proposer` defaults to the caller; the starter vocabulary passes the system actor. The
+    tenant decision lock is taken first, so a proposal and a decision never interleave.
     """
+    await decision_lock_service.acquire(session, view.tenant_id)
     who = proposer or caller.actor
     match draft:
         case ConceptDraft():
@@ -101,4 +104,5 @@ async def propose_equivalence(
     if a.company_id == b.company_id:
         raise conflict("same_company", "both concepts belong to one company")
     draft = RelationDraft(a_id=a_id, b_id=b_id, action=SAME_ACTION, caption=caption)
+    await decision_lock_service.acquire(session, view.tenant_id)
     return await propose_relation(session, caller, caller.actor, view, draft, False, True)

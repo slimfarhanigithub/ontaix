@@ -58,6 +58,14 @@ def can_read(grants: tuple[Grant, ...], company_id: uuid.UUID) -> bool:
     return any(g.contains(scope) or g.scope_kind is ScopeKind.DOMAIN for g in grants)
 
 
+def can_read_proposal(grants: tuple[Grant, ...], company_ids: set[uuid.UUID]) -> bool:
+    """A proposal is readable when every company it touches is; a tenant-level one needs a
+    tenant-wide grant."""
+    if not company_ids:
+        return any(g.scope_kind is ScopeKind.TENANT for g in grants)
+    return all(can_read(grants, company_id) for company_id in company_ids)
+
+
 def can_read_tenant(grants: tuple[Grant, ...]) -> bool:
     """A caller with at least one role may read tenant-level resources."""
     return len(grants) > 0

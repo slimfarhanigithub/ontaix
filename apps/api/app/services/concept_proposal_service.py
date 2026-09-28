@@ -19,7 +19,13 @@ from app.models.storage.relation import Relation
 from app.repositories import concept_repository, relation_repository
 from app.services import outbox_service
 from app.services.ontology_view_service import OntologyView
-from app.services.proposal_store_service import ISA_ACTION, ensure_can_propose, esc, store
+from app.services.proposal_store_service import (
+    ISA_ACTION,
+    ensure_can_propose,
+    ensure_still_live,
+    esc,
+    store,
+)
 from app.utilities.clock import get_clock
 from app.utilities.layout import birth_position, company_centre, domain_centre, rest_length
 from app.utilities.permissions import Scope
@@ -44,6 +50,7 @@ async def propose_concept(
     if enforce:
         ensure_can_propose(caller, Scope(company.id, product.template_key))
     _ensure_label_free(view, company.id, draft.label)
+    await ensure_still_live(session, view, parent)
     template = view.templates[product.template_key]
     action = draft.action.strip().lower()
     concept, relation = await _divide(
@@ -81,6 +88,7 @@ async def propose_concept(
         why=f"domain product: {template.name}",
         caption=draft.caption,
         payload={},
+        touched_company_ids=[company.id],
         concept_id=concept.id,
         relation_id=relation.id,
         bulk=bulk,
@@ -104,6 +112,7 @@ async def propose_spec(
     if enforce:
         ensure_can_propose(caller, Scope(company.id, product.template_key))
     _ensure_label_free(view, company.id, draft.label)
+    await ensure_still_live(session, view, parent)
     template = view.templates[product.template_key]
     concept, relation = await _divide(
         session,
@@ -136,6 +145,7 @@ async def propose_spec(
         why=why,
         caption=draft.caption,
         payload={},
+        touched_company_ids=[company.id],
         concept_id=concept.id,
         relation_id=relation.id,
         bulk=bulk,

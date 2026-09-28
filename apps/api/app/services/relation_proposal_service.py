@@ -24,6 +24,7 @@ from app.services.proposal_store_service import (
     ISA_ACTION,
     SAME_ACTION,
     ensure_can_propose,
+    ensure_still_live,
     esc,
     store,
 )
@@ -65,6 +66,8 @@ async def propose_relation(
         raise conflict(
             "duplicate_relation", f"{a.label} {action} {b.label} is already in the model"
         )
+    await ensure_still_live(session, view, a)
+    await ensure_still_live(session, view, b)
     kind = _relation_kind(action)
     cross_domain = a.domain_product_id != b.domain_product_id
     relation = await relation_repository.create(
@@ -108,6 +111,7 @@ async def propose_relation(
         why=why,
         caption=draft.caption,
         payload={},
+        touched_company_ids=[a.company_id, b.company_id],
         concept_id=None,
         relation_id=relation.id,
         bulk=bulk,
@@ -121,7 +125,7 @@ async def propose_relation(
             "relation": view.relation_dto(relation).model_dump(mode="json", by_alias=True),
             "proposalId": str(proposal.id),
         },
-        company_id=a.company_id,
+        company_id=None if cross_company else a.company_id,
         bulk=bulk,
     )
     return proposal

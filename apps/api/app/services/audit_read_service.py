@@ -1,4 +1,7 @@
-"""The Audit log page: newest first, filterable by kind, outcome, actor kind and time window."""
+"""The Audit log page: newest first, filterable by kind, outcome, actor kind and time window.
+
+An entry about a proposal the caller may not read is left out, since it carries the title.
+"""
 
 from __future__ import annotations
 
@@ -10,11 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import Caller
 from app.models.api.audit import AuditEntry as AuditEntryDto
 from app.models.api.page import PageOf
-from app.repositories import app_user_repository, audit_repository
+from app.repositories import app_user_repository, audit_repository, proposal_repository
 from app.services import audit_service
 from app.utilities.listing import ListQuery, matches_search, paginate
-from app.utilities.permissions import can_read_audit
+from app.utilities.permissions import can_read_audit, can_read_proposal
 from app.utilities.problems import bad_request, forbidden
+from app.utilities.proposal_scope import proposal_company_ids
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +38,15 @@ async def list_audit(
     )
     since = _time_bound(query.filters.get("from"))
     until = _time_bound(query.filters.get("to"))
+    hidden = {
+        p.id
+        for p in await proposal_repository.list_for_tenant(session, caller.tenant_id)
+        if not can_read_proposal(caller.grants, proposal_company_ids(p))
+    }
     rows = []
     for entry in entries:
+        if entry.proposal_id in hidden:
+            continue
         if "kind" in query.filters and entry.kind not in query.filters["kind"]:
             continue
         if "ok" in query.filters and str(entry.ok).lower() not in [

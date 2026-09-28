@@ -13,11 +13,11 @@ from app.models.api.proposal import Proposal as ProposalDto
 from app.models.storage.proposal import Proposal
 from app.repositories import proposal_repository
 from app.services import proposal_service
-from app.services.company_service import readable_companies
 from app.services.ontology_view_service import OntologyView, load_view
 from app.utilities.listing import ListQuery, paginate
-from app.utilities.permissions import can_read_tenant
+from app.utilities.permissions import can_read_proposal, can_read_tenant
 from app.utilities.problems import forbidden, not_found
+from app.utilities.proposal_scope import proposal_company_ids
 
 logger = logging.getLogger(__name__)
 
@@ -33,17 +33,16 @@ async def list_proposals(
         raise forbidden("no role grants you access to the model")
     proposals = await proposal_repository.list_for_tenant(session, caller.tenant_id)
     view = await load_view(session, caller.tenant_id, proposals)
-    readable = {c.id for c in readable_companies(caller, view)}
     states = query.filters.get("state", DEFAULT_STATES)
     rows = [
         p
         for p in proposals
         if p.state.value in states
-        and view.proposal_company_ids(p) <= readable
+        and can_read_proposal(caller.grants, proposal_company_ids(p))
         and ("type" not in query.filters or p.type.value in query.filters["type"])
         and (
             "companyId" not in query.filters
-            or any(str(c) in query.filters["companyId"] for c in view.proposal_company_ids(p))
+            or any(str(c) in query.filters["companyId"] for c in proposal_company_ids(p))
         )
         and (
             "proposerKind" not in query.filters
@@ -84,6 +83,5 @@ async def create_batch(session: AsyncSession, caller: Caller, drafts: list) -> l
 
 def _ensure_readable(caller: Caller, view: OntologyView, proposal: Proposal) -> None:
     """A proposal is readable when the caller reads every company it touches."""
-    readable = {c.id for c in readable_companies(caller, view)}
-    if not view.proposal_company_ids(proposal) <= readable:
+    if not can_read_proposal(caller.grants, proposal_company_ids(proposal)):
         raise not_found("proposal")

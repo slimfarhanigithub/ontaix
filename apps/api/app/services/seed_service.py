@@ -3,6 +3,11 @@
 Every concept and relation goes through the proposal service and is approved through the
 decision service, so the seeded state carries real audit entries, outbox rows and domain
 product revisions. Seeding is idempotent: a tenant that already exists is left untouched.
+
+The whole seed is one transaction, so the tenant's decision lock taken by the first approval is
+held until the seed commits. That blocks nobody: the lock is keyed by tenant, the tenant row is
+created in the same uncommitted transaction so no other request can reach it, and an existing
+tenant is never seeded again.
 """
 
 from __future__ import annotations

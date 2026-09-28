@@ -21,8 +21,9 @@ from app.repositories import (
 from app.services.company_service import readable_companies
 from app.services.ontology_view_service import OntologyView, load_view
 from app.utilities.clock import get_clock
-from app.utilities.permissions import can_read_tenant
+from app.utilities.permissions import can_read_proposal, can_read_tenant
 from app.utilities.problems import forbidden
+from app.utilities.proposal_scope import proposal_company_ids
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,9 @@ async def get_scene(session: AsyncSession, caller: Caller) -> Scene:
     relations = [
         r for r in view.live_relations() if r.a_id in concept_ids and r.b_id in concept_ids
     ]
-    proposals = [p for p in open_proposals if p.company_id is None or p.company_id in readable_ids]
+    proposals = [
+        p for p in open_proposals if can_read_proposal(caller.grants, proposal_company_ids(p))
+    ]
     settings = view.settings
     view_state = await view_state_repository.get(session, caller.tenant_id)
     connectors = await connector_type_repository.list_in_catalogue_order(session)
