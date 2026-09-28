@@ -3,6 +3,7 @@
  * from reference/ontaix-studio-reference.html line 192; open, close and theme behaviour from
  * lines 948-952. The navigation and the pages come from the admin module.
  */
+import { invalidateDirectory } from '../admin/adminData';
 import { AdminMain, AdminNav } from '../admin/AdminPortal';
 import { refStyle, useStore } from './dom';
 
@@ -33,7 +34,10 @@ export function AdminOverlay() {
             title="Switch between dark and light mode"
             onClick={() => {
               st.toggleTheme();
-              if (st.ui.adminOpen) st.renderAdmin();
+              if (st.ui.adminOpen) {
+                invalidateDirectory();
+                st.renderAdmin();
+              }
             }}
           >
             <svg viewBox="0 0 16 16" ref={refStyle('width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round')}>

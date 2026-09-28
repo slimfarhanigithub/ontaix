@@ -3,7 +3,9 @@
  * products (`pageEntities` to `pageDomains`, reference lines 991-1014). Rows come from the scene
  * the canvas shows; every change they offer is a proposal.
  */
-import type { Link, Node } from '../../canvas/types';
+import type { Domain, Link, Node } from '../../canvas/types';
+import { store } from '../../store/store';
+import { attempt } from '../adminData';
 import { openAddCompany } from '../../shell/AddCompany';
 import { useStore } from '../../shell/dom';
 import { api } from '../../api/client';
@@ -414,11 +416,7 @@ export function DomainProducts() {
                   <Tg
                     on={!d.hidden}
                     data-act="domVis"
-                    onClick={() => {
-                      d.hidden = !d.hidden;
-                      st.renderAdmin();
-                      if (d.sid) void api.updateDomainProduct(d.sid, { hidden: d.hidden }).catch(() => undefined);
-                    }}
+                    onClick={() => toggleDomainVisible(d)}
                   />
                 </td>
               </tr>
@@ -428,4 +426,18 @@ export function DomainProducts() {
       </table>
     </>
   );
+}
+
+/** Shows or hides a domain product at once; a refusal puts it back and shows the toast. */
+export function toggleDomainVisible(d: Domain): void {
+  d.hidden = !d.hidden;
+  store.renderAdmin();
+  const sid = d.sid;
+  if (!sid) return;
+  const want = d.hidden;
+  void attempt(() => api.updateDomainProduct(sid, { hidden: want })).then((r) => {
+    if (r !== null) return;
+    d.hidden = !want;
+    store.renderAdmin();
+  });
 }

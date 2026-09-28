@@ -5,7 +5,7 @@
 import { useEffect, type ReactNode } from 'react';
 
 import { useStore } from '../shell/dom';
-import { directory, loadDirectory } from './adminData';
+import { directory, invalidateDirectory, loadDirectory } from './adminData';
 import { Connectors, DataSources } from './pages/DataPages';
 import { AuditLog, CostManagement, Groups, Roles, Users } from './pages/GovernancePages';
 import { Bindings, Companies, DomainProducts, Entities, Relationships } from './pages/ModelPages';
@@ -80,7 +80,10 @@ export function AdminMain() {
   const st = useStore();
   const { adminOpen, adminRev, adminPage } = st.ui;
   useEffect(() => {
-    if (adminOpen) void loadDirectory(adminRev);
+    if (adminOpen) invalidateDirectory();
+  }, [adminOpen]);
+  useEffect(() => {
+    if (adminOpen) void loadDirectory();
   }, [adminOpen, adminRev]);
   const render = PAGES[adminPage] || PAGES.sources;
   return <>{render()}</>;

@@ -8,7 +8,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { api } from '../api/client';
-import type { Group, Scope, User } from '../api/types';
+import type { Group, ProposalDraft, Scope, User } from '../api/types';
 import { DOMAIN_TEMPLATES } from '../canvas/constants';
 import type { Company, Link, Node } from '../canvas/types';
 import { title } from '../nl/parser';
@@ -36,6 +36,23 @@ export function confirmDialog(heading: string, body: ReactNode, label: string, o
     body,
     small: true,
     buttons: [{ label: 'Cancel' }, { label, cls: danger ? 'danger' : 'primary', onClick: () => onYes() }],
+  });
+}
+
+/**
+ * Sends a draft; the success feedback runs only once the server has accepted it. A refusal
+ * shows the store's refusal toast instead.
+ */
+function proposeThen(draft: ProposalDraft, accepted: () => void): void {
+  void store.propose(draft).then((p) => {
+    if (p) accepted();
+  }, failed);
+}
+
+/** Runs a proposal-creating call; the success feedback runs only when it was accepted. */
+function attemptThen<T>(call: () => Promise<T>, accepted: () => void): void {
+  void attempt(call).then((r) => {
+    if (r !== null) accepted();
   });
 }
 
@@ -230,11 +247,11 @@ export function renameDialog(n: Node): void {
         cls: 'primary',
         onClick: (bk) => {
           const name = title((bk.querySelector<HTMLInputElement>('#rnName')?.value || '').trim());
-          if (name && name !== n.label && n.sid) {
-            void store.propose({ type: 'change', changeKind: 'rename', payload: { conceptId: n.sid, newLabel: name } });
-            store.toast2('Proposed', `rename to ${name}`);
-          }
-          renderAdmin();
+          if (name && name !== n.label && n.sid)
+            proposeThen({ type: 'change', changeKind: 'rename', payload: { conceptId: n.sid, newLabel: name } }, () => {
+              store.toast2('Proposed', `rename to ${name}`);
+              renderAdmin();
+            });
         },
       },
     ],
@@ -247,9 +264,11 @@ export function deleteNodeDialog(n: Node, rels: number): void {
     `This proposes a change for approval. Its ${plural(rels, 'relation')} and any specialisation of it go with it.`,
     'Propose deletion',
     () => {
-      if (n.sid) void store.propose({ type: 'change', changeKind: 'delete_concept', payload: { conceptId: n.sid } });
-      store.toast2('Proposed', `deletion of ${n.label}`);
-      renderAdmin();
+      if (n.sid)
+        proposeThen({ type: 'change', changeKind: 'delete_concept', payload: { conceptId: n.sid } }, () => {
+          store.toast2('Proposed', `deletion of ${n.label}`);
+          renderAdmin();
+        });
     },
     true,
   );
@@ -261,9 +280,11 @@ export function deleteRelationDialog(l: Link, name: string): void {
     'This proposes a change for approval.',
     'Propose deletion',
     () => {
-      if (l.sid) void store.propose({ type: 'change', changeKind: 'remove_relation', payload: { relationId: l.sid } });
-      store.caption('One proposal', `Removing “${l.a.label} ${l.label} ${l.b.label}” is waiting for your approval.`);
-      renderAdmin();
+      if (l.sid)
+        proposeThen({ type: 'change', changeKind: 'remove_relation', payload: { relationId: l.sid } }, () => {
+          store.caption('One proposal', `Removing “${l.a.label} ${l.label} ${l.b.label}” is waiting for your approval.`);
+          renderAdmin();
+        });
     },
     true,
   );
@@ -299,9 +320,10 @@ export function bindDialog(n: Node): void {
           const id = bk.querySelector<HTMLSelectElement>('#bdSrc')?.value;
           const src = srcs.find((x) => String(x.id) === id);
           if (!src || !src.sid || !n.sid) return;
-          void store.propose({ type: 'bind', sourceId: src.sid, conceptIds: [n.sid] });
-          store.toast2('Proposed', `${n.label} bound to ${src.label}`);
-          renderAdmin();
+          proposeThen({ type: 'bind', sourceId: src.sid, conceptIds: [n.sid] }, () => {
+            store.toast2('Proposed', `${n.label} bound to ${src.label}`);
+            renderAdmin();
+          });
         },
       },
     ],
@@ -315,12 +337,15 @@ export function unbindDialog(n: Node, source: string, attrs: number): void {
     'Propose unbinding',
     () => {
       const link = store.s.links.find((l) => l.kind === 'bind' && l.b === n && !l.pending);
-      if (link?.sid) {
-        const sid = link.sid;
-        void attempt(() => api.proposeUnbind(sid));
-      }
-      store.toast2('Proposed', `unbinding of ${n.label}`);
-      renderAdmin();
+      const sid = link?.sid;
+      if (sid)
+        attemptThen(
+          () => api.proposeUnbind(sid),
+          () => {
+            store.toast2('Proposed', `unbinding of ${n.label}`);
+            renderAdmin();
+          },
+        );
     },
     true,
   );
@@ -371,10 +396,15 @@ export function removeSourceDialog(n: Node): void {
     'Propose deletion',
     () => {
       const sid = n.sid;
-      if (sid) void attempt(() => api.proposeRemoveSource(sid));
-      store.caption('One proposal', `Removing ${n.label} is waiting for approval.`);
-      store.toast2('Proposed', `deletion of ${n.label} · approve it on the canvas`);
-      renderAdmin();
+      if (sid)
+        attemptThen(
+          () => api.proposeRemoveSource(sid),
+          () => {
+            store.caption('One proposal', `Removing ${n.label} is waiting for approval.`);
+            store.toast2('Proposed', `deletion of ${n.label} · approve it on the canvas`);
+            renderAdmin();
+          },
+        );
     },
     true,
   );
@@ -388,9 +418,14 @@ export function removeCompanyDialog(c: Company): void {
     'Propose removal',
     () => {
       const sid = c.sid;
-      if (sid) void attempt(() => api.proposeRemoveCompany(sid));
-      store.toast2('Proposed', `removal of ${c.name} · approve it on the canvas`);
-      renderAdmin();
+      if (sid)
+        attemptThen(
+          () => api.proposeRemoveCompany(sid),
+          () => {
+            store.toast2('Proposed', `removal of ${c.name} · approve it on the canvas`);
+            renderAdmin();
+          },
+        );
     },
     true,
   );
@@ -661,9 +696,12 @@ function RoleGroupsDialog({ role, close }: { role: string; close: () => void }) 
   const hold = (r: HoldRow) => {
     if (r.on) {
       const drop = r.g.roles.filter((a) => roleLabel(a.role) === role);
-      void Promise.all(drop.map((a) => api.removeGroupRole(r.g.id, a.id)))
-        .then(() => replace({ ...r.g, roles: r.g.roles.filter((a) => !drop.includes(a)) }))
-        .catch((err: unknown) => failed(err));
+      void Promise.allSettled(drop.map((a) => api.removeGroupRole(r.g.id, a.id))).then((results) => {
+        const removed = drop.filter((_, i) => results[i].status === 'fulfilled');
+        replace({ ...r.g, roles: r.g.roles.filter((a) => !removed.includes(a)) });
+        const refusal = results.find((x): x is PromiseRejectedResult => x.status === 'rejected');
+        if (refusal) failed(refusal.reason);
+      });
       return;
     }
     const scopes = localScopes();

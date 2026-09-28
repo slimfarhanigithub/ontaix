@@ -28,23 +28,24 @@ const VERIFY_MS = 1100;
 /** The catalogue name without its ` ·` or ` (` qualifier, the default display name. */
 export const shortName = (c: ConnectorType): string => c.name.split(' ·')[0].split(' (')[0];
 
-/** Opens the wizard: a new source at step 1 (or step 2 with a connector), an existing one at step 2. */
-export function showSourceForm(n: Node | null, cat: ConnectorType | null = null): void {
+/**
+ * Opens the wizard: a new source at step 1, an existing one at step 2 with its stored
+ * connection settings. When those cannot be read, only the refusal toast shows: an edit form
+ * opened with blanks would overwrite the real configuration on save.
+ */
+export function showSourceForm(n: Node | null, cat: ConnectorType | null = null): Promise<void> {
   if (!n) {
     store.openDialog({ render: (close) => <SourceWizard n={null} src={null} cat={cat} close={close} /> });
-    return;
+    return Promise.resolve();
   }
   const sid = n.sid;
-  const open = (src: Source | null) =>
-    store.openDialog({ render: (close) => <SourceWizard n={n} src={src} cat={null} close={close} /> });
-  if (!sid) {
-    open(null);
-    return;
-  }
-  api.getSource(sid).then(open, (err: unknown) => {
-    failed(err, 'Unavailable');
-    open(null);
-  });
+  if (!sid) return Promise.resolve();
+  return api.getSource(sid).then(
+    (src) => {
+      store.openDialog({ render: (close) => <SourceWizard n={n} src={src} cat={null} close={close} /> });
+    },
+    (err: unknown) => failed(err, 'Unavailable'),
+  );
 }
 
 interface Data {
@@ -66,9 +67,9 @@ function SourceWizard({ n, src, cat, close }: { n: Node | null; src: Source | nu
     name: n ? n.label : cat ? shortName(cat) : '',
     co: n && n.company ? Math.max(0, companies.indexOf(n.company)) : 0,
     host: src?.host || '',
-    auth: AUTHS[0][0],
+    auth: (AUTHS.find((a) => a[1] === src?.auth) || AUTHS[0])[0],
     scope: src?.scope || '',
-    refresh: store.ui.settings?.refresh || '15 min',
+    refresh: src?.refresh || store.ui.settings?.refresh || '15 min',
   }));
   const [found, setFound] = useState<Discovery | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -140,13 +141,19 @@ function SourceWizard({ n, src, cat, close }: { n: Node | null; src: Source | nu
           renderAdmin();
         });
         if (data.name !== n.label)
-          void store.propose({ type: 'change', changeKind: 'rename_source', payload: { sourceId: sid, newLabel: data.name } });
+          void store
+            .propose({ type: 'change', changeKind: 'rename_source', payload: { sourceId: sid, newLabel: data.name } })
+            .then((p) => {
+              if (p) store.toast2('Proposed', `rename to ${data.name}`);
+            }, failed);
       }
       close();
       return;
     }
-    if (co?.sid) {
-      void store.propose({
+    close();
+    if (!co?.sid) return;
+    void store
+      .propose({
         type: 'source',
         companyId: co.sid,
         label: data.name,
@@ -157,12 +164,13 @@ function SourceWizard({ n, src, cat, close }: { n: Node | null; src: Source | nu
         auth,
         refresh: data.refresh,
         caption: `${data.name} is connected to ${co.name} as a read-only source. Bind concepts to it from the canvas: drop a cell on it.`,
-      });
-    }
-    store.toast2('Proposed', `${data.name} is waiting for approval on the canvas`);
-    if (store.ui.adminOpen) renderAdmin();
-    store.caption('One proposal', `${data.name} (${sel ? sel.name : 'system'}) is waiting for approval as a data source of ${co?.name}.`);
-    close();
+      })
+      .then((p) => {
+        if (!p) return;
+        store.toast2('Proposed', `${data.name} is waiting for approval on the canvas`);
+        if (store.ui.adminOpen) renderAdmin();
+        store.caption('One proposal', `${data.name} (${sel ? sel.name : 'system'}) is waiting for approval as a data source of ${co.name}.`);
+      }, failed);
   };
 
   const steps = (

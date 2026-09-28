@@ -15,13 +15,14 @@ export interface DirectoryState {
   users: User[];
   audit: AuditEntry[];
   auditTotal: number;
-  /** Portal render the lists were loaded for; -1 before the first load. */
-  rev: number;
+  /** True once a load has answered, refused or not. */
+  loaded: boolean;
 }
 
-export const directory: DirectoryState = { groups: [], users: [], audit: [], auditTotal: 0, rev: -1 };
+export const directory: DirectoryState = { groups: [], users: [], audit: [], auditTotal: 0, loaded: false };
 
-let loadedRev = -1;
+let stale = true;
+let loadSeq = 0;
 
 /** Every row of a paged list, 200 at a time. */
 export async function fetchAll<T>(get: (p: ListParams) => Promise<Page & { items: T[] }>): Promise<T[]> {
@@ -50,10 +51,15 @@ export async function attempt<T>(call: () => Promise<T>): Promise<T | null> {
   }
 }
 
-/** Loads groups, users and the audit log once per portal render. */
-export async function loadDirectory(rev: number): Promise<void> {
-  if (rev === loadedRev) return;
-  loadedRev = rev;
+/**
+ * Loads groups, users and the audit log when they are stale: when the portal opens and after
+ * an action changed them. Moving between pages reuses what is loaded. Only the latest load
+ * lands, so an older answer never overwrites a newer one.
+ */
+export async function loadDirectory(): Promise<void> {
+  if (!stale) return;
+  stale = false;
+  const seq = ++loadSeq;
   let refusal: unknown = null;
   const soft = <T>(p: Promise<T>): Promise<T | null> =>
     p.catch((err: unknown) => {
@@ -65,16 +71,17 @@ export async function loadDirectory(rev: number): Promise<void> {
     soft(fetchAll((p) => api.listUsers(p))),
     soft(api.listAudit({ page: 1, pageSize: AUDIT_SHOWN })),
   ]);
+  if (seq !== loadSeq) return;
   if (refusal) failed(refusal, 'Unavailable');
   directory.groups = groups || [];
   directory.users = users || [];
   directory.audit = audit ? audit.items : [];
   directory.auditTotal = audit ? audit.total : 0;
-  directory.rev = rev;
+  directory.loaded = true;
   store.bump();
 }
 
-/** Forces the next portal render to reload the directory. */
+/** Marks the directory stale; the next portal render reloads it. */
 export function invalidateDirectory(): void {
-  loadedRev = -1;
+  stale = true;
 }

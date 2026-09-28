@@ -4,7 +4,7 @@
  * Dialogs stack: one opened from another sits on top of it, as appended elements do in the
  * reference.
  */
-import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { Fragment, useEffect, useRef, type ReactNode, type RefObject } from 'react';
 
 import { useStore } from './dom';
 
@@ -118,15 +118,11 @@ export function Dialog() {
       {st.ui.dialogs.map((d) => {
         const close = () => st.closeDialog(d.id);
         return 'render' in d ? (
-          <DialogSlot key={d.id}>{d.render(close)}</DialogSlot>
+          <Fragment key={d.id}>{d.render(close)}</Fragment>
         ) : (
           <StandardDialog key={d.id} spec={d} close={close} />
         );
       })}
     </>
   );
-}
-
-function DialogSlot({ children }: { children: ReactNode }) {
-  return <>{children}</>;
 }

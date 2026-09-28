@@ -58,7 +58,7 @@ export function Groups() {
         </button>
       </div>
       <div className="lst-host" id="lstGroups" style={{ height: 'calc(100% - 120px)' }}>
-        {directory.rev === st.ui.adminRev ? (
+        {directory.loaded ? (
         <List
           key={st.ui.adminRev}
           columns={columns}
@@ -132,7 +132,7 @@ export function Users() {
       <h2>Users</h2>
       <p className="lead">Everyone who can sign in. Roles come from the groups a user belongs to; a user with no group can read nothing.</p>
       <div className="lst-host" id="lstUsers" style={{ height: 'calc(100% - 80px)' }}>
-        {directory.rev === st.ui.adminRev ? (
+        {directory.loaded ? (
         <List
           key={st.ui.adminRev}
           columns={columns}

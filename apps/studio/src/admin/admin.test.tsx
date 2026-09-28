@@ -69,7 +69,7 @@ function hostileModel() {
   ];
   directory.audit = [{ id: 1, at: '2026-09-28T09:00:00Z', actor: { kind: 'user' }, kind: PAYLOAD, what: PAYLOAD, ok: true, companyIds: [] }];
   directory.auditTotal = 1;
-  directory.rev = store.ui.adminRev;
+  directory.loaded = true;
   return { a, b, n, m, src };
 }
 
