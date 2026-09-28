@@ -4341,7 +4341,12 @@ components:
           uniqueItems: true
           items:
             $ref: '#/components/schemas/Id'
-          description: Every company whose name, labels or artefacts the entry mentions - both companies of a cross-company proposal, the added company of a `company` entry, the company of a role scope in a `roles` entry. Empty means tenant-wide. Readable by a caller holding `audit.read` in a scope containing every listed company; an empty list needs `audit.read` at any scope.
+          description: Every company whose name, labels or artefacts the entry mentions - both companies of a cross-company proposal, the added company of a `company` entry, the company of a role scope in a `roles` entry. Empty means tenant-wide. Readable by a caller holding `audit.read` in a scope containing every listed company, or on the domain scope named by `domainKey`; an empty list needs `audit.read` at any scope.
+        domainKey:
+          oneOf:
+            - $ref: '#/components/schemas/DomainKey'
+            - type: 'null'
+          description: Template key of the domain product of the proposal the entry records, when that proposal has one; null for every other entry. A caller holding `audit.read` on the domain scope with this key reads the entry whatever its `companyIds`, because that scope covers the domain product in every company and matches the proposals it may decide.
 
     DemoScene:
       type: object
