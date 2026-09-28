@@ -20,3 +20,4 @@ class AuditEntry(ApiModel):
     ok: bool
     proposal_id: uuid.UUID | None = None
     company_ids: list[uuid.UUID] = Field(default_factory=list)
+    domain_key: str | None = None

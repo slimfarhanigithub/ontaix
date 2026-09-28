@@ -30,11 +30,13 @@ async def record(
     proposal_id: uuid.UUID | None = None,
     *,
     company_ids: Iterable[uuid.UUID],
+    domain_key: str | None = None,
 ) -> AuditEntryDto:
     """Append one entry and emit `audit.appended` in the same transaction.
 
-    `company_ids` lists every company the entry names; empty is tenant-wide. The event carries
-    the same audience as the entry.
+    `company_ids` lists every company the entry names; empty is tenant-wide. `domain_key` is the
+    template key of the domain product of the proposal the entry records, None for any other
+    entry. The event carries the same audience and key as the entry.
     """
     entry = await audit_repository.create(
         session,
@@ -46,6 +48,7 @@ async def record(
         ok=ok,
         proposal_id=proposal_id,
         company_ids=audience(company_ids),
+        domain_key=domain_key,
     )
     dto = to_dto(entry, {actor.id: actor.name} if actor.id else {})
     await outbox_service.emit(
@@ -55,6 +58,7 @@ async def record(
         "audit.appended",
         dto,
         company_ids=entry.company_ids,
+        domain_key=entry.domain_key,
         visibility=outbox_service.VISIBILITY_AUDIT,
     )
     return dto
@@ -71,6 +75,7 @@ def to_dto(entry: AuditEntry, names: Mapping[uuid.UUID | None, str | None]) -> A
         ok=entry.ok,
         proposal_id=entry.proposal_id,
         company_ids=list(entry.company_ids),
+        domain_key=entry.domain_key,
     )
 
 

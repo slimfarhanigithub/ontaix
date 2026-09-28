@@ -31,6 +31,7 @@ async def emit(
     payload: BaseModel | dict[str, Any],
     *,
     company_ids: Iterable[uuid.UUID] = (),
+    domain_key: str | None = None,
     visibility: str = VISIBILITY_MODEL,
     bulk: bool = False,
 ) -> Outbox:
@@ -39,7 +40,8 @@ async def emit(
     `visibility` is the permission a subscriber needs to receive the event. `company_ids` is its
     audience: every company whose labels, names or artefact state the payload carries; empty is
     tenant-wide. A subscriber receives the event only when it holds `visibility` in a scope that
-    contains every listed company.
+    contains every listed company. `domain_key` is set on `audit.appended` only: a holder of
+    `audit.read` on that domain scope also receives the event.
     """
     aggregate, action = event_type.split(".", 1)
     body = (
@@ -55,6 +57,7 @@ async def emit(
         subject=f"{SUBJECT_PREFIX}.{tenant_id}.{aggregate}.{action}",
         visibility=visibility,
         company_ids=audience(company_ids),
+        domain_key=domain_key,
         actor_kind=ActorKind(actor.kind),
         actor_id=actor.id,
         bulk=bulk,

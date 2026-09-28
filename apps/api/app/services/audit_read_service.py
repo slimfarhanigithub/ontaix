@@ -1,7 +1,8 @@
 """The Audit log page: newest first, filterable by kind, outcome, actor kind and time window.
 
 An entry is listed, and counted in `total`, only when the caller holds `audit.read` in a scope
-that contains every company the entry names; an entry naming no company is tenant-wide.
+that contains every company the entry names, or on the domain scope named by the entry's
+`domain_key`; an entry naming no company is tenant-wide.
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ async def list_audit(
     until = _time_bound(query.filters.get("to"))
     rows = []
     for entry in entries:
-        if not can_read_audit_entry(caller.grants, entry.company_ids):
+        if not can_read_audit_entry(caller.grants, entry.company_ids, entry.domain_key):
             continue
         if "kind" in query.filters and entry.kind not in query.filters["kind"]:
             continue
