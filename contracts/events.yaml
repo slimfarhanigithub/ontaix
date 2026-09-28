@@ -9,7 +9,11 @@ info:
 
     WebSocket envelope: every message is one `Envelope`; `sequence` is the tenant-wide outbox id. A client reconnects with `?since=<sequence>`; when the gap is too old the server sends `snapshot.required` and the client reloads `GET /api/v1/scene`.
 
-    Visibility: every channel declares `x-ontaix-visibility`, the permission (vocabulary in ADR 0003) a subscriber must hold to receive its events. Channels marked `model.read` are further limited to the companies the subscriber may read. The outbox row stores the visibility and the company so the hub filters without re-deriving it.
+    Visibility: every channel declares `x-ontaix-visibility`, the permission (vocabulary in ADR 0003) a subscriber must hold to receive its events, and `x-ontaix-audience`, how the event's `companyIds` is filled. `companyIds` lists every company whose labels, names or artefact state the payload carries; bare ids do not count. An empty list means tenant-wide. A subscriber receives an event only if it holds the visibility permission in a scope that contains every listed company; with an empty list, the permission at any scope suffices. A cross-company event therefore reaches only readers of all its companies.
+
+    Audience values: `companies` - the writer fills `companyIds` from the artefacts in the payload; `tenant` - `companyIds` is always empty and the payload carries no company-specific labels. On a `companies` channel an event never mixes artefacts with different company sets: the writer partitions the artefacts by company set and emits one event per partition (for example `source.refreshed` per company, and a cascaded proposal whose companies are not all in the rejected proposal's set gets its own `proposal.rejected`), so a one-company reader never loses an event about something it can read.
+
+    Transport: the outbox row stores `visibility` and `company_ids`; the relay copies them into the NATS headers `Ontaix-Visibility` and `Ontaix-Company-Ids` (trait `Audience`), and the WebSocket hub filters on them without re-deriving them and forwards `companyIds` in the `Envelope`.
 
     Payloads carry the full new state of the affected artefacts, not a diff. Bulk operations (approve-all, finalise-all, companies-may-interact disable) set `bulk: true` so the Studio softens the flash and skips the toast.
   license:
@@ -31,6 +35,7 @@ channels:
   proposalCreated:
     address: ontaix.{tenantId}.proposal.created
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -40,6 +45,7 @@ channels:
   proposalHalfApproved:
     address: ontaix.{tenantId}.proposal.half_approved
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -49,6 +55,7 @@ channels:
   proposalApproved:
     address: ontaix.{tenantId}.proposal.approved
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -58,6 +65,7 @@ channels:
   proposalRejected:
     address: ontaix.{tenantId}.proposal.rejected
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -67,6 +75,7 @@ channels:
   proposalFinalised:
     address: ontaix.{tenantId}.proposal.finalised
     x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -76,6 +85,7 @@ channels:
   conceptBorn:
     address: ontaix.{tenantId}.concept.born
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -85,6 +95,7 @@ channels:
   conceptChanged:
     address: ontaix.{tenantId}.concept.changed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -94,6 +105,7 @@ channels:
   conceptDying:
     address: ontaix.{tenantId}.concept.dying
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -103,6 +115,7 @@ channels:
   conceptConflict:
     address: ontaix.{tenantId}.concept.conflict
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -112,6 +125,7 @@ channels:
   relationCreated:
     address: ontaix.{tenantId}.relation.created
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -121,6 +135,7 @@ channels:
   relationChanged:
     address: ontaix.{tenantId}.relation.changed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -130,6 +145,7 @@ channels:
   relationRemoved:
     address: ontaix.{tenantId}.relation.removed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -139,6 +155,7 @@ channels:
   sourceCreated:
     address: ontaix.{tenantId}.source.created
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -148,6 +165,7 @@ channels:
   sourceChanged:
     address: ontaix.{tenantId}.source.changed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -157,6 +175,7 @@ channels:
   sourceRemoved:
     address: ontaix.{tenantId}.source.removed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -166,6 +185,7 @@ channels:
   sourcesRefreshed:
     address: ontaix.{tenantId}.source.refreshed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -175,6 +195,7 @@ channels:
   bindingCreated:
     address: ontaix.{tenantId}.binding.created
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -184,6 +205,7 @@ channels:
   bindingChanged:
     address: ontaix.{tenantId}.binding.changed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -193,6 +215,7 @@ channels:
   bindingRemoved:
     address: ontaix.{tenantId}.binding.removed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -202,6 +225,7 @@ channels:
   attributeChanged:
     address: ontaix.{tenantId}.attribute.changed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -211,6 +235,7 @@ channels:
   domainProductChanged:
     address: ontaix.{tenantId}.domain_product.changed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -220,6 +245,7 @@ channels:
   companyCreated:
     address: ontaix.{tenantId}.company.created
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -229,6 +255,7 @@ channels:
   companyRemoved:
     address: ontaix.{tenantId}.company.removed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -238,6 +265,7 @@ channels:
   settingsChanged:
     address: ontaix.{tenantId}.settings.changed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -247,6 +275,7 @@ channels:
   appearanceChanged:
     address: ontaix.{tenantId}.appearance.changed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -256,6 +285,7 @@ channels:
   crossCompanyDisabled:
     address: ontaix.{tenantId}.settings.cross_company_disabled
     x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -265,6 +295,7 @@ channels:
   groupChanged:
     address: ontaix.{tenantId}.group.changed
     x-ontaix-visibility: group.manage
+    x-ontaix-audience: tenant
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -274,6 +305,7 @@ channels:
   agentChanged:
     address: ontaix.{tenantId}.agent.changed
     x-ontaix-visibility: agent.manage
+    x-ontaix-audience: tenant
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -283,6 +315,7 @@ channels:
   auditAppended:
     address: ontaix.{tenantId}.audit.appended
     x-ontaix-visibility: audit.read
+    x-ontaix-audience: companies
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -292,6 +325,7 @@ channels:
   viewStateChanged:
     address: ontaix.{tenantId}.view_state.changed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -301,6 +335,7 @@ channels:
   positionsChanged:
     address: ontaix.{tenantId}.positions.changed
     x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -310,6 +345,7 @@ channels:
   demoScenePlayed:
     address: ontaix.{tenantId}.demo.scene_played
     x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -491,32 +527,42 @@ components:
             description: The current sequence to pass as `since` after reloading.
     ProposalCreated:
       name: ProposalCreated
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: proposal.created
       summary: A proposal was created; its pending artefacts exist.
       payload:
         $ref: '#/components/schemas/ProposalEvent'
     ProposalHalfApproved:
       name: ProposalHalfApproved
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: proposal.half_approved
       summary: First of two approvals given on a change.
       payload:
         $ref: '#/components/schemas/ProposalEvent'
     ProposalApproved:
       name: ProposalApproved
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: proposal.approved
       summary: A proposal was approved and applied; the domain revision may have moved.
       payload:
         $ref: '#/components/schemas/ProposalEvent'
     ProposalRejected:
       name: ProposalRejected
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: proposal.rejected
-      summary: A proposal was rejected; `cascaded` lists proposals rejected with it.
+      summary: A proposal was rejected; `cascaded` lists proposals rejected with it whose companies are all in this event's `companyIds`. Every other cascaded proposal is announced by its own `proposal.rejected` event with its own audience.
       payload:
         $ref: '#/components/schemas/ProposalEvent'
     ProposalFinalised:
       name: ProposalFinalised
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: proposal.finalised
-      summary: Finalise-all or approve-all completed; summary counts for the caption.
+      summary: Finalise-all or approve-all completed; summary counts for the caption. Tenant-wide audience; the payload carries counts only and `caption` names no company or label.
       payload:
         type: object
         required: [approved, rejected, rounds, remaining, companies, concepts, bound, equivalences]
@@ -541,6 +587,8 @@ components:
             type: string
     ConceptBorn:
       name: ConceptBorn
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: concept.born
       summary: A pending cell was born by division from its parent; the client animates the division.
       payload:
@@ -558,6 +606,8 @@ components:
             format: uuid
     ConceptChanged:
       name: ConceptChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: concept.changed
       summary: Label, sub, pending, colour, rule or conflict flag of a concept changed.
       payload:
@@ -575,6 +625,8 @@ components:
             format: uuid
     ConceptDying:
       name: ConceptDying
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: concept.dying
       summary: A concept and its descendants are being removed; the client fades them red over 0.7 s.
       payload:
@@ -601,6 +653,8 @@ components:
             format: uuid
     ConceptConflict:
       name: ConceptConflict
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: concept.conflict
       summary: Two approved definitions share one name; both cells are flagged and a clash relation exists.
       payload:
@@ -619,6 +673,8 @@ components:
             type: string
     RelationCreated:
       name: RelationCreated
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: relation.created
       summary: A relation exists (pending unless it is a clash).
       payload:
@@ -632,6 +688,8 @@ components:
             format: uuid
     RelationChanged:
       name: RelationChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: relation.changed
       summary: Pending cleared, label rewritten or direction swapped.
       payload:
@@ -649,6 +707,8 @@ components:
             format: uuid
     RelationRemoved:
       name: RelationRemoved
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: relation.removed
       summary: A relation is leaving; `dying` says whether to fade (0.7 s) or splice at once.
       payload:
@@ -665,6 +725,8 @@ components:
             format: uuid
     SourceCreated:
       name: SourceCreated
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: source.created
       summary: A pending source appears outside the domain ring.
       payload:
@@ -678,6 +740,8 @@ components:
             format: uuid
     SourceChanged:
       name: SourceChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: source.changed
       summary: Pending cleared, enabled or disabled, or reconfigured.
       payload:
@@ -692,6 +756,8 @@ components:
               type: string
     SourceRemoved:
       name: SourceRemoved
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: source.removed
       summary: A source and its bindings are removed.
       payload:
@@ -711,8 +777,10 @@ components:
             format: uuid
     SourcesRefreshed:
       name: SourcesRefreshed
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: source.refreshed
-      summary: Refresh-all completed; freshness of listed bindings is `just now`.
+      summary: Refresh-all completed; freshness of listed bindings is `just now`. One event per company, listing that company's bindings only.
       payload:
         type: object
         required: [bindings]
@@ -723,6 +791,8 @@ components:
               $ref: '#/components/schemas/Binding'
     BindingCreated:
       name: BindingCreated
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: binding.created
       summary: A pending bind link from a source to a concept.
       payload:
@@ -736,6 +806,8 @@ components:
             format: uuid
     BindingChanged:
       name: BindingChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: binding.changed
       summary: Pending cleared with records and freshness set, or freshness changed.
       payload:
@@ -754,6 +826,8 @@ components:
             format: uuid
     BindingRemoved:
       name: BindingRemoved
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: binding.removed
       summary: A binding was removed (unbind, source removal or rejection); attributes stay.
       payload:
@@ -771,6 +845,8 @@ components:
             format: uuid
     AttributeChanged:
       name: AttributeChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: attribute.changed
       summary: An attribute was proposed, approved or removed.
       payload:
@@ -789,6 +865,8 @@ components:
             format: uuid
     DomainProductChanged:
       name: DomainProductChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: domain_product.changed
       summary: Revision incremented or visibility changed.
       payload:
@@ -803,6 +881,8 @@ components:
               type: string
     CompanyCreated:
       name: CompanyCreated
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: company.created
       summary: A company with its nine domain products and root cell was added.
       payload:
@@ -815,6 +895,8 @@ components:
             $ref: '#/components/schemas/Concept'
     CompanyRemoved:
       name: CompanyRemoved
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: company.removed
       summary: A company is leaving; every cell of it is dying.
       payload:
@@ -839,6 +921,8 @@ components:
             format: uuid
     SettingsChanged:
       name: SettingsChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: settings.changed
       summary: One or more tenant settings changed.
       payload:
@@ -854,6 +938,8 @@ components:
               type: string
     AppearanceChanged:
       name: AppearanceChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: appearance.changed
       summary: Theme, domain colours, accent or source colour changed.
       payload:
@@ -869,8 +955,10 @@ components:
               type: string
     CrossCompanyDisabled:
       name: CrossCompanyDisabled
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: settings.cross_company_disabled
-      summary: Companies may no longer interact; the listed relations are dying and the listed proposals rejected.
+      summary: Companies may no longer interact; the listed relations are dying and the listed proposals rejected. Tenant-wide audience because the payload carries ids only; the relation and proposal states are announced by `relation.removed` and `proposal.rejected` events with their own audience.
       payload:
         type: object
         required: [removedRelationIds, rejectedProposalIds, proposalId]
@@ -890,6 +978,8 @@ components:
             format: uuid
     GroupChanged:
       name: GroupChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: group.changed
       summary: A group was created, edited, deleted, or its members or roles changed.
       payload:
@@ -907,6 +997,8 @@ components:
             additionalProperties: true
     AgentChanged:
       name: AgentChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: agent.changed
       summary: An agent's access flag changed.
       payload:
@@ -920,12 +1012,16 @@ components:
             type: boolean
     AuditAppended:
       name: AuditAppended
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: audit.appended
-      summary: A row was appended to the audit log.
+      summary: A row was appended to the audit log. The event's `companyIds` equals the entry's `companyIds`.
       payload:
         $ref: '#/components/schemas/AuditEntry'
     ViewStateChanged:
       name: ViewStateChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: view_state.changed
       summary: Coverage flag or scene index changed.
       payload:
@@ -938,6 +1034,8 @@ components:
             type: integer
     PositionsChanged:
       name: PositionsChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: positions.changed
       summary: Stored positions changed after a drag or an Arrange.
       payload:
@@ -964,6 +1062,8 @@ components:
                   type: boolean
     DemoScenePlayed:
       name: DemoScenePlayed
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
       title: demo.scene_played
       summary: A story scene was played; its proposals were created.
       payload:
@@ -980,10 +1080,24 @@ components:
               type: string
               format: uuid
 
+  messageTraits:
+    Audience:
+      headers:
+        type: object
+        required: [Ontaix-Visibility, Ontaix-Company-Ids]
+        properties:
+          Ontaix-Visibility:
+            type: string
+            enum: [model.read, audit.read, group.manage, agent.manage]
+            description: The channel's `x-ontaix-visibility`, copied from `outbox.visibility`.
+          Ontaix-Company-Ids:
+            type: string
+            description: Comma-separated company uuids copied from `outbox.company_ids`; an empty string means tenant-wide. A subscriber receives the event only if it holds `Ontaix-Visibility` in a scope containing every listed company.
+
   schemas:
     Envelope:
       type: object
-      required: [id, type, occurredAt, tenantId, sequence, actor, bulk, payload]
+      required: [id, type, occurredAt, tenantId, companyIds, sequence, actor, bulk, payload]
       properties:
         id:
           type: string
@@ -1031,9 +1145,16 @@ components:
         tenantId:
           type: string
           format: uuid
+        companyIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+          description: The event's audience, copied from `outbox.company_ids` - every company whose labels, names or artefact state the payload carries; empty means tenant-wide. The hub delivers the event only to a subscriber holding the channel's `x-ontaix-visibility` in a scope that contains every listed company.
         sequence:
           type: integer
-          description: Tenant-wide outbox id; strictly increasing.
+          description: Tenant-wide outbox id; strictly increasing. A subscriber sees gaps where events were filtered out for it; a gap alone never means events were lost.
         actor:
           $ref: '#/components/schemas/Actor'
         bulk:
@@ -1430,7 +1551,7 @@ components:
     AuditEntry:
       type: object
       description: Same shape as `AuditEntry` in contracts/openapi.yaml.
-      required: [id, at, actor, kind, what, ok]
+      required: [id, at, actor, kind, what, ok, companyIds]
       properties:
         id:
           type: integer
@@ -1447,3 +1568,10 @@ components:
           type: boolean
         proposalId:
           type: [string, 'null']
+        companyIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+          description: Every company the entry names; empty means tenant-wide. The read rule is on `AuditEntry` in contracts/openapi.yaml.

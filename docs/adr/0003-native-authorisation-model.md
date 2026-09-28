@@ -70,8 +70,8 @@ Permission check points, each enforced in the router layer and returning `403 fo
 3. `proposal.second_approve` requires Governor or Owner in scope and a different user from the first approver.
 4. `proposal.reject` follows the same rule as approve.
 5. `settings.write`, `appearance.write`, `company.create`, `source.manage`, `group.manage`, `agent.manage` require Administrator at tenant scope. Connector discovery runs under `source.manage`: it opens outbound connections and is refused for every other role, including Agent.
-6. `audit.read` requires Administrator, Governor or Auditor.
-7. `model.read` requires any role in scope; the scene snapshot, the lists and the WebSocket return only the companies the caller can read.
+6. `audit.read` requires Administrator, Governor or Auditor. An audit entry is readable only when the caller holds `audit.read` in a scope containing every company in the entry's `companyIds`; an entry with an empty list is tenant-wide and needs `audit.read` at any scope.
+7. `model.read` requires any role in scope; the scene snapshot, the lists and the WebSocket return only the companies the caller can read. Anything spanning several companies (a cross-company relation, a proposal touching two companies, their events) is returned only when the caller can read every one of them.
 8. Locked settings (`approvalRequired`, `readOnlyConnectors`) reject every write with `409 locked_setting`, whatever the role.
 9. Bulk decisions act only on proposals the caller may decide under check points 2 to 4. `approve-all` approves every ready proposal in the caller's scope and skips the rest; `reject-all` rejects every open proposal in the caller's scope and skips the rest; skipped proposals are counted in `remaining`. A scoped Owner can never approve another company's, another domain's or a cross-company proposal through a bulk call.
 10. `finalise-all` requires `proposal.finalise` (Governor at tenant scope) because it creates proposals for every company and approves everything.
