@@ -1,4 +1,9 @@
-"""The outbox events of decisions: one per decided proposal and one per bulk run."""
+"""The outbox events of decisions: one per decided proposal and one per bulk run.
+
+A proposal event keeps its full payload. It is limited to one company only when everything it
+carries belongs to that company; an event that spans several companies names none, because an
+outbox row can name at most one.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +18,8 @@ from app.models.storage.base import NodeKind, RelationKind
 from app.models.storage.proposal import Proposal
 from app.services import outbox_service
 from app.services.ontology_view_service import OntologyView
+from app.utilities.artefact_visibility import artefact_company_ids, event_company_id
+from app.utilities.proposal_scope import proposal_company_ids
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +34,16 @@ async def emit_proposal_event(
     bulk: bool,
 ) -> None:
     dto = view.proposal_dto(proposal)
+    companies = proposal_company_ids(proposal) | artefact_company_ids(outcome.artefacts)
+    spans_tenant = False
+    for cascaded in outcome.cascaded:
+        if cascaded.company_id is None:
+            spans_tenant = True
+        else:
+            companies.add(cascaded.company_id)
+        if cascaded.artefacts is not None:
+            companies |= artefact_company_ids(cascaded.artefacts)
+    company_id = None if spans_tenant else event_company_id(companies)
     await outbox_service.emit(
         session,
         caller.tenant_id,
@@ -41,7 +58,7 @@ async def emit_proposal_event(
             ],
             "caption": outcome.caption,
         },
-        company_id=proposal.company_id if proposal.company_id in view.companies else None,
+        company_id=company_id if company_id in view.companies else None,
         bulk=bulk,
     )
 

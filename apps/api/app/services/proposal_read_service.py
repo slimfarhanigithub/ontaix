@@ -14,6 +14,7 @@ from app.models.storage.proposal import Proposal
 from app.repositories import proposal_repository
 from app.services import proposal_service
 from app.services.ontology_view_service import OntologyView, load_view
+from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.listing import ListQuery, paginate
 from app.utilities.permissions import can_read_proposal, can_read_tenant
 from app.utilities.problems import forbidden, not_found
@@ -51,7 +52,10 @@ async def list_proposals(
     ]
     page, total = paginate(rows, query, {"createdAt": lambda p: p.created_at}, "createdAt")
     return PageOf[ProposalDto](
-        items=[view.proposal_dto(p, view.proposal_artefacts(p)) for p in page],
+        items=[
+            readable_proposal(caller.grants, view.proposal_dto(p, view.proposal_artefacts(p)))
+            for p in page
+        ],
         page=query.page,
         page_size=query.page_size,
         total=total,
@@ -66,19 +70,26 @@ async def get_proposal(
         raise not_found("proposal")
     view = await load_view(session, caller.tenant_id, [proposal])
     _ensure_readable(caller, view, proposal)
-    return view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )
 
 
 async def create_proposal(session: AsyncSession, caller: Caller, draft) -> ProposalDto:
     view = await load_view(session, caller.tenant_id)
     proposal = await proposal_service.create(session, caller, view, draft)
-    return view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )
 
 
 async def create_batch(session: AsyncSession, caller: Caller, drafts: list) -> list[ProposalDto]:
     view = await load_view(session, caller.tenant_id)
     created = await proposal_service.create_batch(session, caller, view, drafts)
-    return [view.proposal_dto(p, view.proposal_artefacts(p)) for p in created]
+    return [
+        readable_proposal(caller.grants, view.proposal_dto(p, view.proposal_artefacts(p)))
+        for p in created
+    ]
 
 
 def _ensure_readable(caller: Caller, view: OntologyView, proposal: Proposal) -> None:

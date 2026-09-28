@@ -34,6 +34,7 @@ from app.services.decision_event_service import emit_finalised, emit_proposal_ev
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.proposal_apply_service import apply
 from app.services.rejection_service import OPEN_STATES, reject_one
+from app.utilities.artefact_visibility import readable_artefacts, readable_proposal
 from app.utilities.clock import get_clock
 from app.utilities.permissions import (
     Scope,
@@ -347,14 +348,17 @@ def _result(
     outcome: DecisionOutcome,
     open_proposals: list[Proposal],
 ) -> DecisionResult:
-    """The response; cascaded proposals the caller may not read are left out."""
+    """The response: unreadable cascaded proposals and unreadable artefact rows are left out."""
     readable = {
         p.id for p in open_proposals if can_read_proposal(caller.grants, proposal_company_ids(p))
     }
+    artefacts = readable_artefacts(caller.grants, outcome.artefacts)
     return DecisionResult(
-        proposal=view.proposal_dto(proposal, outcome.artefacts),
-        artefacts=outcome.artefacts,
-        cascaded=[c for c in outcome.cascaded if c.id in readable],
+        proposal=view.proposal_dto(proposal, artefacts),
+        artefacts=artefacts,
+        cascaded=[
+            readable_proposal(caller.grants, c) for c in outcome.cascaded if c.id in readable
+        ],
         audit=outcome.audit,
         caption=outcome.caption,
     )

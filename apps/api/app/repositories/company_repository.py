@@ -24,6 +24,18 @@ async def get(session: AsyncSession, tenant_id: uuid.UUID, company_id: uuid.UUID
     )
 
 
+async def exists(session: AsyncSession, tenant_id: uuid.UUID, company_id: uuid.UUID) -> bool:
+    """True when the committed row is still there and not dying, whatever the session caches."""
+    found = await session.scalar(
+        select(Company.id).where(
+            Company.tenant_id == tenant_id,
+            Company.id == company_id,
+            Company.dying_at.is_(None),
+        )
+    )
+    return found is not None
+
+
 async def get_by_key(session: AsyncSession, tenant_id: uuid.UUID, key: str) -> Company | None:
     return await session.scalar(
         select(Company).where(Company.tenant_id == tenant_id, Company.key == key)

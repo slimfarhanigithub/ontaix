@@ -22,6 +22,7 @@ from app.services.ontology_view_service import OntologyView
 from app.services.proposal_store_service import (
     ISA_ACTION,
     ensure_can_propose,
+    ensure_label_free,
     ensure_still_live,
     esc,
     store,
@@ -29,7 +30,7 @@ from app.services.proposal_store_service import (
 from app.utilities.clock import get_clock
 from app.utilities.layout import birth_position, company_centre, domain_centre, rest_length
 from app.utilities.permissions import Scope
-from app.utilities.problems import conflict, not_found, validation_failed
+from app.utilities.problems import not_found, validation_failed
 from app.utilities.randomness import get_randomness
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ async def propose_concept(
     )
     if enforce:
         ensure_can_propose(caller, Scope(company.id, product.template_key))
-    _ensure_label_free(view, company.id, draft.label)
+    await ensure_label_free(session, view, company.id, draft.label)
     await ensure_still_live(session, view, parent)
     template = view.templates[product.template_key]
     action = draft.action.strip().lower()
@@ -111,7 +112,7 @@ async def propose_spec(
     )
     if enforce:
         ensure_can_propose(caller, Scope(company.id, product.template_key))
-    _ensure_label_free(view, company.id, draft.label)
+    await ensure_label_free(session, view, company.id, draft.label)
     await ensure_still_live(session, view, parent)
     template = view.templates[product.template_key]
     concept, relation = await _divide(
@@ -234,11 +235,6 @@ def _resolve_birth(
     if product is None:
         raise validation_failed("domainKey", f"unknown domain key {domain_key!r}")
     return company, parent, product
-
-
-def _ensure_label_free(view: OntologyView, company_id: uuid.UUID, label: str) -> None:
-    if view.find_label(company_id, label) is not None:
-        raise conflict("duplicate_label", f"{label} already exists in this company")
 
 
 async def _emit_born(

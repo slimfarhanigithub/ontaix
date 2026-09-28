@@ -18,6 +18,7 @@ from app.models.storage.relation import Relation
 from app.services import proposal_service
 from app.services.company_service import readable_companies
 from app.services.ontology_view_service import OntologyView, load_view
+from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.listing import ListQuery, matches_search, paginate
 from app.utilities.problems import not_found
 
@@ -76,7 +77,9 @@ async def propose_relation(
 ) -> ProposalDto:
     view = await load_view(session, caller.tenant_id)
     proposal = await proposal_service.create(session, caller, view, draft)
-    return view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )
 
 
 async def propose_equivalence(
@@ -90,7 +93,9 @@ async def propose_equivalence(
     proposal = await proposal_service.propose_equivalence(
         session, caller, view, a_id, b_id, caption
     )
-    return view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )
 
 
 async def propose_edit(
@@ -103,7 +108,9 @@ async def propose_edit(
         payload=ChangePayload(relation_id=relation_id, action=edit.action, reverse=edit.reverse),
     )
     proposal = await proposal_service.create(session, caller, view, draft)
-    return view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )
 
 
 async def propose_remove(
@@ -115,7 +122,9 @@ async def propose_remove(
         change_kind="remove_relation", payload=ChangePayload(relation_id=relation_id)
     )
     proposal = await proposal_service.create(session, caller, view, draft)
-    return view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )
 
 
 def _readable_relations(caller: Caller, view: OntologyView) -> list[Relation]:

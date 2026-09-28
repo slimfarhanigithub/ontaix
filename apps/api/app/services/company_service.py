@@ -19,6 +19,7 @@ from app.repositories import company_repository, concept_repository, domain_prod
 from app.seed.starter_vocabulary import STARTER_VOCABULARY
 from app.services import audit_service, outbox_service, proposal_service
 from app.services.ontology_view_service import OntologyView, load_view
+from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.clock import get_clock
 from app.utilities.layout import company_centre
 from app.utilities.permissions import can_manage, can_read
@@ -87,7 +88,11 @@ async def create_company(
     proposals: list[ProposalDto] = []
     if body.start == "starter_vocabulary":
         for proposal in await propose_starter_vocabulary(session, caller, view, company):
-            proposals.append(view.proposal_dto(proposal, view.proposal_artefacts(proposal)))
+            proposals.append(
+                readable_proposal(
+                    caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+                )
+            )
     return CompanyCreated(
         company=view.company_dto(company), root=view.concept_dto(root), proposals=proposals
     )
@@ -167,4 +172,6 @@ async def propose_remove_company(
         raise not_found("company")
     draft = ChangeDraft(change_kind="remove_company", payload=ChangePayload(company_id=company_id))
     proposal = await proposal_service.create(session, caller, view, draft)
-    return view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )

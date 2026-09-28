@@ -21,6 +21,7 @@ from app.services import proposal_service
 from app.services.company_service import readable_companies
 from app.services.ontology_view_service import OntologyView, attribute_dto, load_view
 from app.services.proposal_store_service import ISA_ACTION
+from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.listing import ListQuery, matches_search, paginate
 from app.utilities.permissions import can_read
 from app.utilities.problems import forbidden, not_found
@@ -96,7 +97,9 @@ async def propose_concept(
 ) -> ProposalDto:
     view = await load_view(session, caller.tenant_id)
     proposal = await proposal_service.create(session, caller, view, draft)
-    return view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )
 
 
 async def propose_rename(
@@ -108,7 +111,9 @@ async def propose_rename(
         change_kind="rename", payload=ChangePayload(concept_id=concept_id, new_label=label)
     )
     proposal = await proposal_service.create(session, caller, view, draft)
-    return view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )
 
 
 async def propose_delete(
@@ -118,7 +123,9 @@ async def propose_delete(
     _readable_concept(caller, view, concept_id)
     draft = ChangeDraft(change_kind="delete_concept", payload=ChangePayload(concept_id=concept_id))
     proposal = await proposal_service.create(session, caller, view, draft)
-    return view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )
 
 
 def _readable_concept(caller: Caller, view: OntologyView, concept_id: uuid.UUID) -> Concept:

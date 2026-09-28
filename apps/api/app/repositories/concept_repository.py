@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.storage.base import NodeKind
@@ -31,6 +31,21 @@ async def exists(session: AsyncSession, tenant_id: uuid.UUID, concept_id: uuid.U
         select(Concept.id).where(
             Concept.tenant_id == tenant_id,
             Concept.id == concept_id,
+            Concept.dying_at.is_(None),
+        )
+    )
+    return found is not None
+
+
+async def label_taken(
+    session: AsyncSession, tenant_id: uuid.UUID, company_id: uuid.UUID, label: str
+) -> bool:
+    """True when a live cell of the company already carries the label, ignoring case."""
+    found = await session.scalar(
+        select(Concept.id).where(
+            Concept.tenant_id == tenant_id,
+            Concept.company_id == company_id,
+            func.lower(Concept.label) == label.lower(),
             Concept.dying_at.is_(None),
         )
     )

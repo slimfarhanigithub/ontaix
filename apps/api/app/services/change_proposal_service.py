@@ -20,7 +20,14 @@ from app.models.storage.concept import Concept
 from app.models.storage.proposal import Proposal
 from app.models.storage.relation import Relation
 from app.services.ontology_view_service import OntologyView
-from app.services.proposal_store_service import ensure_can_propose, esc, store
+from app.services.proposal_store_service import (
+    ensure_can_propose,
+    ensure_company_still_live,
+    ensure_relation_still_live,
+    ensure_still_live,
+    esc,
+    store,
+)
 from app.utilities.layout import CONFLICT_COLOR, NEUTRAL_COLOR
 from app.utilities.permissions import Scope
 from app.utilities.problems import ProblemError, conflict, not_found, validation_failed
@@ -84,6 +91,7 @@ async def _propose_rename(
         raise validation_failed("payload.newLabel", "the new label equals the current one")
     if enforce:
         ensure_can_propose(caller, Scope(concept.company_id, view.domain_key(concept)))
+    await ensure_still_live(session, view, concept)
     existing = view.find_label(concept.company_id, new_label)
     if existing is not None and existing.id != concept.id:
         raise conflict("duplicate_label", f"{new_label} already exists in this company")
@@ -124,6 +132,7 @@ async def _propose_delete_concept(
     concept = _payload_concept(view, draft.payload.concept_id)
     if enforce:
         ensure_can_propose(caller, Scope(concept.company_id, view.domain_key(concept)))
+    await ensure_still_live(session, view, concept)
     relations = len(view.relations_touching(concept.id))
     plural = "" if relations == 1 else "s"
     return await store(
@@ -169,6 +178,7 @@ async def _propose_edit_relation(
         raise conflict("structural_relation", f"a {relation.label} relation cannot be relabelled")
     if enforce:
         _ensure_can_propose_on_ends(caller, view, a, b)
+    await ensure_relation_still_live(session, view, relation)
     frm, to = (b, a) if reverse else (a, b)
     if any(
         r.id != relation.id and r.a_id == frm.id and r.b_id == to.id and r.label.lower() == action
@@ -221,6 +231,7 @@ async def _propose_remove_relation(
     a, b = view.concepts[relation.a_id], view.concepts[relation.b_id]
     if enforce:
         _ensure_can_propose_on_ends(caller, view, a, b)
+    await ensure_relation_still_live(session, view, relation)
     if relation.kind is RelationKind.ISA:
         why = "the specialisation would no longer inherit from its parent"
     elif relation.kind is RelationKind.SAME:
@@ -271,6 +282,7 @@ async def _propose_remove_company(
         raise conflict("home_company", "the home company cannot be removed")
     if enforce:
         ensure_can_propose(caller, Scope(company.id, None))
+    await ensure_company_still_live(session, view, company)
     cells = sum(1 for c in view.live_concepts() if c.company_id == company.id)
     return await store(
         session,

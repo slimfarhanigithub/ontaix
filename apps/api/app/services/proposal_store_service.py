@@ -16,9 +16,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import Caller
 from app.models.api.actor import Actor
 from app.models.storage.base import ActorKind, ChangeKind, ProposalType
+from app.models.storage.company import Company
 from app.models.storage.concept import Concept
 from app.models.storage.proposal import Proposal
-from app.repositories import concept_repository, proposal_repository
+from app.models.storage.relation import Relation
+from app.repositories import (
+    company_repository,
+    concept_repository,
+    proposal_repository,
+    relation_repository,
+)
 from app.services import outbox_service
 from app.services.ontology_view_service import OntologyView
 from app.utilities.permissions import Scope, can_propose
@@ -47,6 +54,34 @@ async def ensure_still_live(session: AsyncSession, view: OntologyView, concept: 
             "proposal_decided",
             f"{concept.label} was rejected or removed while this proposal was being created",
         )
+
+
+async def ensure_relation_still_live(
+    session: AsyncSession, view: OntologyView, relation: Relation
+) -> None:
+    """Re-check under the tenant decision lock that a relation read from the view still exists."""
+    if not await relation_repository.exists(session, view.tenant_id, relation.id):
+        raise conflict(
+            "proposal_decided", "the relation was removed while this proposal was being created"
+        )
+
+
+async def ensure_company_still_live(
+    session: AsyncSession, view: OntologyView, company: Company
+) -> None:
+    """Re-check under the tenant decision lock that a company read from the view still exists."""
+    if not await company_repository.exists(session, view.tenant_id, company.id):
+        raise conflict(
+            "proposal_decided", f"{company.name} was removed while this proposal was being created"
+        )
+
+
+async def ensure_label_free(
+    session: AsyncSession, view: OntologyView, company_id: uuid.UUID, label: str
+) -> None:
+    """Check label uniqueness in the company against the database, under the decision lock."""
+    if await concept_repository.label_taken(session, view.tenant_id, company_id, label):
+        raise conflict("duplicate_label", f"{label} already exists in this company")
 
 
 def ensure_can_propose(caller: Caller, scope: Scope) -> None:

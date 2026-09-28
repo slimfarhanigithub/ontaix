@@ -27,6 +27,18 @@ async def get(
     )
 
 
+async def exists(session: AsyncSession, tenant_id: uuid.UUID, relation_id: uuid.UUID) -> bool:
+    """True when the committed row is still there and not dying, whatever the session caches."""
+    found = await session.scalar(
+        select(Relation.id).where(
+            Relation.tenant_id == tenant_id,
+            Relation.id == relation_id,
+            Relation.dying_at.is_(None),
+        )
+    )
+    return found is not None
+
+
 async def create(
     session: AsyncSession,
     *,

@@ -20,6 +20,7 @@ from app.repositories import (
 )
 from app.services.company_service import readable_companies
 from app.services.ontology_view_service import OntologyView, load_view
+from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.clock import get_clock
 from app.utilities.permissions import can_read_proposal, can_read_tenant
 from app.utilities.problems import forbidden
@@ -56,7 +57,10 @@ async def get_scene(session: AsyncSession, caller: Caller) -> Scene:
         companies=[view.company_dto(c) for c in companies],
         nodes=[view.concept_dto(c) for c in concepts],
         links=[view.relation_dto(r) for r in relations],
-        proposals=[view.proposal_dto(p, view.proposal_artefacts(p)) for p in proposals],
+        proposals=[
+            readable_proposal(caller.grants, view.proposal_dto(p, view.proposal_artefacts(p)))
+            for p in proposals
+        ],
         settings=settings_dto(settings),
         appearance=appearance_dto(view, settings),
         view_state=ViewState(
