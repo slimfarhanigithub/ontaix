@@ -33,3 +33,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 .claude/worktrees/
+tests/screenshots/output/
+tests/screenshots/last-run.log
+tests/screenshots/test-results/
+playwright-report/

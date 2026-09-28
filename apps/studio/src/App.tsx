@@ -1,11 +1,48 @@
 /**
- * Placeholder shell. The Studio UI is ported from reference/ontaix-studio-reference.html in a
- * later wave; until then this component only proves the toolchain renders.
+ * The Studio: the canvas and the shell around it, in the element order of
+ * reference/ontaix-studio-reference.html lines 185-233.
  */
+import { useEffect } from 'react';
+
+import { AdminOverlay } from './shell/AdminOverlay';
+import { NewBox, LinkBox } from './shell/Boxes';
+import { CanvasView } from './shell/CanvasView';
+import { Caption } from './shell/Caption';
+import { Dialog } from './shell/Dialog';
+import { DomainsCard } from './shell/DomainsCard';
+import { Drawer } from './shell/Drawer';
+import { Header } from './shell/Header';
+import { Hint } from './shell/Hint';
+import { Legend } from './shell/Legend';
+import { Panel } from './shell/Panel';
+import { TeachBar } from './shell/TeachBar';
+import { Tools } from './shell/Tools';
+import { Toasts } from './shell/Toasts';
+import { useKeyboard } from './shell/useKeyboard';
+import { store } from './store/store';
+
 export function App() {
+  useKeyboard();
+  useEffect(() => {
+    void store.load();
+  }, []);
   return (
-    <main>
-      <h1>Ontaix Studio</h1>
-    </main>
+    <>
+      <CanvasView />
+      <Header />
+      <Toasts />
+      <AdminOverlay />
+      <Caption />
+      <Tools />
+      <TeachBar />
+      <Panel />
+      <Drawer />
+      <NewBox />
+      <LinkBox />
+      <DomainsCard />
+      <Legend />
+      <Hint />
+      <Dialog />
+    </>
   );
 }

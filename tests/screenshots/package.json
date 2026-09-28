@@ -1,0 +1,6 @@
+{
+  "name": "ontaix-screenshots",
+  "private": true,
+  "type": "module",
+  "description": "Playwright screenshot regression of the Studio against reference/ontaix-studio-reference.html. Run with `pnpm --filter studio test:screens`; dependencies come from apps/studio."
+}
