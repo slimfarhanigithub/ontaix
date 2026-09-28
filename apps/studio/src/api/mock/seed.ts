@@ -1,7 +1,7 @@
 /**
  * Fixture data of the in-browser mock API, verbatim from reference/ontaix-studio-reference.html:
  * `SEED` (line 612), `ATTR` (280-297), `generic` (298-299), `RECORDS` (300), `CATALOG`
- * (911-913) and the home company of `reset()` (736).
+ * (911-913), `DISCOVER` (1054) and the home company of `reset()` (736).
  */
 import type { DomainKey } from '../types';
 
@@ -199,3 +199,18 @@ export const CATALOG: [string, string, string, string][] = [
   ['PI', 'AVEVA PI · OT', 'operations', 'tags and assets'],
   ['SP', 'SharePoint · files', 'documents', 'glossaries, procedures, specifications'],
 ];
+
+/** Objects a connector discovers on verification, by catalogue code (reference line 1054). */
+export const DISCOVER: Record<string, string[]> = {
+  SAP: ['MARA (materials)', 'MAKT (descriptions)', 'KNA1 (customers)', 'LFA1 (vendors)', 'VBAK (sales orders)', 'EKKO (purchase orders)', 'MARC (plant data)', 'CSKS (cost centres)'],
+  SF: ['Account', 'Contact', 'Opportunity', 'Quote', 'Pricebook2', 'Territory2'],
+  MES: ['Plant', 'Line', 'Asset', 'Shift', 'WorkOrder', 'Downtime'],
+  FAB: ['lakehouse.bronze.*', 'lakehouse.silver.customer', 'warehouse.dim_product', 'Fabric IQ · Northwind ontology'],
+  DBX: ['main.sales.orders', 'main.supply.materials', 'Genie ontology · production'],
+  SNW: ['SALES.ORDERS', 'SUPPLY.MATERIALS', 'semantic view · CUSTOMER_360'],
+  X3: ['FACILITY', 'ITMMASTER', 'BPCUSTOMER', 'BPSUPPLIER', 'SORDER'],
+  WD: ['Worker', 'Position', 'Organization', 'Certification'],
+  SN: ['cmdb_ci', 'incident', 'change_request'],
+  PI: ['AF elements', 'tags · 12,600'],
+  SP: ['Glossary.docx', 'Procedures/', 'Specifications/'],
+};

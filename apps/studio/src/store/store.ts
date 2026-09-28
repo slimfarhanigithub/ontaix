@@ -12,12 +12,15 @@ import {
   isSource,
   type Appearance,
   type Artefacts,
+  type Binding,
+  type ConnectorType,
   type Company as ApiCompany,
   type DomainProduct,
   type Proposal,
   type ProposalDraft,
   type Scene,
   type Settings,
+  type Source,
 } from '../api/types';
 import { arrange as arrangeCanvas } from '../canvas/arrange';
 import { GREEN, RED, DEFAULT_BRASS, DEFAULT_COLORS, DOMAIN_TEMPLATES } from '../canvas/constants';
@@ -42,7 +45,7 @@ import type { Company, Domain, Link, Node } from '../canvas/types';
 import { random } from '../runtime/rng';
 import { SCENES } from '../demo/scenes';
 import { now } from '../runtime/clock';
-import type { DialogSpec } from '../shell/Dialog';
+import type { CustomDialog, DialogEntry, DialogSpec } from '../shell/Dialog';
 
 /** A toast: a strong lead word and plain text, both rendered as text nodes. */
 export interface Toast {
@@ -89,7 +92,13 @@ export interface UiState {
   finalising: boolean;
   importing: boolean;
   listening: boolean;
-  dialog: DialogSpec | null;
+  /** Open dialogs, bottom first. */
+  dialogs: DialogEntry[];
+  /** Page the admin portal shows; kept while the portal is closed. */
+  adminPage: string;
+  /** Bumped whenever the portal re-renders from scratch, which resets its lists. */
+  adminRev: number;
+  connectors: ConnectorType[];
 }
 
 type Listener = () => void;
@@ -107,6 +116,7 @@ class StudioStore {
   private version = 0;
   private listeners = new Set<Listener>();
   private toastSeq = 0;
+  private dialogSeq = 0;
   private refreshQueued = false;
   private unsubscribeEvents: (() => void) | null = null;
   private loading: Promise<void> | null = null;
@@ -143,7 +153,10 @@ class StudioStore {
       finalising: false,
       importing: false,
       listening: false,
-      dialog: null,
+      dialogs: [],
+      adminPage: 'sources',
+      adminRev: 0,
+      connectors: [],
     };
   }
 
@@ -284,7 +297,9 @@ class StudioStore {
     this.ui.proposals = scene.proposals;
     this.ui.settings = scene.settings;
     this.ui.appearance = scene.appearance;
+    this.ui.connectors = scene.connectors || [];
     this.setTheme(scene.appearance.theme, false);
+    this.applyColors();
     this.applySettings();
     this.setScene(Math.max(0, Math.min(scene.viewState.sceneIdx || 0, SCENES.length - 1)));
     if (scene.viewState.coverage !== s.COVERAGE) s.COVERAGE = scene.viewState.coverage;
@@ -369,6 +384,13 @@ class StudioStore {
         break;
       case 'appearance.changed':
         this.ui.appearance = e.payload.appearance as Appearance;
+        this.applyColors();
+        break;
+      case 'source.changed':
+        this.applySourceChanged(e.payload.source as Source, (e.payload.bindings as Binding[] | undefined) || []);
+        break;
+      case 'relation.removed':
+        for (const id of (e.payload.relationIds as string[] | undefined) || []) this.fadeLink(linkBySid(this.s, id));
         this.bump();
         break;
       case 'snapshot.required':
@@ -533,12 +555,27 @@ class StudioStore {
         l.pending = false;
         l.grow = { start: now() };
       }
+      const source = bySid(s, b.sourceId),
+        target = bySid(s, b.conceptId);
+      if (!b.pending && source && target) target.bound = { source, records: b.records, fresh: b.fresh };
     }
     const src = bySid(s, p.sourceId);
     if (src && p.type === 'source') {
       src.pending = false;
       src.flash = { color: GREEN, start: now(), soft: !!bulk };
     }
+    if (p.changeKind === 'unbind' && node) {
+      this.fadeLink(s.links.find((l) => l.kind === 'bind' && l.b === node && !l.pending));
+      node.bound = null;
+    }
+    if (p.changeKind === 'remove_source' && src)
+      for (const l of s.links)
+        if (l.kind === 'bind' && l.a === src) {
+          if (l.b.bound && l.b.bound.source === src) l.b.bound = null;
+          this.fadeLink(l);
+        }
+    if (p.changeKind === 'remove_company') this.removeCompanyLater(this.companyBySid(p.companyId));
+    if (p.changeKind === 'resolve_conflict') this.resolveConflictLinks(payload.artefacts);
     this.reconcile(payload.artefacts, p.changeKind === 'edit_relation');
     for (const q of payload.cascaded) {
       if (q.state === 'pending') this.applyCreated(q);
@@ -636,10 +673,87 @@ class StudioStore {
     for (const src of art.sources || []) {
       const n = bySid(s, src.id);
       if (!n) continue;
+      n.label = src.label;
       n.pending = src.pending;
       n.disabled = src.disabled;
       if (src.dyingAt && !n.dying) n.dying = { start: now(), color: RED };
     }
+  }
+
+  /**
+   * A resolved conflict: the clash line goes, and the renamed definition loses its old "is a"
+   * line; the new one arrives with the artefacts. Lines leave at once, as in the reference.
+   */
+  private resolveConflictLinks(art: Artefacts): void {
+    const s = this.s;
+    const i = s.links.findIndex((l) => l.kind === 'clash');
+    if (i >= 0) s.links.splice(i, 1);
+    const renamed = (art.concepts || []).map((c) => ({ n: bySid(s, c.id), c })).find((x) => x.n && x.n.label !== x.c.label)?.n;
+    if (!renamed) return;
+    const j = s.links.findIndex((l) => l.a === renamed && l.kind === 'isa');
+    if (j >= 0) s.links.splice(j, 1);
+  }
+
+  /** A line fades for 0.7 s, then leaves the canvas. */
+  fadeLink(link: Link | null | undefined): void {
+    if (!link || link.dying) return;
+    const s = this.s;
+    link.dying = { start: now() };
+    setTimeout(() => {
+      const j = s.links.indexOf(link);
+      if (j >= 0) s.links.splice(j, 1);
+    }, 700);
+  }
+
+  /** Every cell of the company fades, and the company leaves the view 0.8 s later. */
+  private removeCompanyLater(c: Company | null): void {
+    if (!c) return;
+    const s = this.s;
+    for (const x of s.nodes) if (x.company === c) x.dying = { start: now(), color: RED };
+    setTimeout(() => {
+      const i = s.companies.indexOf(c);
+      if (i >= 0) s.companies.splice(i, 1);
+      s.DOMAINS = s.companies.flatMap((x) => x.domains);
+      if (s.activeCompany === c) s.activeCompany = s.companies[0] || null;
+      layoutCompanies(s);
+      this.renderCompanies();
+    }, 800);
+  }
+
+  /** A source was enabled, disabled, reconfigured or refreshed: its state and the freshness it feeds. */
+  private applySourceChanged(src: Source, feeds: Binding[]): void {
+    const s = this.s;
+    const n = bySid(s, src.id);
+    if (n) {
+      n.disabled = src.disabled;
+      n.pending = src.pending;
+      n.label = src.label;
+    }
+    for (const b of feeds) {
+      const c = bySid(s, b.conceptId);
+      if (c && c.bound) c.bound.fresh = b.fresh;
+    }
+    this.bump();
+  }
+
+  /** Domain colours, accent and source colour onto the canvas and the page, the reference's `applyColors`. */
+  applyColors(): void {
+    const s = this.s;
+    const ap = this.ui.appearance;
+    if (!ap) return;
+    for (const t of DOMAIN_TEMPLATES) {
+      const c = ap.colors[t.key] || DEFAULT_COLORS[t.key];
+      t.color = c;
+      for (const d of s.DOMAINS) if (d.key === t.key) d.color = c;
+      for (const n of s.nodes)
+        if (n.domain && n.domain.key === t.key) {
+          n.finalColor = c;
+          if (!n.split && !n.diff) n.color = c;
+        }
+    }
+    document.documentElement.style.setProperty('--accent', ap.accent);
+    s.BRASS = ap.source;
+    this.bump();
   }
 
   // ------------------------------------------------------------ captions, toasts, scenes
@@ -815,8 +929,20 @@ class StudioStore {
     this.setTheme(this.ui.theme === 'light' ? 'dark' : 'light');
   }
 
-  openAdmin(): void {
+  openAdmin(page?: string): void {
+    if (page) this.ui.adminPage = page;
     this.ui.adminOpen = true;
+    this.renderAdmin();
+  }
+
+  setAdminPage(page: string): void {
+    this.ui.adminPage = page;
+    this.renderAdmin();
+  }
+
+  /** Re-renders the admin portal from scratch, the reference's `renderAdmin`. */
+  renderAdmin(): void {
+    this.ui.adminRev++;
     this.bump();
   }
 
@@ -1036,14 +1162,19 @@ class StudioStore {
       : '';
   }
 
-  openDialog(spec: DialogSpec): void {
-    this.ui.dialog = spec;
+  /** Opens a dialog on top of any open one and returns its id. */
+  openDialog(spec: DialogSpec | CustomDialog): number {
+    const id = ++this.dialogSeq;
+    this.ui.dialogs = [...this.ui.dialogs, { id, ...spec }];
     this.bump();
+    return id;
   }
 
-  closeDialog(): void {
-    if (!this.ui.dialog) return;
-    this.ui.dialog = null;
+  /** Closes the dialog with this id, or the top one. */
+  closeDialog(id?: number): void {
+    if (!this.ui.dialogs.length) return;
+    const target = id ?? this.ui.dialogs[this.ui.dialogs.length - 1].id;
+    this.ui.dialogs = this.ui.dialogs.filter((d) => d.id !== target);
     this.bump();
   }
 

@@ -56,6 +56,7 @@ export function openAddCompany(): void {
               `A second company, with its own domain products, its own owners and its own words. ${seed ? 'Its starter vocabulary is waiting for approval.' : 'Teach it, import its documents, or click its cell to grow it.'}`,
             );
             store.toast2('Added', `${name}${seed ? ' · 13 proposals waiting on the canvas' : ''}`);
+            if (store.ui.adminOpen) store.renderAdmin();
           });
         },
       },

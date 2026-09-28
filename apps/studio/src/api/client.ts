@@ -11,6 +11,24 @@ import {
   ApiError,
   type AppearancePatch,
   type Appearance,
+  type Agent,
+  type AuditEntry,
+  type ConnectorType,
+  type CostSummary,
+  type CrossCompanyDisabled,
+  type Discovery,
+  type DiscoveryRequest,
+  type Group,
+  type GroupInput,
+  type RefreshAllResult,
+  type RoleAssignment,
+  type RoleGroup,
+  type RoleInfo,
+  type RoleName,
+  type Scope,
+  type Source,
+  type SourceUpdate,
+  type User,
   type BulkResult,
   type CompanyCreate,
   type CompanyCreated,
@@ -59,6 +77,7 @@ async function call<R>(method: string, path: string, body?: unknown): Promise<R>
     problem = res.ok ? null : await problemOf(res);
   }
   if (problem) throw new ApiError(res.status, problem);
+  if (res.status === 204) return undefined as R;
   return (await res.json()) as R;
 }
 
@@ -80,6 +99,30 @@ export function busyRetryDelayMs(retryAfter: string | null): number {
   if (!retryAfter || !Number.isFinite(seconds) || seconds < 0) return BUSY_RETRY_DEFAULT_MS;
   return Math.min(seconds * 1000, BUSY_RETRY_CAP_MS);
 }
+
+/** Query parameters of a list operation: paging, search, `filter[field]`, sort and order. */
+export interface ListParams {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  filter?: Record<string, string>;
+  sort?: string;
+  order?: 'asc' | 'desc';
+}
+
+export function listQuery(p: ListParams = {}): string {
+  const parts: string[] = [];
+  const add = (k: string, v: string | number) => parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+  if (p.page !== undefined) add('page', p.page);
+  if (p.pageSize !== undefined) add('pageSize', p.pageSize);
+  if (p.q) add('q', p.q);
+  for (const [k, v] of Object.entries(p.filter || {})) add(`filter[${k}]`, v);
+  if (p.sort) add('sort', p.sort);
+  if (p.order) add('order', p.order);
+  return parts.length ? `?${parts.join('&')}` : '';
+}
+
+type Paged<T> = Page & { items: T[] };
 
 export const api = {
   getScene: () => call<Scene>('GET', '/scene'),
@@ -105,6 +148,39 @@ export const api = {
   demoScenes: () => call<DemoScenes>('GET', '/demo/scenes'),
   demoNext: () => call<DemoNext>('POST', '/demo/next'),
   demoReset: () => call<Scene>('POST', '/demo/reset'),
+
+  listConnectors: () => call<ConnectorType[]>('GET', '/connectors'),
+  discover: (code: string, body: DiscoveryRequest) =>
+    call<Discovery>('POST', `/connectors/${encodeURIComponent(code)}/discover`, body),
+  getSource: (id: string) => call<Source>('GET', `/sources/${id}`),
+  updateSource: (id: string, patch: SourceUpdate) => call<Source>('PATCH', `/sources/${id}`, patch),
+  enableSource: (id: string) => call<Source>('POST', `/sources/${id}/enable`),
+  disableSource: (id: string) => call<Source>('POST', `/sources/${id}/disable`),
+  refreshAllSources: () => call<RefreshAllResult>('POST', '/sources/refresh-all'),
+  proposeRemoveSource: (id: string) => call<Proposal>('DELETE', `/sources/${id}`),
+  proposeUnbind: (bindingId: string) => call<Proposal>('DELETE', `/bindings/${bindingId}`),
+  proposeRemoveCompany: (id: string) => call<Proposal>('DELETE', `/companies/${id}`),
+  listUsers: (p?: ListParams) => call<Paged<User>>('GET', `/users${listQuery(p)}`),
+  listGroups: (p?: ListParams) => call<Paged<Group>>('GET', `/groups${listQuery(p)}`),
+  getGroup: (id: string) => call<Group>('GET', `/groups/${id}`),
+  createGroup: (body: GroupInput) => call<Group>('POST', '/groups', body),
+  updateGroup: (id: string, body: GroupInput) => call<Group>('PATCH', `/groups/${id}`, body),
+  deleteGroup: (id: string) => call<void>('DELETE', `/groups/${id}`),
+  addGroupMember: (groupId: string, userId: string) => call<void>('PUT', `/groups/${groupId}/members/${userId}`),
+  removeGroupMember: (groupId: string, userId: string) => call<void>('DELETE', `/groups/${groupId}/members/${userId}`),
+  addGroupRole: (groupId: string, body: { role: RoleName; scope: Scope }) =>
+    call<RoleAssignment>('POST', `/groups/${groupId}/roles`, body),
+  removeGroupRole: (groupId: string, assignmentId: string) => call<void>('DELETE', `/groups/${groupId}/roles/${assignmentId}`),
+  listRoles: () => call<RoleInfo[]>('GET', '/roles'),
+  listRoleGroups: (role: RoleName) => call<RoleGroup[]>('GET', `/roles/${role}/groups`),
+  listScopes: () => call<Scope[]>('GET', '/scopes'),
+  listAgents: (p?: ListParams) => call<Paged<Agent>>('GET', `/agents${listQuery(p)}`),
+  updateAgent: (id: string, access: boolean) => call<Agent>('PATCH', `/agents/${id}`, { access }),
+  getCost: () => call<CostSummary>('GET', '/cost'),
+  disableCrossCompany: (confirmation: string) =>
+    call<CrossCompanyDisabled>('POST', '/settings/cross-company/disable', { confirmation }),
+  resetAppearance: () => call<Appearance>('POST', '/appearance/reset'),
+  listAudit: (p?: ListParams) => call<Paged<AuditEntry>>('GET', `/audit${listQuery(p)}`),
 };
 
 export type Api = typeof api;
