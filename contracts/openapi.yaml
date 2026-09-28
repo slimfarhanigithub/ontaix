@@ -787,6 +787,7 @@ paths:
                   format: uuid
                 caption:
                   type: string
+                  maxLength: 300
       responses:
         '202':
           $ref: '#/components/responses/ProposalAccepted'
@@ -1941,6 +1942,34 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+    post:
+      tags: [Agents]
+      summary: Register an agent
+      description: Immediate and audited (`agents`). Binds the agent's token identity (issuer, subject) to a row with an optional company scope; a null `companyId` means tenant-wide. Refused with `409 duplicate_agent` when the (issuer, subject) pair or the name already exists.
+      operationId: createAgent
+      x-ontaix-permission: agent.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCreate'
+      responses:
+        '201':
+          description: The agent, with issuer and subject.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
   /agents/{agentId}:
     parameters:
       - name: agentId
@@ -2574,6 +2603,7 @@ components:
             - unsupported_media_type
             - rate_limited
             - duplicate_attribute
+            - duplicate_agent
             - unavailable
         errors:
           type: array
@@ -2878,10 +2908,10 @@ components:
       allOf:
         - oneOf:
             - required: [aId]
-            - required: [aLabel]
+            - required: [aLabel, companyId]
         - oneOf:
             - required: [bId]
-            - required: [bLabel]
+            - required: [bLabel, companyId]
       properties:
         type:
           type: string
@@ -3912,6 +3942,39 @@ components:
           type: integer
           description: Distinct users holding the role through groups; agents with access for the Agent row.
 
+    AgentCreate:
+      type: object
+      required: [name, platform, issuer, subject]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        platform:
+          type: string
+          minLength: 1
+          maxLength: 60
+        issuer:
+          type: string
+          maxLength: 300
+          description: Token issuer the agent authenticates with.
+        subject:
+          type: string
+          maxLength: 300
+          description: Token subject (client id or workload identity) the agent authenticates with.
+        companyId:
+          type: [string, 'null']
+          format: uuid
+          description: Company scope; null means tenant-wide.
+        domainKey:
+          oneOf:
+            - $ref: '#/components/schemas/DomainKey'
+            - type: 'null'
+        owner:
+          type: string
+          maxLength: 120
+          default: ''
+
     Agent:
       type: object
       required: [id, name, platform, owner, access, reads, costEur]
@@ -3922,6 +3985,16 @@ components:
           type: string
         platform:
           type: string
+        issuer:
+          type: string
+          description: Present only for callers holding `agent.manage`.
+        subject:
+          type: string
+          description: Present only for callers holding `agent.manage`.
+        companyId:
+          type: [string, 'null']
+          format: uuid
+          description: Company scope; null means tenant-wide.
         domainKey:
           oneOf:
             - $ref: '#/components/schemas/DomainKey'
@@ -4016,6 +4089,13 @@ components:
           type: boolean
         demoStory:
           type: boolean
+        egressAllowlist:
+          type: array
+          maxItems: 200
+          description: Hosts connector discovery may reach even when they resolve to loopback, link-local or private ranges.
+          items:
+            type: string
+            maxLength: 300
 
     SettingsPatch:
       type: object
@@ -4054,6 +4134,12 @@ components:
           type: boolean
         demoStory:
           type: boolean
+        egressAllowlist:
+          type: array
+          maxItems: 200
+          items:
+            type: string
+            maxLength: 300
 
     Appearance:
       type: object

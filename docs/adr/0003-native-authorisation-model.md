@@ -10,7 +10,11 @@ The owner rejected any dependency on Microsoft or Entra groups for what a user m
 
 OIDC is for authentication only. Any OIDC provider signs the user in; the API validates the token, finds the tenant through `tenant_identity_provider` by the token's `(issuer, audience)`, then looks the user up in `app_user` by `(issuer, subject)`. On first login the user is provisioned into that tenant with name and email from the token and no group. A user with no group can read nothing.
 
-Agents authenticate with a bearer token of their own (client credentials or a workload identity token). The token's `(issuer, subject)` must match an `agent` row whose `access` is true in a tenant whose `agentAccess` setting is on; otherwise the gateway and the API answer `403`. Agents never hold roles through groups: an agent's scope is its own row, tenant-wide when `company_id` is null, one company otherwise. Every agent read is logged.
+Agents authenticate with a bearer token of their own (client credentials or a workload identity token). The token's `(issuer, subject)` must match an `agent` row whose `access` is true in a tenant whose `agentAccess` setting is on; otherwise the gateway and the API answer `403`. An administrator registers an agent with `POST /agents` (name, platform, issuer, subject, optional company scope); issuer and subject are returned only to holders of `agent.manage`. Agents never hold roles through groups: an agent's scope is its own row, tenant-wide when `company_id` is null, one company otherwise. Every agent read is logged.
+
+A user is unique per `(issuer, subject)` across the whole deployment, so one person signing into two tenants through two audiences of the same issuer is refused on the second sign-in. This holds for the single-tenant dev environment; a multi-tenant deployment scopes that uniqueness by tenant.
+
+The connector egress allowlist (`Settings.egressAllowlist`) is written under `settings.write` and audited like every other setting.
 
 Authorisation is a pure function over the tenant's own tables: `permission(actor, permission, scope) -> bool`, where a user's roles reach them only through `group_member` and `group_role`.
 
@@ -47,6 +51,8 @@ Permissions are a fixed vocabulary. Every operation in `contracts/openapi.yaml` 
 
 | Permission | Who holds it |
 |---|---|
+| `none` | nobody is checked: the operation needs no token (the liveness probe only) |
+| `authenticated` | any valid user or agent token, no role required (`GET /me` only) |
 | `model.read` | any role in the company's scope; Auditor; Agent in scope |
 | `view.write` | any role with `model.read` in the company (positions, coverage flag, scene index, domain visibility) |
 | `proposal.create` | Owner, Builder or Agent in the proposal's scope; Member when `everyoneTeaches` is on |

@@ -483,13 +483,10 @@ CREATE TABLE audit_entry (
   kind            text NOT NULL,
   what            text NOT NULL,
   ok              boolean NOT NULL,
-  proposal_id     uuid,
-  FOREIGN KEY (tenant_id, actor_user_id) REFERENCES app_user(tenant_id, id) ON DELETE SET NULL (actor_user_id),
-  FOREIGN KEY (tenant_id, actor_agent_id) REFERENCES agent(tenant_id, id) ON DELETE SET NULL (actor_agent_id),
-  FOREIGN KEY (tenant_id, proposal_id) REFERENCES proposal(tenant_id, id) ON DELETE SET NULL (proposal_id)
+  proposal_id     uuid
 );
 CREATE INDEX audit_entry_by_tenant_time ON audit_entry (tenant_id, at DESC);
-COMMENT ON TABLE audit_entry IS 'Append-only log of every approval, rejection, setting change and connection, with the actor; update, delete and truncate are refused by trigger and the application role holds INSERT and SELECT only.';
+COMMENT ON TABLE audit_entry IS 'Append-only log of every approval, rejection, setting change and connection; actor and proposal ids are plain columns without foreign keys so deletions elsewhere never touch the log; update, delete and truncate are refused by trigger and the application role holds INSERT and SELECT only.';
 
 CREATE FUNCTION audit_entry_is_append_only() RETURNS trigger
 LANGUAGE plpgsql AS $$
@@ -513,7 +510,7 @@ CREATE TABLE outbox (
   aggregate     text NOT NULL,
   action        text NOT NULL,
   subject       text NOT NULL,
-  visibility    text NOT NULL,
+  visibility    text NOT NULL CHECK (visibility IN ('model.read', 'audit.read', 'group.manage', 'agent.manage')),
   company_id    uuid,
   actor_kind    actor_kind NOT NULL,
   actor_id      uuid,
