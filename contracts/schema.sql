@@ -402,6 +402,55 @@ COMMENT ON TABLE cost_allocation IS 'The euro amount allocated to agent reads fo
 -- Proposals and approvals
 -- ---------------------------------------------------------------------------
 
+CREATE TABLE document_import (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id        uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  actor_kind       actor_kind NOT NULL,
+  actor_user_id    uuid,
+  actor_agent_id   uuid,
+  file_name        text NOT NULL,
+  media_type       text NOT NULL,
+  sha256           bytea NOT NULL,
+  sentence_count   integer NOT NULL,
+  extracted_chars  integer NOT NULL,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  expires_at       timestamptz NOT NULL DEFAULT now() + interval '1 hour',
+  UNIQUE (tenant_id, id),
+  FOREIGN KEY (tenant_id, actor_user_id) REFERENCES app_user(tenant_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, actor_agent_id) REFERENCES agent(tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT document_import_actor_matches_kind CHECK (
+    (actor_kind = 'user'  AND actor_user_id IS NOT NULL AND actor_agent_id IS NULL) OR
+    (actor_kind = 'agent' AND actor_agent_id IS NOT NULL AND actor_user_id IS NULL)
+  ),
+  CONSTRAINT document_import_file_name CHECK (
+    char_length(file_name) BETWEEN 1 AND 255
+    AND octet_length(file_name) <= 1020
+    AND file_name !~ '[/\\:\x01-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]'
+  ),
+  CONSTRAINT document_import_media_type CHECK (media_type IN (
+    'text/plain', 'text/markdown', 'text/csv', 'application/json',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/pdf')),
+  CONSTRAINT document_import_sha256 CHECK (octet_length(sha256) = 32),
+  CONSTRAINT document_import_limits CHECK (sentence_count BETWEEN 0 AND 2000 AND extracted_chars BETWEEN 0 AND 2000000),
+  CONSTRAINT document_import_one_hour CHECK (expires_at = created_at + interval '1 hour')
+);
+COMMENT ON TABLE document_import IS 'One uploaded document after server-side extraction: usable for one hour by the actor that created it, in its tenant. Proposals copy the file name, media type, sentence index and position into proposal.origin_detail, so they survive the purge of expired imports.';
+
+CREATE TABLE document_import_sentence (
+  tenant_id       uuid NOT NULL,
+  import_id       uuid NOT NULL,
+  sentence_index  integer NOT NULL CHECK (sentence_index BETWEEN 0 AND 1999),
+  text            text NOT NULL CHECK (char_length(text) BETWEEN 13 AND 399),
+  position_unit   text CHECK (position_unit IN ('page', 'paragraph')),
+  position_index  integer CHECK (position_index BETWEEN 1 AND 100000),
+  parse_count     smallint NOT NULL DEFAULT 0 CHECK (parse_count BETWEEN 0 AND 3),
+  drafted_at      timestamptz,
+  PRIMARY KEY (tenant_id, import_id, sentence_index),
+  FOREIGN KEY (tenant_id, import_id) REFERENCES document_import(tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT document_import_sentence_position_pair CHECK ((position_unit IS NULL) = (position_index IS NULL))
+);
+COMMENT ON TABLE document_import_sentence IS 'Extracted sentences of an import in document order. parse_count caps teach parses per sentence at 3; drafted_at is set by the one proposal call allowed to cite the sentence.';
+
 CREATE TABLE proposal (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id          uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
@@ -444,28 +493,33 @@ CREATE TABLE proposal (
   FOREIGN KEY (tenant_id, proposer_agent_id) REFERENCES agent(tenant_id, id) ON DELETE SET NULL (proposer_agent_id),
   CONSTRAINT proposal_change_kind_only_for_change CHECK ((type = 'change') = (change_kind IS NOT NULL)),
   CONSTRAINT proposal_deps_is_array CHECK (jsonb_typeof(deps) = 'array'),
-  CONSTRAINT proposal_origin_detail_only_for_document CHECK (origin_detail IS NULL OR origin = 'document'),
+  CONSTRAINT proposal_origin_detail_iff_document CHECK ((origin = 'document') = (origin_detail IS NOT NULL)),
   CONSTRAINT proposal_origin_detail_shape CHECK (
     origin_detail IS NULL OR COALESCE((
       jsonb_typeof(origin_detail) = 'object'
-      AND octet_length(origin_detail::text) <= 1024
+      AND octet_length(origin_detail::text) <= 2048
       AND origin_detail ? 'fileName'
       AND origin_detail ? 'mediaType'
-      AND (origin_detail - 'fileName' - 'mediaType' - 'position') = '{}'::jsonb
+      AND origin_detail ? 'sentenceIndex'
+      AND (origin_detail - 'fileName' - 'mediaType' - 'sentenceIndex' - 'position') = '{}'::jsonb
       AND jsonb_typeof(origin_detail -> 'fileName') = 'string'
       AND char_length(origin_detail ->> 'fileName') BETWEEN 1 AND 255
-      AND (origin_detail ->> 'fileName') !~ '[/\\:[:cntrl:]]'
+      AND octet_length(origin_detail ->> 'fileName') <= 1020
+      AND (origin_detail ->> 'fileName') !~ '[/\\:\x01-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]'
       AND jsonb_typeof(origin_detail -> 'mediaType') = 'string'
       AND (origin_detail ->> 'mediaType') IN (
         'text/plain', 'text/markdown', 'text/csv', 'application/json',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/pdf')
+      AND jsonb_typeof(origin_detail -> 'sentenceIndex') = 'number'
+      AND (origin_detail ->> 'sentenceIndex') ~ '^[0-9]{1,4}$'
+      AND (origin_detail ->> 'sentenceIndex')::integer <= 1999
       AND (NOT (origin_detail ? 'position') OR (
         jsonb_typeof(origin_detail -> 'position') = 'object'
-        AND (origin_detail -> 'position' - 'unit' - 'index') = '{}'::jsonb
+        AND ((origin_detail -> 'position') - 'unit' - 'index') = '{}'::jsonb
         AND (origin_detail -> 'position' ->> 'unit') IN ('page', 'paragraph')
         AND jsonb_typeof(origin_detail -> 'position' -> 'index') = 'number'
-        AND (origin_detail -> 'position' ->> 'index')::numeric BETWEEN 1 AND 100000
-        AND (origin_detail -> 'position' ->> 'index')::numeric = trunc((origin_detail -> 'position' ->> 'index')::numeric)
+        AND (origin_detail -> 'position' ->> 'index') ~ '^[0-9]{1,6}$'
+        AND (origin_detail -> 'position' ->> 'index')::integer BETWEEN 1 AND 100000
       ))
     ), false)
   ),

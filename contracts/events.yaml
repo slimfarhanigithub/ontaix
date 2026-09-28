@@ -1149,19 +1149,23 @@ components:
           type: string
           enum: [text, speech, document]
         originDetail:
-          description: Set only when `origin` is `document`; same shape as `OriginDetail` in contracts/openapi.yaml.
+          description: Set exactly when `origin` is `document`; same shape as `OriginDetail` in contracts/openapi.yaml.
           oneOf:
             - type: 'null'
             - type: object
               additionalProperties: false
-              required: [fileName, mediaType]
+              required: [fileName, mediaType, sentenceIndex]
               properties:
+                sentenceIndex:
+                  type: integer
+                  minimum: 0
+                  maximum: 1999
                 fileName:
                   type: string
                   minLength: 1
                   maxLength: 255
-                  pattern: '^[^/\\:\x00-\x1f\x7f]{1,255}$'
-                  description: Basename only; HTML-escaped wherever interpolated, rendered as text.
+                  pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]{1,255}$'
+                  description: Basename only, at most 1020 bytes in UTF-8, no bidirectional controls; HTML-escaped wherever interpolated, rendered as text.
                 mediaType:
                   type: string
                   enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf]
