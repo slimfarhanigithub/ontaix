@@ -107,6 +107,18 @@ def can_read_audit(grants: tuple[Grant, ...]) -> bool:
     return any(g.role in AUDIT_ROLES for g in grants)
 
 
+def can_read_audit_entry(grants: tuple[Grant, ...], company_ids: list[uuid.UUID]) -> bool:
+    """`audit.read` in one scope that contains every listed company; an empty list is
+    tenant-wide and needs `audit.read` at any scope."""
+    audit_grants = [g for g in grants if g.role in AUDIT_ROLES]
+    if not company_ids:
+        return bool(audit_grants)
+    return any(
+        all(g.contains(Scope(company_id=company_id)) for company_id in company_ids)
+        for g in audit_grants
+    )
+
+
 def permission_names(grants: tuple[Grant, ...], everyone_teaches: bool) -> list[str]:
     """Coarse permission list the Studio uses to enable buttons."""
     names: list[str] = []

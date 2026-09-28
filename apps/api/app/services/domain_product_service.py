@@ -64,6 +64,7 @@ async def set_hidden(
         "list",
         f"{dto.name} {'hidden' if hidden else 'shown'}",
         True,
+        company_ids=[product.company_id],
     )
     await outbox_service.emit(
         session,
@@ -71,6 +72,6 @@ async def set_hidden(
         caller.actor,
         "domain_product.changed",
         {"domainProduct": dto.model_dump(mode="json", by_alias=True), "fields": ["hidden"]},
-        company_id=product.company_id,
+        company_ids=[product.company_id],
     )
     return dto

@@ -125,7 +125,7 @@ async def propose_relation(
             "relation": view.relation_dto(relation).model_dump(mode="json", by_alias=True),
             "proposalId": str(proposal.id),
         },
-        company_id=None if cross_company else a.company_id,
+        company_ids=[a.company_id, b.company_id],
         bulk=bulk,
     )
     return proposal

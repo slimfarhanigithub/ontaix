@@ -33,7 +33,6 @@ async def remove_concepts(
     if not doomed:
         return
     now = get_clock().now()
-    company_id = doomed[0].company_id
     relation_ids: list[uuid.UUID] = []
     for c in doomed:
         await concept_repository.mark_dying(session, c, now)
@@ -57,6 +56,6 @@ async def remove_concepts(
             "bindingIds": [],
             "proposalId": str(proposal.id),
         },
-        company_id=company_id,
+        company_ids={c.company_id for c in doomed},
         bulk=bulk,
     )

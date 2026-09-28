@@ -255,6 +255,6 @@ async def _emit_born(
             "birthRelation": view.relation_dto(relation).model_dump(mode="json", by_alias=True),
             "proposalId": str(proposal.id),
         },
-        company_id=concept.company_id,
+        company_ids=[concept.company_id],
         bulk=proposal.bulk,
     )

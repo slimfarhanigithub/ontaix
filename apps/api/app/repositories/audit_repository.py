@@ -28,6 +28,7 @@ async def create(
     what: str,
     ok: bool,
     proposal_id: uuid.UUID | None,
+    company_ids: list[uuid.UUID],
 ) -> AuditEntry:
     entry = AuditEntry(
         tenant_id=tenant_id,
@@ -37,6 +38,7 @@ async def create(
         what=what,
         ok=ok,
         proposal_id=proposal_id,
+        company_ids=company_ids,
     )
     session.add(entry)
     await session.flush()

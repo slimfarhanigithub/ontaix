@@ -72,7 +72,13 @@ async def create_company(
     root = view.root_of(company.id)
     assert root is not None
     await audit_service.record(
-        session, caller.tenant_id, caller.actor, "company", f"{body.name} added", True
+        session,
+        caller.tenant_id,
+        caller.actor,
+        "company",
+        f"{body.name} added",
+        True,
+        company_ids=[company.id],
     )
     await outbox_service.emit(
         session,
@@ -83,7 +89,7 @@ async def create_company(
             "company": view.company_dto(company).model_dump(mode="json", by_alias=True),
             "root": view.concept_dto(root).model_dump(mode="json", by_alias=True),
         },
-        company_id=company.id,
+        company_ids=[company.id],
     )
     proposals: list[ProposalDto] = []
     if body.start == "starter_vocabulary":

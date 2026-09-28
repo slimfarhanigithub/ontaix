@@ -25,6 +25,7 @@ from app.services.rejection_service import OPEN_STATES, reject_one, touches_any
 from app.utilities.clock import get_clock
 from app.utilities.problems import conflict
 from app.utilities.proposal_relations import touched_relation_ids
+from app.utilities.proposal_scope import proposal_company_ids
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ async def _apply_rename(
             "fields": ["label"],
             "proposalId": str(proposal.id),
         },
-        company_id=concept.company_id,
+        company_ids=[concept.company_id],
         bulk=bulk,
     )
     return DecisionOutcome(artefacts=Artefacts(concepts=[dto]))
@@ -105,8 +106,8 @@ async def _apply_delete_concept(
     for q in list(open_proposals):
         if q.id != proposal.id and q.state in OPEN_STATES and touches_any(view, q, doomed):
             cascaded = await reject_one(session, caller, view, q, open_proposals, None, True)
-            outcome.cascaded.append(view.proposal_dto(q, cascaded.artefacts))
-            outcome.cascaded.extend(cascaded.cascaded)
+            outcome.add_cascaded(view.proposal_dto(q, cascaded.artefacts), proposal_company_ids(q))
+            outcome.absorb_cascade(cascaded)
     await remove_concepts(session, caller, view, proposal, doomed, outcome, bulk)
     return outcome
 
@@ -137,7 +138,7 @@ async def _apply_edit_relation(
             "fields": fields,
             "proposalId": str(proposal.id),
         },
-        company_id=proposal.company_id,
+        company_ids=dto.company_ids,
         bulk=bulk,
     )
     return DecisionOutcome(artefacts=Artefacts(relations=[dto]))
@@ -162,7 +163,8 @@ async def _apply_remove_relation(
             and relation.id in touched_relation_ids(q)
         ):
             cascaded = await reject_one(session, caller, view, q, open_proposals, None, True)
-            outcome.cascaded.append(view.proposal_dto(q, cascaded.artefacts))
+            outcome.add_cascaded(view.proposal_dto(q, cascaded.artefacts), proposal_company_ids(q))
+    relation_company_ids = view.relation_dto(relation).company_ids
     await relation_repository.mark_dying(session, relation, get_clock().now())
     outcome.artefacts.relations.append(view.relation_dto(relation))
     await relation_repository.delete(session, relation)
@@ -173,7 +175,7 @@ async def _apply_remove_relation(
         caller.actor,
         "relation.removed",
         {"relationId": str(relation.id), "dying": True, "proposalId": str(proposal.id)},
-        company_id=proposal.company_id,
+        company_ids=relation_company_ids,
         bulk=bulk,
     )
     return outcome
@@ -197,15 +199,13 @@ async def _apply_remove_company(
             continue
         if q.company_id == company.id or touches_any(view, q, company_concepts):
             cascaded = await reject_one(session, caller, view, q, open_proposals, None, True)
-            outcome.cascaded.append(view.proposal_dto(q, cascaded.artefacts))
+            outcome.add_cascaded(view.proposal_dto(q, cascaded.artefacts), proposal_company_ids(q))
     await company_repository.mark_dying(session, company, get_clock().now())
     outcome.artefacts.companies.append(
         view.company_dto(company).model_dump(mode="json", by_alias=True)
     )
     concept_ids = [c.id for c in company_concepts]
-    await proposal_repository.detach_company(session, caller.tenant_id, company.id)
-    await company_repository.delete(session, company)
-    view.forget_company(company.id)
+    outcome.removed_company = company
     await outbox_service.emit(
         session,
         caller.tenant_id,
@@ -217,6 +217,22 @@ async def _apply_remove_company(
             "sourceIds": [],
             "proposalId": str(proposal.id),
         },
+        company_ids=[company.id],
         bulk=bulk,
     )
     return outcome
+
+
+async def delete_removed_company(
+    session: AsyncSession, caller: Caller, view: OntologyView, outcome: DecisionOutcome
+) -> None:
+    """Delete the company a decision marked dying, once its audit entry and events are written.
+
+    The company's proposals keep their history: their company column is cleared first.
+    """
+    company = outcome.removed_company
+    if company is None:
+        return
+    await proposal_repository.detach_company(session, caller.tenant_id, company.id)
+    await company_repository.delete(session, company)
+    view.forget_company(company.id)

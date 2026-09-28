@@ -21,6 +21,8 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 ASYNC_DRIVER_PREFIX = "postgresql+psycopg://"
+# Contract triggers name tables without a schema, so every session resolves them in `ontaix`.
+SEARCH_PATH_OPTION = "-c search_path=ontaix,public"
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
@@ -39,7 +41,11 @@ def async_database_url(url: str) -> str:
 def configure_engine(url: str) -> AsyncEngine:
     """Build the process-wide engine for `url`, replacing any earlier one."""
     global _engine, _session_factory
-    _engine = create_async_engine(async_database_url(url), pool_pre_ping=True)
+    _engine = create_async_engine(
+        async_database_url(url),
+        pool_pre_ping=True,
+        connect_args={"options": SEARCH_PATH_OPTION},
+    )
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
     return _engine
 

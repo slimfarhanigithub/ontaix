@@ -7,7 +7,7 @@ Decisions of one tenant never interleave with each other or with proposal creati
 first takes the tenant's decision lock, then row-locks the proposals it decides and re-reads
 their state under the lock, so of two concurrent decisions on one proposal exactly one wins and
 the other answers `409 proposal_decided`. A lock that is not granted in time answers
-`503 unavailable`.
+`503 busy`.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from app.repositories import (
 from app.services import audit_service, decision_lock_service, outbox_service
 from app.services.decision_event_service import emit_finalised, emit_proposal_event
 from app.services.ontology_view_service import OntologyView, load_view
-from app.services.proposal_apply_service import apply
+from app.services.proposal_apply_service import apply, delete_removed_company
 from app.services.rejection_service import OPEN_STATES, reject_one
 from app.utilities.artefact_visibility import readable_artefacts, readable_proposal
 from app.utilities.clock import get_clock
@@ -156,7 +156,7 @@ async def finalise_all(session: AsyncSession, caller: Caller) -> FinaliseResult:
         f"{equivalences} equivalences. Everything approved."
     )
     await audit_service.record(
-        session, caller.tenant_id, caller.actor, "demo", FINALISE_AUDIT_WHAT, True
+        session, caller.tenant_id, caller.actor, "demo", FINALISE_AUDIT_WHAT, True, company_ids=()
     )
     remaining = sum(1 for p in proposals if p.state in OPEN_STATES)
     await emit_finalised(
@@ -249,6 +249,7 @@ async def _half_approve(
         f"{proposal.title} · 1 of 2 approvals",
         True,
         proposal.id,
+        company_ids=proposal_company_ids(proposal),
     )
     outcome = DecisionOutcome(artefacts=view.proposal_artefacts(proposal), audit=audit)
     await emit_proposal_event(
@@ -288,7 +289,7 @@ async def _complete_approval(
             caller.actor,
             "domain_product.changed",
             {"domainProduct": dto.model_dump(mode="json", by_alias=True), "fields": ["revision"]},
-            company_id=product.company_id,
+            company_ids=[product.company_id],
             bulk=bulk,
         )
     outcome.caption = proposal.caption
@@ -300,8 +301,10 @@ async def _complete_approval(
         proposal.title,
         True,
         proposal.id,
+        company_ids=proposal_company_ids(proposal),
     )
     await emit_proposal_event(session, caller, view, proposal, "proposal.approved", outcome, bulk)
+    await delete_removed_company(session, caller, view, outcome)
     return outcome
 
 

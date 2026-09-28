@@ -1,8 +1,9 @@
 """The outbox events of decisions: one per decided proposal and one per bulk run.
 
-A proposal event keeps its full payload. It is limited to one company only when everything it
-carries belongs to that company; an event that spans several companies names none, because an
-outbox row can name at most one.
+A proposal event's audience is every company the proposal touches plus every company of the
+artefacts it carries. Its `cascaded` list keeps only the cascaded proposals whose companies are
+all in that audience; every cascaded proposal also has its own `proposal.rejected` event with
+its own audience, so a reader of fewer companies still learns about it.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from app.models.storage.base import NodeKind, RelationKind
 from app.models.storage.proposal import Proposal
 from app.services import outbox_service
 from app.services.ontology_view_service import OntologyView
-from app.utilities.artefact_visibility import artefact_company_ids, event_company_id
+from app.utilities.artefact_visibility import artefact_company_ids
 from app.utilities.proposal_scope import proposal_company_ids
 
 logger = logging.getLogger(__name__)
@@ -35,15 +36,9 @@ async def emit_proposal_event(
 ) -> None:
     dto = view.proposal_dto(proposal)
     companies = proposal_company_ids(proposal) | artefact_company_ids(outcome.artefacts)
-    spans_tenant = False
-    for cascaded in outcome.cascaded:
-        if cascaded.company_id is None:
-            spans_tenant = True
-        else:
-            companies.add(cascaded.company_id)
-        if cascaded.artefacts is not None:
-            companies |= artefact_company_ids(cascaded.artefacts)
-    company_id = None if spans_tenant else event_company_id(companies)
+    cascaded = [
+        c for c in outcome.cascaded if outcome.cascaded_company_ids.get(c.id, set()) <= companies
+    ]
     await outbox_service.emit(
         session,
         caller.tenant_id,
@@ -53,12 +48,11 @@ async def emit_proposal_event(
             "proposal": dto.model_dump(mode="json", by_alias=True, exclude={"artefacts"}),
             "artefacts": outcome.artefacts.model_dump(mode="json", by_alias=True),
             "cascaded": [
-                c.model_dump(mode="json", by_alias=True, exclude={"artefacts"})
-                for c in outcome.cascaded
+                c.model_dump(mode="json", by_alias=True, exclude={"artefacts"}) for c in cascaded
             ],
             "caption": outcome.caption,
         },
-        company_id=company_id if company_id in view.companies else None,
+        company_ids=companies,
         bulk=bulk,
     )
 

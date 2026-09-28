@@ -5,9 +5,6 @@ creation answers) passes them through `readable_proposal` or `readable_artefacts
 kept only when every company it joins is readable, so another company's labels never reach a
 caller that cannot read that company. The client never drew a row it cannot read, so dropping
 the row loses nothing on the canvas.
-
-Outbox events keep the full data. `event_company_id` scopes an event to its single company, or
-to no company when it touches several, since an outbox row names at most one company.
 """
 
 from __future__ import annotations
@@ -56,8 +53,3 @@ def readable_proposal(grants: tuple[Grant, ...], proposal: ProposalDto) -> Propo
     if proposal.artefacts is None:
         return proposal
     return proposal.model_copy(update={"artefacts": readable_artefacts(grants, proposal.artefacts)})
-
-
-def event_company_id(company_ids: set[uuid.UUID]) -> uuid.UUID | None:
-    """The company an event is limited to: its only company, otherwise none."""
-    return next(iter(company_ids)) if len(company_ids) == 1 else None

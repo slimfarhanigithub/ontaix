@@ -1,4 +1,4 @@
-"""Decision responses never carry another company's rows; their events name no single company."""
+"""Decision responses never carry another company's rows; events that carry them list it."""
 
 from __future__ import annotations
 
@@ -66,7 +66,9 @@ async def _delete_proposal(client: httpx.AsyncClient, tenant: TenantFixture, lab
 
 async def _assert_events_not_scoped_to_home(session: AsyncSession, tenant: TenantFixture) -> None:
     rows = (await session.scalars(select(Outbox).where(Outbox.tenant_id == tenant.tenant_id))).all()
-    leaking = [r for r in rows if HIDDEN in str(r.payload) and r.company_id == tenant.company_id]
+    leaking = [
+        r for r in rows if HIDDEN in str(r.payload) and set(r.company_ids) <= {tenant.company_id}
+    ]
     assert leaking == [], [f"{r.aggregate}.{r.action}" for r in leaking]
 
 

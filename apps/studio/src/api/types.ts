@@ -319,6 +319,7 @@ export interface AuditEntry {
   what: string;
   ok: boolean;
   proposalId?: string | null;
+  companyIds: string[];
 }
 
 export interface DecisionResult {

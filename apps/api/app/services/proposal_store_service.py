@@ -28,6 +28,7 @@ from app.repositories import (
 )
 from app.services import outbox_service
 from app.services.ontology_view_service import OntologyView
+from app.utilities.artefact_visibility import artefact_company_ids
 from app.utilities.permissions import Scope, can_propose
 from app.utilities.problems import conflict, forbidden
 from app.utilities.proposal_scope import PAYLOAD_COMPANY_IDS
@@ -154,7 +155,8 @@ async def store(
             else {},
             "cascaded": [],
         },
-        company_id=company_id,
+        company_ids=unique_ids
+        + (list(artefact_company_ids(dto.artefacts)) if dto.artefacts else []),
         bulk=bulk,
     )
     return proposal

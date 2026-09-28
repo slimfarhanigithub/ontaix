@@ -22,7 +22,9 @@ REPO_SCHEMA_SQL = Path(__file__).resolve().parents[5] / "contracts" / "schema.sq
 
 
 def upgrade() -> None:
-    op.get_bind().exec_driver_sql(_contract_ddl())
+    """Run the DDL on the raw psycopg cursor with no parameters, so `%` in PL/pgSQL is literal."""
+    with op.get_bind().connection.dbapi_connection.cursor() as cursor:
+        cursor.execute(_contract_ddl())
 
 
 def downgrade() -> None:

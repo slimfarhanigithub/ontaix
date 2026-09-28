@@ -225,8 +225,14 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
     null;
   const open = () => proposals.filter((p) => p.state === 'pending' || p.state === 'half_approved');
 
-  function addAudit(kind: string, what: string, ok: boolean, proposalId: string | null = null): T.AuditEntry {
-    const e: T.AuditEntry = { id: audit.length + 1, at: iso(), actor: ACTOR, kind, what, ok, proposalId };
+  function addAudit(
+    kind: string,
+    what: string,
+    ok: boolean,
+    proposalId: string | null = null,
+    companyIds: string[] = [],
+  ): T.AuditEntry {
+    const e: T.AuditEntry = { id: audit.length + 1, at: iso(), actor: ACTOR, kind, what, ok, proposalId, companyIds };
     audit.unshift(e);
     if (audit.length > 400) audit.pop();
     return e;

@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Uuid, text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.storage.base import ActorKind, Base, pg_enum
@@ -28,3 +29,4 @@ class AuditEntry(Base):
     what: Mapped[str]
     ok: Mapped[bool] = mapped_column(Boolean)
     proposal_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    company_ids: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), server_default=text("'{}'"))

@@ -23,6 +23,7 @@ from app.services.decision_event_service import emit_proposal_event
 from app.services.ontology_view_service import OntologyView
 from app.utilities.clock import get_clock
 from app.utilities.proposal_relations import own_relation_ids, touched_relation_ids
+from app.utilities.proposal_scope import proposal_company_ids
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ async def reject_one(
         proposal.title,
         False,
         proposal.id,
+        company_ids=proposal_company_ids(proposal),
     )
     concept = view.concepts.get(proposal.concept_id) if proposal.concept_id else None
     if concept is not None and concept.pending:
@@ -65,8 +67,10 @@ async def reject_one(
             )
             if descends or _touches_relation(view, q, concept.id):
                 cascaded = await reject_one(session, caller, view, q, open_proposals, None, bulk)
-                outcome.cascaded.append(view.proposal_dto(q, cascaded.artefacts))
-                outcome.cascaded.extend(cascaded.cascaded)
+                outcome.add_cascaded(
+                    view.proposal_dto(q, cascaded.artefacts), proposal_company_ids(q)
+                )
+                outcome.absorb_cascade(cascaded)
         await concept_repository.clear_pending(session, concept)
         await remove_concepts(session, caller, view, proposal, [concept], outcome, bulk)
     else:
@@ -74,6 +78,7 @@ async def reject_one(
             relation = view.relations.get(rid)
             if relation is None or not relation.pending:
                 continue
+            relation_company_ids = view.relation_dto(relation).company_ids
             await relation_repository.delete(session, relation)
             view.forget_relation(rid)
             await outbox_service.emit(
@@ -82,7 +87,7 @@ async def reject_one(
                 caller.actor,
                 "relation.removed",
                 {"relationId": str(rid), "dying": False, "proposalId": str(proposal.id)},
-                company_id=proposal.company_id,
+                company_ids=relation_company_ids,
                 bulk=bulk,
             )
     outcome.caption = REJECTED_CAPTION.format(title=proposal.title)

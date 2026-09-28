@@ -6,8 +6,8 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, ForeignKeyConstraint, Uuid, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Uuid, text
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.storage.base import ActorKind, Base, pg_enum
@@ -15,11 +15,6 @@ from app.models.storage.base import ActorKind, Base, pg_enum
 
 class Outbox(Base):
     __tablename__ = "outbox"
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["tenant_id", "company_id"], ["company.tenant_id", "company.id"], ondelete="SET NULL"
-        ),
-    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenant.id", ondelete="CASCADE"))
@@ -28,7 +23,7 @@ class Outbox(Base):
     action: Mapped[str]
     subject: Mapped[str]
     visibility: Mapped[str]
-    company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    company_ids: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), server_default=text("'{}'"))
     actor_kind: Mapped[ActorKind] = mapped_column(pg_enum(ActorKind, "actor_kind"))
     actor_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     bulk: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))

@@ -109,7 +109,7 @@ async def test_child_proposed_after_its_parent_was_rejected_answers_409(
     assert refused.value.code == "proposal_decided"
 
 
-async def test_decision_lock_wait_is_bounded_and_answers_503(
+async def test_decision_lock_wait_is_bounded_and_answers_503_busy(
     client: httpx.AsyncClient, tenant: TenantFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     held = (await propose_concept(client, tenant, tenant.builder, "Held", tenant.root_id)).json()
@@ -131,7 +131,8 @@ async def test_decision_lock_wait_is_bounded_and_answers_503(
         await holder.close()
 
     assert response.status_code == 503, response.text
-    assert response.json()["code"] == "unavailable"
+    assert response.json()["code"] == "busy"
+    assert int(response.headers["Retry-After"]) > 0
     retried = await client.post(
         f"/proposals/{waiting['id']}/approve", headers=tenant.second_governor.headers
     )

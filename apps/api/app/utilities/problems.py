@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 PROBLEM_TYPE_PREFIX = "urn:ontaix:problem:"
+BUSY_RETRY_AFTER_SECONDS = 1
 
 TITLES: dict[str, str] = {
     "bad_request": "Bad request",
@@ -34,6 +35,7 @@ TITLES: dict[str, str] = {
     "payload_too_large": "Payload too large",
     "unsupported_media_type": "Unsupported media type",
     "unavailable": "Unavailable",
+    "busy": "Busy",
     "rate_limited": "Rate limited",
     "duplicate_attribute": "Duplicate attribute",
     "duplicate_agent": "Duplicate agent",
@@ -49,12 +51,14 @@ class ProblemError(Exception):
         code: str,
         detail: str | None = None,
         errors: list[dict[str, str]] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(detail or TITLES.get(code, code))
         self.status = status
         self.code = code
         self.detail = detail
         self.errors = errors
+        self.headers = headers
 
     def body(self, instance: str | None) -> dict[str, Any]:
         """Serialise to the `Problem` schema of the contract."""
@@ -91,6 +95,11 @@ def conflict(code: str, detail: str | None = None) -> ProblemError:
 
 def bad_request(detail: str) -> ProblemError:
     return ProblemError(400, "bad_request", detail)
+
+
+def busy(detail: str) -> ProblemError:
+    """Contention on a lock, a deadlock or a serialisation failure: nothing was written."""
+    return ProblemError(503, "busy", detail, headers={"Retry-After": str(BUSY_RETRY_AFTER_SECONDS)})
 
 
 def validation_failed(field: str, message: str) -> ProblemError:

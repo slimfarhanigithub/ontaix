@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,7 @@ from app.models.storage.audit_entry import AuditEntry
 from app.models.storage.base import ActorKind
 from app.repositories import audit_repository
 from app.services import outbox_service
+from app.utilities.audience import audience
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +28,14 @@ async def record(
     what: str,
     ok: bool,
     proposal_id: uuid.UUID | None = None,
+    *,
+    company_ids: Iterable[uuid.UUID],
 ) -> AuditEntryDto:
-    """Append one entry and emit `audit.appended` in the same transaction."""
+    """Append one entry and emit `audit.appended` in the same transaction.
+
+    `company_ids` lists every company the entry names; empty is tenant-wide. The event carries
+    the same audience as the entry.
+    """
     entry = await audit_repository.create(
         session,
         tenant_id=tenant_id,
@@ -38,6 +45,7 @@ async def record(
         what=what,
         ok=ok,
         proposal_id=proposal_id,
+        company_ids=audience(company_ids),
     )
     dto = to_dto(entry, {actor.id: actor.name} if actor.id else {})
     await outbox_service.emit(
@@ -46,6 +54,7 @@ async def record(
         actor,
         "audit.appended",
         dto,
+        company_ids=entry.company_ids,
         visibility=outbox_service.VISIBILITY_AUDIT,
     )
     return dto
@@ -61,6 +70,7 @@ def to_dto(entry: AuditEntry, names: Mapping[uuid.UUID | None, str | None]) -> A
         what=entry.what,
         ok=entry.ok,
         proposal_id=entry.proposal_id,
+        company_ids=list(entry.company_ids),
     )
 
 

@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.auth import DEV_USER_HEADER
@@ -28,12 +29,14 @@ from app.routers import (
     relations,
     scene,
 )
-from app.utilities.problems import ProblemError
+from app.utilities.contention import is_contention
+from app.utilities.problems import ProblemError, busy
 
 logger = logging.getLogger(__name__)
 
 API_PREFIX = "/api/v1"
 PROBLEM_MEDIA_TYPE = "application/problem+json"
+CONTENTION_DETAIL = "the request met concurrent work on the same data; try again"
 HTTP_STATUS_CODES = {400: "bad_request", 401: "unauthorized", 403: "forbidden", 404: "not_found"}
 
 
@@ -62,6 +65,7 @@ def create_app() -> FastAPI:
     application.add_exception_handler(ProblemError, _problem_handler)
     application.add_exception_handler(RequestValidationError, _validation_handler)
     application.add_exception_handler(StarletteHTTPException, _http_exception_handler)
+    application.add_exception_handler(DBAPIError, _database_error_handler)
     return application
 
 
@@ -70,6 +74,7 @@ def _problem_response(problem: ProblemError, request: Request) -> JSONResponse:
         status_code=problem.status,
         content=problem.body(request.url.path),
         media_type=PROBLEM_MEDIA_TYPE,
+        headers=problem.headers,
     )
 
 
@@ -99,6 +104,16 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
     )
     detail = exc.detail if isinstance(exc.detail, str) else None
     return _problem_response(ProblemError(exc.status_code, code, detail), request)
+
+
+async def _database_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Lock timeouts, deadlocks and serialisation failures answer `503 busy`; the transaction
+    was rolled back, so the client retries the same request. Any other database error stays a
+    server error."""
+    if not is_contention(exc):
+        raise exc
+    logger.warning("database contention on %s %s: %s", request.method, request.url.path, exc)
+    return _problem_response(busy(CONTENTION_DETAIL), request)
 
 
 app = create_app()
