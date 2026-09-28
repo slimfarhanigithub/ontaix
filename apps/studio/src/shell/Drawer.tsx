@@ -1,22 +1,22 @@
 /**
  * What the model knows about a cell, and its lineage. Markup from
  * reference/ontaix-studio-reference.html line 214; content from `openDrawer` (lines 637-646)
- * and `showLineage` (lines 653-662).
+ * and `showLineage` (lines 653-662). Labels, subs, names and freshness are rendered as text.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
 import { ancestorsOf, childrenOf, descendantsOf } from '../canvas/lineage';
 import type { Node } from '../canvas/types';
 import { useStore } from './dom';
 
-const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const HEX = /^#[0-9a-f]{6}$/i;
+const safeColour = (c: string, fallback: string) => (HEX.test(c) ? c : fallback);
 
 export function Drawer() {
   const st = useStore();
   const s = st.s;
   const n = st.ui.drawerNode;
   const lineageOn = !!n && s.lineageNode === n;
-  const line = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (n && lineageOn) {
@@ -59,23 +59,56 @@ export function Drawer() {
   const d = n.domain;
   const bindCount = (pending: boolean) => s.links.filter((l) => l.kind === 'bind' && l.a === n && l.pending === pending).length;
   const meta =
-    n.kind === 'root'
-      ? `<b>${n.company?.name}</b><br>${n.sub || ''}<br>${n.company?.domains.filter((x) => s.nodes.some((m) => m.domain === x && !m.dying)).length} domain products · ${s.nodes.filter((m) => m.company === n.company && m.kind === 'concept').length} concepts`
-      : n.kind === 'source'
-        ? `<b>${n.sub}</b> · ${n.company?.name}<br>${bindCount(false)} concepts bound · ${bindCount(true)} pending`
-        : `<b>${d ? d.name : '—'}</b> · domain product owned by ${d ? d.owner : '—'} · v${d ? d.version.toFixed(1) : '—'}<br>${n.pending ? 'awaiting approval' : 'approved'} · ${s.links.filter((l) => (l.a === n || l.b === n) && l.kind !== 'bind').length} relations`;
-  let srcClass = 'src',
-    srcHtml: string;
+    n.kind === 'root' ? (
+      <>
+        <b>{n.company?.name}</b>
+        <br />
+        {n.sub || ''}
+        <br />
+        {`${n.company?.domains.filter((x) => s.nodes.some((m) => m.domain === x && !m.dying)).length} domain products · ${s.nodes.filter((m) => m.company === n.company && m.kind === 'concept').length} concepts`}
+      </>
+    ) : n.kind === 'source' ? (
+      <>
+        <b>{n.sub}</b>
+        {` · ${n.company?.name}`}
+        <br />
+        {`${bindCount(false)} concepts bound · ${bindCount(true)} pending`}
+      </>
+    ) : (
+      <>
+        <b>{d ? d.name : '—'}</b>
+        {` · domain product owned by ${d ? d.owner : '—'} · v${d ? d.version.toFixed(1) : '—'}`}
+        <br />
+        {`${n.pending ? 'awaiting approval' : 'approved'} · ${s.links.filter((l) => (l.a === n || l.b === n) && l.kind !== 'bind').length} relations`}
+      </>
+    );
+  let srcClass = 'src';
+  let src: React.ReactNode;
   if (n.kind === 'source')
-    srcHtml = `<b>${n.label}</b> feeds: ${s.links.filter((l) => l.kind === 'bind' && l.a === n).map((l) => l.b.label).join(', ') || 'nothing yet'}`;
+    src = (
+      <>
+        <b>{n.label}</b>
+        {` feeds: ${s.links.filter((l) => l.kind === 'bind' && l.a === n).map((l) => l.b.label).join(', ') || 'nothing yet'}`}
+      </>
+    );
   else if (n.bound)
-    srcHtml = `Bound to <b>${n.bound.source.label}</b> · ${n.bound.records.toLocaleString('en-GB')} records · fresh ${n.bound.fresh}`;
+    src = (
+      <>
+        Bound to <b>{n.bound.source.label}</b>
+        {` · ${n.bound.records.toLocaleString('en-GB')} records · fresh ${n.bound.fresh}`}
+      </>
+    );
   else {
     srcClass = 'src none';
-    srcHtml = n.kind === 'root' ? '<b>Company</b>' : `<b>No data behind it yet.</b> Bind it to a system to read its attributes.`;
+    src =
+      n.kind === 'root' ? (
+        <b>Company</b>
+      ) : (
+        <>
+          <b>No data behind it yet.</b> Bind it to a system to read its attributes.
+        </>
+      );
   }
-
-  const lineageHtml = lineageOn ? lineage(st, n) : '';
 
   return (
     <section className="drawer on" id="drawer" aria-live="polite">
@@ -83,11 +116,15 @@ export function Drawer() {
         ×
       </button>
       <h2>
-        <i id="drDot" style={{ color: n.kind === 'source' ? s.BRASS : n.color }}></i>
+        <i id="drDot" style={{ color: safeColour(n.kind === 'source' ? s.BRASS : n.color, '#a9b3cc') }}></i>
         <span id="drName">{n.label + (n.sub && n.kind !== 'source' ? ' · ' + n.sub : '')}</span>
       </h2>
-      <div className="meta" id="drMeta" dangerouslySetInnerHTML={{ __html: meta }} />
-      <div className={srcClass} id="drSrc" dangerouslySetInnerHTML={{ __html: srcHtml }} />
+      <div className="meta" id="drMeta">
+        {meta}
+      </div>
+      <div className={srcClass} id="drSrc">
+        {src}
+      </div>
       <h3 id="drAttrTitle" style={{ display: n.attrs && n.attrs.length ? undefined : 'none' }}>
         Attributes
       </h3>
@@ -100,7 +137,7 @@ export function Drawer() {
             </span>
             <span className="col">{`${a.type} · ${a.col}`}</span>
             <div className="fill" title={`${a.fill} percent filled`}>
-              <i style={{ width: `${a.fill}%` }}></i>
+              <i style={{ width: `${Math.max(0, Math.min(100, Number(a.fill) || 0))}%` }}></i>
             </div>
           </div>
         ))}
@@ -125,28 +162,19 @@ export function Drawer() {
           Lineage
         </button>
       </div>
-      <div
-        id="drLine"
-        ref={line}
-        style={{ display: lineageOn ? undefined : 'none' }}
-        dangerouslySetInnerHTML={{ __html: lineageHtml }}
-        onClick={(e) => {
-          const b = (e.target as HTMLElement).closest('[data-go]') as HTMLElement | null;
-          if (!b) return;
-          const m = s.nodes.find((x) => String(x.id) === b.dataset.go);
-          if (m) st.goTo(m);
-        }}
-      ></div>
+      <div id="drLine" style={{ display: lineageOn ? undefined : 'none' }}>
+        {lineageOn ? <Lineage n={n} /> : null}
+      </div>
     </section>
   );
 }
 
-/** Ancestry, descendants and data lineage of a cell, as HTML. */
-function lineage(st: ReturnType<typeof useStore>, n: Node): string {
+/** Ancestry, descendants and data lineage of a cell. */
+function Lineage({ n }: { n: Node }) {
+  const st = useStore();
   const s = st.s;
   const anc = ancestorsOf(n),
     desc = descendantsOf(s, n);
-  const when = (x: Node) => st.when(x);
   const how = (x: Node) => {
     const l = x.birthLink;
     if (!l || !x.parent) return '';
@@ -156,18 +184,62 @@ function lineage(st: ReturnType<typeof useStore>, n: Node): string {
         ? `${x.label} ${l.label} ${x.parent.label}`
         : `${x.parent.label} ${l.label} ${x.label}`;
   };
-  const chain = [...anc, n]
-    .map(
-      (x) =>
-        `<div class="step${x === n ? ' me' : ''}" style="color:${x.kind === 'root' ? '#d8deee' : x.color}"><i></i><div><b data-go="${x.id}">${escapeHtml(x.label)}</b>${x.kind === 'root' ? '<small>the company</small>' : `<small>${escapeHtml(how(x))}${x.domain ? ' · ' + x.domain.name : ''}${x.bornAt ? ' · born ' + when(x) : ''}${x.pending ? ' · awaiting approval' : ''}</small>`}</div></div>`,
-    )
-    .join('');
   const kids = childrenOf(s, n);
-  const kidsHtml = kids.length
-    ? `<div class="kids">${kids.map((k) => `<b data-go="${k.id}">${escapeHtml(k.label)}</b> <em>· ${escapeHtml(how(k))}${descendantsOf(s, k).length ? ' · ' + descendantsOf(s, k).length + ' below' : ''}</em>`).join('<br>')}</div>`
-    : '<div class="kids" style="color:var(--ink-3)">Nothing has been born from it yet.</div>';
-  const data = n.bound
-    ? `<div class="step" style="color:${s.BRASS}"><i></i><div><b data-go="${n.bound.source.id}">${escapeHtml(n.bound.source.label)}</b><small>feeds ${escapeHtml(n.label)} · ${n.bound.records.toLocaleString('en-GB')} records · fresh ${n.bound.fresh}</small></div></div><div class="step me" style="color:${n.color}"><i></i><div><b>${escapeHtml(n.label)}</b><small>${(n.attrs || []).filter((a) => a.state === 'approved').length} attributes read from ${escapeHtml(n.bound.source.label)}</small></div></div>`
-    : `<div class="kids" style="color:var(--ink-3)">No data behind it yet.</div>`;
-  return `<div class="lin"><h3>Ancestry · ${anc.length} generation${anc.length === 1 ? '' : 's'} from ${escapeHtml(anc[0] ? anc[0].label : n.label)}</h3>${chain}<h3>Descendants · ${desc.length}</h3>${kidsHtml}<h3>Data lineage</h3>${data}</div>`;
+  return (
+    <div className="lin">
+      <h3>{`Ancestry · ${anc.length} generation${anc.length === 1 ? '' : 's'} from ${anc[0] ? anc[0].label : n.label}`}</h3>
+      {[...anc, n].map((x) => (
+        <div key={x.id} className={`step${x === n ? ' me' : ''}`} style={{ color: safeColour(x.kind === 'root' ? '#d8deee' : x.color, '#a9b3cc') }}>
+          <i></i>
+          <div>
+            <b onClick={() => st.goTo(x)}>{x.label}</b>
+            {x.kind === 'root' ? (
+              <small>the company</small>
+            ) : (
+              <small>{`${how(x)}${x.domain ? ' · ' + x.domain.name : ''}${x.bornAt ? ' · born ' + st.when(x) : ''}${x.pending ? ' · awaiting approval' : ''}`}</small>
+            )}
+          </div>
+        </div>
+      ))}
+      <h3>{`Descendants · ${desc.length}`}</h3>
+      {kids.length ? (
+        <div className="kids">
+          {kids.map((k, i) => (
+            <span key={k.id}>
+              {i ? <br /> : null}
+              <b onClick={() => st.goTo(k)}>{k.label}</b>{' '}
+              <em>{`· ${how(k)}${descendantsOf(s, k).length ? ' · ' + descendantsOf(s, k).length + ' below' : ''}`}</em>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="kids" style={{ color: 'var(--ink-3)' }}>
+          Nothing has been born from it yet.
+        </div>
+      )}
+      <h3>Data lineage</h3>
+      {n.bound ? (
+        <>
+          <div className="step" style={{ color: safeColour(s.BRASS, '#d6bd8a') }}>
+            <i></i>
+            <div>
+              <b onClick={() => n.bound && st.goTo(n.bound.source)}>{n.bound.source.label}</b>
+              <small>{`feeds ${n.label} · ${n.bound.records.toLocaleString('en-GB')} records · fresh ${n.bound.fresh}`}</small>
+            </div>
+          </div>
+          <div className="step me" style={{ color: safeColour(n.color, '#a9b3cc') }}>
+            <i></i>
+            <div>
+              <b>{n.label}</b>
+              <small>{`${(n.attrs || []).filter((a) => a.state === 'approved').length} attributes read from ${n.bound.source.label}`}</small>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="kids" style={{ color: 'var(--ink-3)' }}>
+          No data behind it yet.
+        </div>
+      )}
+    </div>
+  );
 }

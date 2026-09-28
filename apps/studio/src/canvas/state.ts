@@ -88,7 +88,9 @@ export function createScene(effects: Partial<SceneEffects> = {}): SceneState {
   };
 }
 
+/** Adds a node; the seed is drawn unless the caller drew it already (`o.seed`). */
 export function addNode(s: SceneState, o: Partial<Node>): Node {
+  const seed = o.seed ?? random() * 100;
   const n: Node = Object.assign(
     {
       id: s.nid++,
@@ -110,7 +112,7 @@ export function addNode(s: SceneState, o: Partial<Node>): Node {
       born: now(),
       alpha: 0,
       fixed: false,
-      seed: random() * 100,
+      seed,
       conflict: false,
       split: null,
       recoil: null,
@@ -132,7 +134,16 @@ export function addNode(s: SceneState, o: Partial<Node>): Node {
   return n;
 }
 
-export function addLink(s: SceneState, a: Node, b: Node, kind: LinkKind = 'rel', rest = 230, label = ''): Link {
+/** Adds a link; the curve bend is drawn unless the caller provides the stored `seed`. */
+export function addLink(
+  s: SceneState,
+  a: Node,
+  b: Node,
+  kind: LinkKind = 'rel',
+  rest = 230,
+  label = '',
+  seed?: number,
+): Link {
   const l: Link = {
     sid: null,
     a,
@@ -142,7 +153,7 @@ export function addLink(s: SceneState, a: Node, b: Node, kind: LinkKind = 'rel',
     label,
     born: now(),
     pulses: [],
-    seed: random(),
+    seed: seed ?? random(),
     alpha: 0,
     grow: null,
     pending: false,
@@ -159,17 +170,11 @@ export const find = (s: SceneState, label: string, company?: Company | null): No
   );
 };
 
-export const findAny = (s: SceneState, label: string): Node | null =>
-  s.nodes.find((n) => n.label.toLowerCase() === label.toLowerCase()) || null;
-
 export const bySid = (s: SceneState, sid: string | null | undefined): Node | null =>
   sid ? s.nodes.find((n) => n.sid === sid) || null : null;
 
 export const linkBySid = (s: SceneState, sid: string | null | undefined): Link | null =>
   sid ? s.links.find((l) => l.sid === sid) || null : null;
-
-export const exists = (s: SceneState, label: string): boolean =>
-  s.nodes.some((n) => n.label.toLowerCase() === label.toLowerCase());
 
 export const neighbours = (s: SceneState, n: Node): Set<Node> => {
   const set = new Set([n]);

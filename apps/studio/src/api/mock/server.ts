@@ -10,7 +10,8 @@ import { DEFAULT_BRASS, DOMAIN_R, DOMAIN_TEMPLATES, C, NEUTRAL } from '../../can
 import { demoScenes, SCENES } from '../../demo/scenes';
 import { contentWords, domainPrefix, singular, title, understand } from '../../nl/parser';
 import { nowDate } from '../../runtime/clock';
-import { mulberry32, random } from '../../runtime/rng';
+import { random } from '../../runtime/rng';
+import { escapeHtml } from '../../shell/sanitize';
 import { liveEvents, type EventBus, type EventType } from '../events';
 import type * as T from '../types';
 import { ATTR, CATALOG, generic, HOME_COMPANY, RECORDS, SEED, type AttrSpec } from './seed';
@@ -172,9 +173,9 @@ const KIND_HEADING: Record<T.ProposalType, string> = {
 export function createMockServer(bus: EventBus = liveEvents): MockServer {
   let counter = 0;
   const uuid = () => `00000000-0000-4000-8000-${String(++counter).padStart(12, '0')}`;
-  /** Curve bends the server hands out for relations; a private stream so the canvas stream is untouched. */
-  const bendSeed = mulberry32(7);
   const iso = () => nowDate().toISOString();
+  /** Label text as it may appear inside proposal html: escaped, so markup only ever comes from the builders. */
+  const e = escapeHtml;
 
   let companies: MCompany[] = [];
   let concepts: MConcept[] = [];
@@ -444,8 +445,10 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
 
   // ------------------------------------------------------------ model helpers
 
-  function newRelation(a: MConcept, b: MConcept, kind: T.RelationKind, rest: number, label: string): MRelation {
-    const l: MRelation = { id: uuid(), aId: a.id, bId: b.id, kind, label, rest, seed: bendSeed(), pending: false, dyingAt: null };
+  /** A relation row; the bend is the client's draw when the draft carried one, else drawn here. */
+  function newRelation(a: MConcept, b: MConcept, kind: T.RelationKind, rest: number, label: string, seed?: number): MRelation {
+    const bend = typeof seed === 'number' && seed >= 0 && seed <= 1 ? seed : random();
+    const l: MRelation = { id: uuid(), aId: a.id, bId: b.id, kind, label, rest, seed: bend, pending: false, dyingAt: null };
     relations.push(l);
     return l;
   }
@@ -519,7 +522,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
 
   // ------------------------------------------------------------ proposal builders
 
-  function pConcept(host: MConcept, label: string, domainKey: string | null, pred: string, cap: string | undefined, reverse: boolean): MProposal {
+  function pConcept(host: MConcept, label: string, domainKey: string | null, pred: string, cap: string | undefined, reverse: boolean, seed?: number): MProposal {
     const dom = domainByKey(host.companyId, domainKey) || domainOfConcept(host);
     const concept: MConcept = {
       id: uuid(),
@@ -544,8 +547,8 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
     concepts.push(concept);
     const cross = host.domainKey !== concept.domainKey;
     const rel = reverse
-      ? newRelation(concept, host, 'rel', cross ? 330 : 220, pred)
-      : newRelation(host, concept, 'rel', cross ? 330 : 220, pred);
+      ? newRelation(concept, host, 'rel', cross ? 330 : 220, pred, seed)
+      : newRelation(host, concept, 'rel', cross ? 330 : 220, pred, seed);
     rel.pending = true;
     concept.birthRelationId = rel.id;
     const parentLabel = host.label;
@@ -565,8 +568,8 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
       },
       waitFor: parentLabel,
       html: reverse
-        ? `<b>${label}</b> <em>· ${label} <b>${pred}</b> ${parentLabel}</em>`
-        : `<b>${label}</b> <em>· ${parentLabel} <b>${pred}</b> ${label}</em>`,
+        ? `<b>${e(label)}</b> <em>· ${e(label)} <b>${e(pred)}</b> ${e(parentLabel)}</em>`
+        : `<b>${e(label)}</b> <em>· ${e(parentLabel)} <b>${e(pred)}</b> ${e(label)}</em>`,
       why: dom ? `domain product: ${dom.name}` : '',
       caption: cap ?? null,
       conceptId: concept.id,
@@ -578,7 +581,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
     });
   }
 
-  function pSpec(host: MConcept, label: string, rule: string, cap: string | undefined, domainKey: string | null): MProposal {
+  function pSpec(host: MConcept, label: string, rule: string, cap: string | undefined, domainKey: string | null, seed?: number): MProposal {
     const dom = domainByKey(host.companyId, domainKey) || domainOfConcept(host);
     const concept: MConcept = {
       id: uuid(),
@@ -602,7 +605,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
     };
     concepts.push(concept);
     const cross = host.domainKey !== concept.domainKey;
-    const rel = newRelation(concept, host, 'isa', cross ? 300 : 170, 'is a');
+    const rel = newRelation(concept, host, 'isa', cross ? 300 : 170, 'is a', seed);
     rel.pending = true;
     concept.birthRelationId = rel.id;
     const parentLabel = host.label;
@@ -622,7 +625,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
         return !!n && !n.pending && !n.dyingAt;
       },
       waitFor: parentLabel,
-      html: `<b>${label}</b> <em>is a ${parentLabel}</em>`,
+      html: `<b>${e(label)}</b> <em>is a ${e(parentLabel)}</em>`,
       why: (rule ? `rule: ${rule}` : '') + (dom ? ` · domain product: ${dom.name}` : ''),
       caption: cap ?? null,
       conceptId: concept.id,
@@ -634,7 +637,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
     });
   }
 
-  function pRelation(a: MConcept, pred: string, b: MConcept, cap: string | undefined): MProposal {
+  function pRelation(a: MConcept, pred: string, b: MConcept, cap: string | undefined, seed?: number): MProposal {
     if (a.companyId !== b.companyId && !settings.crossCompany)
       throw new Refusal(409, 'cross_company_disabled', 'companies may not interact · enable it in the admin portal');
     const kind: T.RelationKind = pred === 'is a' ? 'isa' : pred === 'equivalent to' ? 'same' : 'rel';
@@ -646,7 +649,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
     const xco = a.companyId !== b.companyId;
     const aCo = companyOf(a.companyId),
       bCo = companyOf(b.companyId);
-    const rel = newRelation(a, b, kind, xco ? 560 : cross ? 330 : 220, pred);
+    const rel = newRelation(a, b, kind, xco ? 560 : cross ? 330 : 220, pred, seed);
     rel.pending = true;
     return newProposal({
       type: 'relation',
@@ -660,7 +663,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
       deps: [a.label, b.label],
       ready: () => !a.pending && !b.pending && !a.dyingAt && !b.dyingAt,
       waitFor: `${a.label} and ${b.label}`,
-      html: `${a.label}${xco ? ' <em>(' + aCo?.name + ')</em>' : ''} <b>${pred}</b> ${b.label}${xco ? ' <em>(' + bCo?.name + ')</em>' : ''}`,
+      html: `${e(a.label)}${xco ? ' <em>(' + e(aCo?.name ?? '') + ')</em>' : ''} <b>${e(pred)}</b> ${e(b.label)}${xco ? ' <em>(' + e(bCo?.name ?? '') + ')</em>' : ''}`,
       why: xco
         ? `across companies: ${aCo?.name} ↔ ${bCo?.name}`
         : cross
@@ -711,7 +714,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
       deps: [],
       ready: () => true,
       waitFor: null,
-      html: `<b>${label}</b> <em>· ${kindText} joins ${company.name} as a data source</em>`,
+      html: `<b>${e(label)}</b> <em>· ${e(kindText)} joins ${e(company.name)} as a data source</em>`,
       why: 'systems are not concepts: they feed them',
       caption: cap || `${label} is connected. Nothing is bound to it yet.`,
       conceptId: null,
@@ -738,7 +741,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
       deps: [],
       ready: () => true,
       waitFor: null,
-      html: `<b>${n.label}</b> has <b>${a[0]}</b> <em>· ${a[1]} · found in ${a[2]}</em>`,
+      html: `<b>${e(n.label)}</b> has <b>${e(a[0])}</b> <em>· ${e(a[1])} · found in ${e(a[2])}</em>`,
       why: `${a[3]} percent filled · in the data, not yet in the model`,
       caption: `${n.label}.${a[0]} is now part of the model, read from ${a[2]}.`,
       conceptId: n.id,
@@ -776,7 +779,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
       deps: [sourceLabel, ...targets.map((n) => n.label)],
       ready: () => !src.pending && targets.every((n) => !n.pending && !n.dyingAt),
       waitFor: sourceLabel,
-      html: `<b>${sourceLabel}</b> feeds ${targets.map((n) => '<b>' + n.label + '</b>').join(', ')}`,
+      html: `<b>${e(sourceLabel)}</b> feeds ${targets.map((n) => '<b>' + e(n.label) + '</b>').join(', ')}`,
       why: `${targets.reduce((a, n) => a + (RECORDS[n.label] || 1200), 0).toLocaleString('en-GB')} records · attributes are read from the schema`,
       caption:
         cap ||
@@ -874,7 +877,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
         deps: [],
         ready: () => true,
         waitFor: null,
-        html: `Rename <b>${n.label}</b> to <b>${name}</b>`,
+        html: `Rename <b>${e(n.label)}</b> to <b>${e(name)}</b>`,
         why: `${relations.filter((l) => l.aId === n.id || l.bId === n.id).length} relations keep pointing at it`,
         caption: draft.caption ?? `${n.label} is now called ${name}.`,
         conceptId: n.id,
@@ -905,7 +908,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
         deps: [],
         ready: () => true,
         waitFor: null,
-        html: `Delete <b>${n.label}</b> and its ${rel} relation${rel === 1 ? '' : 's'}`,
+        html: `Delete <b>${e(n.label)}</b> and its ${rel} relation${rel === 1 ? '' : 's'}`,
         why: 'specialisations of it are deleted too',
         caption: draft.caption ?? `${n.label} was removed from the model.`,
         conceptId: n.id,
@@ -940,7 +943,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
           deps: [],
           ready: () => true,
           waitFor: null,
-          html: `Remove the relation <b>${a.label}</b> <em>${link.label}</em> ${b.label}`,
+          html: `Remove the relation <b>${e(a.label)}</b> <em>${e(link.label)}</em> ${e(b.label)}`,
           why:
             link.kind === 'isa'
               ? 'the specialisation would no longer inherit from its parent'
@@ -978,7 +981,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
         deps: [],
         ready: () => true,
         waitFor: null,
-        html: `Relation <b>${a.label}</b> <em>${link.label}</em> ${b.label} becomes <b>${from.label}</b> <em>${v}</em> ${to.label}`,
+        html: `Relation <b>${e(a.label)}</b> <em>${e(link.label)}</em> ${e(b.label)} becomes <b>${e(from.label)}</b> <em>${e(v)}</em> ${e(to.label)}`,
         why: reverse ? 'direction reversed' : 'action renamed',
         caption: draft.caption ?? `The relation now reads ${from.label} ${v} ${to.label}.`,
         conceptId: null,
@@ -1007,18 +1010,18 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
         if (!host) throw new Refusal(404, 'parent_not_found', 'the parent concept does not exist');
         if (findConcept(draft.label, host.companyId))
           throw new Refusal(409, 'duplicate_label', `${draft.label} is already in the model.`);
-        return pConcept(host, draft.label, draft.domainKey, draft.action || 'relates to', draft.caption, !!draft.reverse);
+        return pConcept(host, draft.label, draft.domainKey, draft.action || 'relates to', draft.caption, !!draft.reverse, draft.seed);
       }
       case 'spec': {
         const host = conceptById(draft.parentId) || (draft.parentLabel ? findConcept(draft.parentLabel, draft.companyId) : null);
         if (!host) throw new Refusal(404, 'parent_not_found', 'the parent concept does not exist');
-        return pSpec(host, draft.label, draft.rule || '', draft.caption, draft.domainKey);
+        return pSpec(host, draft.label, draft.rule || '', draft.caption, draft.domainKey, draft.seed);
       }
       case 'relation': {
         const a = conceptById(draft.aId),
           b = conceptById(draft.bId);
         if (!a || !b) throw new Refusal(404, 'concept_not_found', 'an end of the relation does not exist');
-        return pRelation(a, draft.action, b, draft.caption);
+        return pRelation(a, draft.action, b, draft.caption, draft.seed);
       }
       case 'source': {
         const co = companyOf(draft.companyId);

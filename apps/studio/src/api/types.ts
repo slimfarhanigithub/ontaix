@@ -159,7 +159,16 @@ export type SceneLink = Relation | Binding;
 export const isSource = (n: SceneNode): n is Source => 'kindText' in n;
 export const isBinding = (l: SceneLink): l is Binding => 'conceptId' in l;
 
-export interface ConceptDraft {
+/**
+ * Curve bend of the relation a draft creates, drawn by the client from its random stream in
+ * the reference's draw order and stored by the server on the relation. Absent, the server
+ * draws it.
+ */
+export interface DraftSeed {
+  seed?: number;
+}
+
+export interface ConceptDraft extends DraftSeed {
   type: 'concept';
   companyId: string;
   parentId: string;
@@ -171,7 +180,7 @@ export interface ConceptDraft {
   caption?: string;
 }
 
-export interface SpecDraft {
+export interface SpecDraft extends DraftSeed {
   type: 'spec';
   companyId: string;
   parentId: string;
@@ -182,7 +191,7 @@ export interface SpecDraft {
   caption?: string;
 }
 
-export interface RelationDraft {
+export interface RelationDraft extends DraftSeed {
   type: 'relation';
   aId: string;
   bId: string;

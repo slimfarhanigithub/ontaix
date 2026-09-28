@@ -5,6 +5,7 @@
 import type { Proposal } from '../api/types';
 import { NEUTRAL } from '../canvas/constants';
 import { refStyle, useStore } from './dom';
+import { sanitizeHtml } from './sanitize';
 
 const KIND: Record<Proposal['type'], string> = {
   concept: 'New concept',
@@ -60,7 +61,7 @@ export function Panel() {
                   ></i>
                   {p.heading || KIND[p.type]}
                 </div>
-                <div className="what" dangerouslySetInnerHTML={{ __html: p.html }} />
+                <div className="what" dangerouslySetInnerHTML={{ __html: sanitizeHtml(p.html) }} />
                 {p.why ? <div className="why">{p.why}</div> : null}
                 <div className="act">
                   <button className="ok" disabled={!ok} onClick={() => void st.approve(p)}>

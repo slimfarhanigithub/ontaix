@@ -1,7 +1,8 @@
-import { currentSeed, mulberry32, random, seedFromLocation, seedRandom } from './rng';
+import { mulberry32 } from './mulberry32';
+import { random, seedFromLocation, setSource } from './rng';
 
 describe('rng', () => {
-  afterEach(() => seedRandom(null));
+  afterEach(() => setSource(null));
 
   it('mulberry32 is deterministic for a seed', () => {
     const a = mulberry32(42),
@@ -22,12 +23,11 @@ describe('rng', () => {
     expect(r()).toBeCloseTo(0.44829055899754167, 12);
   });
 
-  it('random() follows the seeded stream in test mode', () => {
-    seedRandom(7);
+  it('random() follows the installed source', () => {
+    setSource(mulberry32(7));
     const expected = mulberry32(7);
     expect(random()).toBe(expected());
     expect(random()).toBe(expected());
-    expect(currentSeed()).toBe(7);
   });
 
   it('reads the seed from the URL before the build-time value', () => {

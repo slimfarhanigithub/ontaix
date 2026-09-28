@@ -208,10 +208,3 @@ export function arrange(s: SceneState, v: View): void {
   if (s.domainFocus) return arrangeDomain(s, v, s.domainFocus);
   arrangeAll(s);
 }
-
-/** Spiral placement of the k-th member of a domain cluster in the whole-model layout. */
-export function spiralPlacement(k: number, cx: number, cy: number, radiusStep = 70): [number, number] {
-  const rr = k === 0 ? 0 : radiusStep * Math.sqrt(k + 0.5),
-    a = k * 2.399963;
-  return [cx + Math.cos(a) * rr, cy + Math.sin(a) * rr];
-}

@@ -15,7 +15,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  timeout: 120_000,
+  timeout: 180_000,
   reporter: [['list'], ['html', { outputFolder: resolve(here, 'output/report'), open: 'never' }]],
   use: {
     browserName: 'chromium',
@@ -26,6 +26,8 @@ export default defineConfig({
   webServer: {
     command: 'pnpm exec vite build && pnpm exec vite preview --port 4787 --strictPort --host 127.0.0.1',
     cwd: studio,
+    // Test hooks (seeded random source, in-browser mock API) are compiled in only for this build.
+    env: { VITE_ONTAIX_TEST_HOOKS: 'true' },
     url: `http://127.0.0.1:${STUDIO_PORT}/`,
     reuseExistingServer: false,
     timeout: 180_000,

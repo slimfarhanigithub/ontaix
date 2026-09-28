@@ -1,4 +1,5 @@
-import { seedRandom } from '../runtime/rng';
+import { mulberry32 } from '../runtime/mulberry32';
+import { setSource } from '../runtime/rng';
 import { hitDomainAt, hull, inHull } from './hulls';
 import { addCompany, addNode, createScene, domainOf } from './state';
 
@@ -23,7 +24,8 @@ describe('hull', () => {
 });
 
 describe('hitDomain nearest-cell rule', () => {
-  beforeEach(() => seedRandom(1));
+  beforeEach(() => setSource(mulberry32(1)));
+  afterEach(() => setSource(null));
 
   it('picks the domain whose nearest member is closest when two padded shapes overlap', () => {
     const s = createScene();

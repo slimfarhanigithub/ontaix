@@ -1,16 +1,34 @@
 /**
  * The tool row above the teach bar. Markup from reference/ontaix-studio-reference.html lines
- * 194-201; behaviours from lines 548-565 (arrange, coverage, finalise, skip).
+ * 194-201; behaviours from lines 548-565 (arrange, coverage, finalise, skip), 616 (add a
+ * company) and 904-906 (import, drag and drop).
  */
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
-import { finaliseAll } from '../demo/story';
+import { finaliseAll, importDocument } from '../demo/story';
+import { openAddCompany } from './AddCompany';
 import { useStore } from './dom';
 
 export function Tools() {
   const st = useStore();
   const settings = st.ui.settings;
   const file = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const over = (e: DragEvent) => e.preventDefault();
+    const drop = (e: DragEvent) => {
+      e.preventDefault();
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) void importDocument(f);
+    };
+    addEventListener('dragover', over);
+    addEventListener('drop', drop);
+    return () => {
+      removeEventListener('dragover', over);
+      removeEventListener('drop', drop);
+    };
+  }, []);
+
   return (
     <div className="tools" id="tools">
       <button
@@ -18,6 +36,7 @@ export function Tools() {
         id="addCo"
         title="Add another company to the same view"
         style={{ display: settings && !settings.multiCompany ? 'none' : undefined }}
+        onClick={openAddCompany}
       >
         <svg viewBox="0 0 16 16">
           <path d="M8 3v10M3 8h10" />
@@ -29,12 +48,13 @@ export function Tools() {
         id="importBtn"
         title="Import a document and detect concepts and relations (I)"
         style={{ display: settings && !settings.importDocs ? 'none' : undefined }}
+        disabled={st.ui.importing}
         onClick={() => file.current?.click()}
       >
         <svg viewBox="0 0 16 16">
           <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10" />
         </svg>
-        Import
+        {st.ui.importing ? 'Importing…' : 'Import'}
       </button>
       <input
         type="file"
@@ -43,7 +63,9 @@ export function Tools() {
         hidden
         ref={file}
         onChange={(e) => {
+          const f = e.currentTarget.files?.[0];
           e.currentTarget.value = '';
+          if (f) void importDocument(f);
         }}
       />
       <button type="button" id="arrange" title={st.arrangeTitle()} onClick={() => st.arrange()}>

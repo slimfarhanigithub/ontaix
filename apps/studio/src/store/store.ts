@@ -21,7 +21,7 @@ import {
 } from '../api/types';
 import { arrange as arrangeCanvas } from '../canvas/arrange';
 import { GREEN, RED, DEFAULT_BRASS, DEFAULT_COLORS, DOMAIN_TEMPLATES } from '../canvas/constants';
-import { divide } from '../canvas/division';
+import { divide, type BirthDraws } from '../canvas/division';
 import { focusOnCell, focusOnDomain } from '../canvas/focus';
 import { hideLineageState, showLineageState } from '../canvas/lineage';
 import type { Renderer } from '../canvas/renderer';
@@ -39,12 +39,16 @@ import {
   type SceneState,
 } from '../canvas/state';
 import type { Company, Domain, Link, Node } from '../canvas/types';
+import { random } from '../runtime/rng';
 import { SCENES } from '../demo/scenes';
-import { now, nowDate } from '../runtime/clock';
+import { now } from '../runtime/clock';
+import type { DialogSpec } from '../shell/Dialog';
 
+/** A toast: a strong lead word and plain text, both rendered as text nodes. */
 export interface Toast {
   id: number;
-  html: string;
+  strong: string;
+  text: string;
 }
 
 export interface NewBoxState {
@@ -83,7 +87,9 @@ export interface UiState {
   linkBox: LinkBoxState | null;
   toasts: Toast[];
   finalising: boolean;
+  importing: boolean;
   listening: boolean;
+  dialog: DialogSpec | null;
 }
 
 type Listener = () => void;
@@ -103,6 +109,9 @@ class StudioStore {
   private toastSeq = 0;
   private refreshQueued = false;
   private unsubscribeEvents: (() => void) | null = null;
+  private loading: Promise<void> | null = null;
+  /** Birth draws made when a draft was posted, keyed by company id and label, used when the proposal event arrives. */
+  private births = new Map<string, BirthDraws>();
 
   constructor() {
     this.s = createScene({
@@ -132,7 +141,9 @@ class StudioStore {
       linkBox: null,
       toasts: [],
       finalising: false,
+      importing: false,
       listening: false,
+      dialog: null,
     };
   }
 
@@ -159,8 +170,13 @@ class StudioStore {
     r.applyTheme(this.ui.theme);
   }
 
-  /** Loads the scene and starts listening to live events. */
-  async load(): Promise<void> {
+  /** Loads the scene and starts listening to live events; a second call joins the first. */
+  load(): Promise<void> {
+    if (!this.loading) this.loading = this.loadOnce();
+    return this.loading;
+  }
+
+  private async loadOnce(): Promise<void> {
     if (!this.unsubscribeEvents) this.unsubscribeEvents = liveEvents.subscribe((e) => this.handleEvent(e));
     try {
       const scene = await api.getScene();
@@ -245,9 +261,8 @@ class StudioStore {
       const a = bySid(s, l.aId),
         b = bySid(s, l.bId);
       if (!a || !b) continue;
-      const link = addLink(s, a, b, l.kind, l.rest, l.label);
+      const link = addLink(s, a, b, l.kind, l.rest, l.label, l.seed);
       link.sid = l.id;
-      link.seed = l.seed;
       link.pending = l.pending;
       link.alpha = 1;
     }
@@ -381,6 +396,18 @@ class StudioStore {
     this.bump();
   }
 
+  /** Remembers the draws made for a draft so the birth reuses them when its event arrives. */
+  rememberBirth(companyId: string, label: string, draws: BirthDraws): void {
+    this.births.set(`${companyId}|${label.toLowerCase()}`, draws);
+  }
+
+  private takeBirth(companyId: string, label: string): BirthDraws | undefined {
+    const k = `${companyId}|${label.toLowerCase()}`;
+    const d = this.births.get(k);
+    this.births.delete(k);
+    return d;
+  }
+
   /** A proposal's pending artefacts appear at once: a cell divides off its parent, a line grows lighter. */
   applyCreated(p: Proposal): void {
     const s = this.s;
@@ -394,11 +421,16 @@ class StudioStore {
         const parent = bySid(s, c.parentId);
         if (!parent) return;
         const isa = r.kind === 'isa';
+        // The bend is the server's stored seed; the angle noise and node seed come from the
+        // draws made when the draft was posted, or are drawn now for a proposal another client made.
+        const own = this.takeBirth(c.companyId, c.label);
+        const draws: BirthDraws = own ? { ...own, link: r.seed } : { noise: random(), node: random() * 100, link: r.seed };
         const n = divide(s, parent, c.label, null, {
           label: isa ? undefined : r.label,
           domain: c.domainKey ?? null,
           isa,
           reverse: !isa && r.aId === c.id,
+          draws,
         });
         n.sid = c.id;
         n.pending = true;
@@ -424,7 +456,7 @@ class StudioStore {
         const a = bySid(s, r.aId),
           b = bySid(s, r.bId);
         if (!a || !b) return;
-        const l = addLink(s, a, b, r.kind, r.rest, r.label);
+        const l = addLink(s, a, b, r.kind, r.rest, r.label, r.seed);
         l.sid = r.id;
         l.pending = true;
         break;
@@ -468,7 +500,7 @@ class StudioStore {
   applyApproved(payload: ProposalEventPayload, bulk: boolean): void {
     const s = this.s;
     const p = payload.proposal;
-    if (!bulk) this.toast2(`<b>Approved</b> ${p.title}`);
+    if (!bulk) this.toast2('Approved', p.title);
     const node = bySid(s, p.conceptId);
     if (node && p.type !== 'attr' && p.type !== 'change') {
       node.pending = false;
@@ -557,7 +589,7 @@ class StudioStore {
         const a = bySid(s, r.aId),
           b = bySid(s, r.bId);
         if (!a || !b) continue;
-        l = addLink(s, a, b, r.kind, r.rest, r.label);
+        l = addLink(s, a, b, r.kind, r.rest, r.label, r.seed);
         l.sid = r.id;
         l.pending = r.pending;
         continue;
@@ -602,9 +634,9 @@ class StudioStore {
     this.bump();
   }
 
-  toast2(html: string): void {
+  toast2(strong: string, text: string): void {
     const id = ++this.toastSeq;
-    this.ui.toasts = [...this.ui.toasts, { id, html }];
+    this.ui.toasts = [...this.ui.toasts, { id, strong, text }];
     this.bump();
     setTimeout(() => {
       this.ui.toasts = this.ui.toasts.filter((t) => t.id !== id);
@@ -651,10 +683,10 @@ class StudioStore {
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.problem.code === 'cross_company_disabled')
-          this.toast2('<b>Not allowed</b> companies may not interact · enable it in the admin portal');
+          this.toast2('Not allowed', 'companies may not interact · enable it in the admin portal');
         else if (err.problem.code === 'duplicate_relation' || err.problem.code === 'duplicate_label')
           this.caption('Already there', err.problem.detail || err.problem.title);
-        else if (err.status !== 404) this.toast2(`<b>Refused</b> ${err.problem.detail || err.problem.title}`);
+        else if (err.status !== 404) this.toast2('Refused', err.problem.detail || err.problem.title);
         return null;
       }
       throw err;
@@ -889,7 +921,7 @@ class StudioStore {
   openLinkBox(a: Node, b: Node, sx: number, sy: number, link: Link | null = null): void {
     const st = this.ui.settings;
     if (!link && a.company !== b.company && st && !st.crossCompany) {
-      this.toast2('<b>Not allowed</b> companies may not interact · enable it in the admin portal');
+      this.toast2('Not allowed', 'companies may not interact · enable it in the admin portal');
       return;
     }
     if (!link && (a.kind === 'source' || b.kind === 'source')) {
@@ -967,9 +999,15 @@ class StudioStore {
       : '';
   }
 
-  /** Time of the store's clock, exposed for the demo layer. */
-  clock(): Date {
-    return nowDate();
+  openDialog(spec: DialogSpec): void {
+    this.ui.dialog = spec;
+    this.bump();
+  }
+
+  closeDialog(): void {
+    if (!this.ui.dialog) return;
+    this.ui.dialog = null;
+    this.bump();
   }
 
   /** Company root lookup by label for the demo layer. */

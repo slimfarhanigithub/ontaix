@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { DomainKey } from '../api/types';
 import { domainOf, find } from '../canvas/state';
+import { withSeed } from '../demo/story';
 import { suggestAction } from '../nl/suggest';
 import { refStyle, titleCase, useStore } from './dom';
 
@@ -56,26 +57,30 @@ export function NewBox() {
     }
     const domName = domainOf(s, dom, host.company)?.name ?? dom;
     if (spec) {
-      void st.propose({
-        type: 'spec',
-        companyId: host.company.sid,
-        parentId: host.sid,
-        label: nm,
-        rule: act || '',
-        domainKey: dom as DomainKey,
-        caption: `${host.label} divides: ${nm} inherits everything ${host.label} is.`,
-      });
+      void st.propose(
+        withSeed({
+          type: 'spec',
+          companyId: host.company.sid,
+          parentId: host.sid,
+          label: nm,
+          rule: act || '',
+          domainKey: dom as DomainKey,
+          caption: `${host.label} divides: ${nm} inherits everything ${host.label} is.`,
+        }),
+      );
       st.caption('One proposal', `${nm}, a specialisation of ${host.label}, is waiting for your approval.`);
     } else {
-      void st.propose({
-        type: 'concept',
-        companyId: host.company.sid,
-        parentId: host.sid,
-        label: nm,
-        domainKey: dom as DomainKey,
-        action: act || 'relates to',
-        caption: `${nm} is kept in ${domName}.`,
-      });
+      void st.propose(
+        withSeed({
+          type: 'concept',
+          companyId: host.company.sid,
+          parentId: host.sid,
+          label: nm,
+          domainKey: dom as DomainKey,
+          action: act || 'relates to',
+          caption: `${nm} is kept in ${domName}.`,
+        }),
+      );
       st.caption('One proposal', `${host.label} ${act || 'relates to'} ${nm}, in ${domName}, is waiting for your approval.`);
     }
   };
@@ -132,7 +137,7 @@ export function NewBox() {
             if (!host) return;
             const nm = name.trim();
             if (!nm) {
-              st.toast2('<b>Name first</b> the suggestion depends on the new concept’s name');
+              st.toast2('Name first', 'the suggestion depends on the new concept’s name');
               nameRef.current?.focus();
               return;
             }
@@ -193,7 +198,7 @@ export function LinkBox() {
     const { a, b } = box;
     st.closeLinkBox();
     if (!link && a.company !== b.company && st.ui.settings && !st.ui.settings.crossCompany) {
-      st.toast2('<b>Not allowed</b> companies may not interact · enable it in the admin portal');
+      st.toast2('Not allowed', 'companies may not interact · enable it in the admin portal');
       return;
     }
     if (link) {
@@ -217,18 +222,20 @@ export function LinkBox() {
     const from = reverse ? b : a,
       to = reverse ? a : b;
     if (from.sid && to.sid)
-      void st.propose({
-        type: 'relation',
-        aId: from.sid,
-        bId: to.sid,
-        aLabel: from.label,
-        bLabel: to.label,
-        action: v,
-        caption:
-          from.company !== to.company
-            ? `${from.label} (${from.company?.name}) ${v} ${to.label} (${to.company?.name}): a relation across two companies.`
-            : `${from.label} ${v} ${to.label}${from.domain !== to.domain ? ': a relation across two domain products' : ''}.`,
-      });
+      void st.propose(
+        withSeed({
+          type: 'relation',
+          aId: from.sid,
+          bId: to.sid,
+          aLabel: from.label,
+          bLabel: to.label,
+          action: v,
+          caption:
+            from.company !== to.company
+              ? `${from.label} (${from.company?.name}) ${v} ${to.label} (${to.company?.name}): a relation across two companies.`
+              : `${from.label} ${v} ${to.label}${from.domain !== to.domain ? ': a relation across two domain products' : ''}.`,
+        }),
+      );
     st.caption('One proposal', `${from.label} ${v} ${to.label} is waiting for your approval.`);
   };
 

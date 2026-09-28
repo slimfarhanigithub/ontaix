@@ -8,6 +8,7 @@ import { AdminOverlay } from './shell/AdminOverlay';
 import { NewBox, LinkBox } from './shell/Boxes';
 import { CanvasView } from './shell/CanvasView';
 import { Caption } from './shell/Caption';
+import { Dialog } from './shell/Dialog';
 import { DomainsCard } from './shell/DomainsCard';
 import { Drawer } from './shell/Drawer';
 import { Header } from './shell/Header';
@@ -41,6 +42,7 @@ export function App() {
       <DomainsCard />
       <Legend />
       <Hint />
+      <Dialog />
     </>
   );
 }

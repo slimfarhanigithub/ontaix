@@ -7,7 +7,9 @@
 import { api } from '../api/client';
 import type { DomainKey, ProposalDraft } from '../api/types';
 import { W_, REDUCED } from '../canvas/constants';
+import { drawBirth } from '../canvas/division';
 import type { Company } from '../canvas/types';
+import { random } from '../runtime/rng';
 import { store } from '../store/store';
 import { SCENES } from './scenes';
 
@@ -22,6 +24,21 @@ async function post(draft: ProposalDraft): Promise<void> {
   await store.propose(draft);
 }
 
+/**
+ * Draws the random numbers a draft's birth consumes, in the reference order, and puts the link
+ * bend on the draft for the server to store. Concept and spec drafts draw angle noise, node
+ * seed and link seed; relation drafts draw the link seed only.
+ */
+export function withSeed<D extends ProposalDraft>(draft: D): D {
+  if (draft.type === 'concept' || draft.type === 'spec') {
+    const draws = drawBirth();
+    store.rememberBirth(draft.companyId, draft.label, draws);
+    return { ...draft, seed: draws.link };
+  }
+  if (draft.type === 'relation') return { ...draft, seed: random() };
+  return draft;
+}
+
 /** A concept born from `parentLabel`, in `domainKey`, joined by `pred`. */
 export async function pConcept(
   parentLabel: string,
@@ -34,17 +51,19 @@ export async function pConcept(
 ): Promise<void> {
   const host = store.findNode(parentLabel, company);
   if (!host || !host.sid || !host.company?.sid) return;
-  await post({
-    type: 'concept',
-    companyId: host.company.sid,
-    parentId: host.sid,
-    parentLabel,
-    label,
-    domainKey,
-    action: pred,
-    reverse: !!reverse,
-    caption: cap,
-  });
+  await post(
+    withSeed({
+      type: 'concept',
+      companyId: host.company.sid,
+      parentId: host.sid,
+      parentLabel,
+      label,
+      domainKey,
+      action: pred,
+      reverse: !!reverse,
+      caption: cap,
+    }),
+  );
 }
 
 /** A specialisation of `parentLabel` with a rule. */
@@ -58,14 +77,14 @@ export async function pSpec(
 ): Promise<void> {
   const host = store.findNode(parentLabel, company);
   if (!host || !host.sid || !host.company?.sid) return;
-  await post({ type: 'spec', companyId: host.company.sid, parentId: host.sid, parentLabel, label, rule, domainKey, caption: cap });
+  await post(withSeed({ type: 'spec', companyId: host.company.sid, parentId: host.sid, parentLabel, label, rule, domainKey, caption: cap }));
 }
 
 export async function pRelation(aLabel: string, pred: string, bLabel: string, cap?: string, company?: Company | null): Promise<void> {
   const a = store.findNode(aLabel, company),
     b = store.findNode(bLabel, company);
   if (!a || !b || !a.sid || !b.sid) return;
-  await post({ type: 'relation', aId: a.sid, bId: b.sid, aLabel, bLabel, action: pred, caption: cap });
+  await post(withSeed({ type: 'relation', aId: a.sid, bId: b.sid, aLabel, bLabel, action: pred, caption: cap }));
 }
 
 export async function pSource(company: Company, label: string, kind: string, cap?: string): Promise<void> {
@@ -88,17 +107,19 @@ export async function pEquiv(labelA: string, companyA: Company, labelB: string, 
   const a = store.findNode(labelA, companyA),
     b = store.findNode(labelB, companyB);
   if (!a || !b || !a.sid || !b.sid) return;
-  await post({
-    type: 'relation',
-    aId: a.sid,
-    bId: b.sid,
-    aLabel: a.label,
-    bLabel: b.label,
-    action: 'equivalent to',
-    caption:
-      cap ||
-      `${a.label} at ${a.company?.name} is the same concept as ${b.label} at ${b.company?.name}. One meaning, two vocabularies, both kept.`,
-  });
+  await post(
+    withSeed({
+      type: 'relation',
+      aId: a.sid,
+      bId: b.sid,
+      aLabel: a.label,
+      bLabel: b.label,
+      action: 'equivalent to',
+      caption:
+        cap ||
+        `${a.label} at ${a.company?.name} is the same concept as ${b.label} at ${b.company?.name}. One meaning, two vocabularies, both kept.`,
+    }),
+  );
 }
 
 /** Adds a company to the view; its starter vocabulary arrives as proposals through events. */
@@ -384,7 +405,7 @@ export async function finaliseAll(): Promise<void> {
     }
     const res = await api.finaliseAll();
     store.caption('Finalised', res.caption || 'Everything approved.');
-    store.toast2(`<b>Finalised</b> ${res.concepts} concepts approved`);
+    store.toast2('Finalised', `${res.concepts} concepts approved`);
   } finally {
     if (s.SKIP !== wasSkip) store.toggleSkip();
     finalising = false;
@@ -396,27 +417,90 @@ export async function finaliseAll(): Promise<void> {
 /**
  * Teaching: an empty sentence plays the next scene, a sentence matching the coming scene plays
  * it, anything else is parsed by the API into proposal drafts. Ported from
- * reference/ontaix-studio-reference.html lines 864-884 (`teach`).
+ * reference/ontaix-studio-reference.html lines 864-884 (`teach`). Sentences from a document
+ * import skip the story interception.
  */
-export async function teach(text: string): Promise<void> {
+export async function teach(text: string, fromImport = false): Promise<void> {
   text = text.trim();
-  if (!text) return next();
+  if (!text) return fromImport ? undefined : next();
   const up = SCENES[store.ui.sceneIdx + 1];
-  if (up && up.match && up.match.test(text)) return playScene(store.ui.sceneIdx + 1);
+  if (!fromImport && up && up.match && up.match.test(text)) return playScene(store.ui.sceneIdx + 1);
   const co = s.activeCompany;
   if (!co || !co.sid) return;
-  const result = await api.teachParse({ companyId: co.sid, text });
+  const result = await api.teachParse({ companyId: co.sid, text, fromImport });
   if (result.outcome === 'scene') return playScene(store.ui.sceneIdx + 1);
   if (result.outcome === 'understood') {
-    await api.createProposalBatch(result.drafts).catch(() => undefined);
+    await api.createProposalBatch(result.drafts.map(withSeed)).catch(() => undefined);
     const n = result.statements?.length ?? result.drafts.length;
     store.caption(`Understood ${n === 1 ? 'one statement' : n + ' statements'}`, result.caption);
     return;
   }
   if (result.outcome === 'partly_understood') {
-    result.drafts.forEach((d, i) => setTimeout(() => void store.propose(d), i * 850));
+    result.drafts.forEach((d, i) => setTimeout(() => void store.propose(withSeed(d)), i * 850));
     store.caption('Partly understood', result.caption);
     return;
   }
   store.caption('Not understood', result.caption);
+}
+
+/** Text of an imported file; CSV rows become sentences. Word and PDF need libraries the Studio does not ship. */
+async function textOf(file: File): Promise<string> {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.docx') || name.endsWith('.pdf')) throw new Error('Word and PDF import is not available yet');
+  if (name.endsWith('.csv')) {
+    const raw = await file.text();
+    return raw
+      .split(/\r?\n/)
+      .map((r) =>
+        r
+          .split(/[;,\t]/)
+          .map((c) => c.trim())
+          .filter(Boolean)
+          .join(' '),
+      )
+      .join('. ');
+  }
+  return await file.text();
+}
+
+export function sentencesOf(text: string): string[] {
+  return text
+    .replace(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((x) => x.trim())
+    .filter((x) => x.length > 12 && x.length < 400);
+}
+
+/** Import a document: every sentence is read like a spoken one. Reference lines 897-903. */
+export async function importDocument(file: File | null | undefined): Promise<void> {
+  if (!file || store.ui.importing) return;
+  store.ui.importing = true;
+  store.bump();
+  try {
+    const text = await textOf(file);
+    const sents = sentencesOf(text);
+    const before = store.ui.proposals.length;
+    store.caption(
+      'Importing ' + file.name,
+      `${sents.length} sentences found. Each one is read the way a spoken sentence is; what the model understands becomes a proposal.`,
+    );
+    for (const sn of sents) {
+      await teach(sn, true);
+      await wait(s.SKIP ? 0 : 450);
+    }
+    await store.refreshProposals();
+    const added = store.ui.proposals.length - before;
+    store.caption(
+      'Import finished',
+      `${file.name}: ${sents.length} sentences read, ${added} proposal${added === 1 ? '' : 's'} waiting for approval on the right.`,
+    );
+  } catch (err) {
+    store.caption(
+      'Import failed',
+      `${file.name} could not be read (${(err as Error).message}). Text, Markdown, CSV, Word and PDF are supported.`,
+    );
+  } finally {
+    store.ui.importing = false;
+    store.bump();
+  }
 }

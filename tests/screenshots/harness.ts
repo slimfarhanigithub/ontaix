@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { mulberry32 } from '../../apps/studio/src/runtime/rng';
+import { mulberry32 } from '../../apps/studio/src/runtime/mulberry32';
 import { expect, pixelmatch, PNG, type Page, type TestInfo } from '../../apps/studio/test-support/playwright';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -22,6 +22,17 @@ export const START_TIME = new Date('2026-09-28T09:00:00Z');
 export const TOLERANCE = 0.001;
 
 export type Theme = 'dark' | 'light';
+
+export interface Viewport {
+  width: number;
+  height: number;
+}
+
+/** The two viewports the UI contract names. */
+export const VIEWPORTS: Viewport[] = [
+  { width: 1440, height: 900 },
+  { width: 1920, height: 1080 },
+];
 
 /**
  * Installs the fake clock and pauses it before navigation, so no frame runs until the test
@@ -100,16 +111,19 @@ function decode(buf: Buffer): PNG {
   return PNG.sync.read(buf);
 }
 
-/** Compares two screenshots, writes the images and the diff, and returns the differing fraction. */
-export function compare(scene: string, theme: Theme, reference: Buffer, studio: Buffer): Comparison {
+/**
+ * Compares two screenshots pixel for pixel (no colour threshold, anti-aliased pixels counted),
+ * writes the images and the diff, and returns the differing fraction.
+ */
+export function compare(scene: string, theme: Theme, vp: Viewport, reference: Buffer, studio: Buffer): Comparison {
   const a = decode(reference),
     b = decode(studio);
   expect(a.width, 'screenshot widths').toBe(b.width);
   expect(a.height, 'screenshot heights').toBe(b.height);
   const diff = new PNG({ width: a.width, height: a.height });
-  const diffPixels = pixelmatch(a.data, b.data, diff.data, a.width, a.height, { threshold: 0.1, includeAA: false });
+  const diffPixels = pixelmatch(a.data, b.data, diff.data, a.width, a.height, { threshold: 0, includeAA: true });
   const total = a.width * a.height;
-  const dir = resolve(OUTPUT_DIR, `${scene}-${theme}`);
+  const dir = resolve(OUTPUT_DIR, `${scene}-${theme}-${vp.width}x${vp.height}`);
   mkdirSync(dir, { recursive: true });
   writeFileSync(resolve(dir, 'reference.png'), reference);
   writeFileSync(resolve(dir, 'studio.png'), studio);
@@ -117,9 +131,9 @@ export function compare(scene: string, theme: Theme, reference: Buffer, studio: 
   return { diffRatio: diffPixels / total, diffPixels, total };
 }
 
-export function report(info: TestInfo, scene: string, theme: Theme, c: Comparison): void {
+export function report(info: TestInfo, scene: string, theme: Theme, vp: Viewport, c: Comparison): void {
   const pct = (c.diffRatio * 100).toFixed(4);
-  const line = `${scene} ${theme}: ${pct} % of pixels differ (${c.diffPixels} of ${c.total})`;
+  const line = `${scene} ${theme} ${vp.width}x${vp.height}: ${pct} % of pixels differ (${c.diffPixels} of ${c.total})`;
   console.log(line);
   info.annotations.push({ type: 'diff', description: line });
 }

@@ -33,7 +33,6 @@ export interface Renderer {
   start(): void;
   stop(): void;
   applyTheme(name: string): void;
-  clamp(v: number, a: number, b: number): number;
 }
 
 const clampN = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -225,7 +224,6 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
 
   return {
     v,
-    clamp: clampN,
     start() {
       addEventListener('resize', onResize);
       document.addEventListener('fullscreenchange', onFullscreen);
