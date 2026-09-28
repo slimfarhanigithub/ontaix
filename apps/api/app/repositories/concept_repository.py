@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.storage.base import NodeKind
@@ -23,30 +23,6 @@ async def get(session: AsyncSession, tenant_id: uuid.UUID, concept_id: uuid.UUID
     return await session.scalar(
         select(Concept).where(Concept.tenant_id == tenant_id, Concept.id == concept_id)
     )
-
-
-async def find_by_label(session: AsyncSession, company_id: uuid.UUID, label: str) -> Concept | None:
-    """Case-insensitive label lookup inside one company, pending cells included, dying excluded."""
-    return await session.scalar(
-        select(Concept).where(
-            Concept.company_id == company_id,
-            func.lower(Concept.label) == label.lower(),
-            Concept.dying_at.is_(None),
-        )
-    )
-
-
-async def root_of(session: AsyncSession, company_id: uuid.UUID) -> Concept | None:
-    return await session.scalar(
-        select(Concept).where(Concept.company_id == company_id, Concept.kind == NodeKind.ROOT)
-    )
-
-
-async def children_of(session: AsyncSession, parent_id: uuid.UUID) -> list[Concept]:
-    result = await session.scalars(
-        select(Concept).where(Concept.parent_id == parent_id, Concept.dying_at.is_(None))
-    )
-    return list(result)
 
 
 async def create(
@@ -90,4 +66,27 @@ async def create(
 
 async def delete(session: AsyncSession, concept: Concept) -> None:
     await session.delete(concept)
+    await session.flush()
+
+
+async def set_birth_relation(
+    session: AsyncSession, concept: Concept, relation_id: uuid.UUID
+) -> None:
+    concept.birth_relation_id = relation_id
+    await session.flush()
+
+
+async def clear_pending(session: AsyncSession, concept: Concept) -> None:
+    concept.pending = False
+    await session.flush()
+
+
+async def rename(session: AsyncSession, concept: Concept, label: str) -> None:
+    concept.label = label
+    await session.flush()
+
+
+async def mark_dying(session: AsyncSession, concept: Concept, at: datetime) -> None:
+    """Stamp the moment the cell starts dying; the row is deleted later in the same transaction."""
+    concept.dying_at = at
     await session.flush()

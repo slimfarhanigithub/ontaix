@@ -47,6 +47,7 @@ from app.repositories import (
     tenant_settings_repository,
 )
 from app.utilities.layout import ROOT_COLOR
+from app.utilities.proposal_relations import own_relation_ids, touched_relation_ids
 from app.utilities.versions import version_label
 
 logger = logging.getLogger(__name__)
@@ -79,8 +80,6 @@ class OntologyView:
     users: dict[uuid.UUID, AppUser]
     approvals: dict[uuid.UUID, list[ProposalApproval]] = field(default_factory=dict)
 
-    # ------------------------------------------------------------------ registration
-
     def register_concept(self, concept: Concept) -> None:
         self.concepts[concept.id] = concept
 
@@ -110,8 +109,6 @@ class OntologyView:
         for pid in [p.id for p in self.domain_products.values() if p.company_id == company_id]:
             self.domain_products.pop(pid, None)
         self.companies.pop(company_id, None)
-
-    # ------------------------------------------------------------------ lookups
 
     def live_concepts(self) -> list[Concept]:
         return [c for c in self.concepts.values() if c.dying_at is None]
@@ -185,8 +182,6 @@ class OntologyView:
             hops += 1
         return False
 
-    # ------------------------------------------------------------------ colours and text
-
     def effective_color(self, template_key: str) -> str:
         overrides = self.settings.colors if self.settings is not None else {}
         return str(overrides.get(template_key) or self.templates[template_key].color)
@@ -210,8 +205,6 @@ class OntologyView:
             else None
         )
         return product.template_key if product else None
-
-    # ------------------------------------------------------------------ DTO builders
 
     def domain_product_dto(self, product: DomainProduct) -> DomainProductDto:
         template = self.templates[product.template_key]
@@ -410,9 +403,7 @@ class OntologyView:
         concepts = []
         if proposal.concept_id and proposal.concept_id in self.concepts:
             concepts.append(self.concept_dto(self.concepts[proposal.concept_id]))
-        relation_ids = list(proposal.relation_ids or [])
-        if proposal.relation_id:
-            relation_ids.insert(0, proposal.relation_id)
+        relation_ids = own_relation_ids(proposal)
         relations = [
             self.relation_dto(self.relations[rid])
             for rid in relation_ids
@@ -426,6 +417,20 @@ class OntologyView:
                 self.domain_product_dto(self.domain_products[proposal.domain_product_id])
             )
         return Artefacts(concepts=concepts, relations=relations, domain_products=products)
+
+    def proposal_company_ids(self, proposal: Proposal) -> set[uuid.UUID]:
+        """The companies a proposal touches: its own, or both ends of a cross-company relation."""
+        if proposal.company_id is not None:
+            return {proposal.company_id}
+        companies: set[uuid.UUID] = set()
+        for rid in touched_relation_ids(proposal):
+            relation = self.relations.get(rid)
+            if relation is None:
+                continue
+            for end in (relation.a_id, relation.b_id):
+                if end in self.concepts:
+                    companies.add(self.concepts[end].company_id)
+        return companies
 
     def _both_ends_approved(self, proposal: Proposal) -> bool:
         relation = self.relations.get(proposal.relation_id) if proposal.relation_id else None
@@ -471,7 +476,7 @@ async def load_view(
     )
     if proposals:
         for approval in await proposal_approval_repository.list_for_proposals(
-            session, [p.id for p in proposals]
+            session, tenant_id, [p.id for p in proposals]
         ):
             view.register_approval(approval)
     return view

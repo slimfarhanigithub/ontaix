@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,4 +56,10 @@ async def create(
 
 async def delete(session: AsyncSession, company: Company) -> None:
     await session.delete(company)
+    await session.flush()
+
+
+async def mark_dying(session: AsyncSession, company: Company, at: datetime) -> None:
+    """Stamp the moment the company starts dying; it is deleted later in the same transaction."""
+    company.dying_at = at
     await session.flush()

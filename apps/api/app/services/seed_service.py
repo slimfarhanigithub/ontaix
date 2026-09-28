@@ -81,7 +81,9 @@ async def _seed_directory(session: AsyncSession, tenant_id: uuid.UUID) -> dict[s
 
 
 async def _caller_for(session: AsyncSession, user: AppUser) -> Caller:
-    assignments = await group_role_repository.list_for_user(session, user.id, get_clock().now())
+    assignments = await group_role_repository.list_for_user(
+        session, user.tenant_id, user.id, get_clock().now()
+    )
     return Caller(
         tenant_id=user.tenant_id,
         user_id=user.id,
@@ -95,7 +97,7 @@ async def _caller_for(session: AsyncSession, user: AppUser) -> Caller:
 
 async def _seed_northwind(session: AsyncSession, proposer: Caller, approver: Caller) -> None:
     view = await load_view(session, proposer.tenant_id)
-    company = await company_service._add_company(
+    company = await company_service.add_company(
         session, view, northwind.COMPANY_NAME, northwind.COMPANY_SUB, is_home=True
     )
     for scene in northwind.SCENES:
@@ -110,7 +112,7 @@ async def _seed_northwind(session: AsyncSession, proposer: Caller, approver: Cal
 
 async def _seed_aurora(session: AsyncSession, proposer: Caller, approver: Caller) -> None:
     view = await load_view(session, proposer.tenant_id)
-    company = await company_service._add_company(
+    company = await company_service.add_company(
         session, view, aurora.COMPANY_NAME, aurora.COMPANY_SUB, is_home=False
     )
     for proposal in await propose_starter_vocabulary(session, proposer, view, company):

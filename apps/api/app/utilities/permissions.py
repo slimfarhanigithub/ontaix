@@ -3,7 +3,8 @@
 Roles reach a user only through group membership and group role assignments. A grant holds on
 the tenant (everything), on one company (its domain products included) or on one domain product
 family (that template key in every company). A proposal's scope is its domain product when it
-has one, otherwise its company, otherwise the tenant.
+has one, otherwise its company, otherwise the tenant. A proposal whose relation joins two
+companies has the tenant as its scope, so only a tenant-wide grant decides it.
 """
 
 from __future__ import annotations
@@ -77,6 +78,11 @@ def can_approve(grants: tuple[Grant, ...], scope: Scope) -> bool:
     return any(g.role in APPROVING_ROLES and g.contains(scope) for g in grants)
 
 
+def holds_approving_role(grants: tuple[Grant, ...]) -> bool:
+    """Owner or Governor on any scope: the caller may decide at least some proposals."""
+    return any(g.role in APPROVING_ROLES for g in grants)
+
+
 def can_finalise(grants: tuple[Grant, ...]) -> bool:
     """Governor at tenant scope."""
     return any(g.role is RoleName.GOVERNOR and g.scope_kind is ScopeKind.TENANT for g in grants)
@@ -103,7 +109,7 @@ def permission_names(grants: tuple[Grant, ...], everyone_teaches: bool) -> list[
         for g in grants
     ):
         names.append("proposal.create")
-    if any(g.role in APPROVING_ROLES for g in grants):
+    if holds_approving_role(grants):
         names.extend(["proposal.approve", "proposal.second_approve", "proposal.reject"])
     if can_finalise(grants):
         names.append("proposal.finalise")

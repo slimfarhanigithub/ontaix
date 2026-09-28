@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.auth import DEV_USER_HEADER
 from app.clients.db_client import dispose_engine
 from app.config import get_settings
 from app.routers import (
@@ -42,6 +43,11 @@ def create_app() -> FastAPI:
     """Build the FastAPI application and mount every router under /api/v1."""
     settings = get_settings()
     logging.basicConfig(level=settings.log_level)
+    if settings.is_dev:
+        logger.warning(
+            "environment is dev: the %s header is accepted without any other credential",
+            DEV_USER_HEADER,
+        )
 
     application = FastAPI(title=settings.app_name, version="1.0.0", lifespan=_lifespan)
     application.include_router(health.router)

@@ -1,9 +1,12 @@
 """Resolves the caller of a request and carries its native role grants.
 
-Authentication: in the `dev` environment the header `X-Ontaix-User` names a user of the native
-directory by its `dev` issuer subject. Outside `dev` no credential is accepted until OIDC bearer
-tokens are wired in. Authorisation never looks at the credential: it reads the tenant's own
-groups and role assignments.
+Authentication: only when the environment is exactly `dev` does the header `X-Ontaix-User` name
+a user of the native directory by its `dev` issuer subject. In every other environment, including
+an unset one, no credential is accepted until OIDC bearer tokens are wired in. Authorisation never
+looks at the credential: it reads the tenant's own groups and role assignments.
+
+The request session commits when the endpoint function returns, before the response is sent, so
+a failed commit answers 5xx and never a 2xx for a change that did not land.
 """
 
 from __future__ import annotations
@@ -50,9 +53,10 @@ class Caller:
         return ActorKind.USER
 
 
-async def get_caller(
-    request: Request, session: Annotated[AsyncSession, Depends(session_dependency)]
-) -> Caller:
+SessionDependency = Annotated[AsyncSession, Depends(session_dependency, scope="function")]
+
+
+async def get_caller(request: Request, session: SessionDependency) -> Caller:
     """FastAPI dependency: the caller, or 401 when no accepted credential identifies a user."""
     settings = get_settings()
     if not settings.is_dev:
@@ -63,7 +67,9 @@ async def get_caller(
     user = await app_user_repository.get_by_identity(session, DEV_ISSUER, subject)
     if user is None:
         raise unauthorized("unknown user")
-    assignments = await group_role_repository.list_for_user(session, user.id, get_clock().now())
+    assignments = await group_role_repository.list_for_user(
+        session, user.tenant_id, user.id, get_clock().now()
+    )
     tenant_settings = await tenant_settings_repository.get(session, user.tenant_id)
     grants = tuple(
         Grant(
@@ -84,4 +90,3 @@ async def get_caller(
 
 
 CallerDependency = Annotated[Caller, Depends(get_caller)]
-SessionDependency = Annotated[AsyncSession, Depends(session_dependency)]

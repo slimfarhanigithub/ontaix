@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEV_ENVIRONMENT = "dev"
+
+Environment = Literal["dev", "test", "staging", "production"]
 
 
 class Settings(BaseSettings):
@@ -13,13 +18,16 @@ class Settings(BaseSettings):
 
     Every field is read from the environment as ONTAIX_<FIELD>, for example
     ONTAIX_DATABASE_URL. Values are never logged.
+
+    `environment` fails closed: it defaults to `production`, and a value outside the known
+    environments stops the process at startup instead of silently enabling anything.
     """
 
     model_config = SettingsConfigDict(env_prefix="ONTAIX_", env_file=".env", extra="ignore")
 
     app_name: str = "ontaix-api"
-    environment: str = Field(
-        default="dev",
+    environment: Environment = Field(
+        default="production",
         validation_alias=AliasChoices("ONTAIX_ENVIRONMENT", "ONTAIX_ENV"),
     )
     log_level: str = "INFO"
@@ -28,8 +36,8 @@ class Settings(BaseSettings):
 
     @property
     def is_dev(self) -> bool:
-        """True when the dev identity header is accepted in place of an OIDC token."""
-        return self.environment == "dev"
+        """True only when the environment is exactly `dev`: the dev identity header is accepted."""
+        return self.environment == DEV_ENVIRONMENT
 
 
 @lru_cache

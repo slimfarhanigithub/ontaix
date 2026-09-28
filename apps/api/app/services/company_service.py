@@ -67,7 +67,7 @@ async def create_company(
     key = company_key(body.name)
     if any(c.key == key for c in view.companies.values()):
         raise conflict("duplicate_label", f"a company with key {key!r} already exists")
-    company = await _add_company(session, view, body.name, body.sub, is_home=not view.companies)
+    company = await add_company(session, view, body.name, body.sub, is_home=not view.companies)
     root = view.root_of(company.id)
     assert root is not None
     await audit_service.record(
@@ -93,44 +93,10 @@ async def create_company(
     )
 
 
-async def propose_starter_vocabulary(
-    session: AsyncSession, caller: Caller, view: OntologyView, company: Company
-) -> list:
-    """The thirteen starter concepts, proposed by the system in the company's own words."""
-    created = []
-    for label, domain_key, action, parent_label in STARTER_VOCABULARY:
-        domain_name = view.templates[domain_key].name
-        draft = ConceptDraft(
-            company_id=company.id,
-            parent_label=parent_label or company.name,
-            label=label,
-            domain_key=domain_key,
-            action=action,
-            caption=f"{label} is kept in {company.name}’s {domain_name}.",
-        )
-        created.append(
-            await proposal_service.create(
-                session, caller, view, draft, enforce_permission=False, proposer=SYSTEM_ACTOR
-            )
-        )
-    return created
-
-
-async def propose_remove_company(
-    session: AsyncSession, caller: Caller, company_id: uuid.UUID
-) -> ProposalDto:
-    view = await load_view(session, caller.tenant_id)
-    company = view.companies.get(company_id)
-    if company is None or company.dying_at is not None:
-        raise not_found("company")
-    draft = ChangeDraft(change_kind="remove_company", payload=ChangePayload(company_id=company_id))
-    proposal = await proposal_service.create(session, caller, view, draft)
-    return view.proposal_dto(proposal, view.proposal_artefacts(proposal))
-
-
-async def _add_company(
+async def add_company(
     session: AsyncSession, view: OntologyView, name: str, sub: str, *, is_home: bool
 ) -> Company:
+    """Write the company, its nine domain products and its root cell; no proposal involved."""
     position = await company_repository.next_position(session, view.tenant_id)
     company = await company_repository.create(
         session,
@@ -167,3 +133,38 @@ async def _add_company(
     )
     view.register_concept(root)
     return company
+
+
+async def propose_starter_vocabulary(
+    session: AsyncSession, caller: Caller, view: OntologyView, company: Company
+) -> list:
+    """The thirteen starter concepts, proposed by the system in the company's own words."""
+    created = []
+    for label, domain_key, action, parent_label in STARTER_VOCABULARY:
+        domain_name = view.templates[domain_key].name
+        draft = ConceptDraft(
+            company_id=company.id,
+            parent_label=parent_label or company.name,
+            label=label,
+            domain_key=domain_key,
+            action=action,
+            caption=f"{label} is kept in {company.name}’s {domain_name}.",
+        )
+        created.append(
+            await proposal_service.create(
+                session, caller, view, draft, enforce_permission=False, proposer=SYSTEM_ACTOR
+            )
+        )
+    return created
+
+
+async def propose_remove_company(
+    session: AsyncSession, caller: Caller, company_id: uuid.UUID
+) -> ProposalDto:
+    view = await load_view(session, caller.tenant_id)
+    company = view.companies.get(company_id)
+    if company is None or company.dying_at is not None:
+        raise not_found("company")
+    draft = ChangeDraft(change_kind="remove_company", payload=ChangePayload(company_id=company_id))
+    proposal = await proposal_service.create(session, caller, view, draft)
+    return view.proposal_dto(proposal, view.proposal_artefacts(proposal))

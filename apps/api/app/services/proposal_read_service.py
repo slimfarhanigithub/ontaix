@@ -14,7 +14,7 @@ from app.models.storage.proposal import Proposal
 from app.repositories import proposal_repository
 from app.services import proposal_service
 from app.services.company_service import readable_companies
-from app.services.ontology_view_service import load_view
+from app.services.ontology_view_service import OntologyView, load_view
 from app.utilities.listing import ListQuery, paginate
 from app.utilities.permissions import can_read_tenant
 from app.utilities.problems import forbidden, not_found
@@ -39,9 +39,12 @@ async def list_proposals(
         p
         for p in proposals
         if p.state.value in states
-        and (p.company_id is None or p.company_id in readable)
+        and view.proposal_company_ids(p) <= readable
         and ("type" not in query.filters or p.type.value in query.filters["type"])
-        and ("companyId" not in query.filters or str(p.company_id) in query.filters["companyId"])
+        and (
+            "companyId" not in query.filters
+            or any(str(c) in query.filters["companyId"] for c in view.proposal_company_ids(p))
+        )
         and (
             "proposerKind" not in query.filters
             or p.proposer_kind.value in query.filters["proposerKind"]
@@ -79,7 +82,8 @@ async def create_batch(session: AsyncSession, caller: Caller, drafts: list) -> l
     return [view.proposal_dto(p, view.proposal_artefacts(p)) for p in created]
 
 
-def _ensure_readable(caller: Caller, view, proposal: Proposal) -> None:
+def _ensure_readable(caller: Caller, view: OntologyView, proposal: Proposal) -> None:
+    """A proposal is readable when the caller reads every company it touches."""
     readable = {c.id for c in readable_companies(caller, view)}
-    if proposal.company_id is not None and proposal.company_id not in readable:
+    if not view.proposal_company_ids(proposal) <= readable:
         raise not_found("proposal")

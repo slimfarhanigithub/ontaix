@@ -15,7 +15,7 @@ from app.models.storage.user_group import UserGroup
 
 
 async def list_for_user(
-    session: AsyncSession, user_id: uuid.UUID, now: datetime
+    session: AsyncSession, tenant_id: uuid.UUID, user_id: uuid.UUID, now: datetime
 ) -> list[GroupRole]:
     """Every role assignment reaching the user through a group that is still valid."""
     result = await session.scalars(
@@ -23,6 +23,9 @@ async def list_for_user(
         .join(UserGroup, UserGroup.id == GroupRole.group_id)
         .join(GroupMember, GroupMember.group_id == UserGroup.id)
         .where(
+            GroupRole.tenant_id == tenant_id,
+            UserGroup.tenant_id == tenant_id,
+            GroupMember.tenant_id == tenant_id,
             GroupMember.user_id == user_id,
             or_(UserGroup.valid_until.is_(None), UserGroup.valid_until > now),
         )

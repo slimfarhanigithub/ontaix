@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.storage.base import ActorKind, ChangeKind, ProposalState, ProposalType
 from app.models.storage.proposal import Proposal
 
 OPEN_STATES = (ProposalState.PENDING, ProposalState.HALF_APPROVED)
+DECISION_LOCK_NAMESPACE = "ontaix.proposal-decisions"
 
 
 async def list_for_tenant(session: AsyncSession, tenant_id: uuid.UUID) -> list[Proposal]:
@@ -30,12 +32,76 @@ async def list_open(session: AsyncSession, tenant_id: uuid.UUID) -> list[Proposa
     return list(result)
 
 
+async def lock_open(session: AsyncSession, tenant_id: uuid.UUID) -> list[Proposal]:
+    """The open proposals of the tenant, row-locked until the transaction ends.
+
+    Rows are locked in one stable order and re-read from the database, so the states returned
+    are the committed ones at the moment the lock was granted.
+    """
+    result = await session.scalars(
+        select(Proposal)
+        .where(Proposal.tenant_id == tenant_id, Proposal.state.in_(OPEN_STATES))
+        .order_by(Proposal.created_at, Proposal.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return list(result)
+
+
 async def get(
     session: AsyncSession, tenant_id: uuid.UUID, proposal_id: uuid.UUID
 ) -> Proposal | None:
     return await session.scalar(
         select(Proposal).where(Proposal.tenant_id == tenant_id, Proposal.id == proposal_id)
     )
+
+
+async def get_for_update(
+    session: AsyncSession, tenant_id: uuid.UUID, proposal_id: uuid.UUID
+) -> Proposal | None:
+    """One proposal, row-locked until the transaction ends and re-read after the lock."""
+    return await session.scalar(
+        select(Proposal)
+        .where(Proposal.tenant_id == tenant_id, Proposal.id == proposal_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+async def lock_decisions(session: AsyncSession, tenant_id: uuid.UUID) -> None:
+    """Serialise every decision of one tenant until the transaction ends.
+
+    A decision reads the whole open queue and may cascade to other proposals, so two decisions
+    of one tenant never interleave: the second waits here until the first commits or rolls back.
+    """
+    key = func.hashtextextended(f"{DECISION_LOCK_NAMESPACE}:{tenant_id}", 0)
+    await session.execute(select(func.pg_advisory_xact_lock(key)))
+
+
+async def mark_half_approved(session: AsyncSession, proposal: Proposal, why: str) -> None:
+    proposal.state = ProposalState.HALF_APPROVED
+    proposal.why = why
+    await session.flush()
+
+
+async def mark_decided(
+    session: AsyncSession, proposal: Proposal, state: ProposalState, decided_at: datetime
+) -> None:
+    proposal.state = state
+    proposal.decided_at = decided_at
+    await session.flush()
+
+
+async def detach_company(
+    session: AsyncSession, tenant_id: uuid.UUID, company_id: uuid.UUID
+) -> None:
+    """Keep the history of a company's proposals when the company row is deleted."""
+    result = await session.scalars(
+        select(Proposal).where(Proposal.tenant_id == tenant_id, Proposal.company_id == company_id)
+    )
+    for proposal in result:
+        proposal.company_id = None
+    await session.flush()
 
 
 async def create(

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.storage.base import RelationKind
@@ -23,26 +24,6 @@ async def get(
 ) -> Relation | None:
     return await session.scalar(
         select(Relation).where(Relation.tenant_id == tenant_id, Relation.id == relation_id)
-    )
-
-
-async def touching(session: AsyncSession, concept_id: uuid.UUID) -> list[Relation]:
-    result = await session.scalars(
-        select(Relation).where(or_(Relation.a_id == concept_id, Relation.b_id == concept_id))
-    )
-    return list(result)
-
-
-async def find_triple(
-    session: AsyncSession, a_id: uuid.UUID, label: str, b_id: uuid.UUID
-) -> Relation | None:
-    return await session.scalar(
-        select(Relation).where(
-            Relation.a_id == a_id,
-            Relation.b_id == b_id,
-            func.lower(Relation.label) == label.lower(),
-            Relation.dying_at.is_(None),
-        )
     )
 
 
@@ -75,4 +56,24 @@ async def create(
 
 async def delete(session: AsyncSession, relation: Relation) -> None:
     await session.delete(relation)
+    await session.flush()
+
+
+async def clear_pending(session: AsyncSession, relation: Relation) -> None:
+    relation.pending = False
+    await session.flush()
+
+
+async def update(
+    session: AsyncSession, relation: Relation, *, label: str, a_id: uuid.UUID, b_id: uuid.UUID
+) -> None:
+    relation.label = label
+    relation.a_id = a_id
+    relation.b_id = b_id
+    await session.flush()
+
+
+async def mark_dying(session: AsyncSession, relation: Relation, at: datetime) -> None:
+    """Stamp the moment the relation starts dying; it is deleted later in the same transaction."""
+    relation.dying_at = at
     await session.flush()

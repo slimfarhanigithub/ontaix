@@ -20,7 +20,7 @@ from app.models.storage.concept import Concept
 from app.services import proposal_service
 from app.services.company_service import readable_companies
 from app.services.ontology_view_service import OntologyView, attribute_dto, load_view
-from app.services.proposal_service import ISA_ACTION
+from app.services.proposal_store_service import ISA_ACTION
 from app.utilities.listing import ListQuery, matches_search, paginate
 from app.utilities.permissions import can_read
 from app.utilities.problems import forbidden, not_found

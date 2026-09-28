@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 FILTERABLE = ("kind", "ok", "actorKind", "from", "to")
 SORTABLE = ("at",)
+TIME_BOUND_DETAIL = "from and to must be ISO 8601 timestamps with a UTC offset"
 
 
 async def list_audit(
@@ -71,9 +72,13 @@ async def list_audit(
 
 
 def _time_bound(values: list[str] | None) -> datetime | None:
+    """Parse `from` or `to`; the value must carry its UTC offset to compare with entry times."""
     if not values:
         return None
     try:
-        return datetime.fromisoformat(values[0])
+        bound = datetime.fromisoformat(values[0])
     except ValueError as exc:
-        raise bad_request("from and to must be ISO 8601 timestamps") from exc
+        raise bad_request(TIME_BOUND_DETAIL) from exc
+    if bound.tzinfo is None or bound.utcoffset() is None:
+        raise bad_request(TIME_BOUND_DETAIL)
+    return bound

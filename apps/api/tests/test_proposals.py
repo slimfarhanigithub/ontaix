@@ -11,6 +11,7 @@ from sqlalchemy import select
 from app.models.storage.audit_entry import AuditEntry
 from app.models.storage.concept import Concept
 from app.models.storage.outbox import Outbox
+from app.models.storage.relation import Relation
 from app.models.storage.tenant_settings import TenantSettings
 from tests.conftest import Persona, TenantFixture
 
@@ -38,6 +39,32 @@ async def propose_concept(
     if parent_label is not None:
         body["parentLabel"] = parent_label
     return await client.post("/concepts", json=body, headers=persona.headers)
+
+
+async def approved(
+    client: httpx.AsyncClient, tenant: TenantFixture, label: str, domain_key: str = "production"
+) -> dict:
+    """Propose a concept under the home root and approve it; returns the approved concept."""
+    created = await propose_concept(
+        client, tenant, tenant.builder, label, tenant.root_id, domain_key=domain_key
+    )
+    assert created.status_code == 202, created.text
+    decided = await client.post(
+        f"/proposals/{created.json()['id']}/approve", headers=tenant.governor.headers
+    )
+    assert decided.status_code == 200, decided.text
+    return decided.json()["artefacts"]["concepts"][0]
+
+
+async def add_company(client: httpx.AsyncClient, tenant: TenantFixture, name: str) -> dict:
+    """A second company of the tenant, added by the Administrator."""
+    created = await client.post(
+        "/companies",
+        json={"name": f"{name} {uuid.uuid4().hex[:6]}", "start": "one_cell"},
+        headers=tenant.admin.headers,
+    )
+    assert created.status_code == 201, created.text
+    return created.json()
 
 
 async def test_propose_returns_202_and_keeps_the_concept_pending(
@@ -369,21 +396,129 @@ async def test_approve_all_repeats_until_nothing_is_ready(
 async def test_approve_all_skips_proposals_outside_the_callers_scope(
     client: httpx.AsyncClient, tenant: TenantFixture
 ) -> None:
-    created = (
+    other = await add_company(client, tenant, "Outside")
+    home = (
         await propose_concept(
             client, tenant, tenant.builder, "Route", tenant.root_id, domain_key="logistics"
         )
     ).json()
+    foreign = await client.post(
+        "/concepts",
+        json={
+            "type": "concept",
+            "companyId": other["company"]["id"],
+            "parentId": other["root"]["id"],
+            "label": "Lane",
+            "domainKey": "logistics",
+            "action": "has",
+        },
+        headers=tenant.builder.headers,
+    )
+    assert foreign.status_code == 202, foreign.text
 
-    response = await client.post("/proposals/approve-all", headers=tenant.builder.headers)
+    response = await client.post("/proposals/approve-all", headers=tenant.owner.headers)
 
     assert response.status_code == 200, response.text
-    assert response.json()["approved"] == 0
+    assert response.json()["approved"] == 1
     assert response.json()["remaining"] >= 1
+    states = {
+        pid: (await client.get(f"/proposals/{pid}", headers=tenant.governor.headers)).json()[
+            "state"
+        ]
+        for pid in (home["id"], foreign.json()["id"])
+    }
+    assert states == {home["id"]: "approved", foreign.json()["id"]: "pending"}
+
+
+@pytest.mark.parametrize("bulk", ["approve-all", "reject-all"])
+async def test_bulk_decisions_are_forbidden_without_an_approving_role(
+    client: httpx.AsyncClient, tenant: TenantFixture, bulk: str
+) -> None:
+    created = (
+        await propose_concept(
+            client, tenant, tenant.builder, "Pallet", tenant.root_id, domain_key="logistics"
+        )
+    ).json()
+
+    response = await client.post(f"/proposals/{bulk}", headers=tenant.builder.headers)
+
+    assert response.status_code == 403, response.text
+    assert response.json()["code"] == "forbidden"
     still_open = (
         await client.get(f"/proposals/{created['id']}", headers=tenant.governor.headers)
     ).json()
     assert still_open["state"] == "pending"
+
+
+@pytest.mark.parametrize("kind", ["remove", "edit"])
+async def test_rejecting_a_relation_change_keeps_the_approved_relation(
+    client: httpx.AsyncClient, tenant: TenantFixture, kind: str
+) -> None:
+    a = await approved(client, tenant, f"Employee {kind}", domain_key="people")
+    b = await approved(client, tenant, f"Training {kind}", domain_key="people")
+    relation = await client.post(
+        "/relations",
+        json={"type": "relation", "aId": a["id"], "bId": b["id"], "action": "attends"},
+        headers=tenant.builder.headers,
+    )
+    assert relation.status_code == 202, relation.text
+    relation_id = relation.json()["relationId"]
+    assert (
+        await client.post(
+            f"/proposals/{relation.json()['id']}/approve", headers=tenant.governor.headers
+        )
+    ).status_code == 200
+    if kind == "remove":
+        change = await client.delete(f"/relations/{relation_id}", headers=tenant.builder.headers)
+    else:
+        change = await client.patch(
+            f"/relations/{relation_id}",
+            json={"action": "completes"},
+            headers=tenant.builder.headers,
+        )
+    assert change.status_code == 202, change.text
+
+    rejected = await client.post(
+        f"/proposals/{change.json()['id']}/reject", headers=tenant.governor.headers
+    )
+
+    assert rejected.status_code == 200, rejected.text
+    assert rejected.json()["proposal"]["state"] == "rejected"
+    after = await client.get(f"/relations/{relation_id}", headers=tenant.governor.headers)
+    assert after.status_code == 200, after.text
+    assert after.json()["label"] == "attends"
+    assert after.json()["pending"] is False
+
+
+async def test_reject_cascades_to_relations_touching_the_concept(
+    client: httpx.AsyncClient, tenant: TenantFixture, session
+) -> None:
+    anchor = await approved(client, tenant, "Supplier", domain_key="supply")
+    pending = (
+        await propose_concept(
+            client, tenant, tenant.builder, "Contract", tenant.root_id, domain_key="supply"
+        )
+    ).json()
+    relation = await client.post(
+        "/relations",
+        json={
+            "type": "relation",
+            "aId": anchor["id"],
+            "bId": pending["conceptId"],
+            "action": "signs",
+        },
+        headers=tenant.builder.headers,
+    )
+    assert relation.status_code == 202, relation.text
+
+    response = await client.post(
+        f"/proposals/{pending['id']}/reject", headers=tenant.governor.headers
+    )
+
+    assert response.status_code == 200, response.text
+    assert [p["id"] for p in response.json()["cascaded"]] == [relation.json()["id"]]
+    assert await session.get(Relation, uuid.UUID(relation.json()["relationId"])) is None
+    assert await session.get(Concept, uuid.UUID(anchor["id"])) is not None
 
 
 async def test_finalise_all_reports_counts(

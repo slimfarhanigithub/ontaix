@@ -111,7 +111,7 @@ async def test_seeded_lineage_and_lists(client: httpx.AsyncClient, demo_seeded: 
     assert audit["items"][0]["actor"]["name"] == "Hugo Brandt"
 
 
-async def test_seed_users_without_roles_read_nothing(
+async def test_seed_auditor_reads_and_builder_cannot_bulk_approve(
     client: httpx.AsyncClient, demo_seeded: bool
 ) -> None:
     auditor = (
@@ -122,8 +122,8 @@ async def test_seed_users_without_roles_read_nothing(
     builder_only = await client.post(
         "/proposals/approve-all", headers={"X-Ontaix-User": "tom.reiss@northwind.com"}
     )
-    assert builder_only.status_code == 200
-    assert builder_only.json()["approved"] == 0
+    assert builder_only.status_code == 403
+    assert builder_only.json()["code"] == "forbidden"
 
 
 async def test_tenant_isolation(

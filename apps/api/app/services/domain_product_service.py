@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
 from app.models.api.domain_product import DomainProduct as DomainProductDto
+from app.repositories import domain_product_repository
 from app.services import audit_service, outbox_service
 from app.services.company_service import readable_companies
 from app.services.ontology_view_service import load_view
@@ -54,8 +55,7 @@ async def set_hidden(
         raise not_found("domain product")
     if not can_read(caller.grants, product.company_id):
         raise forbidden("you may not change the view of this company")
-    product.hidden = hidden
-    await session.flush()
+    await domain_product_repository.set_hidden(session, product, hidden)
     dto = view.domain_product_dto(product)
     await audit_service.record(
         session,

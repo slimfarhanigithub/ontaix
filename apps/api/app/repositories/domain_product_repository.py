@@ -27,16 +27,6 @@ async def get(
     )
 
 
-async def get_by_company_and_key(
-    session: AsyncSession, company_id: uuid.UUID, template_key: str
-) -> DomainProduct | None:
-    return await session.scalar(
-        select(DomainProduct).where(
-            DomainProduct.company_id == company_id, DomainProduct.template_key == template_key
-        )
-    )
-
-
 async def create(
     session: AsyncSession, tenant_id: uuid.UUID, company_id: uuid.UUID, template_key: str
 ) -> DomainProduct:
@@ -44,3 +34,13 @@ async def create(
     session.add(product)
     await session.flush()
     return product
+
+
+async def bump_revision(session: AsyncSession, product: DomainProduct) -> None:
+    product.revision += 1
+    await session.flush()
+
+
+async def set_hidden(session: AsyncSession, product: DomainProduct, hidden: bool) -> None:
+    product.hidden = hidden
+    await session.flush()

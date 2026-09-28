@@ -12,14 +12,14 @@ from app.models.storage.proposal_approval import ProposalApproval
 
 
 async def list_for_proposals(
-    session: AsyncSession, proposal_ids: Iterable[uuid.UUID]
+    session: AsyncSession, tenant_id: uuid.UUID, proposal_ids: Iterable[uuid.UUID]
 ) -> list[ProposalApproval]:
     ids = list(proposal_ids)
     if not ids:
         return []
     result = await session.scalars(
         select(ProposalApproval)
-        .where(ProposalApproval.proposal_id.in_(ids))
+        .where(ProposalApproval.tenant_id == tenant_id, ProposalApproval.proposal_id.in_(ids))
         .order_by(ProposalApproval.ordinal)
     )
     return list(result)

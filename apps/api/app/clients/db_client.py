@@ -1,7 +1,7 @@
 """Async SQLAlchemy engine and session factory over psycopg 3.
 
-Repositories are the only callers of `get_session`; routers receive a session through the
-`session_dependency` and pass it down to services.
+Routers receive a session through `session_dependency` and pass it down to services;
+repositories are the only code that runs statements on it.
 """
 
 from __future__ import annotations

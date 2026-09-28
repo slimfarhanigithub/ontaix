@@ -137,7 +137,7 @@ async def tenant(migrated_database: str) -> TenantFixture:
             )
             personas[role] = Persona(subject=subject, user_id=user.id)
         view = await load_view(s, t.id)
-        company = await company_service._add_company(
+        company = await company_service.add_company(
             s, view, f"Home {slug}", "one line of context", is_home=True
         )
         root = view.root_of(company.id)
