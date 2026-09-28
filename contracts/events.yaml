@@ -1,0 +1,1583 @@
+asyncapi: 3.0.0
+info:
+  title: Ontaix Events
+  version: 1.0.0
+  description: |
+    Every state change other clients or services must see is one event. Events are written to the `outbox` table in the same transaction as the change, published to NATS JetStream by the relay in outbox id order, and forwarded to Studio clients over the WebSocket `GET /api/v1/ws`.
+
+    NATS subject pattern: `ontaix.{tenantId}.{aggregate}.{action}`. Consumers subscribe with wildcards, for example `ontaix.*.proposal.>`.
+
+    WebSocket envelope: every message is one `Envelope`; `sequence` is the tenant-wide outbox id. A client reconnects with `?since=<sequence>`; when the gap is too old the server sends `snapshot.required` and the client reloads `GET /api/v1/scene`.
+
+    Visibility: every channel declares `x-ontaix-visibility`, the permission (vocabulary in ADR 0003) a subscriber must hold to receive its events, and `x-ontaix-audience`, how the event's `companyIds` is filled. `companyIds` lists every company whose labels, names or artefact state the payload carries; bare ids do not count. An empty list means tenant-wide. A subscriber receives an event only if it holds the visibility permission in a scope that contains every listed company; with an empty list, the permission at any scope suffices. A cross-company event therefore reaches only readers of all its companies.
+
+    Audience values: `companies` - the writer fills `companyIds` from the artefacts in the payload; `tenant` - `companyIds` is always empty and the payload carries no company-specific labels. On a `companies` channel an event never mixes artefacts with different company sets: the writer partitions the artefacts by company set and emits one event per partition (for example `source.refreshed` per company, and a cascaded proposal whose companies are not all in the rejected proposal's set gets its own `proposal.rejected`), so a one-company reader never loses an event about something it can read.
+
+    Transport: the outbox row stores `visibility`, `company_ids` and, for `audit.appended` only, `domain_key`; the relay copies them into the NATS headers `Ontaix-Visibility`, `Ontaix-Company-Ids` and `Ontaix-Domain-Key` (trait `Audience`), and the WebSocket hub filters on them without re-deriving them and forwards `companyIds` in the `Envelope`.
+
+    Payloads carry the full new state of the affected artefacts, not a diff. Bulk operations (approve-all, finalise-all, companies-may-interact disable) set `bulk: true` so the Studio softens the flash and skips the toast.
+  license:
+    name: Proprietary
+defaultContentType: application/json
+
+servers:
+  nats:
+    host: nats.ontaix.svc.cluster.local:4222
+    protocol: nats
+    description: In-cluster NATS JetStream, stream `ONTAIX`, subjects `ontaix.>`.
+  studio-websocket:
+    host: localhost:8000
+    pathname: /api/v1/ws
+    protocol: ws
+    description: Studio live-update channel. Authentication is a one-time ticket minted by `POST /api/v1/ws/ticket` and passed as the `ticket` query parameter; a bearer token is never accepted in the URL. The `since` query parameter resumes from a sequence.
+
+channels:
+  proposalCreated:
+    address: ontaix.{tenantId}.proposal.created
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      proposalCreated:
+        $ref: '#/components/messages/ProposalCreated'
+  proposalHalfApproved:
+    address: ontaix.{tenantId}.proposal.half_approved
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      proposalHalfApproved:
+        $ref: '#/components/messages/ProposalHalfApproved'
+  proposalApproved:
+    address: ontaix.{tenantId}.proposal.approved
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      proposalApproved:
+        $ref: '#/components/messages/ProposalApproved'
+  proposalRejected:
+    address: ontaix.{tenantId}.proposal.rejected
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      proposalRejected:
+        $ref: '#/components/messages/ProposalRejected'
+  proposalFinalised:
+    address: ontaix.{tenantId}.proposal.finalised
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      proposalFinalised:
+        $ref: '#/components/messages/ProposalFinalised'
+  conceptBorn:
+    address: ontaix.{tenantId}.concept.born
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      conceptBorn:
+        $ref: '#/components/messages/ConceptBorn'
+  conceptChanged:
+    address: ontaix.{tenantId}.concept.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      conceptChanged:
+        $ref: '#/components/messages/ConceptChanged'
+  conceptDying:
+    address: ontaix.{tenantId}.concept.dying
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      conceptDying:
+        $ref: '#/components/messages/ConceptDying'
+  conceptConflict:
+    address: ontaix.{tenantId}.concept.conflict
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      conceptConflict:
+        $ref: '#/components/messages/ConceptConflict'
+  relationCreated:
+    address: ontaix.{tenantId}.relation.created
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      relationCreated:
+        $ref: '#/components/messages/RelationCreated'
+  relationChanged:
+    address: ontaix.{tenantId}.relation.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      relationChanged:
+        $ref: '#/components/messages/RelationChanged'
+  relationRemoved:
+    address: ontaix.{tenantId}.relation.removed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      relationRemoved:
+        $ref: '#/components/messages/RelationRemoved'
+  sourceCreated:
+    address: ontaix.{tenantId}.source.created
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      sourceCreated:
+        $ref: '#/components/messages/SourceCreated'
+  sourceChanged:
+    address: ontaix.{tenantId}.source.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      sourceChanged:
+        $ref: '#/components/messages/SourceChanged'
+  sourceRemoved:
+    address: ontaix.{tenantId}.source.removed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      sourceRemoved:
+        $ref: '#/components/messages/SourceRemoved'
+  sourcesRefreshed:
+    address: ontaix.{tenantId}.source.refreshed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      sourcesRefreshed:
+        $ref: '#/components/messages/SourcesRefreshed'
+  bindingCreated:
+    address: ontaix.{tenantId}.binding.created
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      bindingCreated:
+        $ref: '#/components/messages/BindingCreated'
+  bindingChanged:
+    address: ontaix.{tenantId}.binding.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      bindingChanged:
+        $ref: '#/components/messages/BindingChanged'
+  bindingRemoved:
+    address: ontaix.{tenantId}.binding.removed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      bindingRemoved:
+        $ref: '#/components/messages/BindingRemoved'
+  attributeChanged:
+    address: ontaix.{tenantId}.attribute.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      attributeChanged:
+        $ref: '#/components/messages/AttributeChanged'
+  domainProductChanged:
+    address: ontaix.{tenantId}.domain_product.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      domainProductChanged:
+        $ref: '#/components/messages/DomainProductChanged'
+  companyCreated:
+    address: ontaix.{tenantId}.company.created
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      companyCreated:
+        $ref: '#/components/messages/CompanyCreated'
+  companyRemoved:
+    address: ontaix.{tenantId}.company.removed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      companyRemoved:
+        $ref: '#/components/messages/CompanyRemoved'
+  settingsChanged:
+    address: ontaix.{tenantId}.settings.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      settingsChanged:
+        $ref: '#/components/messages/SettingsChanged'
+  appearanceChanged:
+    address: ontaix.{tenantId}.appearance.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      appearanceChanged:
+        $ref: '#/components/messages/AppearanceChanged'
+  crossCompanyDisabled:
+    address: ontaix.{tenantId}.settings.cross_company_disabled
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      crossCompanyDisabled:
+        $ref: '#/components/messages/CrossCompanyDisabled'
+  groupChanged:
+    address: ontaix.{tenantId}.group.changed
+    x-ontaix-visibility: group.manage
+    x-ontaix-audience: tenant
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      groupChanged:
+        $ref: '#/components/messages/GroupChanged'
+  agentChanged:
+    address: ontaix.{tenantId}.agent.changed
+    x-ontaix-visibility: agent.manage
+    x-ontaix-audience: tenant
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      agentChanged:
+        $ref: '#/components/messages/AgentChanged'
+  auditAppended:
+    address: ontaix.{tenantId}.audit.appended
+    x-ontaix-visibility: audit.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      auditAppended:
+        $ref: '#/components/messages/AuditAppended'
+  viewStateChanged:
+    address: ontaix.{tenantId}.view_state.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      viewStateChanged:
+        $ref: '#/components/messages/ViewStateChanged'
+  positionsChanged:
+    address: ontaix.{tenantId}.positions.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      positionsChanged:
+        $ref: '#/components/messages/PositionsChanged'
+  demoScenePlayed:
+    address: ontaix.{tenantId}.demo.scene_played
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      demoScenePlayed:
+        $ref: '#/components/messages/DemoScenePlayed'
+  studioStream:
+    address: /api/v1/ws
+    x-ontaix-visibility: model.read
+    description: The WebSocket channel. Every message is an `Envelope` whose `type` names one of the NATS events above, or a `snapshot.required` control message.
+    servers:
+      - $ref: '#/servers/studio-websocket'
+    messages:
+      envelope:
+        $ref: '#/components/messages/Envelope'
+      snapshotRequired:
+        $ref: '#/components/messages/SnapshotRequired'
+
+operations:
+  publishProposalCreated:
+    action: send
+    channel:
+      $ref: '#/channels/proposalCreated'
+  publishProposalHalfApproved:
+    action: send
+    channel:
+      $ref: '#/channels/proposalHalfApproved'
+  publishProposalApproved:
+    action: send
+    channel:
+      $ref: '#/channels/proposalApproved'
+  publishProposalRejected:
+    action: send
+    channel:
+      $ref: '#/channels/proposalRejected'
+  publishProposalFinalised:
+    action: send
+    channel:
+      $ref: '#/channels/proposalFinalised'
+  publishConceptBorn:
+    action: send
+    channel:
+      $ref: '#/channels/conceptBorn'
+  publishConceptChanged:
+    action: send
+    channel:
+      $ref: '#/channels/conceptChanged'
+  publishConceptDying:
+    action: send
+    channel:
+      $ref: '#/channels/conceptDying'
+  publishConceptConflict:
+    action: send
+    channel:
+      $ref: '#/channels/conceptConflict'
+  publishRelationCreated:
+    action: send
+    channel:
+      $ref: '#/channels/relationCreated'
+  publishRelationChanged:
+    action: send
+    channel:
+      $ref: '#/channels/relationChanged'
+  publishRelationRemoved:
+    action: send
+    channel:
+      $ref: '#/channels/relationRemoved'
+  publishSourceCreated:
+    action: send
+    channel:
+      $ref: '#/channels/sourceCreated'
+  publishSourceChanged:
+    action: send
+    channel:
+      $ref: '#/channels/sourceChanged'
+  publishSourceRemoved:
+    action: send
+    channel:
+      $ref: '#/channels/sourceRemoved'
+  publishSourcesRefreshed:
+    action: send
+    channel:
+      $ref: '#/channels/sourcesRefreshed'
+  publishBindingCreated:
+    action: send
+    channel:
+      $ref: '#/channels/bindingCreated'
+  publishBindingChanged:
+    action: send
+    channel:
+      $ref: '#/channels/bindingChanged'
+  publishBindingRemoved:
+    action: send
+    channel:
+      $ref: '#/channels/bindingRemoved'
+  publishAttributeChanged:
+    action: send
+    channel:
+      $ref: '#/channels/attributeChanged'
+  publishDomainProductChanged:
+    action: send
+    channel:
+      $ref: '#/channels/domainProductChanged'
+  publishCompanyCreated:
+    action: send
+    channel:
+      $ref: '#/channels/companyCreated'
+  publishCompanyRemoved:
+    action: send
+    channel:
+      $ref: '#/channels/companyRemoved'
+  publishSettingsChanged:
+    action: send
+    channel:
+      $ref: '#/channels/settingsChanged'
+  publishAppearanceChanged:
+    action: send
+    channel:
+      $ref: '#/channels/appearanceChanged'
+  publishCrossCompanyDisabled:
+    action: send
+    channel:
+      $ref: '#/channels/crossCompanyDisabled'
+  publishGroupChanged:
+    action: send
+    channel:
+      $ref: '#/channels/groupChanged'
+  publishAgentChanged:
+    action: send
+    channel:
+      $ref: '#/channels/agentChanged'
+  publishAuditAppended:
+    action: send
+    channel:
+      $ref: '#/channels/auditAppended'
+  publishViewStateChanged:
+    action: send
+    channel:
+      $ref: '#/channels/viewStateChanged'
+  publishPositionsChanged:
+    action: send
+    channel:
+      $ref: '#/channels/positionsChanged'
+  publishDemoScenePlayed:
+    action: send
+    channel:
+      $ref: '#/channels/demoScenePlayed'
+  studioReceive:
+    action: receive
+    channel:
+      $ref: '#/channels/studioStream'
+    description: The Studio receives every event of its tenant that the user may read, in `sequence` order.
+
+components:
+  parameters:
+    tenantId:
+      description: Tenant UUID.
+
+  messages:
+    Envelope:
+      name: Envelope
+      title: WebSocket envelope
+      summary: One event as delivered to the Studio.
+      payload:
+        $ref: '#/components/schemas/Envelope'
+    SnapshotRequired:
+      name: SnapshotRequired
+      title: Snapshot required
+      summary: The resume gap is too old; reload the scene.
+      payload:
+        type: object
+        required: [type, sequence]
+        properties:
+          type:
+            type: string
+            const: snapshot.required
+          sequence:
+            type: integer
+            description: The current sequence to pass as `since` after reloading.
+    ProposalCreated:
+      name: ProposalCreated
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: proposal.created
+      summary: A proposal was created; its pending artefacts exist.
+      payload:
+        $ref: '#/components/schemas/ProposalEvent'
+    ProposalHalfApproved:
+      name: ProposalHalfApproved
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: proposal.half_approved
+      summary: First of two approvals given on a change.
+      payload:
+        $ref: '#/components/schemas/ProposalEvent'
+    ProposalApproved:
+      name: ProposalApproved
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: proposal.approved
+      summary: A proposal was approved and applied; the domain revision may have moved.
+      payload:
+        $ref: '#/components/schemas/ProposalEvent'
+    ProposalRejected:
+      name: ProposalRejected
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: proposal.rejected
+      summary: A proposal was rejected; `cascaded` lists proposals rejected with it whose companies are all in this event's `companyIds`. Every other cascaded proposal is announced by its own `proposal.rejected` event with its own audience.
+      payload:
+        $ref: '#/components/schemas/ProposalEvent'
+    ProposalFinalised:
+      name: ProposalFinalised
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: proposal.finalised
+      summary: Finalise-all or approve-all completed; summary counts for the caption. Tenant-wide audience; the payload carries counts only and `caption` names no company or label.
+      payload:
+        type: object
+        required: [approved, rejected, rounds, remaining, companies, concepts, bound, equivalences]
+        properties:
+          approved:
+            type: integer
+          rejected:
+            type: integer
+          rounds:
+            type: integer
+          remaining:
+            type: integer
+          companies:
+            type: integer
+          concepts:
+            type: integer
+          bound:
+            type: integer
+          equivalences:
+            type: integer
+          caption:
+            type: string
+    ConceptBorn:
+      name: ConceptBorn
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: concept.born
+      summary: A pending cell was born by division from its parent; the client animates the division.
+      payload:
+        type: object
+        required: [concept, birthRelation]
+        properties:
+          concept:
+            $ref: '#/components/schemas/Concept'
+          birthRelation:
+            oneOf:
+              - $ref: '#/components/schemas/Relation'
+              - type: 'null'
+          proposalId:
+            type: string
+            format: uuid
+    ConceptChanged:
+      name: ConceptChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: concept.changed
+      summary: Label, sub, pending, colour, rule or conflict flag of a concept changed.
+      payload:
+        type: object
+        required: [concept, fields]
+        properties:
+          concept:
+            $ref: '#/components/schemas/Concept'
+          fields:
+            type: array
+            items:
+              type: string
+          proposalId:
+            type: string
+            format: uuid
+    ConceptDying:
+      name: ConceptDying
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: concept.dying
+      summary: A concept and its descendants are being removed; the client fades them red over 0.7 s.
+      payload:
+        type: object
+        required: [conceptIds, relationIds, bindingIds]
+        properties:
+          conceptIds:
+            type: array
+            items:
+              type: string
+              format: uuid
+          relationIds:
+            type: array
+            items:
+              type: string
+              format: uuid
+          bindingIds:
+            type: array
+            items:
+              type: string
+              format: uuid
+          proposalId:
+            type: string
+            format: uuid
+    ConceptConflict:
+      name: ConceptConflict
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: concept.conflict
+      summary: Two approved definitions share one name; both cells are flagged and a clash relation exists.
+      payload:
+        type: object
+        required: [concepts, clash, caption]
+        properties:
+          concepts:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              $ref: '#/components/schemas/Concept'
+          clash:
+            $ref: '#/components/schemas/Relation'
+          caption:
+            type: string
+    RelationCreated:
+      name: RelationCreated
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: relation.created
+      summary: A relation exists (pending unless it is a clash).
+      payload:
+        type: object
+        required: [relation]
+        properties:
+          relation:
+            $ref: '#/components/schemas/Relation'
+          proposalId:
+            type: string
+            format: uuid
+    RelationChanged:
+      name: RelationChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: relation.changed
+      summary: Pending cleared, label rewritten or direction swapped.
+      payload:
+        type: object
+        required: [relation, fields]
+        properties:
+          relation:
+            $ref: '#/components/schemas/Relation'
+          fields:
+            type: array
+            items:
+              type: string
+          proposalId:
+            type: string
+            format: uuid
+    RelationRemoved:
+      name: RelationRemoved
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: relation.removed
+      summary: A relation is leaving; `dying` says whether to fade (0.7 s) or splice at once.
+      payload:
+        type: object
+        required: [relationId, dying]
+        properties:
+          relationId:
+            type: string
+            format: uuid
+          dying:
+            type: boolean
+          proposalId:
+            type: string
+            format: uuid
+    SourceCreated:
+      name: SourceCreated
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: source.created
+      summary: A pending source appears outside the domain ring.
+      payload:
+        type: object
+        required: [source]
+        properties:
+          source:
+            $ref: '#/components/schemas/Source'
+          proposalId:
+            type: string
+            format: uuid
+    SourceChanged:
+      name: SourceChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: source.changed
+      summary: Pending cleared, enabled or disabled, or reconfigured.
+      payload:
+        type: object
+        required: [source, fields]
+        properties:
+          source:
+            $ref: '#/components/schemas/Source'
+          fields:
+            type: array
+            items:
+              type: string
+    SourceRemoved:
+      name: SourceRemoved
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: source.removed
+      summary: A source and its bindings are removed.
+      payload:
+        type: object
+        required: [sourceId, bindingIds]
+        properties:
+          sourceId:
+            type: string
+            format: uuid
+          bindingIds:
+            type: array
+            items:
+              type: string
+              format: uuid
+          proposalId:
+            type: string
+            format: uuid
+    SourcesRefreshed:
+      name: SourcesRefreshed
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: source.refreshed
+      summary: Refresh-all completed; freshness of listed bindings is `just now`. One event per company, listing that company's bindings only.
+      payload:
+        type: object
+        required: [bindings]
+        properties:
+          bindings:
+            type: array
+            items:
+              $ref: '#/components/schemas/Binding'
+    BindingCreated:
+      name: BindingCreated
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: binding.created
+      summary: A pending bind link from a source to a concept.
+      payload:
+        type: object
+        required: [binding]
+        properties:
+          binding:
+            $ref: '#/components/schemas/Binding'
+          proposalId:
+            type: string
+            format: uuid
+    BindingChanged:
+      name: BindingChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: binding.changed
+      summary: Pending cleared with records and freshness set, or freshness changed.
+      payload:
+        type: object
+        required: [binding, attributes]
+        properties:
+          binding:
+            $ref: '#/components/schemas/Binding'
+          attributes:
+            type: array
+            description: Attributes written as approved on binding approval.
+            items:
+              $ref: '#/components/schemas/Attribute'
+          proposalId:
+            type: string
+            format: uuid
+    BindingRemoved:
+      name: BindingRemoved
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: binding.removed
+      summary: A binding was removed (unbind, source removal or rejection); attributes stay.
+      payload:
+        type: object
+        required: [bindingId, conceptId]
+        properties:
+          bindingId:
+            type: string
+            format: uuid
+          conceptId:
+            type: string
+            format: uuid
+          proposalId:
+            type: string
+            format: uuid
+    AttributeChanged:
+      name: AttributeChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: attribute.changed
+      summary: An attribute was proposed, approved or removed.
+      payload:
+        type: object
+        required: [conceptId, attribute, removed]
+        properties:
+          conceptId:
+            type: string
+            format: uuid
+          attribute:
+            $ref: '#/components/schemas/Attribute'
+          removed:
+            type: boolean
+          proposalId:
+            type: string
+            format: uuid
+    DomainProductChanged:
+      name: DomainProductChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: domain_product.changed
+      summary: Revision incremented or visibility changed.
+      payload:
+        type: object
+        required: [domainProduct, fields]
+        properties:
+          domainProduct:
+            $ref: '#/components/schemas/DomainProduct'
+          fields:
+            type: array
+            items:
+              type: string
+    CompanyCreated:
+      name: CompanyCreated
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: company.created
+      summary: A company with its nine domain products and root cell was added.
+      payload:
+        type: object
+        required: [company, root]
+        properties:
+          company:
+            $ref: '#/components/schemas/Company'
+          root:
+            $ref: '#/components/schemas/Concept'
+    CompanyRemoved:
+      name: CompanyRemoved
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: company.removed
+      summary: A company is leaving; every cell of it is dying.
+      payload:
+        type: object
+        required: [companyId, conceptIds, sourceIds]
+        properties:
+          companyId:
+            type: string
+            format: uuid
+          conceptIds:
+            type: array
+            items:
+              type: string
+              format: uuid
+          sourceIds:
+            type: array
+            items:
+              type: string
+              format: uuid
+          proposalId:
+            type: string
+            format: uuid
+    SettingsChanged:
+      name: SettingsChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: settings.changed
+      summary: One or more tenant settings changed.
+      payload:
+        type: object
+        required: [settings, changed]
+        properties:
+          settings:
+            type: object
+            additionalProperties: true
+          changed:
+            type: array
+            items:
+              type: string
+    AppearanceChanged:
+      name: AppearanceChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: appearance.changed
+      summary: Theme, domain colours, accent or source colour changed.
+      payload:
+        type: object
+        required: [appearance, changed]
+        properties:
+          appearance:
+            type: object
+            additionalProperties: true
+          changed:
+            type: array
+            items:
+              type: string
+    CrossCompanyDisabled:
+      name: CrossCompanyDisabled
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: settings.cross_company_disabled
+      summary: Companies may no longer interact; the listed relations are dying and the listed proposals rejected. Tenant-wide audience because the payload carries ids only; the relation and proposal states are announced by `relation.removed` and `proposal.rejected` events with their own audience.
+      payload:
+        type: object
+        required: [removedRelationIds, rejectedProposalIds, proposalId]
+        properties:
+          removedRelationIds:
+            type: array
+            items:
+              type: string
+              format: uuid
+          rejectedProposalIds:
+            type: array
+            items:
+              type: string
+              format: uuid
+          proposalId:
+            type: string
+            format: uuid
+    GroupChanged:
+      name: GroupChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: group.changed
+      summary: A group was created, edited, deleted, or its members or roles changed.
+      payload:
+        type: object
+        required: [groupId, change]
+        properties:
+          groupId:
+            type: string
+            format: uuid
+          change:
+            type: string
+            enum: [created, updated, deleted, members, roles]
+          group:
+            type: object
+            additionalProperties: true
+    AgentChanged:
+      name: AgentChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: agent.changed
+      summary: An agent's access flag changed.
+      payload:
+        type: object
+        required: [agentId, access]
+        properties:
+          agentId:
+            type: string
+            format: uuid
+          access:
+            type: boolean
+    AuditAppended:
+      name: AuditAppended
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: audit.appended
+      summary: A row was appended to the audit log. The event's `companyIds` equals the entry's `companyIds`, and its `Ontaix-Domain-Key` header equals the entry's `domainKey` when set.
+      payload:
+        $ref: '#/components/schemas/AuditEntry'
+    ViewStateChanged:
+      name: ViewStateChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: view_state.changed
+      summary: Coverage flag or scene index changed.
+      payload:
+        type: object
+        required: [coverage, sceneIdx]
+        properties:
+          coverage:
+            type: boolean
+          sceneIdx:
+            type: integer
+    PositionsChanged:
+      name: PositionsChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: positions.changed
+      summary: Stored positions changed after a drag or an Arrange.
+      payload:
+        type: object
+        required: [nodes]
+        properties:
+          nodes:
+            type: array
+            items:
+              type: object
+              required: [id, kind, x, y, pinned]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                kind:
+                  type: string
+                  enum: [concept, source]
+                x:
+                  type: number
+                y:
+                  type: number
+                pinned:
+                  type: boolean
+    DemoScenePlayed:
+      name: DemoScenePlayed
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: demo.scene_played
+      summary: A story scene was played; its proposals were created.
+      payload:
+        type: object
+        required: [sceneIdx, name, proposalIds]
+        properties:
+          sceneIdx:
+            type: integer
+          name:
+            type: string
+          proposalIds:
+            type: array
+            items:
+              type: string
+              format: uuid
+
+  messageTraits:
+    Audience:
+      headers:
+        type: object
+        required: [Ontaix-Visibility, Ontaix-Company-Ids]
+        properties:
+          Ontaix-Visibility:
+            type: string
+            enum: [model.read, audit.read, group.manage, agent.manage]
+            description: The channel's `x-ontaix-visibility`, copied from `outbox.visibility`.
+          Ontaix-Company-Ids:
+            type: string
+            description: Comma-separated company uuids copied from `outbox.company_ids`; an empty string means tenant-wide. A subscriber receives the event only if it holds `Ontaix-Visibility` in a scope containing every listed company, or on the domain scope named by `Ontaix-Domain-Key`.
+          Ontaix-Domain-Key:
+            type: string
+            description: Present only on `audit.appended` events whose entry has a `domainKey`, copied from `outbox.domain_key`. A subscriber holding `audit.read` on the domain scope with this key also receives the event.
+
+  schemas:
+    Envelope:
+      type: object
+      required: [id, type, occurredAt, tenantId, companyIds, sequence, actor, bulk, payload]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Event id from the outbox row; clients de-duplicate on it.
+        type:
+          type: string
+          description: '`<aggregate>.<action>`, for example `proposal.approved`.'
+          enum:
+            - proposal.created
+            - proposal.half_approved
+            - proposal.approved
+            - proposal.rejected
+            - proposal.finalised
+            - concept.born
+            - concept.changed
+            - concept.dying
+            - concept.conflict
+            - relation.created
+            - relation.changed
+            - relation.removed
+            - source.created
+            - source.changed
+            - source.removed
+            - source.refreshed
+            - binding.created
+            - binding.changed
+            - binding.removed
+            - attribute.changed
+            - domain_product.changed
+            - company.created
+            - company.removed
+            - settings.changed
+            - appearance.changed
+            - settings.cross_company_disabled
+            - group.changed
+            - agent.changed
+            - audit.appended
+            - view_state.changed
+            - positions.changed
+            - demo.scene_played
+        occurredAt:
+          type: string
+          format: date-time
+        tenantId:
+          type: string
+          format: uuid
+        companyIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+          description: The event's audience, copied from `outbox.company_ids` - every company whose labels, names or artefact state the payload carries; empty means tenant-wide. The hub delivers the event only to a subscriber holding the channel's `x-ontaix-visibility` in a scope that contains every listed company.
+        sequence:
+          type: integer
+          description: Tenant-wide outbox id; strictly increasing. A subscriber sees gaps where events were filtered out for it; a gap alone never means events were lost.
+        actor:
+          $ref: '#/components/schemas/Actor'
+        bulk:
+          type: boolean
+        payload:
+          type: object
+          additionalProperties: true
+
+    Actor:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [user, agent, system]
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    ProposalEvent:
+      type: object
+      required: [proposal, artefacts, cascaded]
+      properties:
+        proposal:
+          $ref: '#/components/schemas/Proposal'
+        artefacts:
+          type: object
+          description: Current state of everything the proposal created or changed.
+          properties:
+            concepts:
+              type: array
+              items:
+                $ref: '#/components/schemas/Concept'
+            relations:
+              type: array
+              items:
+                $ref: '#/components/schemas/Relation'
+            sources:
+              type: array
+              items:
+                $ref: '#/components/schemas/Source'
+            bindings:
+              type: array
+              items:
+                $ref: '#/components/schemas/Binding'
+            attributes:
+              type: array
+              items:
+                $ref: '#/components/schemas/Attribute'
+            domainProducts:
+              type: array
+              items:
+                $ref: '#/components/schemas/DomainProduct'
+        cascaded:
+          type: array
+          items:
+            $ref: '#/components/schemas/Proposal'
+        caption:
+          type: string
+
+    Proposal:
+      type: object
+      description: Same shape as `Proposal` in contracts/openapi.yaml.
+      required: [id, type, state, title, color, html, ready]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [concept, spec, relation, source, bind, attr, change]
+        changeKind:
+          type: [string, 'null']
+        state:
+          type: string
+          enum: [pending, half_approved, approved, rejected]
+        title:
+          type: string
+        heading:
+          type: string
+        color:
+          type: string
+        companyId:
+          type: [string, 'null']
+        domainProductId:
+          type: [string, 'null']
+        parentLabel:
+          type: [string, 'null']
+        deps:
+          type: array
+          items:
+            type: string
+        ready:
+          type: boolean
+        waitFor:
+          type: [string, 'null']
+        html:
+          type: string
+          description: Server-generated; every interpolated label is HTML-escaped and only `<b>`, `<i>` and `<span class="...">` may appear. Rendered by the Studio with those tags allow-listed.
+        why:
+          type: [string, 'null']
+        caption:
+          type: [string, 'null']
+        conceptId:
+          type: [string, 'null']
+        relationId:
+          type: [string, 'null']
+        relationIds:
+          type: array
+          items:
+            type: string
+        sourceId:
+          type: [string, 'null']
+        bindingIds:
+          type: array
+          items:
+            type: string
+        attributeId:
+          type: [string, 'null']
+        proposer:
+          $ref: '#/components/schemas/Actor'
+        approvals:
+          type: array
+          items:
+            type: object
+            properties:
+              ordinal:
+                type: integer
+              userId:
+                type: string
+              userName:
+                type: string
+              approvedAt:
+                type: string
+                format: date-time
+        bulk:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        decidedAt:
+          type: [string, 'null']
+
+    Concept:
+      type: object
+      description: Same shape as `Concept` in contracts/openapi.yaml.
+      required: [id, companyId, kind, label, sub, pending, conflict, bornAt, x, y, pinned]
+      properties:
+        id:
+          type: string
+          format: uuid
+        companyId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [root, concept]
+        label:
+          type: string
+        sub:
+          type: string
+        domainProductId:
+          type: [string, 'null']
+        domainKey:
+          type: [string, 'null']
+        color:
+          type: string
+        rule:
+          type: [string, 'null']
+        pending:
+          type: boolean
+        conflict:
+          type: boolean
+        parentId:
+          type: [string, 'null']
+        birthRelationId:
+          type: [string, 'null']
+        bornAt:
+          type: string
+          format: date-time
+        x:
+          type: number
+        y:
+          type: number
+        pinned:
+          type: boolean
+        dyingAt:
+          type: [string, 'null']
+        bound:
+          oneOf:
+            - $ref: '#/components/schemas/Binding'
+            - type: 'null'
+        attributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attribute'
+
+    Relation:
+      type: object
+      description: Same shape as `Relation` in contracts/openapi.yaml.
+      required: [id, aId, bId, kind, label, rest, seed, pending]
+      properties:
+        id:
+          type: string
+          format: uuid
+        aId:
+          type: string
+          format: uuid
+        bId:
+          type: string
+          format: uuid
+        aLabel:
+          type: string
+        bLabel:
+          type: string
+        kind:
+          type: string
+          enum: [rel, isa, same, clash]
+        label:
+          type: string
+        rest:
+          type: number
+        seed:
+          type: number
+        pending:
+          type: boolean
+        dyingAt:
+          type: [string, 'null']
+        companyIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    Source:
+      type: object
+      description: Same shape as `Source` in contracts/openapi.yaml.
+      required: [id, kind, companyId, label, kindText, anchorIndex, disabled, pending, x, y, pinned]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          const: source
+        companyId:
+          type: string
+          format: uuid
+        label:
+          type: string
+        kindText:
+          type: string
+        connectorCode:
+          type: [string, 'null']
+        host:
+          type: [string, 'null']
+        scope:
+          type: [string, 'null']
+        auth:
+          type: [string, 'null']
+        refresh:
+          type: string
+        anchorIndex:
+          type: integer
+        disabled:
+          type: boolean
+        pending:
+          type: boolean
+        x:
+          type: number
+        y:
+          type: number
+        pinned:
+          type: boolean
+        dyingAt:
+          type: [string, 'null']
+        feeds:
+          type: integer
+        records:
+          type: [integer, 'null']
+        state:
+          type: string
+
+    Binding:
+      type: object
+      description: Same shape as `Binding` in contracts/openapi.yaml.
+      required: [id, kind, sourceId, sourceLabel, conceptId, records, fresh, pending]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          const: bind
+        seed:
+          type: [number, 'null']
+          minimum: 0
+          exclusiveMaximum: 1
+        sourceId:
+          type: string
+          format: uuid
+        sourceLabel:
+          type: string
+        conceptId:
+          type: string
+          format: uuid
+        records:
+          type: integer
+        fresh:
+          type: string
+        pending:
+          type: boolean
+
+    Attribute:
+      type: object
+      description: Same shape as `Attribute` in contracts/openapi.yaml.
+      required: [id, conceptId, name, type, col, fill, state]
+      properties:
+        id:
+          type: string
+          format: uuid
+        conceptId:
+          type: string
+          format: uuid
+        sourceId:
+          type: [string, 'null']
+        name:
+          type: string
+        type:
+          type: string
+          enum: [id, text, number, ref, date]
+        col:
+          type: string
+        fill:
+          type: integer
+        state:
+          type: string
+          enum: [proposed, approved]
+
+    DomainProduct:
+      type: object
+      description: Same shape as `DomainProduct` in contracts/openapi.yaml.
+      required: [id, companyId, key, name, owner, color, revision, version, hidden]
+      properties:
+        id:
+          type: string
+          format: uuid
+        companyId:
+          type: string
+          format: uuid
+        key:
+          type: string
+        name:
+          type: string
+        owner:
+          type: string
+        color:
+          type: string
+        revision:
+          type: integer
+        version:
+          type: string
+        hidden:
+          type: boolean
+
+    Company:
+      type: object
+      description: Same shape as `Company` in contracts/openapi.yaml.
+      required: [id, key, name, sub, position, isHome, rootId, domainProducts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        name:
+          type: string
+        sub:
+          type: string
+        position:
+          type: integer
+        isHome:
+          type: boolean
+        rootId:
+          type: string
+          format: uuid
+        domainProducts:
+          type: array
+          items:
+            $ref: '#/components/schemas/DomainProduct'
+
+    AuditEntry:
+      type: object
+      description: Same shape as `AuditEntry` in contracts/openapi.yaml.
+      required: [id, at, actor, kind, what, ok, companyIds]
+      properties:
+        id:
+          type: integer
+        at:
+          type: string
+          format: date-time
+        actor:
+          $ref: '#/components/schemas/Actor'
+        kind:
+          type: string
+        what:
+          type: string
+        ok:
+          type: boolean
+        proposalId:
+          type: [string, 'null']
+        companyIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+          description: Every company the entry names; empty means tenant-wide. The read rule is on `AuditEntry` in contracts/openapi.yaml.
+        domainKey:
+          type: [string, 'null']
+          description: Template key of the domain product of the proposal the entry records, or null. The read rule is on `AuditEntry` in contracts/openapi.yaml.

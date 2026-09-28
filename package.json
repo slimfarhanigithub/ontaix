@@ -8,6 +8,7 @@
   "scripts": {
     "lint": "pnpm -r --if-present run lint",
     "test": "pnpm -r --if-present run test",
-    "build": "pnpm -r --if-present run build"
+    "build": "pnpm -r --if-present run build",
+    "dev:stack": "node scripts/dev-stack.mjs"
   }
 }

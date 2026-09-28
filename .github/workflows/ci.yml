@@ -3,6 +3,8 @@ name: ci
 # Application checks for every pull request and every push to main.
 #   Python packages (api, gateway, connectors): uv sync, ruff, pytest
 #   Studio: pnpm install, vitest, vite build
+#   Screens: Playwright screenshot regression of the Studio against the reference
+#   E2E: the Studio against the real API on the local stack (postgres:16 service)
 # Infrastructure has its own workflow (infra.yml).
 
 on:
@@ -28,6 +30,21 @@ jobs:
     defaults:
       run:
         working-directory: ${{ matrix.package }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ontaix
+          POSTGRES_PASSWORD: ontaix
+          POSTGRES_DB: ontaix_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ontaix -d ontaix_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ONTAIX_TEST_DATABASE_URL: postgresql://ontaix:ontaix@localhost:5432/ontaix_test
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
@@ -61,3 +78,78 @@ jobs:
         run: pnpm --filter studio test
       - name: build
         run: pnpm --filter studio build
+
+  screens:
+    name: apps/studio screenshots
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+      - name: playwright chromium
+        working-directory: apps/studio
+        run: pnpm exec playwright install --with-deps chromium
+      - name: test:screens
+        run: pnpm --filter studio test:screens
+      - name: upload diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: tests/screenshots/output/
+          retention-days: 7
+
+  e2e:
+    name: e2e (Studio against the API)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ontaix
+          POSTGRES_PASSWORD: ontaix
+          POSTGRES_DB: ontaix_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ontaix -d ontaix_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # scripts/dev-stack.mjs uses this database instead of the embedded one.
+      ONTAIX_DATABASE_URL: postgresql://ontaix:ontaix@localhost:5432/ontaix_e2e
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+      - name: uv sync
+        working-directory: apps/api
+        run: uv sync --frozen
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+      - name: playwright chromium
+        working-directory: apps/studio
+        run: pnpm exec playwright install --with-deps chromium
+      - name: test:e2e
+        run: pnpm --filter studio test:e2e
+      - name: upload output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e
+          path: tests/e2e/output/
+          retention-days: 7

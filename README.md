@@ -63,6 +63,19 @@ cd apps/gateway && uv sync && uv run uvicorn app.main:app --reload --port 8100
 cd packages/connectors && uv sync && uv run pytest
 ```
 
+### Studio Against the Real API
+
+`pnpm dev:stack` (from the repository root, after `pnpm install`; it runs `uv sync` in `apps/api` when the virtualenv is missing) starts the whole stack without Docker:
+
+1. an embedded PostgreSQL 16 from the api's `pgserver` dev dependency, in a temporary directory deleted on exit (set `ONTAIX_DATABASE_URL` to use another server instead);
+2. `python -m app.seed`: migrations, then the demo tenant with Northwind Industries and Aurora Valves;
+3. the API under uvicorn on http://127.0.0.1:8000 with `ONTAIX_ENVIRONMENT=dev` (selector event loop on Windows);
+4. the Studio's Vite dev server on http://localhost:5173 with `VITE_ONTAIX_API_URL=/api/v1`, proxying `/api` to the API.
+
+In this dev build the Studio identifies itself with `X-Ontaix-User`: `VITE_ONTAIX_DEV_USER`, else the seed's Builder (`sam.okafor@northwind.com`), who can teach and propose; `?user=<email>` switches user per tab, for example the Governor (`hugo.brandt@northwind.com`) to approve. Production builds send no such header. Ports come from `ONTAIX_API_PORT` and `ONTAIX_STUDIO_PORT`; Ctrl+C stops everything, the database included.
+
+`pnpm --filter studio test:e2e` boots the same stack on ports 8788 and 5788, checks both companies and their concept counts, teaches and approves one concept, and writes `tests/e2e/output/studio-both-companies.png`.
+
 Each Python package runs `uv run pytest` and `uv run ruff check`; the root `pnpm lint`, `pnpm test` and `pnpm build` cover every workspace package.
 
 Full stack with Docker: copy `deploy/compose/.env.example` to `deploy/compose/.env`, then `docker compose -f deploy/compose/compose.yaml up --build`. Secrets live only in ignored `.env` files and Azure Key Vault.
