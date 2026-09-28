@@ -486,15 +486,19 @@ CREATE TABLE audit_entry (
   ok              boolean NOT NULL,
   proposal_id     uuid,
   company_ids     uuid[] NOT NULL DEFAULT '{}',
+  domain_key      text REFERENCES domain_template(key),
   CHECK (array_position(company_ids, NULL) IS NULL)
 );
 CREATE INDEX audit_entry_by_tenant_time ON audit_entry (tenant_id, at DESC);
 CREATE INDEX audit_entry_by_company_ids ON audit_entry USING gin (company_ids);
+CREATE INDEX audit_entry_by_domain_key ON audit_entry (tenant_id, domain_key, at DESC) WHERE domain_key IS NOT NULL;
 COMMENT ON TABLE audit_entry IS 'Append-only log of every approval, rejection, setting change and connection; actor and proposal ids are plain columns without foreign keys so deletions elsewhere never touch the log; update, delete and truncate are refused by trigger and the application role holds INSERT and SELECT only.';
-COMMENT ON COLUMN audit_entry.company_ids IS 'Audience: every company whose name, labels or artefacts the entry mentions (both companies of a cross-company proposal, the added company of a company entry, the company of a role scope). Empty means tenant-wide. A reader sees the entry only if it holds audit.read in a scope containing every listed company; an empty list needs audit.read at any scope. Checked against the tenant''s companies on insert; no foreign key, so a later company deletion never touches the log.';
+COMMENT ON COLUMN audit_entry.company_ids IS 'Audience: every company whose name, labels or artefacts the entry mentions (both companies of a cross-company proposal, the added company of a company entry, the company of a role scope). Empty means tenant-wide. A reader sees the entry if it holds audit.read in a scope containing every listed company, or on the domain scope named by domain_key; an empty list needs audit.read at any scope. Checked against the tenant''s companies on insert; no foreign key, so a later company deletion never touches the log.';
 
 CREATE FUNCTION audit_entry_is_append_only() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql
+SET search_path = ontaix, pg_catalog, pg_temp
+AS $$
 BEGIN
   RAISE EXCEPTION 'audit_entry is append-only';
 END;
@@ -517,31 +521,37 @@ CREATE TABLE outbox (
   subject       text NOT NULL,
   visibility    text NOT NULL CHECK (visibility IN ('model.read', 'audit.read', 'group.manage', 'agent.manage')),
   company_ids   uuid[] NOT NULL DEFAULT '{}',
+  domain_key    text REFERENCES domain_template(key),
   actor_kind    actor_kind NOT NULL,
   actor_id      uuid,
   bulk          boolean NOT NULL DEFAULT false,
   payload       jsonb NOT NULL,
   created_at    timestamptz NOT NULL DEFAULT now(),
   published_at  timestamptz,
-  CHECK (array_position(company_ids, NULL) IS NULL)
+  CHECK (array_position(company_ids, NULL) IS NULL),
+  CONSTRAINT outbox_domain_key_only_for_audit CHECK (domain_key IS NULL OR visibility = 'audit.read')
 );
 CREATE INDEX outbox_unpublished ON outbox (id) WHERE published_at IS NULL;
 CREATE INDEX outbox_by_tenant_sequence ON outbox (tenant_id, id);
 COMMENT ON TABLE outbox IS 'Events written in the same transaction as the state change they describe, with the permission and the company audience that make each visible; the relay publishes them to NATS in id order.';
 COMMENT ON COLUMN outbox.company_ids IS 'Audience: every company whose labels, names or artefact state the payload carries (bare ids do not count). Empty means tenant-wide. A subscriber receives the event only if it holds the visibility permission in a scope containing every listed company; an empty list needs the permission at any scope. Checked against the tenant''s companies on insert.';
+COMMENT ON COLUMN outbox.domain_key IS 'Set only on audit.appended events, equal to the entry''s audit_entry.domain_key; a holder of audit.read on the domain scope with this key also receives the event.';
 
 CREATE FUNCTION company_ids_belong_to_tenant() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql
+SET search_path = ontaix, pg_catalog, pg_temp
+AS $$
 BEGIN
   IF EXISTS (
     SELECT 1 FROM unnest(NEW.company_ids) AS listed(id)
-    WHERE NOT EXISTS (SELECT 1 FROM company c WHERE c.tenant_id = NEW.tenant_id AND c.id = listed.id)
+    WHERE NOT EXISTS (SELECT 1 FROM ontaix.company c WHERE c.tenant_id = NEW.tenant_id AND c.id = listed.id)
   ) THEN
     RAISE EXCEPTION '%.company_ids names a company outside tenant %', TG_TABLE_NAME, NEW.tenant_id;
   END IF;
   RETURN NEW;
 END;
 $$;
+COMMENT ON COLUMN audit_entry.domain_key IS 'The template key of the domain product of the proposal the entry records, when that proposal has one; null for every other entry. A holder of audit.read on the domain scope with this key reads the entry whatever its company_ids, because that scope covers the domain product in every company and matches the proposals it may decide.';
 COMMENT ON FUNCTION company_ids_belong_to_tenant() IS 'Composite tenant safety for company_ids arrays, which cannot carry a foreign key: every listed company must exist in the row''s tenant when the row is inserted. A removed company is marked dying before its row is deleted, so its removal events and audit entries still pass.';
 
 CREATE TRIGGER outbox_company_ids_in_tenant

@@ -41,10 +41,10 @@ Roles and what they allow:
 |---|---|---|
 | Owner | company, domain | read; propose in scope; approve, second-approve and reject proposals in scope |
 | Builder | tenant, company, domain | read; propose in scope; bind and connect sources; never approve |
-| Governor | tenant, company | read; approve, second-approve and reject `change` proposals in scope; resolve conflicts; finalise-all at tenant scope |
+| Governor | tenant, company, domain | read; approve, second-approve and reject `change` proposals in scope; resolve conflicts; finalise-all at tenant scope |
 | Member | tenant, company | read; teach when `everyoneTeaches` is on (proposes) |
 | Administrator | tenant only | tenant settings, appearance, sources, companies, groups, roles, agents, cost, demo controls |
-| Auditor | tenant, company | read the model, the directory and the audit log; time-boxed by `valid_until` on the group |
+| Auditor | tenant, company, domain | read the model, the directory and the audit log; time-boxed by `valid_until` on the group |
 | Agent | own row | read the certified model through the gateway; propose in its own scope |
 
 Permissions are a fixed vocabulary. Every operation in `contracts/openapi.yaml` declares the one it needs as `x-ontaix-permission`, and every channel in `contracts/events.yaml` declares the one that makes its events visible as `x-ontaix-visibility`, so QA contract tests assert both.
@@ -70,7 +70,7 @@ Permission check points, each enforced in the router layer and returning `403 fo
 3. `proposal.second_approve` requires Governor or Owner in scope and a different user from the first approver.
 4. `proposal.reject` follows the same rule as approve.
 5. `settings.write`, `appearance.write`, `company.create`, `source.manage`, `group.manage`, `agent.manage` require Administrator at tenant scope. Connector discovery runs under `source.manage`: it opens outbound connections and is refused for every other role, including Agent.
-6. `audit.read` requires Administrator, Governor or Auditor. An audit entry is readable only when the caller holds `audit.read` in a scope containing every company in the entry's `companyIds`; an entry with an empty list is tenant-wide and needs `audit.read` at any scope.
+6. `audit.read` requires Administrator, Governor or Auditor. An audit entry is readable when the caller holds `audit.read` in a scope containing every company in the entry's `companyIds`, or on the domain scope named by the entry's `domainKey`; an entry with an empty list is tenant-wide and needs `audit.read` at any scope. `domainKey` is the template key of the domain product of the proposal the entry records, and null for every other entry, so a domain-scoped Governor or Auditor reads the decisions on proposals of its family in every company (the proposals a domain-scoped Governor may decide under check points 2 to 4) and the tenant-wide entries, never company additions, role changes or other company-level entries. `audit.appended` carries the same key in the `Ontaix-Domain-Key` header.
 7. `model.read` requires any role in scope; the scene snapshot, the lists and the WebSocket return only the companies the caller can read. Anything spanning several companies (a cross-company relation, a proposal touching two companies, their events) is returned only when the caller can read every one of them.
 8. Locked settings (`approvalRequired`, `readOnlyConnectors`) reject every write with `409 locked_setting`, whatever the role.
 9. Bulk decisions act only on proposals the caller may decide under check points 2 to 4. `approve-all` approves every ready proposal in the caller's scope and skips the rest; `reject-all` rejects every open proposal in the caller's scope and skips the rest; skipped proposals are counted in `remaining`. A scoped Owner can never approve another company's, another domain's or a cross-company proposal through a bulk call.

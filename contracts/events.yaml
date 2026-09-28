@@ -13,7 +13,7 @@ info:
 
     Audience values: `companies` - the writer fills `companyIds` from the artefacts in the payload; `tenant` - `companyIds` is always empty and the payload carries no company-specific labels. On a `companies` channel an event never mixes artefacts with different company sets: the writer partitions the artefacts by company set and emits one event per partition (for example `source.refreshed` per company, and a cascaded proposal whose companies are not all in the rejected proposal's set gets its own `proposal.rejected`), so a one-company reader never loses an event about something it can read.
 
-    Transport: the outbox row stores `visibility` and `company_ids`; the relay copies them into the NATS headers `Ontaix-Visibility` and `Ontaix-Company-Ids` (trait `Audience`), and the WebSocket hub filters on them without re-deriving them and forwards `companyIds` in the `Envelope`.
+    Transport: the outbox row stores `visibility`, `company_ids` and, for `audit.appended` only, `domain_key`; the relay copies them into the NATS headers `Ontaix-Visibility`, `Ontaix-Company-Ids` and `Ontaix-Domain-Key` (trait `Audience`), and the WebSocket hub filters on them without re-deriving them and forwards `companyIds` in the `Envelope`.
 
     Payloads carry the full new state of the affected artefacts, not a diff. Bulk operations (approve-all, finalise-all, companies-may-interact disable) set `bulk: true` so the Studio softens the flash and skips the toast.
   license:
@@ -1015,7 +1015,7 @@ components:
       traits:
         - $ref: '#/components/messageTraits/Audience'
       title: audit.appended
-      summary: A row was appended to the audit log. The event's `companyIds` equals the entry's `companyIds`.
+      summary: A row was appended to the audit log. The event's `companyIds` equals the entry's `companyIds`, and its `Ontaix-Domain-Key` header equals the entry's `domainKey` when set.
       payload:
         $ref: '#/components/schemas/AuditEntry'
     ViewStateChanged:
@@ -1092,7 +1092,10 @@ components:
             description: The channel's `x-ontaix-visibility`, copied from `outbox.visibility`.
           Ontaix-Company-Ids:
             type: string
-            description: Comma-separated company uuids copied from `outbox.company_ids`; an empty string means tenant-wide. A subscriber receives the event only if it holds `Ontaix-Visibility` in a scope containing every listed company.
+            description: Comma-separated company uuids copied from `outbox.company_ids`; an empty string means tenant-wide. A subscriber receives the event only if it holds `Ontaix-Visibility` in a scope containing every listed company, or on the domain scope named by `Ontaix-Domain-Key`.
+          Ontaix-Domain-Key:
+            type: string
+            description: Present only on `audit.appended` events whose entry has a `domainKey`, copied from `outbox.domain_key`. A subscriber holding `audit.read` on the domain scope with this key also receives the event.
 
   schemas:
     Envelope:
@@ -1575,3 +1578,6 @@ components:
             type: string
             format: uuid
           description: Every company the entry names; empty means tenant-wide. The read rule is on `AuditEntry` in contracts/openapi.yaml.
+        domainKey:
+          type: [string, 'null']
+          description: Template key of the domain product of the proposal the entry records, or null. The read rule is on `AuditEntry` in contracts/openapi.yaml.
