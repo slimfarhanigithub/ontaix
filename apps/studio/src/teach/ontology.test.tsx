@@ -2,8 +2,7 @@ import { fireEvent, render } from '@testing-library/react';
 
 import { api } from '../api/client';
 import { ApiError, type OntologyImportResult, type Proposal } from '../api/types';
-import { Dialog } from '../shell/Dialog';
-import { importChosenFile, openImportDialog } from '../shell/ImportDialog';
+import { ImportModeRows, importFile } from '../shell/ImportMode';
 import { store } from '../store/store';
 import * as teachModule from './teach';
 import { browserLanguages, importOntology } from './ontology';
@@ -37,7 +36,6 @@ describe('ontology import', () => {
   });
   afterEach(() => {
     store.s.activeCompany = before;
-    store.ui.dialogs = [];
     vi.restoreAllMocks();
   });
 
@@ -78,35 +76,29 @@ describe('ontology import', () => {
   });
 });
 
-describe('the import dialog', () => {
-  afterEach(() => {
-    store.ui.dialogs = [];
-    vi.restoreAllMocks();
-  });
+describe('#imMode', () => {
+  afterEach(() => vi.restoreAllMocks());
 
-  it('offers sentence by sentence and ontology in #imMode, then reads the picked file that way', () => {
+  it('offers sentence by sentence and ontology, and reads a file with the checked mode', () => {
     vi.spyOn(store, 'refreshProposals').mockResolvedValue();
     const imports = vi.spyOn(teachModule, 'importDocument').mockResolvedValue();
     const mapping = vi.spyOn(api, 'importOntology').mockResolvedValue({ ...mapped, drafts: [], notes: [] });
-    const picker = vi.fn();
-    openImportDialog(picker);
-    const { container, rerender } = render(<Dialog />);
-    rerender(<Dialog />);
+    const { container } = render(<ImportModeRows />);
 
     const rows = container.querySelectorAll('#imMode .chk');
     expect([...rows].map((r) => r.querySelector('b')?.textContent)).toEqual(['Sentence by sentence', 'Ontology']);
-    expect((container.querySelector('#imMode input:checked') as HTMLInputElement).value).toBe('sentence');
-    fireEvent.click(container.querySelector('#imMode input[value=ontology]') as Element);
-    fireEvent.click(container.querySelector('.df .btn.primary') as Element);
-    expect(picker).toHaveBeenCalledTimes(1);
+    expect((container.querySelector('#imMode input:checked') as HTMLInputElement).value).toBe('sentences');
+    importFile(new File(['x'], 'notes.txt'));
+    expect(imports).toHaveBeenCalledTimes(1);
 
     const before = store.s.activeCompany;
     store.s.activeCompany = { sid: 'company-a' } as typeof before;
     try {
-      importChosenFile(new File(['x'], 'tree.csv'));
-      importChosenFile(new File(['x'], 'notes.txt'));
+      fireEvent.click(container.querySelector('#imMode input[value=ontology]') as Element);
+      importFile(new File(['x'], 'tree.csv'));
     } finally {
       store.s.activeCompany = before;
+      fireEvent.click(container.querySelector('#imMode input[value=sentences]') as Element);
     }
     expect(mapping).toHaveBeenCalledTimes(1);
     expect(imports).toHaveBeenCalledTimes(1);
