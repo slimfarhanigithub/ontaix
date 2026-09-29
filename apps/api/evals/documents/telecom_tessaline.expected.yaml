@@ -1,0 +1,200 @@
+# Gold tree for telecom_tessaline.md. Reviewed twice against the document.
+company: Tessaline Telecom
+description: Telecom operations process framework (fulfilment, assurance, billing, product catalogue) for a fictional mobile and fibre operator; stresses a layered domain-process-activity-record hierarchy, grouping concepts, is-a facts and cross-domain hand-offs.
+tags: [document, telecom, en, process-framework, operations]
+expected:
+  concepts:
+    - {label: Fulfilment, parent: [Tessaline Telecom], action: [organises, has, runs]}
+    - {label: Assurance, parent: [Tessaline Telecom], action: [organises, has, runs]}
+    - {label: Billing, parent: [Tessaline Telecom], action: [organises, has, runs]}
+    - {label: Product catalogue, parent: [Tessaline Telecom], action: [organises, has, runs]}
+
+    - {label: Order handling, parent: [Fulfilment], action: [consists of, includes, has]}
+    - {label: Service configuration and activation, parent: [Fulfilment], action: [consists of, includes, has]}
+    - {label: Resource provisioning, parent: [Fulfilment], action: [consists of, includes, has]}
+    - {label: Fibre installation, parent: [Fulfilment], action: [consists of, includes, has]}
+
+    - {label: Order capture, parent: [Order handling], action: [consists of, includes, has]}
+    - {label: Order decomposition, parent: [Order handling], action: [consists of, includes, has]}
+    - {label: Order tracking, parent: [Order handling], action: [consists of, includes, has]}
+    - {label: Order closure, parent: [Order handling], action: [consists of, includes, has]}
+    - {label: Customer order, parent: [Order capture], action: [produces, creates]}
+    - {label: Order line, parent: [Customer order], action: [contains, has, includes]}
+    - {label: Eligibility check, parent: [Order capture], action: [includes, has, performs]}
+    - {label: Address check, parent: [Eligibility check], action: [consists of, includes, has]}
+    - {label: Credit check, parent: [Eligibility check], action: [consists of, includes, has]}
+    - {label: Service order, parent: [Order decomposition], action: [produces, creates]}
+    - {label: Resource order, parent: [Order decomposition], action: [produces, creates]}
+    - {label: Jeopardy alert, parent: [Order tracking], action: [raises, produces, creates]}
+
+    - {label: Service activation, parent: [Service configuration and activation], action: [consists of, includes, has]}
+    - {label: Service testing, parent: [Service configuration and activation], action: [consists of, includes, has]}
+    - {label: SIM activation, parent: [Service activation], action: [includes, has, consists of]}
+    - {label: Fibre line activation, parent: [Service activation], action: [includes, has, consists of]}
+    - {label: SIM formats, parent: [SIM activation], action: [handles, has, supports]}
+    - {label: ESIM profile, parent: [SIM formats], action: [includes, has]}
+    - {label: Physical SIM card, parent: [SIM formats], action: [includes, has]}
+    - {label: Line profile, parent: [Fibre line activation], action: [applies, uses, sets]}
+    - {label: Activation test report, parent: [Service testing], action: [produces, creates]}
+
+    - {label: Number allocation, parent: [Resource provisioning], action: [consists of, includes, has]}
+    - {label: Port allocation, parent: [Resource provisioning], action: [consists of, includes, has]}
+    - {label: Inventory update, parent: [Resource provisioning], action: [consists of, includes, has]}
+    - {label: Mobile number, parent: [Number allocation], action: [assigns, allocates, produces]}
+    - {label: OLT port, parent: [Port allocation], action: [reserves, allocates]}
+
+    - {label: Appointment scheduling, parent: [Fibre installation], action: [consists of, includes, has]}
+    - {label: Field installation, parent: [Fibre installation], action: [consists of, includes, has]}
+    - {label: Installation acceptance, parent: [Fibre installation], action: [consists of, includes, has]}
+    - {label: Installation appointment, parent: [Appointment scheduling], action: [books, creates, schedules]}
+    - {label: Field technician, parent: [Field installation], action: [requires, uses, involves]}
+    - {label: Installation kit, parent: [Field installation], action: [requires, uses]}
+    - {label: Optical network terminal, parent: [Installation kit], action: [contains, includes, has]}
+    - {label: Drop cable, parent: [Installation kit], action: [contains, includes, has]}
+    - {label: Customer sign-off, parent: [Installation acceptance], action: [requires, needs]}
+
+    - {label: Problem handling, parent: [Assurance], action: [consists of, includes, has]}
+    - {label: Service quality management, parent: [Assurance], action: [consists of, includes, has]}
+    - {label: Resource trouble management, parent: [Assurance], action: [consists of, includes, has]}
+    - {label: SLA management, parent: [Assurance], action: [consists of, includes, has]}
+
+    - {label: Ticket intake, parent: [Problem handling], action: [consists of, includes, has]}
+    - {label: Fault diagnosis, parent: [Problem handling], action: [consists of, includes, has]}
+    - {label: Problem resolution, parent: [Problem handling], action: [consists of, includes, has]}
+    - {label: Problem closure, parent: [Problem handling], action: [consists of, includes, has]}
+    - {label: Support tiers, parent: [Problem handling], action: [has, includes]}
+    - {label: First-line support, parent: [Support tiers], action: [includes, has]}
+    - {label: Second-line support, parent: [Support tiers], action: [includes, has]}
+    - {label: Field support, parent: [Support tiers], action: [includes, has]}
+    - {label: Customer trouble ticket, parent: [Ticket intake], action: [creates, produces, opens]}
+    - {label: Line test, parent: [Fault diagnosis], action: [runs, performs, includes]}
+    - {label: Workaround, parent: [Problem resolution], action: [applies, uses, provides]}
+
+    - {label: Quality monitoring, parent: [Service quality management], action: [consists of, includes, has]}
+    - {label: Quality improvement, parent: [Service quality management], action: [consists of, includes, has]}
+    - {label: Service quality indicator, parent: [Quality monitoring], action: [tracks, monitors, measures]}
+    - {label: Dropped call rate, parent: [Service quality indicator], action: [includes, has]}
+    - {label: Download speed, parent: [Service quality indicator], action: [includes, has]}
+    - {label: Improvement plan, parent: [Quality improvement], action: [produces, creates]}
+
+    - {label: Alarm handling, parent: [Resource trouble management], action: [consists of, includes, has]}
+    - {label: Resource repair, parent: [Resource trouble management], action: [consists of, includes, has]}
+    - {label: Network alarm, parent: [Alarm handling], action: [processes, handles]}
+    - {label: Critical alarm, parent: [Network alarm], action: [is a, is a kind of, is a type of]}
+    - {label: Work order, parent: [Resource repair], action: [issues, produces, creates]}
+
+    - {label: SLA monitoring, parent: [SLA management], action: [consists of, includes, has]}
+    - {label: SLA violation handling, parent: [SLA management], action: [consists of, includes, has]}
+    - {label: SLA reporting, parent: [SLA management], action: [consists of, includes, has]}
+    - {label: Service level agreement, parent: [SLA monitoring], action: [checks, monitors, reads]}
+    - {label: Availability target, parent: [Service level agreement], action: [defines, has, includes]}
+    - {label: Restoration target, parent: [Service level agreement], action: [defines, has, includes]}
+    - {label: Service credit, parent: [SLA violation handling], action: [calculates, produces, creates]}
+
+    - {label: Usage mediation, parent: [Billing], action: [consists of, includes, has]}
+    - {label: Rating, parent: [Billing], action: [consists of, includes, has]}
+    - {label: Bill run, parent: [Billing], action: [consists of, includes, has]}
+    - {label: Payment handling, parent: [Billing], action: [consists of, includes, has]}
+    - {label: Dispute management, parent: [Billing], action: [consists of, includes, has]}
+
+    - {label: Usage collection, parent: [Usage mediation], action: [consists of, includes, has]}
+    - {label: Usage validation, parent: [Usage mediation], action: [consists of, includes, has]}
+    - {label: Usage record, parent: [Usage collection], action: [gathers, collects, produces]}
+    - {label: Voice usage record, parent: [Usage record], action: [is a, is a kind of, is a type of]}
+    - {label: Data usage record, parent: [Usage record], action: [is a, is a kind of, is a type of]}
+
+    - {label: Tariff lookup, parent: [Rating], action: [consists of, includes, has]}
+    - {label: Charge calculation, parent: [Rating], action: [consists of, includes, has]}
+    - {label: Allowance tracking, parent: [Rating], action: [consists of, includes, has]}
+    - {label: Tariff table, parent: [Tariff lookup], action: [maintains, manages, publishes]}
+    - {label: Rated event, parent: [Charge calculation], action: [produces, creates]}
+    - {label: Data allowance, parent: [Allowance tracking], action: [decrements, tracks, manages]}
+
+    - {label: Invoice generation, parent: [Bill run], action: [consists of, includes, has]}
+    - {label: Bill validation, parent: [Bill run], action: [consists of, includes, has]}
+    - {label: Customer invoice, parent: [Invoice generation], action: [produces, creates, generates]}
+    - {label: Invoice line, parent: [Customer invoice], action: [contains, has, includes]}
+    - {label: Tax amount, parent: [Invoice line], action: [carries, has, contains]}
+
+    - {label: Payment collection, parent: [Payment handling], action: [consists of, includes, has]}
+    - {label: Dunning, parent: [Payment handling], action: [consists of, includes, has]}
+    - {label: Payment methods, parent: [Payment collection], action: [has, supports, includes]}
+    - {label: Direct debit, parent: [Payment methods], action: [includes, has]}
+    - {label: Card payment, parent: [Payment methods], action: [includes, has]}
+    - {label: Bank transfer, parent: [Payment methods], action: [includes, has]}
+    - {label: Service suspension, parent: [Dunning], action: [triggers, causes, produces]}
+
+    - {label: Dispute intake, parent: [Dispute management], action: [consists of, includes, has]}
+    - {label: Dispute investigation, parent: [Dispute management], action: [consists of, includes, has]}
+    - {label: Dispute resolution, parent: [Dispute management], action: [consists of, includes, has]}
+    - {label: Billing dispute, parent: [Dispute intake], action: [registers, records, creates]}
+    - {label: Credit note, parent: [Dispute resolution], action: [issues, produces, creates]}
+
+    - {label: Product lines, parent: [Product catalogue], action: [has, includes]}
+    - {label: Mobile plans, parent: [Product lines], action: [includes, has]}
+    - {label: Fibre broadband bundles, parent: [Product lines], action: [includes, has]}
+    - {label: Prepaid plan, parent: [Mobile plans], action: [includes, has]}
+    - {label: Postpaid plan, parent: [Mobile plans], action: [includes, has]}
+    - {label: Tessa Go, parent: [Prepaid plan], action: [is a, is a kind of, is a type of]}
+    - {label: Tessa Unlimited, parent: [Postpaid plan], action: [is a, is a kind of, is a type of]}
+    - {label: EU roaming allowance, parent: [Tessa Unlimited], action: [includes, has, offers]}
+    - {label: Fibre 300 bundle, parent: [Fibre broadband bundles], action: [includes, has]}
+    - {label: Fibre Max bundle, parent: [Fibre broadband bundles], action: [includes, has]}
+    - {label: Mesh Wi-Fi kit, parent: [Fibre Max bundle], action: [includes, has, contains]}
+  relations:
+    - {from: Order capture, to: Product catalogue, action: [reads, uses, checks], inverse: [is read by]}
+    - {from: Credit check, to: Payment handling, action: [reads, uses, queries], inverse: [is read by]}
+    - {from: Service activation, to: Usage collection, action: [starts, triggers, enables], inverse: [is started by]}
+    - {from: Fibre line activation, to: OLT port, action: [configures, uses], inverse: [is configured by]}
+    - {from: Line test, to: Optical network terminal, action: [queries, checks, reads], inverse: [is queried by]}
+    - {from: Alarm handling, to: Customer trouble ticket, action: [raises, creates, opens], inverse: [is raised by]}
+    - {from: Work order, to: Field technician, action: [is assigned to, goes to], inverse: [is assigned]}
+    - {from: SLA monitoring, to: Service quality indicator, action: [reads, uses, monitors], inverse: [is read by]}
+    - {from: Tariff lookup, to: Product catalogue, action: [reads, uses], inverse: [is read by]}
+    - {from: Invoice generation, to: Service credit, action: [applies, uses, includes], inverse: [is applied by]}
+    - {from: Dispute investigation, to: Rated event, action: [reads, reviews, checks], inverse: [is read by]}
+    - {from: Dispute intake, to: Dunning, action: [pauses, suspends, stops], inverse: [is paused by]}
+optional:
+  - Order desk
+  - Order desk lead
+  - Order management system
+  - Online shop
+  - Network inventory
+  - Distribution point
+  - Domain owner
+  - Chief Operating Officer
+  - Payment service provider
+  - Installation contractor
+  - Suspense queue
+  - Mediation team
+  - Billing cycle
+  - Monthly report
+  - Account manager
+  - Collections team
+  - Loyalty discount
+  - Monthly operations board
+  - Operations change log
+  - Field operations manager
+  - Network operations centre
+  - Network operations centre manager
+  - Billing operations lead
+  - Revenue assurance analyst
+  - Customer care director
+  - Product manager
+  - Product team
+  - Orbis
+  - Stratum
+  - Vigil
+  - Meter
+  - Ledgerline
+  - Integration layer
+  - Order-to-activation time
+  - Installation on first appointment
+  - Mean time to restore
+  - Bill accuracy rate
+  - Disputes per thousand invoices
+  - Test probe
+  - Street cabinet
+  - Tariff
+  - Extra pack
+  - Rebill

@@ -1,0 +1,18 @@
+{
+  "rule": "LEARN: the PROV-O and DCAT 3 benchmarks. TEST: the SOSA/SSN, Time Ontology and ValueFlows (business-process) benchmarks. Benchmarks are named by their folder under evals/benchmarks; each yields one case, benchmarks-<folder>-<document name>.",
+  "learn": {
+    "benchmarks": [
+      "dcat",
+      "prov-o"
+    ],
+    "cases": []
+  },
+  "test": {
+    "benchmarks": [
+      "ssn",
+      "time",
+      "valueflows"
+    ],
+    "cases": []
+  }
+}

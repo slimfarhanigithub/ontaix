@@ -24,3 +24,27 @@ foundry_deployment_name               = "gpt-6-sol"
 foundry_model_version                 = "2026-09-22"
 foundry_deployment_sku                = "DataZoneStandard"
 foundry_deployment_capacity           = 100
+
+# Teach extraction bake-off candidates (GPT) and the OCR model for scanned PDFs, which is not a
+# candidate. All DataZoneStandard in France Central.
+# Names, versions and SKUs as listed by `az cognitiveservices model list --location francecentral`
+# on 2026-09-29. Empty the map once the bake-off is decided.
+foundry_eval_deployments = {
+  "gpt-6-luna"      = { model_name = "gpt-6-luna", model_version = "2026-09-22" }
+  "gpt-5.6-sol"     = { model_name = "gpt-5.6-sol", model_version = "2026-07-09" }
+  "gpt-5.6-terra"   = { model_name = "gpt-5.6-terra", model_version = "2026-07-09" }
+  "gpt-5.6-luna"    = { model_name = "gpt-5.6-luna", model_version = "2026-07-09" }
+  "gpt-5.5"         = { model_name = "gpt-5.5", model_version = "2026-04-24" }
+  "gpt-5.4"         = { model_name = "gpt-5.4", model_version = "2026-03-05" }
+  "o3"              = { model_name = "o3", model_version = "2025-04-16" }
+  "mistral-ocr-4-0" = { model_name = "mistral-ocr-4-0", model_version = "1", model_format = "Mistral AI", capacity = 10 }
+}
+
+# Claude candidates on the eval-only Sweden Central resource (GlobalStandard: not EU data zone).
+# Versions as listed by `az cognitiveservices model list --location swedencentral` on 2026-09-29.
+foundry_claude_deployments = {
+  "claude-fable-5-1"  = { model_name = "claude-fable-5-1", model_version = "1" }
+  "claude-opus-5-5"   = { model_name = "claude-opus-5-5", model_version = "2" }
+  "claude-sonnet-5-5" = { model_name = "claude-sonnet-5-5", model_version = "2" }
+  "claude-haiku-4-5"  = { model_name = "claude-haiku-4-5", model_version = "20251001" }
+}

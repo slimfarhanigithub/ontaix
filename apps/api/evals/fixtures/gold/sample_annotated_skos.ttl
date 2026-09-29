@@ -1,0 +1,21 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix oxe:  <https://example.org/ontaix/evals/vocab#> .
+@prefix ex:   <http://example.com/acme#> .
+
+ex:scheme a skos:ConceptScheme ; skos:prefLabel "Acme Corp"@en ; skos:hasTopConcept ex:sales .
+
+ex:sales a skos:Concept ; skos:prefLabel "Sales"@en ; skos:topConceptOf ex:scheme ;
+    oxe:birthAction "runs" ; oxe:acceptedAction "has" .
+ex:order a skos:Concept ; skos:prefLabel "Order"@en ; skos:broader ex:sales .
+ex:invoice a skos:Concept ; skos:prefLabel "Invoice"@en ; skos:broader ex:sales ;
+    oxe:birthAction "produces" ;
+    ex:bills ex:order ;
+    skos:related ex:order .
+ex:customer a skos:Concept ; skos:prefLabel "Customer"@en ; skos:broader ex:sales ;
+    skos:related ex:invoice .
+
+ex:bills a owl:ObjectProperty ; rdfs:label "bills"@en ;
+    oxe:acceptedAction "charges" ; oxe:inverseAction "is billed by" .

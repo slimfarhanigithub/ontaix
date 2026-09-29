@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Ontology xmlns="http://www.w3.org/2002/07/owl#"
+     xml:base="http://example.com/acme"
+     xmlns:xml="http://www.w3.org/XML/1998/namespace"
+     ontologyIRI="http://example.com/acme">
+    <Prefix name="" IRI="http://example.com/acme#"/>
+    <Prefix name="owl" IRI="http://www.w3.org/2002/07/owl#"/>
+    <Prefix name="rdfs" IRI="http://www.w3.org/2000/01/rdf-schema#"/>
+    <Prefix name="xsd" IRI="http://www.w3.org/2001/XMLSchema#"/>
+    <Annotation>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <Literal xml:lang="en">A tiny synthetic business ontology for the gold importer tests.</Literal>
+    </Annotation>
+    <Declaration><Class IRI="#Acme"/></Declaration>
+    <Declaration><Class IRI="#Sales"/></Declaration>
+    <Declaration><Class IRI="#Operations"/></Declaration>
+    <Declaration><Class IRI="#Customer"/></Declaration>
+    <Declaration><Class IRI="#Order"/></Declaration>
+    <Declaration><Class IRI="#OnlineOrder"/></Declaration>
+    <Declaration><Class abbreviatedIRI=":ExpressOnlineOrder"/></Declaration>
+    <Declaration><Class IRI="#Delivery"/></Declaration>
+    <Declaration><Class IRI="#Product"/></Declaration>
+    <Declaration><ObjectProperty IRI="#places"/></Declaration>
+    <Declaration><ObjectProperty IRI="#shipsProduct"/></Declaration>
+    <Declaration><ObjectProperty IRI="#containsItem"/></Declaration>
+    <Declaration><ObjectProperty IRI="#prefersProduct"/></Declaration>
+    <Declaration><DataProperty IRI="#orderDate"/></Declaration>
+    <Declaration><NamedIndividual IRI="#BigCo"/></Declaration>
+    <Declaration><NamedIndividual IRI="#Widget"/></Declaration>
+    <SubClassOf><Class IRI="#Sales"/><Class IRI="#Acme"/></SubClassOf>
+    <SubClassOf><Class IRI="#Operations"/><Class IRI="#Acme"/></SubClassOf>
+    <SubClassOf><Class IRI="#Customer"/><Class IRI="#Sales"/></SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Customer"/>
+        <ObjectSomeValuesFrom>
+            <ObjectProperty IRI="#prefersProduct"/>
+            <Class IRI="#Product"/>
+        </ObjectSomeValuesFrom>
+    </SubClassOf>
+    <SubClassOf><Class IRI="#Order"/><Class IRI="#Sales"/></SubClassOf>
+    <SubClassOf>
+        <Class IRI="#Order"/>
+        <DataAllValuesFrom>
+            <DataProperty IRI="#orderDate"/>
+            <Datatype abbreviatedIRI="xsd:date"/>
+        </DataAllValuesFrom>
+    </SubClassOf>
+    <SubClassOf><Class IRI="#OnlineOrder"/><Class IRI="#Order"/></SubClassOf>
+    <SubClassOf><Class abbreviatedIRI=":ExpressOnlineOrder"/><Class IRI="#OnlineOrder"/></SubClassOf>
+    <SubClassOf><Class IRI="#Delivery"/><Class IRI="#Operations"/></SubClassOf>
+    <SubClassOf><Class IRI="#Delivery"/><Class IRI="#Sales"/></SubClassOf>
+    <SubClassOf><Class IRI="#Product"/><Class abbreviatedIRI="owl:Thing"/></SubClassOf>
+    <DisjointClasses><Class IRI="#Customer"/><Class IRI="#Product"/></DisjointClasses>
+    <ClassAssertion><Class IRI="#Customer"/><NamedIndividual IRI="#BigCo"/></ClassAssertion>
+    <ClassAssertion><Class IRI="#Product"/><NamedIndividual IRI="#Widget"/></ClassAssertion>
+    <ObjectPropertyAssertion>
+        <ObjectProperty IRI="#prefersProduct"/>
+        <NamedIndividual IRI="#BigCo"/>
+        <NamedIndividual IRI="#Widget"/>
+    </ObjectPropertyAssertion>
+    <ObjectPropertyDomain><ObjectProperty IRI="#places"/><Class IRI="#Customer"/></ObjectPropertyDomain>
+    <ObjectPropertyRange><ObjectProperty IRI="#places"/><Class IRI="#Order"/></ObjectPropertyRange>
+    <ObjectPropertyDomain><ObjectProperty IRI="#shipsProduct"/><Class IRI="#Delivery"/></ObjectPropertyDomain>
+    <ObjectPropertyRange><ObjectProperty IRI="#shipsProduct"/><Class IRI="#Product"/></ObjectPropertyRange>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="#containsItem"/>
+        <ObjectUnionOf><Class IRI="#Order"/><Class IRI="#Delivery"/></ObjectUnionOf>
+    </ObjectPropertyDomain>
+    <ObjectPropertyRange><ObjectProperty IRI="#containsItem"/><Class IRI="#Product"/></ObjectPropertyRange>
+    <DataPropertyDomain><DataProperty IRI="#orderDate"/><Class IRI="#Order"/></DataPropertyDomain>
+    <DataPropertyRange><DataProperty IRI="#orderDate"/><Datatype abbreviatedIRI="xsd:date"/></DataPropertyRange>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#Acme</IRI><Literal xml:lang="en">Acme Corp</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#Sales</IRI><Literal xml:lang="en">Sales</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#Operations</IRI><Literal xml:lang="en">Operations</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#Operations</IRI><Literal xml:lang="fr">Opérations</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#Customer</IRI><Literal xml:lang="en">Customer</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#Order</IRI><Literal xml:lang="en">Order</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#OnlineOrder</IRI><Literal xml:lang="en">Online Order</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#Delivery</IRI><Literal xml:lang="en">Delivery</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#Product</IRI><Literal xml:lang="en">Product</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#places</IRI><Literal xml:lang="en">places (0..*)</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#containsItem</IRI><Literal xml:lang="en">contains</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#BigCo</IRI><Literal xml:lang="en">BigCo</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:label"/><IRI>#Widget</IRI><Literal xml:lang="en">Widget</Literal></AnnotationAssertion>
+    <AnnotationAssertion><AnnotationProperty abbreviatedIRI="rdfs:comment"/><IRI>#Order</IRI><Literal xml:lang="en">A request to buy products.</Literal></AnnotationAssertion>
+</Ontology>

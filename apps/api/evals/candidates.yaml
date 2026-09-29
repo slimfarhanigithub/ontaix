@@ -1,0 +1,74 @@
+# Bake-off candidates, GPT and Claude only. The GPT models run on EU DataZoneStandard in France
+# Central (infra/terraform/azure env/dev.tfvars `foundry_eval_deployments`); Claude runs on the
+# eval-only Sweden Central resource (GlobalStandard, `residency: global`) and never receives cases
+# from tests/private unless --allow-global-for-private is passed. `efforts` lists the reasoning
+# efforts each model accepts (`default`: none is sent); `family` groups candidates for the smart
+# plan. Prices are euros per million tokens: Azure retail DataZoneStandard prices in France
+# Central on 2026-09-29 for GPT (o3's are rounded by Azure, so approximate), Anthropic's USD list
+# prices at 0.86 EUR per USD for Claude. Every candidate must have a price, or the run is
+# refused: an unpriced model would count as 0 EUR against the budget cap. The OCR model at the end reads scanned PDFs
+# before any candidate runs; it is not a candidate.
+baseline:
+  deployment: gpt-6-sol
+  effort: none
+candidates:
+  - deployment: gpt-6-sol
+    family: gpt
+    efforts: [none, low, medium, high]
+    price: {inputEurPerMTok: 2.0608, outputEurPerMTok: 10.304}
+  - deployment: gpt-6-luna
+    family: gpt
+    efforts: [none, low, medium, high]
+    price: {inputEurPerMTok: 0.103, outputEurPerMTok: 0.5152}
+  - deployment: gpt-5.6-sol
+    family: gpt
+    efforts: [none, low, medium, high]
+    price: {inputEurPerMTok: 3.7781, outputEurPerMTok: 18.8906}
+  - deployment: gpt-5.6-terra
+    family: gpt
+    efforts: [none, low, medium, high]
+    price: {inputEurPerMTok: 1.8891, outputEurPerMTok: 11.3344}
+  - deployment: gpt-5.6-luna
+    family: gpt
+    efforts: [none, low, medium, high]
+    price: {inputEurPerMTok: 0.1889, outputEurPerMTok: 1.1334}
+  - deployment: gpt-5.5
+    family: gpt
+    efforts: [none, low, medium, high]
+    price: {inputEurPerMTok: 4.7227, outputEurPerMTok: 28.3359}
+  - deployment: gpt-5.4
+    family: gpt
+    efforts: [none, low, medium, high]
+    price: {inputEurPerMTok: 2.3613, outputEurPerMTok: 14.168}
+  - deployment: o3
+    family: gpt
+    efforts: [low, medium, high]
+    price: {inputEurPerMTok: 1.9, outputEurPerMTok: 7.6}
+  - deployment: claude-fable-5-1
+    family: claude
+    provider: foundry_anthropic
+    residency: global
+    efforts: [low, medium, high]
+    price: {inputEurPerMTok: 8.6, outputEurPerMTok: 43.0}
+  - deployment: claude-opus-5-5
+    family: claude
+    provider: foundry_anthropic
+    residency: global
+    efforts: [low, medium, high]
+    price: {inputEurPerMTok: 3.44, outputEurPerMTok: 17.2}
+  - deployment: claude-sonnet-5-5
+    family: claude
+    provider: foundry_anthropic
+    residency: global
+    efforts: [none, low, medium, high]
+    # ASSUMPTION: no list price found; priced as claude-opus-5-5 (conservative) until known.
+    price: {inputEurPerMTok: 3.44, outputEurPerMTok: 17.2}
+  - deployment: claude-haiku-4-5
+    family: claude
+    provider: foundry_anthropic
+    residency: global
+    efforts: [default]
+    price: {inputEurPerMTok: 0.86, outputEurPerMTok: 4.3}
+ocr:
+  deployment: mistral-ocr-4-0
+  eurPer1000Pages: 3.7781

@@ -1,0 +1,10 @@
+PCF ID,Hierarchy ID,Name,Element Description
+10002,1.0,Develop Vision and Strategy,Establish a direction and vision for the organization.
+10014,1.1,Define the business concept and long-term vision,Assess the external and internal environment.
+10017,1.1.1,Assess the external environment,Analyze the factors outside the organization.
+10021,1.1.1.1,Analyze and evaluate competition,Study competitors.
+10022,1.1.1.2,Identify economic trends,
+10003,2.0,Develop and Manage Products and Services,Design and manage the offering.
+10061,2.1,Govern and manage product/service development program,
+,,,
+19999,9.9.9,Orphan Process,A row whose parent is missing.

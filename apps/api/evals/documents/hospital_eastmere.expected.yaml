@@ -1,0 +1,408 @@
+# Gold tree for hospital_eastmere.md. Reviewed twice against the document.
+company: Eastmere General Hospital
+description: Patient-flow and administration handbook of a fictional 600-bed hospital; stresses admission, care pathways with stages and orders, discharge and billing, with is-a facts, grouping concepts and count mismatches.
+tags: [document, healthcare, en, hospital, patient-flow, billing]
+expected:
+  concepts:
+    # Level 1
+    - label: Patient admission
+      parent: [Eastmere General Hospital]
+      action: [runs, has, operates]
+    - label: Care pathways
+      parent: [Eastmere General Hospital]
+      action: [runs, has, operates]
+    - label: Discharge
+      parent: [Eastmere General Hospital]
+      action: [runs, has, operates]
+    - label: Billing
+      parent: [Eastmere General Hospital]
+      action: [runs, has, operates]
+    - label: Patient administration system
+      parent: [Eastmere General Hospital]
+      action: [operates, runs, uses]
+    - label: Electronic patient record
+      parent: [Eastmere General Hospital]
+      action: [operates, runs, uses]
+
+    # Patient admission
+    - label: Elective admission
+      parent: [Patient admission]
+      action: [consists of, includes, has]
+    - label: Emergency admission
+      parent: [Patient admission]
+      action: [consists of, includes, has]
+    - label: Patient registration
+      parent: [Patient admission]
+      action: [consists of, includes, has]
+    - label: Bed management
+      parent: [Patient admission]
+      action: [consists of, includes, has]
+    - label: Pre-admission assessment
+      parent: [Elective admission]
+      action: [consists of, includes, has]
+    - label: Admission booking
+      parent: [Elective admission]
+      action: [consists of, includes, has]
+    - label: Baseline observations
+      parent: [Pre-admission assessment]
+      action: [records, produces, captures]
+    - label: Admission letter
+      parent: [Admission booking]
+      action: [produces, creates, generates]
+    - label: Triage
+      parent: [Emergency admission]
+      action: [consists of, includes, has]
+    - label: Admission decision
+      parent: [Emergency admission]
+      action: [consists of, includes, has]
+    - label: Triage categories
+      parent: [Triage]
+      action: [has, uses, includes]
+    - label: Immediate
+      parent: [Triage categories]
+      action: [includes, has]
+    - label: Very urgent
+      parent: [Triage categories]
+      action: [includes, has]
+    - label: Urgent
+      parent: [Triage categories]
+      action: [includes, has]
+    - label: Standard
+      parent: [Triage categories]
+      action: [includes, has]
+    - label: Non-urgent
+      parent: [Triage categories]
+      action: [includes, has]
+    - label: Admission request
+      parent: [Admission decision]
+      action: [produces, creates, generates]
+    - label: Identity verification
+      parent: [Patient registration]
+      action: [consists of, includes, has]
+    - label: Insurance capture
+      parent: [Patient registration]
+      action: [consists of, includes, has]
+    - label: Hospital number
+      parent: [Identity verification]
+      action: [assigns, produces, creates]
+    - label: Coverage record
+      parent: [Insurance capture]
+      action: [creates, produces, generates]
+    - label: Insurer name
+      parent: [Coverage record]
+      action: [holds, contains, has]
+    - label: Policy number
+      parent: [Coverage record]
+      action: [holds, contains, has]
+    - label: Authorisation code
+      parent: [Coverage record]
+      action: [holds, contains, has]
+    - label: Bed request
+      parent: [Bed management]
+      action: [consists of, includes, has]
+    - label: Bed allocation
+      parent: [Bed management]
+      action: [consists of, includes, has]
+    - label: Bed pools
+      parent: [Bed management]
+      action: [maintains, has, manages]
+    - label: Surgical beds
+      parent: [Bed pools]
+      action: [includes, has]
+    - label: Medical beds
+      parent: [Bed pools]
+      action: [includes, has]
+    - label: Critical care beds
+      parent: [Bed pools]
+      action: [includes, has]
+    - label: Bed assignment
+      parent: [Bed allocation]
+      action: [produces, creates, generates]
+
+    # Care pathways
+    - label: Hip replacement pathway
+      parent: [Care pathways]
+      action: [comprise, consists of, includes]
+    - label: Stroke pathway
+      parent: [Care pathways]
+      action: [comprise, consists of, includes]
+    - label: Order management
+      parent: [Care pathways]
+      action: [comprise, consists of, includes]
+    - label: Pre-operative stage
+      parent: [Hip replacement pathway]
+      action: [consists of, includes, has]
+    - label: Surgical stage
+      parent: [Hip replacement pathway]
+      action: [consists of, includes, has]
+    - label: Post-operative stage
+      parent: [Hip replacement pathway]
+      action: [consists of, includes, has]
+    - label: Rehabilitation stage
+      parent: [Hip replacement pathway]
+      action: [consists of, includes, has]
+    - label: Anaesthetic review
+      parent: [Pre-operative stage]
+      action: [includes, has, consists of]
+    - label: Surgical safety checklist
+      parent: [Surgical stage]
+      action: [includes, has, consists of]
+    - label: Hip arthroplasty
+      parent: [Surgical stage]
+      action: [includes, has, consists of]
+    - label: Sign in
+      parent: [Surgical safety checklist]
+      action: [consists of, includes, has]
+    - label: Time out
+      parent: [Surgical safety checklist]
+      action: [consists of, includes, has]
+    - label: Sign out
+      parent: [Surgical safety checklist]
+      action: [consists of, includes, has]
+    - label: Pain management
+      parent: [Post-operative stage]
+      action: [includes, has, consists of]
+    - label: Physiotherapy sessions
+      parent: [Rehabilitation stage]
+      action: [includes, has, consists of]
+    - label: Hyperacute stage
+      parent: [Stroke pathway]
+      action: [consists of, includes, has]
+    - label: Acute stroke unit stage
+      parent: [Stroke pathway]
+      action: [consists of, includes, has]
+    - label: Stroke rehabilitation
+      parent: [Stroke pathway]
+      action: [consists of, includes, has]
+    - label: Stroke alert
+      parent: [Hyperacute stage]
+      action: [includes, has, consists of]
+    - label: Brain imaging
+      parent: [Hyperacute stage]
+      action: [includes, has, consists of]
+    - label: Swallow screen
+      parent: [Acute stroke unit stage]
+      action: [includes, has, consists of]
+    - label: Speech and language therapy
+      parent: [Stroke rehabilitation]
+      action: [includes, has, consists of]
+    - label: Order entry
+      parent: [Order management]
+      action: [consists of, includes, has]
+    - label: Result reporting
+      parent: [Order management]
+      action: [consists of, includes, has]
+    - label: Laboratory order
+      parent: [Order entry]
+      action: [creates, produces, generates]
+    - label: Imaging order
+      parent: [Order entry]
+      action: [creates, produces, generates]
+    - label: Full blood count
+      parent: [Laboratory order]
+      action: [is a, is a kind of, is a type of]
+    - label: CT scan
+      parent: [Imaging order]
+      action: [is a, is a kind of, is a type of]
+    - label: Result report
+      parent: [Result reporting]
+      action: [produces, creates, generates]
+
+    # Discharge
+    - label: Discharge planning
+      parent: [Discharge]
+      action: [consists of, includes, has]
+    - label: Discharge completion
+      parent: [Discharge]
+      action: [consists of, includes, has]
+    - label: Estimated discharge date
+      parent: [Discharge planning]
+      action: [includes, sets, has]
+    - label: Needs assessment
+      parent: [Discharge planning]
+      action: [includes, has, consists of]
+    - label: Medicines reconciliation
+      parent: [Discharge completion]
+      action: [consists of, includes, has]
+    - label: Discharge summary
+      parent: [Discharge completion]
+      action: [consists of, includes, produces]
+    - label: Coded sections
+      parent: [Discharge summary]
+      action: [contains, has, includes]
+    - label: Primary diagnosis
+      parent: [Coded sections]
+      action: [includes, has]
+    - label: Procedures performed
+      parent: [Coded sections]
+      action: [includes, has]
+    - label: Discharge medications
+      parent: [Coded sections]
+      action: [includes, has]
+    - label: Follow-up plan
+      parent: [Coded sections]
+      action: [includes, has]
+
+    # Billing
+    - label: Clinical coding
+      parent: [Billing]
+      action: [consists of, includes, has]
+    - label: Charge capture
+      parent: [Billing]
+      action: [consists of, includes, has]
+    - label: Insurer claims
+      parent: [Billing]
+      action: [consists of, includes, has]
+    - label: Patient invoicing
+      parent: [Billing]
+      action: [consists of, includes, has]
+    - label: Diagnosis coding
+      parent: [Clinical coding]
+      action: [consists of, includes, has]
+    - label: Procedure coding
+      parent: [Clinical coding]
+      action: [consists of, includes, has]
+    - label: Charge event recording
+      parent: [Charge capture]
+      action: [consists of, includes, has]
+    - label: Tariff lookup
+      parent: [Charge capture]
+      action: [consists of, includes, has]
+    - label: Charge lines
+      parent: [Charge event recording]
+      action: [creates, produces, generates]
+    - label: Theatre charge
+      parent: [Charge lines]
+      action: [is a, is a kind of, is a type of]
+    - label: Bed-day charge
+      parent: [Charge lines]
+      action: [is a, is a kind of, is a type of]
+    - label: Claim preparation
+      parent: [Insurer claims]
+      action: [consists of, includes, has]
+    - label: Claim submission
+      parent: [Insurer claims]
+      action: [consists of, includes, has]
+    - label: Denial management
+      parent: [Insurer claims]
+      action: [consists of, includes, has]
+    - label: Claim file
+      parent: [Claim preparation]
+      action: [produces, creates, generates]
+    - label: Submission channels
+      parent: [Claim submission]
+      action: [uses, has, includes]
+    - label: Insurer portal
+      parent: [Submission channels]
+      action: [includes, has]
+    - label: Electronic data interchange
+      parent: [Submission channels]
+      action: [includes, has]
+    - label: Paper submission
+      parent: [Submission channels]
+      action: [includes, has]
+    - label: Invoice generation
+      parent: [Patient invoicing]
+      action: [consists of, includes, has]
+    - label: Payment collection
+      parent: [Patient invoicing]
+      action: [consists of, includes, has]
+    - label: Patient invoice
+      parent: [Invoice generation]
+      action: [produces, creates, generates]
+    - label: Self-pay invoice
+      parent: [Patient invoice]
+      action: [is a, is a kind of, is a type of]
+  relations:
+    - from: Admission request
+      to: Bed request
+      action: [triggers, raises, creates]
+      inverse: [is triggered by]
+    - from: Admission booking
+      to: Bed request
+      action: [raises, triggers, creates]
+      inverse: [is raised by]
+    - from: Patient registration
+      to: Patient administration system
+      action: [updates, writes to, uses]
+      inverse: [is updated by]
+    - from: Order entry
+      to: Electronic patient record
+      action: [takes place in, uses, runs in]
+    - from: Anaesthetic review
+      to: Full blood count
+      action: [requests, orders]
+      inverse: [is requested by]
+    - from: Hip arthroplasty
+      to: Theatre charge
+      action: [generates, triggers, creates]
+      inverse: [is generated by]
+    - from: Brain imaging
+      to: CT scan
+      action: [requests, orders]
+      inverse: [is requested by]
+    - from: Estimated discharge date
+      to: Bed allocation
+      action: [informs, feeds]
+      inverse: [is informed by]
+    - from: Diagnosis coding
+      to: Discharge summary
+      action: [reads, uses]
+      inverse: [is read by]
+    - from: Claim preparation
+      to: Coverage record
+      action: [reads, uses]
+      inverse: [is read by]
+    - from: Invoice generation
+      to: Charge lines
+      action: [reads, uses]
+      inverse: [is read by]
+optional:
+  - Operating model
+  - Billing engine
+  - Laboratory information system
+  - Integration hub
+  - Patient flow board
+  - Patient flow office
+  - Patient flow manager
+  - Bed manager
+  - Triage nurses
+  - Pathway leads
+  - Discharge coordinators
+  - Clinical coders
+  - Billing officers
+  - Finance business partner
+  - Clinical coding team
+  - Billing office
+  - Admissions office
+  - Waiting list
+  - Episode
+  - Operation note
+  - Clinical notes
+  - Discharge lounge
+  - Community services
+  - Patient support team
+  - Mobility
+  - Home circumstances
+  - Instalments
+  - Arrival to triage time
+  - Decision to admit to bed time
+  - Discharges before noon
+  - First-pass claim acceptance
+  - Emergency department
+  - Capacity meeting
+  - Theatre block
+  - Stroke unit
+  - Ward clerks
+  - Contracted rates
+  - Self-pay price list
+  - Receiving specialty
+  - Level of care
+  - Isolation needs
+  - Bed number
+  - Fasting instructions
+  - Ward pharmacist
+  - National classification
+  - Radiology team
+  - Stroke team
+  - Ambulance crew

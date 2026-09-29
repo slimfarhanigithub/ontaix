@@ -34,6 +34,32 @@ resource "azurerm_cognitive_deployment" "chat" {
   }
 }
 
+# Candidate models for the teach extraction bake-off, beside the default deployment, and the OCR
+# model that reads scanned documents. The version is pinned so every run of the bake-off
+# compares the same model builds.
+resource "azurerm_cognitive_deployment" "eval" {
+  for_each = var.foundry_eval_deployments
+
+  name                   = each.key
+  cognitive_account_id   = azurerm_cognitive_account.foundry.id
+  version_upgrade_option = "NoAutoUpgrade"
+
+  model {
+    format  = each.value.model_format
+    name    = each.value.model_name
+    version = each.value.model_version
+  }
+
+  sku {
+    name     = "DataZoneStandard"
+    capacity = each.value.capacity
+  }
+
+  # Azure refuses concurrent deployment changes on one account: waiting for the default
+  # deployment avoids a conflict with it; `-parallelism=1` serialises the eval deployments.
+  depends_on = [azurerm_cognitive_deployment.chat]
+}
+
 # Inference only: the workload and the owner call the deployment; neither manages the account.
 resource "azurerm_role_assignment" "workload_foundry_user" {
   scope                = azurerm_cognitive_account.foundry.id

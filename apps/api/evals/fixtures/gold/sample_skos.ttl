@@ -1,0 +1,30 @@
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+@prefix ex:   <http://example.com/acme/taxonomy#> .
+
+ex:scheme a skos:ConceptScheme ;
+    skos:prefLabel "Acme Corp"@en ;
+    skos:hasTopConcept ex:products, ex:services .
+
+ex:products a skos:Concept ;
+    skos:prefLabel "Products"@en, "Produits"@fr ;
+    skos:altLabel "Goods"@en ;
+    skos:topConceptOf ex:scheme ;
+    skos:narrower ex:hardware .
+
+ex:services a skos:Concept ; skos:prefLabel "Services"@en ; skos:inScheme ex:scheme .
+
+ex:hardware a skos:Concept ; skos:prefLabel "Hardware"@en ; skos:altLabel "Devices"@en .
+
+ex:laptops a skos:Concept ;
+    skos:prefLabel "Laptops"@en ;
+    skos:broader ex:hardware ;
+    dct:modified "2026-01-01" .
+
+ex:support a skos:Concept ;
+    skos:prefLabel "Device Support"@en ;
+    skos:broader ex:services, ex:hardware ;
+    skos:related ex:laptops ;
+    skos:definition "Help with the devices a customer bought."@en .
+
+ex:gaming a skos:Concept ; skos:prefLabel "Gaming Laptops"@en ; skos:broader ex:laptops .
