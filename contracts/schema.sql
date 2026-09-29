@@ -432,13 +432,13 @@ CREATE TABLE rate_budget_window (
   tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
   actor_kind    actor_kind NOT NULL CHECK (actor_kind IN ('user', 'agent')),
   actor_id      uuid NOT NULL,
-  budget        text NOT NULL CHECK (budget IN ('import', 'parse', 'proposal', 'llm')),
+  budget        text NOT NULL CHECK (budget IN ('import', 'parse', 'proposal', 'llm', 'speech')),
   window_start  timestamptz NOT NULL CHECK (extract(epoch FROM window_start) = floor(extract(epoch FROM window_start) / 3600) * 3600),
   spent         integer NOT NULL CHECK (spent >= 0),
   PRIMARY KEY (tenant_id, actor_kind, actor_id, budget, window_start)
 );
 CREATE INDEX rate_budget_window_by_start ON rate_budget_window (window_start);
-COMMENT ON TABLE rate_budget_window IS 'Units spent per user or agent, per budget, per clock hour (window_start is a whole UTC hour), shared by every API replica. A charge of $n against $limit is one statement: INSERT INTO rate_budget_window (tenant_id, actor_kind, actor_id, budget, window_start, spent) SELECT $tenant, $kind, $actor, $budget, $window, $n WHERE $n <= $limit ON CONFLICT (tenant_id, actor_kind, actor_id, budget, window_start) DO UPDATE SET spent = rate_budget_window.spent + EXCLUDED.spent WHERE rate_budget_window.spent + EXCLUDED.spent <= $limit RETURNING spent; zero rows returned means the budget is exhausted and the call is refused (429 rate_limited, or llmOutcome rate_limited for the llm budget). actor_id is a plain uuid so a charge never waits on a foreign key lock. A purge every 15 minutes deletes windows that started more than 2 hours ago.';
+COMMENT ON TABLE rate_budget_window IS 'Units spent per user or agent, per budget, per clock hour (window_start is a whole UTC hour), shared by every API replica. A charge of $n against $limit is one statement: INSERT INTO rate_budget_window (tenant_id, actor_kind, actor_id, budget, window_start, spent) SELECT $tenant, $kind, $actor, $budget, $window, $n WHERE $n <= $limit ON CONFLICT (tenant_id, actor_kind, actor_id, budget, window_start) DO UPDATE SET spent = rate_budget_window.spent + EXCLUDED.spent WHERE rate_budget_window.spent + EXCLUDED.spent <= $limit RETURNING spent; zero rows returned means the budget is exhausted and the call is refused (429 rate_limited, or llmOutcome rate_limited for the llm budget). The speech budget counts POST /speech/token calls (ADR 0013). actor_id is a plain uuid so a charge never waits on a foreign key lock. A purge every 15 minutes deletes windows that started more than 2 hours ago.';
 
 -- ---------------------------------------------------------------------------
 -- Proposals and approvals
