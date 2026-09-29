@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ontaix:contract:concept-expansion:1.0.0",
+  "title": "Concept Expansion Output",
+  "description": "The only shape the language model step of POST /concepts/{conceptId}/expand may return (ADR 0009). The model suggests new concepts under one expanded concept, which the request names as the handle e0, and optional links between them; it cites no other existing concept, because no other concept is given a handle. Every suggestion has a key s1, s2 and so on, unique in the answer, and a parent that is e0 or the key of a suggestion listed earlier in the same answer, so the suggestions form a tree rooted at e0. There is no depth limit: a suggestion may sit at any depth below e0. The only ceilings are the total number of drafts per run (configuration ONTAIX_EXPAND_MAX_NODES, default 200, at most 2,000, suggestions and links together) and the token budget; the maxItems below are the absolute contract bound, and the API applies the configured ceiling. Every free-text field refuses markup (< and >), C0 and C1 control characters, DEL, U+00A0, U+2028, U+2029 and every Unicode format character (category Cf) in the Basic Multilingual Plane, exactly as contracts/teach-extraction.schema.json does; the API's normalisation step also refuses every Cf character outside that plane. Labels are 1 to 60 characters with no leading or trailing space; actions are 1 to 60 characters, lower-case, with no leading or trailing space; rationales are at most 120 characters. API checks a schema cannot express, each of which makes the whole answer invalid (no suggestion is returned): every key is unique; every parent is e0 or an earlier key; a link's from and to are e0 or keys of this answer and differ; every normalised action (NFKC, whitespace runs collapsed to one space, trimmed, lower-cased) is neither is a nor equivalent to; every label, after NFKC, holds at least one letter. A domainKey on any suggestion other than a child of the company root is ignored. API checks that drop suggestions without invalidating the answer (each reported in ExpansionResult.skipped with its descendants): deeper than the requested depth when the request sets one, more children for one parent than the request's maxChildren when it sets one, or drafts beyond the configured ceiling in answer order (over_cap); confidence below 0.4 (low_confidence); a label that repeats an earlier suggestion of the answer after normalisation (duplicate_in_response); a label that matches a live or pending concept of the expanded concept's company, case-insensitive, singular or plural (existing_label). There is no grounding rule: suggestions are creative by design, and every one becomes a draft that a human selects and then a proposal a human approves. The answer is requested as compact JSON.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "suggestions",
+    "links"
+  ],
+  "properties": {
+    "suggestions": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": {
+        "$ref": "#/$defs/suggestion"
+      }
+    },
+    "links": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": {
+        "$ref": "#/$defs/link"
+      },
+      "description": "Optional further relations inside the expansion, each between two of e0 and the suggestions of this answer; never to any other concept. A link that repeats a birth relation of the answer, in either direction, is dropped. Links count toward the same ceiling as suggestions."
+    }
+  },
+  "$defs": {
+    "suggestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "parent",
+        "label",
+        "action",
+        "confidence",
+        "rationale"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^s[1-9][0-9]{0,3}$",
+          "description": "Unique in the answer."
+        },
+        "parent": {
+          "type": "string",
+          "pattern": "^(e0|s[1-9][0-9]{0,3})$",
+          "description": "e0 (the expanded concept) or the key of a suggestion listed earlier in this answer, at any depth."
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
+          "description": "The new concept's name, a noun phrase in the company's language. The API applies the label casing rule (first character capitalised, the rest kept)."
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^A-Z<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
+          "description": "The birth relation's action, read parent to child, a lower-case present-tense verb phrase such as has, includes, uses or produces; a canonical predicate of the reference lexicon when one has the same meaning. After normalisation, is a and equivalent to are refused."
+        },
+        "domainKey": {
+          "enum": [
+            "production",
+            "supply",
+            "sales",
+            "logistics",
+            "quality",
+            "maintenance",
+            "finance",
+            "people",
+            "engineering"
+          ],
+          "description": "Only when e0 is the company root and the parent is e0: the domain template of the new concept. Otherwise absent, and ignored when present; a suggestion takes its parent's domain, and a child of the root without one takes production."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "How likely the model thinks the concept belongs to this business. Below 0.4 the suggestion is dropped."
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$",
+          "description": "One plain-text line saying why the concept belongs here. Shown to the reviewer as text."
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "action",
+        "confidence",
+        "rationale"
+      ],
+      "properties": {
+        "from": {
+          "type": "string",
+          "pattern": "^(e0|s[1-9][0-9]{0,3})$"
+        },
+        "to": {
+          "type": "string",
+          "pattern": "^(e0|s[1-9][0-9]{0,3})$"
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^A-Z<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
+          "description": "Read from to to. After normalisation, is a and equivalent to are refused."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$"
+        }
+      }
+    }
+  }
+}

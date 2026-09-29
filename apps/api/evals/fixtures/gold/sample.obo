@@ -1,0 +1,61 @@
+format-version: 1.2
+ontology: acme
+
+[Term]
+id: ACME:0000001
+name: Acme Corp
+
+[Term]
+id: ACME:0000002
+name: Sales
+is_a: ACME:0000001 ! Acme Corp
+
+[Term]
+id: ACME:0000003
+name: Operations
+is_a: ACME:0000001 ! Acme Corp
+
+[Term]
+id: ACME:0000004
+name: Customer
+synonym: "client" EXACT []
+synonym: "buyer" RELATED []
+is_a: ACME:0000002 ! Sales
+relationship: places ACME:0000005 ! Order
+
+[Term]
+id: ACME:0000005
+name: Order
+def: "A request to buy products." []
+is_a: ACME:0000002 ! Sales
+
+[Term]
+id: ACME:0000006
+name: Delivery
+is_a: ACME:0000003 ! Operations
+is_a: ACME:0000002 ! Sales
+relationship: ships_product ACME:0000007 ! Product
+
+[Term]
+id: ACME:0000007
+name: Product
+
+[Term]
+id: ACME:0000008
+name: Express Delivery
+is_a: ACME:0000006 ! Delivery
+relationship: part_of ACME:0000003 ! Operations
+
+[Term]
+id: ACME:0000009
+name: Fax Order
+is_obsolete: true
+is_a: ACME:0000005 ! Order
+
+[Typedef]
+id: places
+name: places
+
+[Typedef]
+id: part_of
+name: part of

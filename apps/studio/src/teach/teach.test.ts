@@ -2,7 +2,7 @@ import { api } from '../api/client';
 import { ApiError, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
 import { addCompany, addLink, addNode } from '../canvas/state';
 import { store } from '../store/store';
-import { SPEECH_PARSE_TIMEOUT_MS, importDocument, skippedText, speechStream, teach, teachSessionId, withoutKnown } from './teach';
+import { ONTOLOGY_NOT_AVAILABLE, SPEECH_PARSE_TIMEOUT_MS, importDocument, skippedText, speechStream, teach, teachSessionId, withoutKnown } from './teach';
 
 const result: TeachResult = {
   outcome: 'not_understood',
@@ -397,6 +397,20 @@ describe('leaving out what the canvas already holds', () => {
       'Left out, already in the model: Sales. Also left out, as the existing concept stands under another parent: Leads.',
     );
     vi.restoreAllMocks();
+  });
+});
+
+describe('Ontology import mode', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('refuses the file with a toast and uploads nothing', async () => {
+    const toast = vi.spyOn(store, 'toast2').mockImplementation(() => undefined);
+    const upload = vi.spyOn(api, 'importSentences');
+    await importDocument(new File(['a'], 'model.owl'), 'ontology');
+    expect(toast).toHaveBeenCalledWith('Refused', 'Ontology import is not available yet');
+    expect(ONTOLOGY_NOT_AVAILABLE).toBe('Ontology import is not available yet');
+    expect(upload).not.toHaveBeenCalled();
+    expect(store.ui.importing).toBe(false);
   });
 });
 

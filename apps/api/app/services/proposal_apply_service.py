@@ -18,7 +18,7 @@ from app.repositories import (
     proposal_repository,
     relation_repository,
 )
-from app.services import outbox_service
+from app.services import attribute_proposal_service, outbox_service
 from app.services.concept_removal_service import remove_concepts
 from app.services.ontology_view_service import OntologyView
 from app.services.rejection_service import OPEN_STATES, reject_one, touches_any
@@ -39,6 +39,8 @@ async def apply(
     bulk: bool,
 ) -> DecisionOutcome:
     """Type-specific apply; the artefacts snapshot is taken before any row is deleted."""
+    if proposal.type is ProposalType.ATTR:
+        await attribute_proposal_service.approve(session, view, caller, proposal, bulk)
     if proposal.type is not ProposalType.CHANGE:
         return DecisionOutcome(artefacts=view.proposal_artefacts(proposal))
     match proposal.change_kind:

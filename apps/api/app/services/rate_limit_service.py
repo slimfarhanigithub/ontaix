@@ -1,5 +1,5 @@
-"""Per-actor hourly budgets for imports, teach parses, proposal creation, model calls and speech
-tokens.
+"""Per-actor hourly budgets for imports, teach parses, proposal creation, model calls, concept
+expansions, whole-document extraction jobs and speech tokens.
 
 Each actor of each tenant holds one budget per kind and clock hour (UTC), counted in the
 `rate_budget_window` table that every API replica and worker shares. A charge takes every unit
@@ -35,6 +35,8 @@ class Budget(StrEnum):
     PARSE = "parse"
     PROPOSAL = "proposal"
     LLM = "llm"
+    EXPAND = "expand"
+    EXTRACTION = "extraction"
     SPEECH = "speech"
 
 
@@ -88,10 +90,15 @@ async def charge_proposals(caller: Caller, drafts: int = 1) -> None:
 
 
 def limit_of(budget: Budget) -> int:
+    settings = get_settings()
     if budget is Budget.LLM:
-        return get_settings().llm_calls_per_hour
+        return settings.llm_calls_per_hour
+    if budget is Budget.EXPAND:
+        return settings.expand_calls_per_hour
+    if budget is Budget.EXTRACTION:
+        return settings.document_extraction_jobs_per_hour
     if budget is Budget.SPEECH:
-        return get_settings().speech_tokens_per_hour
+        return settings.speech_tokens_per_hour
     return UNITS_PER_WINDOW[budget]
 
 

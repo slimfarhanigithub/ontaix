@@ -1,0 +1,21 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix oxe:  <https://example.org/ontaix/evals/vocab#> .
+@prefix ex:   <http://example.com/acme#> .
+
+ex:Acme a owl:Class ; rdfs:label "Acme Corp"@en .
+
+ex:Sales a owl:Class ; rdfs:subClassOf ex:Acme ; rdfs:label "Sales"@en ;
+    oxe:birthAction "runs" ; oxe:acceptedAction "operates", "has" .
+
+ex:Order a owl:Class ; rdfs:subClassOf ex:Sales ; rdfs:label "Order"@en ;
+    skos:altLabel "Purchase order"@en .
+
+ex:Invoice a owl:Class ; rdfs:subClassOf ex:Sales ; rdfs:label "Invoice"@en ;
+    oxe:birthAction "produces" ;
+    rdfs:subClassOf [ a owl:Restriction ; owl:onProperty ex:bills ; owl:someValuesFrom ex:Order ] .
+
+ex:bills a owl:ObjectProperty ; rdfs:label "bills"@en ;
+    oxe:acceptedAction "charges" ; oxe:inverseAction "is billed by" .

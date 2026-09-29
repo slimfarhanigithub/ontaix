@@ -1,0 +1,19 @@
+{
+  "label": "Acme Corp",
+  "children": [
+    {
+      "label": "Sales",
+      "action": ["runs", "has"],
+      "children": [
+        {"label": "Order"},
+        {"label": "Invoice", "action": "produces", "alsoUnder": ["Finance"]}
+      ]
+    },
+    {"label": "Finance", "action": ["runs"]}
+  ],
+  "relations": [
+    {"from": "Invoice", "to": "Order", "actions": ["bills", "charges"], "inverse": ["is billed by"]},
+    {"source": "Order", "target": "Finance", "verb": "is paid to"},
+    {"from": "Order"}
+  ]
+}

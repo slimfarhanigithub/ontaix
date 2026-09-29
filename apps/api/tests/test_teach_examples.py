@@ -24,7 +24,13 @@ from app.ai.prompts.teach_extraction import (
 )
 from app.clients.llm_client import LlmRequest, estimate_tokens
 from app.models.llm.teach_extraction_answer import NewLabelRef, TeachExtractionAnswer
-from app.services.teach_extraction_service import _ground, example_tokens, examples_for
+from app.services.teach_extraction_service import (
+    _ground,
+    _ground_name,
+    _ground_value,
+    example_tokens,
+    examples_for,
+)
 from app.utilities.example_selection import most_similar, within_budget
 from tests.conftest import TenantFixture
 from tests.llm_fakes import FakeLlmClient, recorded
@@ -37,7 +43,7 @@ CONTRACT = json.loads(
         encoding="utf-8"
     )
 )
-# The bake-off material, once it sits beside the API.
+# The bake-off material beside the API.
 EVALS = Path(__file__).parents[1] / "evals"
 ALL_EXAMPLES = [*FIXED_EXAMPLES, *EXAMPLE_LIBRARY]
 
@@ -80,7 +86,13 @@ def test_every_example_answer_is_one_the_api_accepts(example: dict) -> None:
         source = (intent.source.start, intent.source.end)
         # The quote is the input's own words at the stated offsets.
         assert text[source[0] : source[1]] == intent.span
+        if intent.kind == "attr":
+            assert intent.attribute_name and intent.attribute_value
+            assert _ground_name(intent.attribute_name, text, source) is not None
+            assert _ground_value(intent.attribute_value, text, source) is not None
         for ref in [intent.subject, intent.object, *(intent.members or [])]:
+            if ref is None:
+                continue
             if not isinstance(ref, NewLabelRef):
                 assert ref.candidate in handles
                 continue
@@ -131,8 +143,9 @@ def test_no_example_comes_from_test_material() -> None:
     learn = set(SPLIT["learn"]["cases"])
     test = set(SPLIT["test"]["cases"])
     assert not learn & test
-    assert SPLIT["learn"]["benchmarks"] == ["goodrelations"]
-    assert "org" in SPLIT["test"]["benchmarks"]
+    assert SPLIT["learn"]["benchmarks"] == ["goodrelations", "prov-o", "dcat"]
+    assert SPLIT["test"]["benchmarks"] == ["org", "ssn", "time", "valueflows"]
+    assert not set(SPLIT["learn"]["benchmarks"]) & set(SPLIT["test"]["benchmarks"])
     for example in ALL_EXAMPLES:
         source = example["source"]
         if source["set"] == "benchmark":
@@ -145,7 +158,6 @@ def test_no_example_comes_from_test_material() -> None:
         assert marker not in text
 
 
-@pytest.mark.skipif(not EVALS.is_dir(), reason="the bake-off material is not in this tree")
 def test_no_example_shares_a_phrase_with_test_material() -> None:
     import yaml
 
@@ -159,7 +171,9 @@ def test_no_example_shares_a_phrase_with_test_material() -> None:
         document = EVALS / "documents" / f"{name}.md"
         if document.is_file():
             held_out.append(document.read_text(encoding="utf-8"))
-    held_out.append((EVALS / "benchmarks" / "org" / "org.md").read_text(encoding="utf-8"))
+    for benchmark in SPLIT["test"]["benchmarks"]:
+        for document in sorted((EVALS / "benchmarks" / benchmark).glob("*.md")):
+            held_out.append(document.read_text(encoding="utf-8"))
     held = set().union(*(_shingles(t) for t in held_out))
     for example in ALL_EXAMPLES:
         assert not _shingles(example["input"]["sentence"]) & held, example["id"]

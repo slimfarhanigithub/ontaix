@@ -1,0 +1,493 @@
+# Gold tree for it_services_corvane.md. Reviewed twice against the document.
+company: Corvane Digital Services
+description: IT services firm operating-model handbook; stresses a service catalogue (offerings, service lines, services), lead-to-order, a phased delivery method, tiered support and finance, with one matching and one mismatched count.
+tags: [document, it-services, en, operating-model, large]
+expected:
+  concepts:
+    - label: Services
+      parent: [Corvane Digital Services]
+      action: [sells, organises into, has]
+    - label: Sales
+      parent: [Corvane Digital Services]
+      action: [organises into, has, consists of]
+    - label: Delivery
+      parent: [Corvane Digital Services]
+      action: [organises into, has, consists of]
+    - label: Support
+      parent: [Corvane Digital Services]
+      action: [organises into, has, consists of]
+    - label: Finance
+      parent: [Corvane Digital Services]
+      action: [organises into, has, consists of]
+
+    - label: Offerings
+      parent: [Services]
+      action: [has, includes]
+    - label: Apps
+      parent: [Offerings]
+      action: [includes, has]
+    - label: Data
+      parent: [Offerings]
+      action: [includes, has]
+    - label: AI
+      parent: [Offerings]
+      action: [includes, has]
+    - label: Application development
+      parent: [Apps]
+      action: [comprises, includes, consists of]
+    - label: Application modernisation
+      parent: [Apps]
+      action: [comprises, includes, consists of]
+    - label: Application management
+      parent: [Apps]
+      action: [comprises, includes, consists of]
+    - label: Custom software build
+      parent: [Application development]
+      action: [offers, includes, provides]
+    - label: Legacy migration
+      parent: [Application modernisation]
+      action: [offers, includes, provides]
+    - label: Application maintenance
+      parent: [Application management]
+      action: [offers, includes, provides]
+    - label: Data engineering
+      parent: [Data]
+      action: [comprises, includes, consists of]
+    - label: Analytics
+      parent: [Data]
+      action: [comprises, includes, consists of]
+    - label: Data governance
+      parent: [Data]
+      action: [comprises, includes, consists of]
+    - label: Data platform build
+      parent: [Data engineering]
+      action: [offers, includes, provides]
+    - label: Dashboard development
+      parent: [Analytics]
+      action: [offers, includes, provides]
+    - label: Master data management
+      parent: [Data governance]
+      action: [offers, includes, provides]
+    - label: AI strategy
+      parent: [AI]
+      action: [comprises, includes, consists of]
+    - label: Machine learning engineering
+      parent: [AI]
+      action: [comprises, includes, consists of]
+    - label: Generative AI
+      parent: [AI]
+      action: [comprises, includes, consists of]
+    - label: AI readiness assessment
+      parent: [AI strategy]
+      action: [offers, includes, provides]
+    - label: Model development
+      parent: [Machine learning engineering]
+      action: [offers, includes, provides]
+    - label: Conversational assistant build
+      parent: [Generative AI]
+      action: [offers, includes, provides]
+
+    - label: Lead-to-order
+      parent: [Sales]
+      action: [runs, owns, operates]
+    - label: Pipeline management
+      parent: [Lead-to-order]
+      action: [consists of, includes]
+    - label: Qualification
+      parent: [Lead-to-order]
+      action: [consists of, includes]
+    - label: Bid management
+      parent: [Lead-to-order]
+      action: [consists of, includes]
+    - label: Contracting
+      parent: [Lead-to-order]
+      action: [consists of, includes]
+    - label: Lead capture
+      parent: [Pipeline management]
+      action: [consists of, includes]
+    - label: Opportunity registration
+      parent: [Pipeline management]
+      action: [consists of, includes]
+    - label: Fit assessment
+      parent: [Qualification]
+      action: [consists of, includes]
+    - label: Go/no-go decision
+      parent: [Qualification]
+      action: [consists of, includes]
+    - label: Qualification record
+      parent: [Go/no-go decision]
+      action: [produces, creates]
+    - label: Solutioning
+      parent: [Bid management]
+      action: [consists of, includes]
+    - label: Pricing
+      parent: [Bid management]
+      action: [consists of, includes]
+    - label: Proposal review
+      parent: [Bid management]
+      action: [consists of, includes]
+    - label: Solution design
+      parent: [Solutioning]
+      action: [produces, creates]
+    - label: Price model
+      parent: [Pricing]
+      action: [produces, creates]
+    - label: Rate card
+      parent: [Price model]
+      action: [includes, contains]
+    - label: Statement of work drafting
+      parent: [Contracting]
+      action: [consists of, includes]
+    - label: Order booking
+      parent: [Contracting]
+      action: [consists of, includes]
+    - label: Statement of work
+      parent: [Statement of work drafting]
+      action: [produces, creates]
+    - label: Scope
+      parent: [Statement of work]
+      action: [contains, includes, has]
+    - label: Deliverables
+      parent: [Statement of work]
+      action: [contains, includes, has]
+    - label: Acceptance criteria
+      parent: [Statement of work]
+      action: [contains, includes, has]
+    - label: Fixed-price statement of work
+      parent: [Statement of work]
+      action: [is a, is a kind of, is a type of]
+    - label: Time-and-materials statement of work
+      parent: [Statement of work]
+      action: [is a, is a kind of, is a type of]
+
+    - label: Project delivery method
+      parent: [Delivery]
+      action: [consists of, includes, has]
+    - label: Resource management
+      parent: [Delivery]
+      action: [consists of, includes, has]
+    - label: Managed services
+      parent: [Delivery]
+      action: [consists of, includes, has]
+    - label: Initiation
+      parent: [Project delivery method]
+      action: [consists of, includes]
+    - label: Design
+      parent: [Project delivery method]
+      action: [consists of, includes]
+    - label: Build
+      parent: [Project delivery method]
+      action: [consists of, includes]
+    - label: Test
+      parent: [Project delivery method]
+      action: [consists of, includes]
+    - label: Transition
+      parent: [Project delivery method]
+      action: [consists of, includes]
+    - label: Project kick-off
+      parent: [Initiation]
+      action: [includes, consists of]
+    - label: Project planning
+      parent: [Initiation]
+      action: [includes, consists of]
+    - label: Project charter
+      parent: [Project kick-off]
+      action: [produces, creates]
+    - label: Project plan
+      parent: [Project planning]
+      action: [produces, creates]
+    - label: RAID log
+      parent: [Project plan]
+      action: [includes, contains]
+    - label: Requirements analysis
+      parent: [Design]
+      action: [includes, consists of]
+    - label: Requirements specification
+      parent: [Requirements analysis]
+      action: [produces, creates]
+    - label: Sprint
+      parent: [Build]
+      action: [runs in, consists of, includes]
+    - label: Increment
+      parent: [Sprint]
+      action: [produces, delivers]
+    - label: User acceptance testing
+      parent: [Test]
+      action: [includes, consists of]
+    - label: Acceptance certificate
+      parent: [User acceptance testing]
+      action: [produces, creates]
+    - label: Go-live
+      parent: [Transition]
+      action: [includes, consists of]
+    - label: Hypercare
+      parent: [Go-live]
+      action: [triggers, starts]
+    - label: Demand planning
+      parent: [Resource management]
+      action: [consists of, includes]
+    - label: Staffing
+      parent: [Resource management]
+      action: [consists of, includes]
+    - label: Bench management
+      parent: [Resource management]
+      action: [consists of, includes]
+    - label: Resource request
+      parent: [Staffing]
+      action: [consists of, includes]
+    - label: Assignment
+      parent: [Staffing]
+      action: [consists of, includes]
+    - label: Service operation
+      parent: [Managed services]
+      action: [runs, operates, includes]
+    - label: Service level agreement
+      parent: [Managed services]
+      action: [has, includes]
+    - label: Service reporting
+      parent: [Service operation]
+      action: [includes, consists of]
+    - label: Monthly service report
+      parent: [Service reporting]
+      action: [produces, creates]
+
+    - label: Service desk
+      parent: [Support]
+      action: [consists of, includes, has]
+    - label: Incident management
+      parent: [Support]
+      action: [consists of, includes, has]
+    - label: Problem management
+      parent: [Support]
+      action: [consists of, includes, has]
+    - label: Change management
+      parent: [Support]
+      action: [consists of, includes, has]
+    - label: Tiers
+      parent: [Service desk]
+      action: [has, includes]
+    - label: Tier 1
+      parent: [Tiers]
+      action: [includes, has]
+    - label: Tier 2
+      parent: [Tiers]
+      action: [includes, has]
+    - label: Tier 3
+      parent: [Tiers]
+      action: [includes, has]
+    - label: Triage
+      parent: [Tier 1]
+      action: [performs, runs, includes]
+    - label: Ticket
+      parent: [Service desk]
+      action: [handles, manages, processes]
+    - label: Incident
+      parent: [Ticket]
+      action: [is a, is a kind of, is a type of]
+    - label: Service request
+      parent: [Ticket]
+      action: [is a, is a kind of, is a type of]
+    - label: Incident logging
+      parent: [Incident management]
+      action: [consists of, includes]
+    - label: Incident classification
+      parent: [Incident management]
+      action: [consists of, includes]
+    - label: Incident resolution
+      parent: [Incident management]
+      action: [consists of, includes]
+    - label: Priority matrix
+      parent: [Incident classification]
+      action: [uses, applies]
+    - label: Impact
+      parent: [Priority matrix]
+      action: [combines, includes, has]
+    - label: Urgency
+      parent: [Priority matrix]
+      action: [combines, includes, has]
+    - label: Root cause analysis
+      parent: [Problem management]
+      action: [consists of, includes]
+    - label: Known error recording
+      parent: [Problem management]
+      action: [consists of, includes]
+    - label: Root cause report
+      parent: [Root cause analysis]
+      action: [produces, creates]
+    - label: Known error database
+      parent: [Known error recording]
+      action: [updates, maintains]
+    - label: Change logging
+      parent: [Change management]
+      action: [consists of, includes]
+    - label: Change approval
+      parent: [Change management]
+      action: [consists of, includes]
+    - label: Change implementation
+      parent: [Change management]
+      action: [consists of, includes]
+    - label: Change request
+      parent: [Change logging]
+      action: [creates, produces]
+    - label: Standard change
+      parent: [Change request]
+      action: [is a, is a kind of, is a type of]
+    - label: Emergency change
+      parent: [Change request]
+      action: [is a, is a kind of, is a type of]
+    - label: Change advisory board
+      parent: [Change approval]
+      action: [convenes, involves, uses]
+    - label: Post-implementation review
+      parent: [Change implementation]
+      action: [ends with, includes, produces]
+
+    - label: Time capture
+      parent: [Finance]
+      action: [consists of, includes, runs]
+    - label: Billing
+      parent: [Finance]
+      action: [consists of, includes, runs]
+    - label: Revenue recognition
+      parent: [Finance]
+      action: [consists of, includes, runs]
+    - label: Collections
+      parent: [Finance]
+      action: [consists of, includes, runs]
+    - label: Timesheet entry
+      parent: [Time capture]
+      action: [consists of, includes]
+    - label: Timesheet approval
+      parent: [Time capture]
+      action: [consists of, includes]
+    - label: Timesheet
+      parent: [Timesheet entry]
+      action: [produces, creates]
+    - label: Billing run
+      parent: [Billing]
+      action: [consists of, includes]
+    - label: Invoice dispatch
+      parent: [Billing]
+      action: [consists of, includes]
+    - label: Draft invoice
+      parent: [Billing run]
+      action: [produces, creates]
+    - label: Customer invoice
+      parent: [Invoice dispatch]
+      action: [sends, issues, produces]
+    - label: Percentage-of-completion method
+      parent: [Revenue recognition]
+      action: [applies, uses]
+    - label: Revenue journal
+      parent: [Revenue recognition]
+      action: [produces, creates]
+    - label: Dunning levels
+      parent: [Collections]
+      action: [has, includes]
+    - label: Reminder
+      parent: [Dunning levels]
+      action: [includes, has]
+    - label: Formal notice
+      parent: [Dunning levels]
+      action: [includes, has]
+    - label: Legal escalation
+      parent: [Dunning levels]
+      action: [includes, has]
+    - label: Aged debt report
+      parent: [Collections]
+      action: [produces, creates]
+
+  relations:
+    - from: Solutioning
+      to: Offerings
+      action: [selects services from, selects from, uses]
+    - from: Project kick-off
+      to: Statement of work
+      action: [reads, uses]
+      inverse: [is read by]
+    - from: Order booking
+      to: Resource request
+      action: [triggers, starts]
+      inverse: [is triggered by]
+    - from: Acceptance certificate
+      to: Billing run
+      action: [triggers, starts]
+      inverse: [is triggered by]
+    - from: Hypercare
+      to: Service desk
+      action: [hands over to, transfers to]
+    - from: Service level agreement
+      to: Incident management
+      action: [governs, constrains]
+      inverse: [is governed by]
+    - from: Tier 3
+      to: Problem management
+      action: [feeds, escalates to]
+      inverse: [is fed by]
+    - from: Timesheet
+      to: Billing run
+      action: [feeds, is used by]
+      inverse: [is fed by]
+    - from: Timesheet
+      to: Revenue recognition
+      action: [feeds, is used by]
+      inverse: [is fed by]
+    - from: Billing run
+      to: Rate card
+      action: [reads, uses]
+      inverse: [is read by]
+    - from: Customer invoice
+      to: Aged debt report
+      action: [feeds, is used by]
+      inverse: [is fed by]
+optional:
+  - Operating Model Office
+  - Operating committee
+  - Service sheet
+  - Catalogue
+  - Master services agreement
+  - Weekly pipeline call
+  - Opportunity
+  - Lead
+  - Effort estimate
+  - Risk contingency
+  - Target margin
+  - Proposal
+  - Gate review
+  - Risks
+  - Assumptions
+  - Issues
+  - Dependencies
+  - Skills inventory
+  - Bench
+  - Workaround
+  - Monthly service review
+  - Service credits
+  - Project code
+  - General ledger
+  - Priority
+  - P1
+  - Major incident manager
+  - Account director
+  - Offering director
+  - Bid manager
+  - Contract manager
+  - Delivery lead
+  - Project manager
+  - Resource manager
+  - Service delivery manager
+  - Credit controller
+  - CRM
+  - PSA tool
+  - ERP
+  - ITSM platform
+  - Document store
+  - Performance dashboard
+  - Pipeline coverage
+  - Win rate
+  - Utilisation
+  - Project margin
+  - Service level attainment
+  - First-contact resolution
+  - Change success rate
+  - Days sales outstanding

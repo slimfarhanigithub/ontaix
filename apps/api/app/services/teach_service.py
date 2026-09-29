@@ -15,6 +15,7 @@ caller's teach session.
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -81,7 +82,9 @@ class _Source:
 
 
 async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> TeachResult:
+    started = time.perf_counter()
     view = await load_view(session, caller.tenant_id)
+    view_ms = int((time.perf_counter() - started) * 1000)
     company = view.companies.get(body.company_id)
     if company is None or not can_read(caller.grants, company.id):
         raise not_found("company")
@@ -143,6 +146,13 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
             segments = step.segments or whole
             result, kept = _with_model(grammar, step, replace, sentence, dom_key, source, segments)
     await teach_session_service.store_turns(key, result.extractor, _turns(source, result, kept))
+    logger.debug(
+        "teach parse (%s, %s): view %d ms, total %d ms",
+        result.extractor,
+        result.llm_outcome,
+        view_ms,
+        int((time.perf_counter() - started) * 1000),
+    )
     return result
 
 

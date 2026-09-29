@@ -1,0 +1,20 @@
+{
+  "label": "Acme Corp",
+  "children": [
+    {
+      "label": "Sales",
+      "children": [
+        {"name": "Customer", "verb": "serves", "aliases": ["Client"]},
+        {
+          "label": "Order",
+          "action": ["takes", "receives"],
+          "children": [
+            {"label": "Online Order", "children": [{"label": "Express Online Order"}]}
+          ]
+        }
+      ]
+    },
+    {"label": "Operations", "children": [{"label": "Delivery"}]},
+    {"children": []}
+  ]
+}

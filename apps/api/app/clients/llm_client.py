@@ -3,7 +3,8 @@
 The rest of the API sees only this module. A request carries the system instructions, one user
 message and the JSON schema the answer must follow; the answer carries the raw JSON text, token
 counts, the estimated euro cost and the latency. A timeout or a provider failure raises
-`LlmTimeout` or `LlmProviderError`, each with the tokens the provider reported (0 when none).
+`LlmTimeout` or `LlmProviderError` (`LlmRefused` for a content filter or a declining model),
+each with the tokens the provider reported (0 when none).
 No provider type, SDK class or credential leaves the implementation modules.
 """
 
@@ -32,6 +33,8 @@ logger = logging.getLogger(__name__)
 # (scripts where one character is a token or more), so a reservation errs on counting too much.
 CODE_POINTS_PER_TOKEN = 2
 BYTES_PER_TOKEN = 3
+# `llm_call.latency_ms` holds at most five minutes.
+MAX_LATENCY_MS = 300_000
 # Providers reached keylessly through the Azure AI Foundry endpoint settings.
 FOUNDRY_PROVIDERS = ("azure_foundry", "anthropic_foundry")
 
@@ -81,6 +84,10 @@ class LlmProviderError(LlmCallError):
     """The provider refused, failed, rate-limited, or stopped before a complete answer."""
 
 
+class LlmRefused(LlmProviderError):
+    """The provider's content filter blocked the request or the answer, or the model declined."""
+
+
 class LlmConfigurationError(RuntimeError):
     """The configured provider cannot run: raised at start-up, never during a request."""
 
@@ -118,6 +125,21 @@ def reset_llm_client() -> None:
     _overrides.clear()
 
 
+async def warm_llm_clients() -> None:
+    """Prepares every configured profile's client for its first call - for Claude on Foundry,
+    the Entra ID token and an open TLS connection, with no model call. A client without a
+    `warm` method needs none. Never raises: a failed warm-up leaves the work to the first call."""
+    for profile in LLM_PROFILES:
+        try:
+            warm = getattr(get_llm_client(profile), "warm", None)
+            if warm is not None:
+                await warm()
+        except Exception as exc:
+            logger.warning(
+                "warming the %s language model client failed: %s", profile, type(exc).__name__
+            )
+
+
 def check_llm_configuration(settings: Settings) -> None:
     """Stops start-up when a provider is configured but a model it calls has no price.
 
@@ -152,8 +174,8 @@ def cost_eur(price: ModelPrice, input_tokens: int, output_tokens: int) -> float:
 
 
 def elapsed_ms(started: float) -> int:
-    """Milliseconds since `started` (a `time.monotonic()` value), capped at one minute."""
-    return min(60_000, max(0, int((time.monotonic() - started) * 1000)))
+    """Milliseconds since `started` (a `time.monotonic()` value), capped at five minutes."""
+    return min(MAX_LATENCY_MS, max(0, int((time.monotonic() - started) * 1000)))
 
 
 def _provider_configured(settings: Settings) -> bool:

@@ -52,6 +52,8 @@ export interface Attr {
   type: string;
   col: string;
   fill: number;
+  /** A taught attribute's value, shown in place of the column; it has no fill. */
+  value?: string;
   state: 'approved' | 'proposed';
 }
 

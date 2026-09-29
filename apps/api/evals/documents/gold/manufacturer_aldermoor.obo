@@ -1,0 +1,938 @@
+format-version: 1.4
+ontology: manufacturer_aldermoor
+remark: Gold tree of manufacturer_aldermoor.md. The company is the root term GOLD:0000000.
+
+[Term]
+id: GOLD:0000000
+name: Aldermoor Valves
+
+[Term]
+id: GOLD:0000001
+name: Order-to-cash
+synonym: "Order to cash" EXACT []
+is_a: GOLD:0000000 ! Aldermoor Valves
+property_value: birth_action "runs" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "operates" xsd:string
+
+[Term]
+id: GOLD:0000002
+name: Procure-to-pay
+is_a: GOLD:0000000 ! Aldermoor Valves
+property_value: birth_action "runs" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "operates" xsd:string
+
+[Term]
+id: GOLD:0000003
+name: Plan-to-produce
+is_a: GOLD:0000000 ! Aldermoor Valves
+property_value: birth_action "runs" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "operates" xsd:string
+
+[Term]
+id: GOLD:0000004
+name: Quality management
+is_a: GOLD:0000000 ! Aldermoor Valves
+property_value: birth_action "runs" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "operates" xsd:string
+
+[Term]
+id: GOLD:0000005
+name: Master data management
+is_a: GOLD:0000000 ! Aldermoor Valves
+property_value: birth_action "runs" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "operates" xsd:string
+
+[Term]
+id: GOLD:0000006
+name: Quote-to-order
+is_a: GOLD:0000001 ! Order-to-cash
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000007
+name: Fulfilment
+is_a: GOLD:0000001 ! Order-to-cash
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000008
+name: Billing
+is_a: GOLD:0000001 ! Order-to-cash
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000009
+name: Quotation
+is_a: GOLD:0000006 ! Quote-to-order
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000010
+name: Order capture
+is_a: GOLD:0000006 ! Quote-to-order
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000011
+name: Configuration check
+is_a: GOLD:0000009 ! Quotation
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000012
+name: Price calculation
+is_a: GOLD:0000009 ! Quotation
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000013
+name: Technical datasheet
+is_a: GOLD:0000011 ! Configuration check
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000014
+name: Price quote
+is_a: GOLD:0000012 ! Price calculation
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000015
+name: Order entry
+is_a: GOLD:0000010 ! Order capture
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+relationship: reads GOLD:0000100 ! Material master
+
+[Term]
+id: GOLD:0000016
+name: Credit check
+is_a: GOLD:0000010 ! Order capture
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+relationship: reads GOLD:0000109 ! Customer master
+
+[Term]
+id: GOLD:0000017
+name: Sales order
+is_a: GOLD:0000015 ! Order entry
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000018
+name: Rush order
+is_a: GOLD:0000017 ! Sales order
+property_value: birth_action "is a" xsd:string
+property_value: accepted_action "is a kind of" xsd:string
+property_value: accepted_action "is a type of" xsd:string
+
+[Term]
+id: GOLD:0000019
+name: Credit decision
+is_a: GOLD:0000016 ! Credit check
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000020
+name: Picking
+is_a: GOLD:0000007 ! Fulfilment
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000021
+name: Shipping
+is_a: GOLD:0000007 ! Fulfilment
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+relationship: attaches GOLD:0000079 ! Test certificate
+
+[Term]
+id: GOLD:0000022
+name: Pick list
+is_a: GOLD:0000020 ! Picking
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000023
+name: Delivery note
+is_a: GOLD:0000021 ! Shipping
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000024
+name: Invoicing
+is_a: GOLD:0000008 ! Billing
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000025
+name: Collection
+is_a: GOLD:0000008 ! Billing
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000026
+name: Customer invoice
+is_a: GOLD:0000024 ! Invoicing
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000027
+name: Cash application
+is_a: GOLD:0000025 ! Collection
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000028
+name: Dunning
+is_a: GOLD:0000025 ! Collection
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000029
+name: Dunning letter
+is_a: GOLD:0000028 ! Dunning
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000030
+name: Sourcing
+is_a: GOLD:0000002 ! Procure-to-pay
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000031
+name: Purchasing
+is_a: GOLD:0000002 ! Procure-to-pay
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000032
+name: Receiving
+is_a: GOLD:0000002 ! Procure-to-pay
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000033
+name: Supplier payment
+is_a: GOLD:0000002 ! Procure-to-pay
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000034
+name: Spend categories
+is_a: GOLD:0000030 ! Sourcing
+property_value: birth_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000035
+name: Castings
+is_a: GOLD:0000034 ! Spend categories
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000036
+name: Electronics
+is_a: GOLD:0000034 ! Spend categories
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000037
+name: Seals
+is_a: GOLD:0000034 ! Spend categories
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000038
+name: Supplier selection
+is_a: GOLD:0000030 ! Sourcing
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000039
+name: Supplier qualification
+is_a: GOLD:0000038 ! Supplier selection
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+relationship: updates GOLD:0000110 ! Supplier master
+
+[Term]
+id: GOLD:0000040
+name: Request for quotation
+is_a: GOLD:0000038 ! Supplier selection
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000041
+name: Supplier audit report
+is_a: GOLD:0000039 ! Supplier qualification
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000042
+name: Supplier bid
+is_a: GOLD:0000040 ! Request for quotation
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000043
+name: Requisitioning
+is_a: GOLD:0000031 ! Purchasing
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000044
+name: Purchase order creation
+is_a: GOLD:0000031 ! Purchasing
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000045
+name: Purchase requisition
+is_a: GOLD:0000043 ! Requisitioning
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000046
+name: Purchase order
+is_a: GOLD:0000044 ! Purchase order creation
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000047
+name: Blanket purchase order
+is_a: GOLD:0000046 ! Purchase order
+property_value: birth_action "is a" xsd:string
+property_value: accepted_action "is a kind of" xsd:string
+property_value: accepted_action "is a type of" xsd:string
+
+[Term]
+id: GOLD:0000048
+name: Goods receipt
+is_a: GOLD:0000032 ! Receiving
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+relationship: triggers GOLD:0000087 ! Incoming inspection
+
+[Term]
+id: GOLD:0000049
+name: Put-away
+is_a: GOLD:0000032 ! Receiving
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000050
+name: Goods receipt note
+is_a: GOLD:0000048 ! Goods receipt
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000051
+name: Invoice verification
+is_a: GOLD:0000033 ! Supplier payment
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000052
+name: Payment run
+is_a: GOLD:0000033 ! Supplier payment
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000053
+name: Three-way match
+is_a: GOLD:0000051 ! Invoice verification
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+relationship: compares GOLD:0000050 ! Goods receipt note
+relationship: compares GOLD:0000046 ! Purchase order
+
+[Term]
+id: GOLD:0000054
+name: Match exception
+is_a: GOLD:0000053 ! Three-way match
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000055
+name: Payment advice
+is_a: GOLD:0000052 ! Payment run
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000056
+name: Demand planning
+is_a: GOLD:0000003 ! Plan-to-produce
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000057
+name: Production planning
+is_a: GOLD:0000003 ! Plan-to-produce
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000058
+name: Production execution
+is_a: GOLD:0000003 ! Plan-to-produce
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000059
+name: Sales forecasting
+is_a: GOLD:0000056 ! Demand planning
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000060
+name: Consensus planning
+is_a: GOLD:0000056 ! Demand planning
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000061
+name: Demand forecast
+is_a: GOLD:0000059 ! Sales forecasting
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000062
+name: Consensus plan
+is_a: GOLD:0000060 ! Consensus planning
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000063
+name: Master scheduling
+is_a: GOLD:0000057 ! Production planning
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+relationship: checks GOLD:0000105 ! Work centre
+
+[Term]
+id: GOLD:0000064
+name: Material requirements planning
+is_a: GOLD:0000057 ! Production planning
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000065
+name: Master production schedule
+is_a: GOLD:0000063 ! Master scheduling
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000066
+name: Net requirements calculation
+is_a: GOLD:0000064 ! Material requirements planning
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+relationship: explodes GOLD:0000101 ! Bill of materials
+
+[Term]
+id: GOLD:0000067
+name: Planned order conversion
+is_a: GOLD:0000064 ! Material requirements planning
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000068
+name: Planned order
+is_a: GOLD:0000066 ! Net requirements calculation
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000069
+name: Production order
+is_a: GOLD:0000067 ! Planned order conversion
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000070
+name: Rework order
+is_a: GOLD:0000069 ! Production order
+property_value: birth_action "is a" xsd:string
+property_value: accepted_action "is a kind of" xsd:string
+property_value: accepted_action "is a type of" xsd:string
+
+[Term]
+id: GOLD:0000071
+name: Shop floor control
+is_a: GOLD:0000058 ! Production execution
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000072
+name: Final assembly
+is_a: GOLD:0000058 ! Production execution
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000073
+name: Order release
+is_a: GOLD:0000071 ! Shop floor control
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+relationship: uses GOLD:0000104 ! Routing
+
+[Term]
+id: GOLD:0000074
+name: Operation confirmation
+is_a: GOLD:0000071 ! Shop floor control
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000075
+name: Job traveller
+is_a: GOLD:0000073 ! Order release
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000076
+name: Confirmation record
+is_a: GOLD:0000074 ! Operation confirmation
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000077
+name: Valve assembly
+is_a: GOLD:0000072 ! Final assembly
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000078
+name: Pressure testing
+is_a: GOLD:0000072 ! Final assembly
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000079
+name: Test certificate
+is_a: GOLD:0000078 ! Pressure testing
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000080
+name: Quality planning
+is_a: GOLD:0000004 ! Quality management
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000081
+name: Quality control
+is_a: GOLD:0000004 ! Quality management
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000082
+name: Nonconformance management
+is_a: GOLD:0000004 ! Quality management
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000083
+name: Inspection planning
+is_a: GOLD:0000080 ! Quality planning
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000084
+name: Inspection plan
+is_a: GOLD:0000083 ! Inspection planning
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000085
+name: Inspection characteristic
+is_a: GOLD:0000084 ! Inspection plan
+property_value: birth_action "lists" xsd:string
+property_value: accepted_action "contains" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000086
+name: Inspection types
+is_a: GOLD:0000081 ! Quality control
+property_value: birth_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000087
+name: Incoming inspection
+is_a: GOLD:0000086 ! Inspection types
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000088
+name: In-process inspection
+is_a: GOLD:0000086 ! Inspection types
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000089
+name: Final inspection
+is_a: GOLD:0000086 ! Inspection types
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000090
+name: Sampling
+is_a: GOLD:0000081 ! Quality control
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000091
+name: Results recording
+is_a: GOLD:0000081 ! Quality control
+property_value: birth_action "includes" xsd:string
+property_value: accepted_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+
+[Term]
+id: GOLD:0000092
+name: Usage decision
+is_a: GOLD:0000091 ! Results recording
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+relationship: triggers GOLD:0000093 ! Root cause analysis
+
+[Term]
+id: GOLD:0000093
+name: Root cause analysis
+is_a: GOLD:0000082 ! Nonconformance management
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000094
+name: Corrective action
+is_a: GOLD:0000082 ! Nonconformance management
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000095
+name: 8D report
+is_a: GOLD:0000093 ! Root cause analysis
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000096
+name: CAPA record
+is_a: GOLD:0000094 ! Corrective action
+property_value: birth_action "produces" xsd:string
+property_value: accepted_action "creates" xsd:string
+property_value: accepted_action "outputs" xsd:string
+
+[Term]
+id: GOLD:0000097
+name: Product data management
+is_a: GOLD:0000005 ! Master data management
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000098
+name: Production data management
+is_a: GOLD:0000005 ! Master data management
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000099
+name: Partner data management
+is_a: GOLD:0000005 ! Master data management
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000100
+name: Material master
+is_a: GOLD:0000097 ! Product data management
+property_value: birth_action "maintains" xsd:string
+property_value: accepted_action "manages" xsd:string
+property_value: accepted_action "owns" xsd:string
+
+[Term]
+id: GOLD:0000101
+name: Bill of materials
+is_a: GOLD:0000097 ! Product data management
+property_value: birth_action "maintains" xsd:string
+property_value: accepted_action "manages" xsd:string
+property_value: accepted_action "owns" xsd:string
+
+[Term]
+id: GOLD:0000102
+name: BOM item
+is_a: GOLD:0000101 ! Bill of materials
+property_value: birth_action "has" xsd:string
+property_value: accepted_action "contains" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000103
+name: Engineering BOM
+is_a: GOLD:0000101 ! Bill of materials
+property_value: birth_action "is a" xsd:string
+property_value: accepted_action "is a kind of" xsd:string
+property_value: accepted_action "is a type of" xsd:string
+
+[Term]
+id: GOLD:0000104
+name: Routing
+is_a: GOLD:0000098 ! Production data management
+property_value: birth_action "maintains" xsd:string
+property_value: accepted_action "manages" xsd:string
+property_value: accepted_action "owns" xsd:string
+
+[Term]
+id: GOLD:0000105
+name: Work centre
+is_a: GOLD:0000098 ! Production data management
+property_value: birth_action "maintains" xsd:string
+property_value: accepted_action "manages" xsd:string
+property_value: accepted_action "owns" xsd:string
+
+[Term]
+id: GOLD:0000106
+name: Routing operation
+is_a: GOLD:0000104 ! Routing
+property_value: birth_action "consists of" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "includes" xsd:string
+
+[Term]
+id: GOLD:0000107
+name: Standard time
+is_a: GOLD:0000106 ! Routing operation
+property_value: birth_action "has" xsd:string
+property_value: accepted_action "carries" xsd:string
+
+[Term]
+id: GOLD:0000108
+name: Capacity profile
+is_a: GOLD:0000105 ! Work centre
+property_value: birth_action "has" xsd:string
+property_value: accepted_action "carries" xsd:string
+
+[Term]
+id: GOLD:0000109
+name: Customer master
+is_a: GOLD:0000099 ! Partner data management
+property_value: birth_action "maintains" xsd:string
+property_value: accepted_action "manages" xsd:string
+property_value: accepted_action "owns" xsd:string
+
+[Term]
+id: GOLD:0000110
+name: Supplier master
+is_a: GOLD:0000099 ! Partner data management
+property_value: birth_action "maintains" xsd:string
+property_value: accepted_action "manages" xsd:string
+property_value: accepted_action "owns" xsd:string
+
+[Typedef]
+id: attaches
+name: attaches
+property_value: accepted_action "includes" xsd:string
+property_value: accepted_action "ships with" xsd:string
+
+[Typedef]
+id: checks
+name: checks
+property_value: accepted_action "reads" xsd:string
+property_value: accepted_action "uses" xsd:string
+
+[Typedef]
+id: compares
+name: compares
+property_value: accepted_action "checks" xsd:string
+property_value: accepted_action "uses" xsd:string
+
+[Typedef]
+id: explodes
+name: explodes
+property_value: accepted_action "reads" xsd:string
+property_value: accepted_action "uses" xsd:string
+
+[Typedef]
+id: reads
+name: reads
+property_value: accepted_action "uses" xsd:string
+property_value: inverse_action "is read by" xsd:string
+
+[Typedef]
+id: triggers
+name: triggers
+property_value: accepted_action "starts" xsd:string
+property_value: inverse_action "is triggered by" xsd:string
+
+[Typedef]
+id: updates
+name: updates
+property_value: accepted_action "maintains" xsd:string
+property_value: accepted_action "writes to" xsd:string
+property_value: inverse_action "is updated by" xsd:string
+
+[Typedef]
+id: uses
+name: uses
+property_value: accepted_action "reads" xsd:string
+property_value: inverse_action "is used by" xsd:string

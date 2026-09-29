@@ -34,6 +34,7 @@ async def emit(
     domain_key: str | None = None,
     visibility: str = VISIBILITY_MODEL,
     bulk: bool = False,
+    recipient_user_id: uuid.UUID | None = None,
 ) -> Outbox:
     """Record an event `<aggregate>.<action>` for the relay; the payload is the full new state.
 
@@ -41,7 +42,8 @@ async def emit(
     audience: every company whose labels, names or artefact state the payload carries; empty is
     tenant-wide. A subscriber receives the event only when it holds `visibility` in a scope that
     contains every listed company. `domain_key` is set on `audit.appended` only: a holder of
-    `audit.read` on that domain scope also receives the event.
+    `audit.read` on that domain scope also receives the event. `recipient_user_id` is set on
+    extraction events only: the one user who receives them.
     """
     aggregate, action = event_type.split(".", 1)
     body = (
@@ -58,6 +60,7 @@ async def emit(
         visibility=visibility,
         company_ids=audience(company_ids),
         domain_key=domain_key,
+        recipient_user_id=recipient_user_id,
         actor_kind=ActorKind(actor.kind),
         actor_id=actor.id,
         bulk=bulk,

@@ -1,0 +1,22 @@
+{
+  "nodes": [
+    {"id": "acme", "label": "Acme Corp"},
+    {"id": "sales", "label": "Sales"},
+    {"id": "ops", "label": "Operations"},
+    {"id": "customer", "label": "Customer"},
+    {"id": "order", "label": "Order"},
+    {"id": "delivery", "label": "Delivery"},
+    {"id": "product", "name": "Product"}
+  ],
+  "edges": [
+    {"source": "sales", "target": "acme", "type": "is_a"},
+    {"source": "ops", "target": "acme", "type": "subClassOf"},
+    {"source": "customer", "target": "sales", "type": "is_a"},
+    {"from": "sales", "to": "order", "type": "narrower"},
+    {"source": "delivery", "target": "ops", "type": "child_of"},
+    {"source": "delivery", "target": "sales", "type": "broader"},
+    {"source": "customer", "target": "order", "label": "places"},
+    {"source": "delivery", "target": "product", "type": "shipsProduct"},
+    {"source": "ghost", "target": "product", "type": "is_a"}
+  ]
+}

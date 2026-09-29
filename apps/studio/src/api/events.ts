@@ -27,6 +27,8 @@ export type EventType =
   | 'domain_product.changed'
   | 'company.created'
   | 'company.removed'
+  /** Progress or end of a whole-document extraction job, delivered to the user who started it. */
+  | 'extraction.changed'
   | 'settings.changed'
   | 'appearance.changed'
   | 'view_state.changed'

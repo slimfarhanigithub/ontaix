@@ -30,6 +30,11 @@ import {
   type SourceUpdate,
   type User,
   type BulkResult,
+  type BranchResult,
+  type DocumentExtraction,
+  type DocumentExtractionResult,
+  type ExpansionRequest,
+  type ExpansionResult,
   type CompanyCreate,
   type CompanyCreated,
   type DecisionResult,
@@ -143,6 +148,18 @@ export const api = {
     call<DecisionResult>('POST', `/proposals/${id}/reject`, reason ? { reason } : undefined),
   approveAll: () => call<BulkResult>('POST', '/proposals/approve-all'),
   rejectAll: () => call<BulkResult>('POST', '/proposals/reject-all'),
+  approveBranch: (id: string) => call<BranchResult>('POST', `/proposals/${id}/approve-branch`),
+  expandConcept: (conceptId: string, body: ExpansionRequest) =>
+    call<ExpansionResult>('POST', `/concepts/${conceptId}/expand`, body),
+  proposeExpansion: (expansionId: string, indexes: number[]) =>
+    call<Proposal[]>('POST', `/expansions/${expansionId}/proposals`, { indexes }),
+  startDocumentExtraction: (importId: string, companyId: string) =>
+    call<DocumentExtraction>('POST', `/import/${importId}/extraction`, { companyId }),
+  getDocumentExtraction: (id: string) => call<DocumentExtraction>('GET', `/extractions/${id}`),
+  cancelDocumentExtraction: (id: string) => call<DocumentExtraction>('DELETE', `/extractions/${id}`),
+  getDocumentExtractionResult: (id: string) => call<DocumentExtractionResult>('GET', `/extractions/${id}/result`),
+  proposeDocumentExtraction: (id: string, indexes: number[]) =>
+    call<Proposal[]>('POST', `/extractions/${id}/proposals`, { indexes }),
   createCompany: (body: CompanyCreate) => call<CompanyCreated>('POST', '/companies', body),
   updateDomainProduct: (id: string, patch: { hidden?: boolean }) =>
     call<DomainProduct>('PATCH', `/domain-products/${id}`, patch),

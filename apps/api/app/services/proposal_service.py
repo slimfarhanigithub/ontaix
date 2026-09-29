@@ -1,9 +1,9 @@
 """Creates proposals from typed drafts and writes their pending artefacts at once.
 
 Every ontology mutation endpoint ends here. Creating a proposal writes the pending concept and
-its birth relation, or the pending relation, in the same transaction as the proposal row, the
-`proposal.created` event and the `concept.born` or `relation.created` event. Nothing here ever
-writes an approved row.
+its birth relation, the pending relation, or the proposed taught attribute, in the same
+transaction as the proposal row, the `proposal.created` event and the `concept.born`,
+`relation.created` or `attribute.changed` event. Nothing here ever writes an approved row.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ from app.models.api.drafts import (
 from app.models.proposals.provenance import Provenance
 from app.models.storage.proposal import Proposal
 from app.services import decision_lock_service, provenance_service
+from app.services.attribute_proposal_service import propose_attribute
 from app.services.change_proposal_service import propose_change
 from app.services.concept_proposal_service import propose_concept, propose_spec
 from app.services.ontology_view_service import OntologyView
@@ -78,6 +79,8 @@ async def create(
             return await propose_relation(session, caller, who, view, draft, bulk, enforce, prov)
         case ChangeDraft():
             return await propose_change(session, caller, who, view, draft, bulk, enforce, prov)
+        case AttributeDraft() if draft.taught:
+            return await propose_attribute(session, caller, who, view, draft, bulk, enforce, prov)
         case _:
             raise ProblemError(
                 503, "unavailable", f"{draft.type} proposals are served by the bindings module"

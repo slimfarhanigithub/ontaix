@@ -17,11 +17,15 @@ Environment = Literal["dev", "test", "staging", "production"]
 
 MAX_LLM_TIMEOUT_SECONDS = 15.0
 MAX_LLM_SPEECH_TIMEOUT_SECONDS = 45.0
+# Concept expansion and whole-document extraction calls; `llm_call.latency_ms` holds at most 300 s.
+MAX_LONG_CALL_TIMEOUT_SECONDS = 300.0
+DEFAULT_EXPAND_TIMEOUT_SECONDS = 120.0
+DEFAULT_DOCUMENT_EXTRACTION_TIMEOUT_SECONDS = 180.0
 
 LlmProvider = Literal["azure_foundry", "anthropic", "anthropic_foundry"]
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
-# Teach extraction runs on one of two model profiles: `live` for typed text and speech, where
-# latency matters, and `deep` for document sentences.
+# Model calls run on one of two profiles: `live` for typed text and speech, where latency
+# matters, and `deep` for document sentences, concept expansion and whole-document extraction.
 LlmProfile = Literal["live", "deep"]
 LLM_PROFILES: tuple[LlmProfile, ...] = ("live", "deep")
 # What `python -m app.seed` loads into the demo tenant: only its directory, or the directory
@@ -140,6 +144,34 @@ class Settings(BaseSettings):
     )
     speech_language: SpeechLanguage = "en-GB"
     speech_tokens_per_hour: int = Field(default=60, ge=0)
+
+    # Concept expansion runs on the `deep` profile; these bound its cost and wait.
+    expand_max_nodes: int = Field(default=200, ge=1, le=2000)
+    expand_max_output_tokens: int = Field(default=32_768, ge=1, le=131_072)
+    expand_context_labels: int = Field(default=1000, ge=0, le=100_000)
+    expand_timeout_seconds: float = Field(
+        default=DEFAULT_EXPAND_TIMEOUT_SECONDS, gt=0, le=MAX_LONG_CALL_TIMEOUT_SECONDS
+    )
+    expand_calls_per_hour: int = Field(default=30, ge=0)
+
+    # Whole-document extraction runs on the `deep` profile; these bound its size, cost and wait.
+    document_extraction_chunk_chars: int = Field(default=10_000, ge=500, le=100_000)
+    document_extraction_outline_context_nodes: int = Field(default=600, ge=1, le=5000)
+    document_extraction_max_nodes: int = Field(default=2000, ge=1, le=5000)
+    document_extraction_max_tokens: int = Field(default=1_000_000, ge=1, le=2_000_000_000)
+    document_extraction_max_chars: int = Field(default=400_000, ge=1, le=2_000_000)
+    document_extraction_timeout_seconds: float = Field(
+        default=DEFAULT_DOCUMENT_EXTRACTION_TIMEOUT_SECONDS,
+        gt=0,
+        le=MAX_LONG_CALL_TIMEOUT_SECONDS,
+    )
+    document_extraction_job_timeout_minutes: float = Field(default=60, gt=0)
+    document_extraction_jobs_per_hour: int = Field(default=5, ge=0)
+    document_extraction_max_attempts: int = Field(default=3, ge=1, le=10)
+    # How often an idle runner looks for queued work.
+    document_extraction_poll_seconds: float = Field(default=5, gt=0)
+    branch_approve_batch: int = Field(default=200, ge=1, le=5000)
+    branch_approve_max_rounds: int = Field(default=50, ge=1, le=10_000)
 
     @field_validator(
         "foundry_endpoint",

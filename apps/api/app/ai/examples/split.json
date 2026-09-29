@@ -1,8 +1,10 @@
 {
-  "rule": "LEARN: the GoodRelations benchmark and a stratified half of the non-private bake-off cases (short cases and documents). TEST: the W3C Organization benchmark, the other half, and everything under tests/private. Strata are (kind, language, primary stress tag); inside a stratum ids are ordered by SHA-256 of the id and alternate between the sets, the first going to the set with fewer members of that kind. Cases whose text the extraction instructions already quote are LEARN; the adversarial documents are TEST. Worked examples come from LEARN only.",
+  "rule": "LEARN: the GoodRelations, PROV-O and DCAT 3 benchmarks and a stratified half of the non-private bake-off cases (short cases and documents). TEST: the W3C Organization, SOSA/SSN, Time Ontology and ValueFlows benchmarks, the other half, and everything under tests/private. Strata are (kind, language, primary stress tag); inside a stratum ids are ordered by SHA-256 of the id and alternate between the sets, the first going to the set with fewer members of that kind. Cases whose text the extraction instructions already quote are LEARN; the adversarial documents and the multi-sentence spoken recordings are TEST. Worked examples come from LEARN only. Benchmarks are named by their folder under evals/benchmarks; each yields one case, benchmarks-<folder>-<document name>.",
   "learn": {
     "benchmarks": [
-      "goodrelations"
+      "goodrelations",
+      "prov-o",
+      "dcat"
     ],
     "cases": [
       "agency_valmont_fr",
@@ -51,7 +53,10 @@
   },
   "test": {
     "benchmarks": [
-      "org"
+      "org",
+      "ssn",
+      "time",
+      "valueflows"
     ],
     "cases": [
       "adversarial_pellucid_incidents",
@@ -66,6 +71,8 @@
       "en-speech-is-a-elliptical",
       "en-speech-it-relations",
       "en-speech-question-aside",
+      "en-speech-recording-correction",
+      "en-speech-recording-depot",
       "en-speech-run-on-they",
       "en-speech-these-policies",
       "en-text-already-known-only",
@@ -86,6 +93,7 @@
       "en-text-role-vendor-existing-that",
       "en-text-subsidiary-which-object",
       "en-text-supplier-e-commerce",
+      "fr-speech-enregistrement-atelier",
       "fr-speech-est-un-type-de",
       "fr-speech-inter-domaines-sla",
       "fr-speech-urgences-correction",

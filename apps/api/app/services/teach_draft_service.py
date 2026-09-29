@@ -7,10 +7,11 @@ with `has` and a second one born from it by label. A `spec` intent (subject the 
 the parent): new child and existing parent give a spec draft; existing child and existing
 parent give an `is a` relation; existing child and new parent give the parent born from the
 child with `is a kind of` and `reverse`; two new concepts give the parent born from the root
-with `has` and the child specialised from it by label. A relation the model already holds,
-pending or approved, is not drafted again: its intent is kept with no draft and its statement
-says the fact is already in the model, so the rest of the result is submitted without a
-duplicate refusal.
+with `has` and the child specialised from it by label. A model `attr` intent gives one taught
+attribute draft on its subject, an existing concept or one an earlier intent introduces, and
+never a concept. A relation or attribute the model already holds, pending or approved, is not
+drafted again: its intent is kept with no draft and its statement says the fact is already in
+the model, so the rest of the result is submitted without a duplicate refusal.
 
 Every intent is planned first and kept only while the result stays within 60 intents and 60
 drafts; the rest are dropped together and reported as one `too_many_drafts` phrase.
@@ -433,6 +434,63 @@ class Drafter:
             _identity(a_end, normalise_action(pred), b_end),
             None,
             _ids(a_end, b_end),
+        )
+
+    def introduced_label(self, label: str) -> str | None:
+        """The label of the new concept an earlier intent of this result introduces under
+        `label`, exactly or by singular and plural, or None."""
+        lower = label.lower()
+        for key, (introduced, _) in self.introduced.items():
+            if key == lower or singular(key) == lower or key == singular(lower):
+                return introduced
+        return None
+
+    def model_attr(
+        self,
+        subject: End,
+        name: str,
+        value: str,
+        value_type: str,
+        note: DraftNote,
+        existing_value: str | None,
+    ) -> PlannedIntent:
+        """A model `attr` intent: one taught attribute draft on the subject, which is an
+        existing concept or a concept an earlier intent introduces (cited by label). With
+        `existing_value` the subject already has the attribute with that same value: the intent
+        is kept with no draft."""
+        concept = subject.concept
+        label = concept.label if concept else subject.label
+        intent = Intent(
+            kind="attr",
+            subject=subject.text,
+            predicate=name,
+            object=value,
+            rule="llm",
+            subject_resolved=concept.id if concept else None,
+            object_resolved=None,
+        )
+        drafts: list[dict[str, Any]] = []
+        if existing_value is not None:
+            statement = f"{label} {name}: {existing_value}{ALREADY_KNOWN}"
+        else:
+            target: dict[str, Any] = (
+                {"conceptId": str(concept.id)}
+                if concept
+                else {"conceptLabel": label, "companyId": str(self.company_id)}
+            )
+            drafts.append(
+                self.draft(type="attr", **target, name=name, attributeType=value_type, value=value)
+            )
+            statement = f"{label} {name}: {value}"
+        side = str(concept.id) if concept else label.lower()
+        return PlannedIntent(
+            intent,
+            drafts,
+            [statement],
+            note,
+            (side, f"attr {name}", value.lower()),
+            None,
+            _ids(subject),
         )
 
     def _introduced(self, end: End) -> tuple[str, str] | None:

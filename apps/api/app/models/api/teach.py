@@ -32,7 +32,10 @@ class TeachRequest(ApiModel):
 
 
 class Intent(ApiModel):
-    kind: Literal["spec", "rel"]
+    """A `rel` or `spec` fact between two concepts, or an `attr` fact about one concept: the
+    subject is the concept, the predicate the attribute name and the object the value."""
+
+    kind: Literal["spec", "rel", "attr"]
     subject: str
     predicate: str | None = Field(default=None, exclude_if=lambda v: v is None)
     object: str
@@ -62,6 +65,7 @@ UnresolvedReason = Literal[
     "not_a_statement",
     "ungrounded_label",
     "too_many_segments",
+    "attribute_exists",
 ]
 
 

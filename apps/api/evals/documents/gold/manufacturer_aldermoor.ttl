@@ -1,0 +1,847 @@
+@prefix gold: <https://example.org/ontaix/evals/manufacturer_aldermoor#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix oxe: <https://example.org/ontaix/evals/vocab#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<https://example.org/ontaix/evals/manufacturer_aldermoor> a owl:Ontology ;
+    rdfs:label "Aldermoor Valves gold tree"@en .
+
+gold:BOMItem a owl:Class ;
+    rdfs:label "BOM item"@en ;
+    rdfs:subClassOf gold:BillOfMaterials ;
+    oxe:acceptedAction "contains",
+        "includes" ;
+    oxe:birthAction "has" .
+
+gold:BlanketPurchaseOrder a owl:Class ;
+    rdfs:label "Blanket purchase order"@en ;
+    rdfs:subClassOf gold:PurchaseOrder ;
+    oxe:acceptedAction "is a kind of",
+        "is a type of" ;
+    oxe:birthAction "is a" .
+
+gold:CAPARecord a owl:Class ;
+    rdfs:label "CAPA record"@en ;
+    rdfs:subClassOf gold:CorrectiveAction ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:CapacityProfile a owl:Class ;
+    rdfs:label "Capacity profile"@en ;
+    rdfs:subClassOf gold:WorkCentre ;
+    oxe:acceptedAction "carries" ;
+    oxe:birthAction "has" .
+
+gold:CashApplication a owl:Class ;
+    rdfs:label "Cash application"@en ;
+    rdfs:subClassOf gold:Collection ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Castings a owl:Class ;
+    rdfs:label "Castings"@en ;
+    rdfs:subClassOf gold:SpendCategories ;
+    oxe:acceptedAction "has" ;
+    oxe:birthAction "includes" .
+
+gold:ConfirmationRecord a owl:Class ;
+    rdfs:label "Confirmation record"@en ;
+    rdfs:subClassOf gold:OperationConfirmation ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:ConsensusPlan a owl:Class ;
+    rdfs:label "Consensus plan"@en ;
+    rdfs:subClassOf gold:ConsensusPlanning ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:CreditDecision a owl:Class ;
+    rdfs:label "Credit decision"@en ;
+    rdfs:subClassOf gold:CreditCheck ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:CustomerInvoice a owl:Class ;
+    rdfs:label "Customer invoice"@en ;
+    rdfs:subClassOf gold:Invoicing ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:DeliveryNote a owl:Class ;
+    rdfs:label "Delivery note"@en ;
+    rdfs:subClassOf gold:Shipping ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:DemandForecast a owl:Class ;
+    rdfs:label "Demand forecast"@en ;
+    rdfs:subClassOf gold:SalesForecasting ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:DunningLetter a owl:Class ;
+    rdfs:label "Dunning letter"@en ;
+    rdfs:subClassOf gold:Dunning ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:Electronics a owl:Class ;
+    rdfs:label "Electronics"@en ;
+    rdfs:subClassOf gold:SpendCategories ;
+    oxe:acceptedAction "has" ;
+    oxe:birthAction "includes" .
+
+gold:EngineeringBOM a owl:Class ;
+    rdfs:label "Engineering BOM"@en ;
+    rdfs:subClassOf gold:BillOfMaterials ;
+    oxe:acceptedAction "is a kind of",
+        "is a type of" ;
+    oxe:birthAction "is a" .
+
+gold:FinalInspection a owl:Class ;
+    rdfs:label "Final inspection"@en ;
+    rdfs:subClassOf gold:InspectionTypes ;
+    oxe:acceptedAction "has" ;
+    oxe:birthAction "includes" .
+
+gold:InProcessInspection a owl:Class ;
+    rdfs:label "In-process inspection"@en ;
+    rdfs:subClassOf gold:InspectionTypes ;
+    oxe:acceptedAction "has" ;
+    oxe:birthAction "includes" .
+
+gold:InspectionCharacteristic a owl:Class ;
+    rdfs:label "Inspection characteristic"@en ;
+    rdfs:subClassOf gold:InspectionPlan ;
+    oxe:acceptedAction "contains",
+        "has" ;
+    oxe:birthAction "lists" .
+
+gold:JobTraveller a owl:Class ;
+    rdfs:label "Job traveller"@en ;
+    rdfs:subClassOf gold:OrderRelease ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:MasterProductionSchedule a owl:Class ;
+    rdfs:label "Master production schedule"@en ;
+    rdfs:subClassOf gold:MasterScheduling ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:MatchException a owl:Class ;
+    rdfs:label "Match exception"@en ;
+    rdfs:subClassOf gold:ThreeWayMatch ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:N8DReport a owl:Class ;
+    rdfs:label "8D report"@en ;
+    rdfs:subClassOf gold:RootCauseAnalysis ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PaymentAdvice a owl:Class ;
+    rdfs:label "Payment advice"@en ;
+    rdfs:subClassOf gold:PaymentRun ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PickList a owl:Class ;
+    rdfs:label "Pick list"@en ;
+    rdfs:subClassOf gold:Picking ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PlannedOrder a owl:Class ;
+    rdfs:label "Planned order"@en ;
+    rdfs:subClassOf gold:NetRequirementsCalculation ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PriceQuote a owl:Class ;
+    rdfs:label "Price quote"@en ;
+    rdfs:subClassOf gold:PriceCalculation ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PurchaseRequisition a owl:Class ;
+    rdfs:label "Purchase requisition"@en ;
+    rdfs:subClassOf gold:Requisitioning ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PutAway a owl:Class ;
+    rdfs:label "Put-away"@en ;
+    rdfs:subClassOf gold:Receiving ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ReworkOrder a owl:Class ;
+    rdfs:label "Rework order"@en ;
+    rdfs:subClassOf gold:ProductionOrder ;
+    oxe:acceptedAction "is a kind of",
+        "is a type of" ;
+    oxe:birthAction "is a" .
+
+gold:RushOrder a owl:Class ;
+    rdfs:label "Rush order"@en ;
+    rdfs:subClassOf gold:SalesOrder ;
+    oxe:acceptedAction "is a kind of",
+        "is a type of" ;
+    oxe:birthAction "is a" .
+
+gold:Sampling a owl:Class ;
+    rdfs:label "Sampling"@en ;
+    rdfs:subClassOf gold:QualityControl ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:Seals a owl:Class ;
+    rdfs:label "Seals"@en ;
+    rdfs:subClassOf gold:SpendCategories ;
+    oxe:acceptedAction "has" ;
+    oxe:birthAction "includes" .
+
+gold:StandardTime a owl:Class ;
+    rdfs:label "Standard time"@en ;
+    rdfs:subClassOf gold:RoutingOperation ;
+    oxe:acceptedAction "carries" ;
+    oxe:birthAction "has" .
+
+gold:SupplierAuditReport a owl:Class ;
+    rdfs:label "Supplier audit report"@en ;
+    rdfs:subClassOf gold:SupplierQualification ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:SupplierBid a owl:Class ;
+    rdfs:label "Supplier bid"@en ;
+    rdfs:subClassOf gold:RequestForQuotation ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:TechnicalDatasheet a owl:Class ;
+    rdfs:label "Technical datasheet"@en ;
+    rdfs:subClassOf gold:ConfigurationCheck ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:UsageDecision a owl:Class ;
+    rdfs:label "Usage decision"@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:onProperty gold:triggers ;
+            owl:someValuesFrom gold:RootCauseAnalysis ],
+        gold:ResultsRecording ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:ValveAssembly a owl:Class ;
+    rdfs:label "Valve assembly"@en ;
+    rdfs:subClassOf gold:FinalAssembly ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:ConfigurationCheck a owl:Class ;
+    rdfs:label "Configuration check"@en ;
+    rdfs:subClassOf gold:Quotation ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:ConsensusPlanning a owl:Class ;
+    rdfs:label "Consensus planning"@en ;
+    rdfs:subClassOf gold:DemandPlanning ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:CorrectiveAction a owl:Class ;
+    rdfs:label "Corrective action"@en ;
+    rdfs:subClassOf gold:NonconformanceManagement ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:CreditCheck a owl:Class ;
+    rdfs:label "Credit check"@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:onProperty gold:reads ;
+            owl:someValuesFrom gold:CustomerMaster ],
+        gold:OrderCapture ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:CustomerMaster a owl:Class ;
+    rdfs:label "Customer master"@en ;
+    rdfs:subClassOf gold:PartnerDataManagement ;
+    oxe:acceptedAction "manages",
+        "owns" ;
+    oxe:birthAction "maintains" .
+
+gold:Dunning a owl:Class ;
+    rdfs:label "Dunning"@en ;
+    rdfs:subClassOf gold:Collection ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:GoodsReceipt a owl:Class ;
+    rdfs:label "Goods receipt"@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:onProperty gold:triggers ;
+            owl:someValuesFrom gold:IncomingInspection ],
+        gold:Receiving ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:GoodsReceiptNote a owl:Class ;
+    rdfs:label "Goods receipt note"@en ;
+    rdfs:subClassOf gold:GoodsReceipt ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:IncomingInspection a owl:Class ;
+    rdfs:label "Incoming inspection"@en ;
+    rdfs:subClassOf gold:InspectionTypes ;
+    oxe:acceptedAction "has" ;
+    oxe:birthAction "includes" .
+
+gold:InspectionPlan a owl:Class ;
+    rdfs:label "Inspection plan"@en ;
+    rdfs:subClassOf gold:InspectionPlanning ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:InspectionPlanning a owl:Class ;
+    rdfs:label "Inspection planning"@en ;
+    rdfs:subClassOf gold:QualityPlanning ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:InvoiceVerification a owl:Class ;
+    rdfs:label "Invoice verification"@en ;
+    rdfs:subClassOf gold:SupplierPayment ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Invoicing a owl:Class ;
+    rdfs:label "Invoicing"@en ;
+    rdfs:subClassOf gold:Billing ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:MasterScheduling a owl:Class ;
+    rdfs:label "Master scheduling"@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:onProperty gold:checks ;
+            owl:someValuesFrom gold:WorkCentre ],
+        gold:ProductionPlanning ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:MaterialMaster a owl:Class ;
+    rdfs:label "Material master"@en ;
+    rdfs:subClassOf gold:ProductDataManagement ;
+    oxe:acceptedAction "manages",
+        "owns" ;
+    oxe:birthAction "maintains" .
+
+gold:NetRequirementsCalculation a owl:Class ;
+    rdfs:label "Net requirements calculation"@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:onProperty gold:explodes ;
+            owl:someValuesFrom gold:BillOfMaterials ],
+        gold:MaterialRequirementsPlanning ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:OperationConfirmation a owl:Class ;
+    rdfs:label "Operation confirmation"@en ;
+    rdfs:subClassOf gold:ShopFloorControl ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:OrderEntry a owl:Class ;
+    rdfs:label "Order entry"@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:onProperty gold:reads ;
+            owl:someValuesFrom gold:MaterialMaster ],
+        gold:OrderCapture ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:OrderRelease a owl:Class ;
+    rdfs:label "Order release"@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:onProperty gold:uses ;
+            owl:someValuesFrom gold:Routing ],
+        gold:ShopFloorControl ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:PaymentRun a owl:Class ;
+    rdfs:label "Payment run"@en ;
+    rdfs:subClassOf gold:SupplierPayment ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Picking a owl:Class ;
+    rdfs:label "Picking"@en ;
+    rdfs:subClassOf gold:Fulfilment ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:PlannedOrderConversion a owl:Class ;
+    rdfs:label "Planned order conversion"@en ;
+    rdfs:subClassOf gold:MaterialRequirementsPlanning ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:PressureTesting a owl:Class ;
+    rdfs:label "Pressure testing"@en ;
+    rdfs:subClassOf gold:FinalAssembly ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:PriceCalculation a owl:Class ;
+    rdfs:label "Price calculation"@en ;
+    rdfs:subClassOf gold:Quotation ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:ProductionOrder a owl:Class ;
+    rdfs:label "Production order"@en ;
+    rdfs:subClassOf gold:PlannedOrderConversion ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PurchaseOrderCreation a owl:Class ;
+    rdfs:label "Purchase order creation"@en ;
+    rdfs:subClassOf gold:Purchasing ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:QualityPlanning a owl:Class ;
+    rdfs:label "Quality planning"@en ;
+    rdfs:subClassOf gold:QualityManagement ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:RequestForQuotation a owl:Class ;
+    rdfs:label "Request for quotation"@en ;
+    rdfs:subClassOf gold:SupplierSelection ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:Requisitioning a owl:Class ;
+    rdfs:label "Requisitioning"@en ;
+    rdfs:subClassOf gold:Purchasing ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ResultsRecording a owl:Class ;
+    rdfs:label "Results recording"@en ;
+    rdfs:subClassOf gold:QualityControl ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:RoutingOperation a owl:Class ;
+    rdfs:label "Routing operation"@en ;
+    rdfs:subClassOf gold:Routing ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:SalesForecasting a owl:Class ;
+    rdfs:label "Sales forecasting"@en ;
+    rdfs:subClassOf gold:DemandPlanning ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:SalesOrder a owl:Class ;
+    rdfs:label "Sales order"@en ;
+    rdfs:subClassOf gold:OrderEntry ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:Shipping a owl:Class ;
+    rdfs:label "Shipping"@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:onProperty gold:attaches ;
+            owl:someValuesFrom gold:TestCertificate ],
+        gold:Fulfilment ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:SupplierMaster a owl:Class ;
+    rdfs:label "Supplier master"@en ;
+    rdfs:subClassOf gold:PartnerDataManagement ;
+    oxe:acceptedAction "manages",
+        "owns" ;
+    oxe:birthAction "maintains" .
+
+gold:SupplierQualification a owl:Class ;
+    rdfs:label "Supplier qualification"@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:onProperty gold:updates ;
+            owl:someValuesFrom gold:SupplierMaster ],
+        gold:SupplierSelection ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:TestCertificate a owl:Class ;
+    rdfs:label "Test certificate"@en ;
+    rdfs:subClassOf gold:PressureTesting ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:ThreeWayMatch a owl:Class ;
+    rdfs:label "Three-way match"@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+            owl:onProperty gold:compares ;
+            owl:someValuesFrom gold:PurchaseOrder ],
+        [ a owl:Restriction ;
+            owl:onProperty gold:compares ;
+            owl:someValuesFrom gold:GoodsReceiptNote ],
+        gold:InvoiceVerification ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:attaches a owl:ObjectProperty ;
+    rdfs:label "attaches"@en ;
+    oxe:acceptedAction "includes",
+        "ships with" .
+
+gold:checks a owl:ObjectProperty ;
+    rdfs:label "checks"@en ;
+    oxe:acceptedAction "reads",
+        "uses" .
+
+gold:explodes a owl:ObjectProperty ;
+    rdfs:label "explodes"@en ;
+    oxe:acceptedAction "reads",
+        "uses" .
+
+gold:updates a owl:ObjectProperty ;
+    rdfs:label "updates"@en ;
+    oxe:acceptedAction "maintains",
+        "writes to" ;
+    oxe:inverseAction "is updated by" .
+
+gold:uses a owl:ObjectProperty ;
+    rdfs:label "uses"@en ;
+    oxe:acceptedAction "reads" ;
+    oxe:inverseAction "is used by" .
+
+gold:Billing a owl:Class ;
+    rdfs:label "Billing"@en ;
+    rdfs:subClassOf gold:OrderToCash ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Collection a owl:Class ;
+    rdfs:label "Collection"@en ;
+    rdfs:subClassOf gold:Billing ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:DemandPlanning a owl:Class ;
+    rdfs:label "Demand planning"@en ;
+    rdfs:subClassOf gold:PlanToProduce ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:FinalAssembly a owl:Class ;
+    rdfs:label "Final assembly"@en ;
+    rdfs:subClassOf gold:ProductionExecution ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Fulfilment a owl:Class ;
+    rdfs:label "Fulfilment"@en ;
+    rdfs:subClassOf gold:OrderToCash ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:MaterialRequirementsPlanning a owl:Class ;
+    rdfs:label "Material requirements planning"@en ;
+    rdfs:subClassOf gold:ProductionPlanning ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:NonconformanceManagement a owl:Class ;
+    rdfs:label "Nonconformance management"@en ;
+    rdfs:subClassOf gold:QualityManagement ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:OrderCapture a owl:Class ;
+    rdfs:label "Order capture"@en ;
+    rdfs:subClassOf gold:QuoteToOrder ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:PartnerDataManagement a owl:Class ;
+    rdfs:label "Partner data management"@en ;
+    rdfs:subClassOf gold:MasterDataManagement ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ProductDataManagement a owl:Class ;
+    rdfs:label "Product data management"@en ;
+    rdfs:subClassOf gold:MasterDataManagement ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ProductionDataManagement a owl:Class ;
+    rdfs:label "Production data management"@en ;
+    rdfs:subClassOf gold:MasterDataManagement ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ProductionExecution a owl:Class ;
+    rdfs:label "Production execution"@en ;
+    rdfs:subClassOf gold:PlanToProduce ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ProductionPlanning a owl:Class ;
+    rdfs:label "Production planning"@en ;
+    rdfs:subClassOf gold:PlanToProduce ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:PurchaseOrder a owl:Class ;
+    rdfs:label "Purchase order"@en ;
+    rdfs:subClassOf gold:PurchaseOrderCreation ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:Purchasing a owl:Class ;
+    rdfs:label "Purchasing"@en ;
+    rdfs:subClassOf gold:ProcureToPay ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Quotation a owl:Class ;
+    rdfs:label "Quotation"@en ;
+    rdfs:subClassOf gold:QuoteToOrder ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:QuoteToOrder a owl:Class ;
+    rdfs:label "Quote-to-order"@en ;
+    rdfs:subClassOf gold:OrderToCash ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Receiving a owl:Class ;
+    rdfs:label "Receiving"@en ;
+    rdfs:subClassOf gold:ProcureToPay ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:RootCauseAnalysis a owl:Class ;
+    rdfs:label "Root cause analysis"@en ;
+    rdfs:subClassOf gold:NonconformanceManagement ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Routing a owl:Class ;
+    rdfs:label "Routing"@en ;
+    rdfs:subClassOf gold:ProductionDataManagement ;
+    oxe:acceptedAction "manages",
+        "owns" ;
+    oxe:birthAction "maintains" .
+
+gold:ShopFloorControl a owl:Class ;
+    rdfs:label "Shop floor control"@en ;
+    rdfs:subClassOf gold:ProductionExecution ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Sourcing a owl:Class ;
+    rdfs:label "Sourcing"@en ;
+    rdfs:subClassOf gold:ProcureToPay ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:SupplierPayment a owl:Class ;
+    rdfs:label "Supplier payment"@en ;
+    rdfs:subClassOf gold:ProcureToPay ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:SupplierSelection a owl:Class ;
+    rdfs:label "Supplier selection"@en ;
+    rdfs:subClassOf gold:Sourcing ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:WorkCentre a owl:Class ;
+    rdfs:label "Work centre"@en ;
+    rdfs:subClassOf gold:ProductionDataManagement ;
+    oxe:acceptedAction "manages",
+        "owns" ;
+    oxe:birthAction "maintains" .
+
+gold:compares a owl:ObjectProperty ;
+    rdfs:label "compares"@en ;
+    oxe:acceptedAction "checks",
+        "uses" .
+
+gold:reads a owl:ObjectProperty ;
+    rdfs:label "reads"@en ;
+    oxe:acceptedAction "uses" ;
+    oxe:inverseAction "is read by" .
+
+gold:triggers a owl:ObjectProperty ;
+    rdfs:label "triggers"@en ;
+    oxe:acceptedAction "starts" ;
+    oxe:inverseAction "is triggered by" .
+
+gold:BillOfMaterials a owl:Class ;
+    rdfs:label "Bill of materials"@en ;
+    rdfs:subClassOf gold:ProductDataManagement ;
+    oxe:acceptedAction "manages",
+        "owns" ;
+    oxe:birthAction "maintains" .
+
+gold:InspectionTypes a owl:Class ;
+    rdfs:label "Inspection types"@en ;
+    rdfs:subClassOf gold:QualityControl ;
+    oxe:acceptedAction "includes" ;
+    oxe:birthAction "has" .
+
+gold:MasterDataManagement a owl:Class ;
+    rdfs:label "Master data management"@en ;
+    rdfs:subClassOf gold:AldermoorValves ;
+    oxe:acceptedAction "has",
+        "operates" ;
+    oxe:birthAction "runs" .
+
+gold:OrderToCash a owl:Class ;
+    rdfs:label "Order-to-cash"@en ;
+    rdfs:subClassOf gold:AldermoorValves ;
+    skos:altLabel "Order to cash"@en ;
+    oxe:acceptedAction "has",
+        "operates" ;
+    oxe:birthAction "runs" .
+
+gold:PlanToProduce a owl:Class ;
+    rdfs:label "Plan-to-produce"@en ;
+    rdfs:subClassOf gold:AldermoorValves ;
+    oxe:acceptedAction "has",
+        "operates" ;
+    oxe:birthAction "runs" .
+
+gold:QualityControl a owl:Class ;
+    rdfs:label "Quality control"@en ;
+    rdfs:subClassOf gold:QualityManagement ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:QualityManagement a owl:Class ;
+    rdfs:label "Quality management"@en ;
+    rdfs:subClassOf gold:AldermoorValves ;
+    oxe:acceptedAction "has",
+        "operates" ;
+    oxe:birthAction "runs" .
+
+gold:SpendCategories a owl:Class ;
+    rdfs:label "Spend categories"@en ;
+    rdfs:subClassOf gold:Sourcing ;
+    oxe:acceptedAction "includes" ;
+    oxe:birthAction "has" .
+
+gold:ProcureToPay a owl:Class ;
+    rdfs:label "Procure-to-pay"@en ;
+    rdfs:subClassOf gold:AldermoorValves ;
+    oxe:acceptedAction "has",
+        "operates" ;
+    oxe:birthAction "runs" .
+
+gold:AldermoorValves a owl:Class ;
+    rdfs:label "Aldermoor Valves"@en .
+

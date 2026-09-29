@@ -25,6 +25,7 @@ from app.repositories import (
 )
 from app.services.company_service import readable_companies
 from app.services.ontology_view_service import OntologyView, load_view
+from app.services.proposal_branch_service import BranchIndex, annotate
 from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.clock import get_clock
 from app.utilities.permissions import can_read_proposal, can_read_tenant
@@ -52,6 +53,7 @@ async def get_scene(session: AsyncSession, caller: Caller) -> Scene:
     proposals = [
         p for p in open_proposals if can_read_proposal(caller.grants, proposal_company_ids(p))
     ]
+    branches = BranchIndex(view, open_proposals)
     settings = view.settings
     view_state = await view_state_repository.get(session, caller.tenant_id)
     connectors = await connector_type_repository.list_in_catalogue_order(session)
@@ -62,7 +64,11 @@ async def get_scene(session: AsyncSession, caller: Caller) -> Scene:
         nodes=[view.concept_dto(c) for c in concepts],
         links=[view.relation_dto(r) for r in relations],
         proposals=[
-            readable_proposal(caller.grants, view.proposal_dto(p, view.proposal_artefacts(p)))
+            annotate(
+                readable_proposal(caller.grants, view.proposal_dto(p, view.proposal_artefacts(p))),
+                p,
+                branches,
+            )
             for p in proposals
         ],
         settings=settings_dto(settings),

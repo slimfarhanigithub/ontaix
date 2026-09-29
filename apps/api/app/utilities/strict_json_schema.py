@@ -6,6 +6,9 @@ writes `null` where it would have left the property out. `drop_optional_nulls` r
 `null` values again, so the answer has the shape of the original schema. It drops `null` only
 under property names that are optional somewhere in the original schema; a schema where the same
 name is required and nullable elsewhere would need a path-aware mapping instead.
+`drop_optional_empties` does the same for empty strings and lists, which a model whose
+structured outputs keep optional properties optional writes for properties it means to leave
+out.
 """
 
 from __future__ import annotations
@@ -30,6 +33,20 @@ def drop_optional_nulls(value: Any, optional: frozenset[str]) -> Any:
             key: drop_optional_nulls(item, optional)
             for key, item in value.items()
             if not (item is None and key in optional)
+        }
+    return value
+
+
+def drop_optional_empties(value: Any, optional: frozenset[str]) -> Any:
+    """`value` without the empty-string and empty-list members whose names are in `optional`,
+    at every depth."""
+    if isinstance(value, list):
+        return [drop_optional_empties(item, optional) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: drop_optional_empties(item, optional)
+            for key, item in value.items()
+            if not (key in optional and (item == "" or item == []))
         }
     return value
 
