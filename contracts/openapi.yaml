@@ -4350,8 +4350,8 @@ components:
       type: integer
       minimum: 0
       maximum: 1000000000
-      default: 0
-      description: Tokens (input plus output) Ontaix's own language model calls may use for the tenant per calendar month (UTC), enforced whatever `costCap` says. `0`, the default, turns the model step off, so no tenant content reaches a model provider until a tenant administrator sets a cap. When the cap is reached the teach parse still answers `200` with the grammar's result and `llmOutcome` `budget_exhausted`. A change writes the audit entry `llmMonthlyTokenCap set to <n>`.
+      default: 2000000
+      description: Tokens (input plus output) Ontaix's own language model calls may use for the tenant per calendar month (UTC), enforced whatever `costCap` says. The default of 2,000,000 keeps the model step on for every tenant, so sentences that trigger it are sent to the configured provider; `0` turns the step off, which is how a tenant administrator opts out. When the cap is reached the teach parse still answers `200` with the grammar's result and `llmOutcome` `budget_exhausted`. A change writes the audit entry `llmMonthlyTokenCap set to <n>`.
 
     Appearance:
       type: object
