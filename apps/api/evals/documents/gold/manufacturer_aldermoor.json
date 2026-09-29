@@ -1,0 +1,1129 @@
+{
+  "label": "Aldermoor Valves",
+  "children": [
+    {
+      "label": "Order-to-cash",
+      "action": [
+        "runs",
+        "has",
+        "operates"
+      ],
+      "aliases": [
+        "Order to cash"
+      ],
+      "children": [
+        {
+          "label": "Quote-to-order",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Quotation",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Configuration check",
+                  "action": [
+                    "includes",
+                    "consists of",
+                    "has"
+                  ],
+                  "children": [
+                    {
+                      "label": "Technical datasheet",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "label": "Price calculation",
+                  "action": [
+                    "includes",
+                    "consists of",
+                    "has"
+                  ],
+                  "children": [
+                    {
+                      "label": "Price quote",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Order capture",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Order entry",
+                  "action": [
+                    "consists of",
+                    "has",
+                    "includes"
+                  ],
+                  "children": [
+                    {
+                      "label": "Sales order",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ],
+                      "children": [
+                        {
+                          "label": "Rush order",
+                          "action": [
+                            "is a",
+                            "is a kind of",
+                            "is a type of"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "label": "Credit check",
+                  "action": [
+                    "consists of",
+                    "has",
+                    "includes"
+                  ],
+                  "children": [
+                    {
+                      "label": "Credit decision",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Fulfilment",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Picking",
+              "action": [
+                "includes",
+                "consists of",
+                "has"
+              ],
+              "children": [
+                {
+                  "label": "Pick list",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Shipping",
+              "action": [
+                "includes",
+                "consists of",
+                "has"
+              ],
+              "children": [
+                {
+                  "label": "Delivery note",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Billing",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Invoicing",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Customer invoice",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Collection",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Cash application",
+                  "action": [
+                    "consists of",
+                    "has",
+                    "includes"
+                  ]
+                },
+                {
+                  "label": "Dunning",
+                  "action": [
+                    "consists of",
+                    "has",
+                    "includes"
+                  ],
+                  "children": [
+                    {
+                      "label": "Dunning letter",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Procure-to-pay",
+      "action": [
+        "runs",
+        "has",
+        "operates"
+      ],
+      "children": [
+        {
+          "label": "Sourcing",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Spend categories",
+              "action": [
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Castings",
+                  "action": [
+                    "includes",
+                    "has"
+                  ]
+                },
+                {
+                  "label": "Electronics",
+                  "action": [
+                    "includes",
+                    "has"
+                  ]
+                },
+                {
+                  "label": "Seals",
+                  "action": [
+                    "includes",
+                    "has"
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Supplier selection",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Supplier qualification",
+                  "action": [
+                    "includes",
+                    "consists of",
+                    "has"
+                  ],
+                  "children": [
+                    {
+                      "label": "Supplier audit report",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "label": "Request for quotation",
+                  "action": [
+                    "includes",
+                    "consists of",
+                    "has"
+                  ],
+                  "children": [
+                    {
+                      "label": "Supplier bid",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Purchasing",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Requisitioning",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Purchase requisition",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Purchase order creation",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Purchase order",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ],
+                  "children": [
+                    {
+                      "label": "Blanket purchase order",
+                      "action": [
+                        "is a",
+                        "is a kind of",
+                        "is a type of"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Receiving",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Goods receipt",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Goods receipt note",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Put-away",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Supplier payment",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Invoice verification",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Three-way match",
+                  "action": [
+                    "includes",
+                    "consists of",
+                    "has"
+                  ],
+                  "children": [
+                    {
+                      "label": "Match exception",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Payment run",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Payment advice",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Plan-to-produce",
+      "action": [
+        "runs",
+        "has",
+        "operates"
+      ],
+      "children": [
+        {
+          "label": "Demand planning",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Sales forecasting",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Demand forecast",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Consensus planning",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Consensus plan",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Production planning",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Master scheduling",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Master production schedule",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Material requirements planning",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Net requirements calculation",
+                  "action": [
+                    "includes",
+                    "consists of",
+                    "has"
+                  ],
+                  "children": [
+                    {
+                      "label": "Planned order",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "label": "Planned order conversion",
+                  "action": [
+                    "includes",
+                    "consists of",
+                    "has"
+                  ],
+                  "children": [
+                    {
+                      "label": "Production order",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ],
+                      "children": [
+                        {
+                          "label": "Rework order",
+                          "action": [
+                            "is a",
+                            "is a kind of",
+                            "is a type of"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Production execution",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Shop floor control",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Order release",
+                  "action": [
+                    "includes",
+                    "consists of",
+                    "has"
+                  ],
+                  "children": [
+                    {
+                      "label": "Job traveller",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "label": "Operation confirmation",
+                  "action": [
+                    "includes",
+                    "consists of",
+                    "has"
+                  ],
+                  "children": [
+                    {
+                      "label": "Confirmation record",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Final assembly",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Valve assembly",
+                  "action": [
+                    "includes",
+                    "consists of",
+                    "has"
+                  ]
+                },
+                {
+                  "label": "Pressure testing",
+                  "action": [
+                    "includes",
+                    "consists of",
+                    "has"
+                  ],
+                  "children": [
+                    {
+                      "label": "Test certificate",
+                      "action": [
+                        "produces",
+                        "creates",
+                        "outputs"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Quality management",
+      "action": [
+        "runs",
+        "has",
+        "operates"
+      ],
+      "children": [
+        {
+          "label": "Quality planning",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Inspection planning",
+              "action": [
+                "includes",
+                "consists of",
+                "has"
+              ],
+              "children": [
+                {
+                  "label": "Inspection plan",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ],
+                  "children": [
+                    {
+                      "label": "Inspection characteristic",
+                      "action": [
+                        "lists",
+                        "contains",
+                        "has"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Quality control",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Inspection types",
+              "action": [
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "Incoming inspection",
+                  "action": [
+                    "includes",
+                    "has"
+                  ]
+                },
+                {
+                  "label": "In-process inspection",
+                  "action": [
+                    "includes",
+                    "has"
+                  ]
+                },
+                {
+                  "label": "Final inspection",
+                  "action": [
+                    "includes",
+                    "has"
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Sampling",
+              "action": [
+                "includes",
+                "consists of",
+                "has"
+              ]
+            },
+            {
+              "label": "Results recording",
+              "action": [
+                "includes",
+                "consists of",
+                "has"
+              ],
+              "children": [
+                {
+                  "label": "Usage decision",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Nonconformance management",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Root cause analysis",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "8D report",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Corrective action",
+              "action": [
+                "consists of",
+                "has",
+                "includes"
+              ],
+              "children": [
+                {
+                  "label": "CAPA record",
+                  "action": [
+                    "produces",
+                    "creates",
+                    "outputs"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Master data management",
+      "action": [
+        "runs",
+        "has",
+        "operates"
+      ],
+      "children": [
+        {
+          "label": "Product data management",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Material master",
+              "action": [
+                "maintains",
+                "manages",
+                "owns"
+              ]
+            },
+            {
+              "label": "Bill of materials",
+              "action": [
+                "maintains",
+                "manages",
+                "owns"
+              ],
+              "children": [
+                {
+                  "label": "BOM item",
+                  "action": [
+                    "has",
+                    "contains",
+                    "includes"
+                  ]
+                },
+                {
+                  "label": "Engineering BOM",
+                  "action": [
+                    "is a",
+                    "is a kind of",
+                    "is a type of"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Production data management",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Routing",
+              "action": [
+                "maintains",
+                "manages",
+                "owns"
+              ],
+              "children": [
+                {
+                  "label": "Routing operation",
+                  "action": [
+                    "consists of",
+                    "has",
+                    "includes"
+                  ],
+                  "children": [
+                    {
+                      "label": "Standard time",
+                      "action": [
+                        "has",
+                        "carries"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "Work centre",
+              "action": [
+                "maintains",
+                "manages",
+                "owns"
+              ],
+              "children": [
+                {
+                  "label": "Capacity profile",
+                  "action": [
+                    "has",
+                    "carries"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Partner data management",
+          "action": [
+            "consists of",
+            "has",
+            "includes"
+          ],
+          "children": [
+            {
+              "label": "Customer master",
+              "action": [
+                "maintains",
+                "manages",
+                "owns"
+              ]
+            },
+            {
+              "label": "Supplier master",
+              "action": [
+                "maintains",
+                "manages",
+                "owns"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "from": "Credit check",
+      "to": "Customer master",
+      "actions": [
+        "reads",
+        "uses"
+      ],
+      "inverse": [
+        "is read by"
+      ]
+    },
+    {
+      "from": "Goods receipt",
+      "to": "Incoming inspection",
+      "actions": [
+        "triggers",
+        "starts"
+      ],
+      "inverse": [
+        "is triggered by"
+      ]
+    },
+    {
+      "from": "Master scheduling",
+      "to": "Work centre",
+      "actions": [
+        "checks",
+        "reads",
+        "uses"
+      ],
+      "inverse": []
+    },
+    {
+      "from": "Net requirements calculation",
+      "to": "Bill of materials",
+      "actions": [
+        "explodes",
+        "reads",
+        "uses"
+      ],
+      "inverse": []
+    },
+    {
+      "from": "Order entry",
+      "to": "Material master",
+      "actions": [
+        "reads",
+        "uses"
+      ],
+      "inverse": [
+        "is read by"
+      ]
+    },
+    {
+      "from": "Order release",
+      "to": "Routing",
+      "actions": [
+        "uses",
+        "reads"
+      ],
+      "inverse": [
+        "is used by"
+      ]
+    },
+    {
+      "from": "Shipping",
+      "to": "Test certificate",
+      "actions": [
+        "attaches",
+        "includes",
+        "ships with"
+      ],
+      "inverse": []
+    },
+    {
+      "from": "Supplier qualification",
+      "to": "Supplier master",
+      "actions": [
+        "updates",
+        "maintains",
+        "writes to"
+      ],
+      "inverse": [
+        "is updated by"
+      ]
+    },
+    {
+      "from": "Three-way match",
+      "to": "Goods receipt note",
+      "actions": [
+        "compares",
+        "checks",
+        "uses"
+      ],
+      "inverse": []
+    },
+    {
+      "from": "Three-way match",
+      "to": "Purchase order",
+      "actions": [
+        "compares",
+        "checks",
+        "uses"
+      ],
+      "inverse": []
+    },
+    {
+      "from": "Usage decision",
+      "to": "Root cause analysis",
+      "actions": [
+        "triggers",
+        "starts"
+      ],
+      "inverse": [
+        "is triggered by"
+      ]
+    }
+  ]
+}

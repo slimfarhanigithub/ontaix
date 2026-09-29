@@ -1,0 +1,90 @@
+# Gold tree for structure_brackwater_distribution.md. Reviewed twice against the document.
+company: Brackwater Distribution
+description: Wiki export of the order-to-cash and warehouse procedures of a fictional electrical wholesale distributor; stresses heading to list structure, a RACI table, step tables, numbered procedures, hard-wrapped paragraphs and long run-on policy sentences.
+tags: [document, document-structure, wholesale-distribution, en]
+expected:
+  concepts:
+    - {label: Order-to-cash, parent: [Brackwater Distribution], action: [runs, has, operates]}
+    - {label: Warehouse operations, parent: [Brackwater Distribution], action: [runs, has, operates]}
+    - {label: Depot network, parent: [Brackwater Distribution], action: [runs, operates, has]}
+    - {label: Systems, parent: [Brackwater Distribution], action: [has, uses, includes]}
+    - {label: Customer master, parent: [Systems, Brackwater Distribution], action: [includes, has, keeps, maintains]}
+    - {label: Warehouse management system, parent: [Systems, Brackwater Distribution], action: [includes, has, uses, runs], aliases: [WMS]}
+    - {label: Finance ledger, parent: [Systems, Brackwater Distribution], action: [includes, has, keeps, uses]}
+
+    - {label: Brinmoor depot, parent: [Depot network], action: [includes, has, consists of]}
+    - {label: Saltcote depot, parent: [Depot network], action: [includes, has, consists of]}
+    - {label: Hallowford depot, parent: [Depot network], action: [includes, has, consists of]}
+    - {label: Kestle depot, parent: [Depot network], action: [includes, has, consists of]}
+    - {label: Tidewell depot, parent: [Depot network], action: [includes, has, consists of]}
+
+    - {label: Order intake, parent: [Order-to-cash], action: [includes, has, consists of]}
+    - {label: Credit control, parent: [Order-to-cash], action: [includes, has, consists of]}
+    - {label: Picking and dispatch, parent: [Order-to-cash], action: [includes, has, consists of]}
+    - {label: Returns, parent: [Order-to-cash], action: [includes, has, consists of]}
+    - {label: Invoicing, parent: [Order-to-cash], action: [includes, has, consists of]}
+
+    - {label: Goods receipt, parent: [Warehouse operations], action: [includes, has, consists of]}
+    - {label: Replenishment, parent: [Warehouse operations], action: [includes, has, consists of]}
+    - {label: Cycle counting, parent: [Warehouse operations], action: [includes, has, consists of]}
+
+    - {label: Order channels, parent: [Order intake], action: [has, includes, reaches through]}
+    - {label: Order validation, parent: [Order intake], action: [goes through, includes, has]}
+    - {label: Trade counter, parent: [Order channels], action: [includes, has, consists of]}
+    - {label: Web shop, parent: [Order channels], action: [includes, has, consists of]}
+    - {label: EDI orders, parent: [Order channels], action: [includes, has, consists of]}
+    - {label: Telesales, parent: [Order channels], action: [includes, has, consists of]}
+    - {label: Customer lookup, parent: [Order validation], action: [consists of, includes, has]}
+    - {label: Price check, parent: [Order validation], action: [consists of, includes, has]}
+    - {label: Stock availability check, parent: [Order validation], action: [consists of, includes, has]}
+    - {label: Backorder, parent: [Stock availability check], action: [creates, produces, raises]}
+
+    - {label: Credit check, parent: [Credit control], action: [includes, has, consists of]}
+    - {label: Credit hold, parent: [Credit control], action: [includes, has, consists of]}
+    - {label: Credit limit review, parent: [Credit control], action: [includes, has, consists of]}
+    - {label: Account status check, parent: [Credit check], action: [consists of, includes, has]}
+    - {label: Exposure calculation, parent: [Credit check], action: [consists of, includes, has]}
+    - {label: Credit decision, parent: [Credit check], action: [consists of, includes, has]}
+    - {label: Exposure report, parent: [Exposure calculation], action: [produces, outputs, creates]}
+    - {label: Hold release, parent: [Credit hold], action: [requires, needs, has]}
+
+    - {label: Wave planning, parent: [Picking and dispatch], action: [includes, has, consists of]}
+    - {label: Picking, parent: [Picking and dispatch], action: [includes, has, consists of]}
+    - {label: Packing, parent: [Picking and dispatch], action: [includes, has, consists of]}
+    - {label: Dispatch, parent: [Picking and dispatch], action: [includes, has, consists of]}
+    - {label: Pick list, parent: [Picking], action: [uses, works from, has]}
+    - {label: Zone picking, parent: [Picking], action: [is a, is a kind of, is a type of]}
+    - {label: Batch picking, parent: [Picking], action: [is a, is a kind of, is a type of]}
+    - {label: Packing check, parent: [Packing], action: [consists of, includes, has]}
+    - {label: Labelling, parent: [Packing], action: [consists of, includes, has]}
+    - {label: Loading, parent: [Packing], action: [consists of, includes, has]}
+    - {label: Delivery note, parent: [Dispatch], action: [prints, produces, creates]}
+    - {label: Proof of delivery, parent: [Dispatch], action: [captures, records, has]}
+
+    - {label: Return authorisation, parent: [Returns], action: [includes, has, consists of]}
+    - {label: Returns inspection, parent: [Returns], action: [includes, has, consists of]}
+    - {label: Credit note, parent: [Returns], action: [includes, raises, has]}
+    - {label: RMA number, parent: [Return authorisation], action: [issues, creates, produces]}
+    - {label: Restock, parent: [Returns inspection], action: [includes, gives, has]}
+    - {label: Scrap, parent: [Returns inspection], action: [includes, gives, has]}
+    - {label: Return to supplier, parent: [Returns inspection], action: [includes, gives, has]}
+
+    - {label: Invoice run, parent: [Invoicing], action: [includes, has, consists of]}
+    - {label: Dunning, parent: [Invoicing], action: [includes, has, consists of]}
+    - {label: Cash allocation, parent: [Invoicing], action: [includes, has, consists of]}
+    - {label: Invoice generation, parent: [Invoice run], action: [consists of, includes, has]}
+    - {label: Invoice dispatch, parent: [Invoice run], action: [consists of, includes, has]}
+    - {label: Sales invoice, parent: [Invoice generation], action: [produces, creates, outputs]}
+    - {label: Reminder letter, parent: [Dunning], action: [starts with, sends, issues]}
+
+    - {label: Receipt check, parent: [Goods receipt], action: [consists of, includes, has]}
+    - {label: Putaway, parent: [Goods receipt], action: [consists of, includes, has]}
+  relations:
+    - {from: Credit check, to: Customer master, action: [reads, uses, checks], inverse: [is read by]}
+    - {from: Warehouse management system, to: Pick list, action: [generates, produces, creates], inverse: [is generated by]}
+    - {from: Warehouse management system, to: Replenishment, action: [raises, creates, triggers], inverse: [is raised by]}
+    - {from: Proof of delivery, to: Invoice run, action: [triggers, starts, releases], inverse: [is triggered by]}
+    - {from: Invoice run, to: Finance ledger, action: [posts to, writes to, updates], inverse: [is posted to by]}
+    - {from: Dunning, to: Credit hold, action: [triggers, places, causes], inverse: [is triggered by]}
+    - {from: Credit note, to: Sales invoice, action: [reverses, offsets, cancels], inverse: [is reversed by]}
+optional: [Sales administrator, Credit controller, Credit desk, Warehouse supervisor, Finance clerk, Aged debt report, Held-orders queue, Suspense account, Purchase order, Stocktake, On-time in-full, Days sales outstanding, Credit hold release time, Stock record accuracy, Price group, Payment plan, RACI, Key measures, Telephone call]

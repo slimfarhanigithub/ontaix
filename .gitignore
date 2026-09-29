@@ -16,6 +16,8 @@ override.tf
 *.pfx
 kubeconfig*
 .claude/settings.local.json
+# The owner's confidential bake-off documents and ontologies never leave the machine.
+apps/api/tests/private/
 
 # Node / Python
 node_modules/

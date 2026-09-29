@@ -1,0 +1,3682 @@
+[
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionPlanning",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Inspection planning"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QualityPlanning"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#InvoiceVerification",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Invoice verification"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierPayment"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PartnerDataManagement",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Partner data management"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MasterDataManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#CAPARecord",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "CAPA record"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#CorrectiveAction"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ConsensusPlan",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Consensus plan"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ConsensusPlanning"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MatchException",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Match exception"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ThreeWayMatch"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QualityPlanning",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Quality planning"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QualityManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Requisitioning",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Requisitioning"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Purchasing"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#AldermoorValves",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Aldermoor Valves"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#updates",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#ObjectProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "updates"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "maintains"
+      },
+      {
+        "@value": "writes to"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#inverseAction": [
+      {
+        "@value": "is updated by"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Ontology"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Aldermoor Valves gold tree"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Electronics",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Electronics"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SpendCategories"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#BOMItem",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "BOM item"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#BillOfMaterials"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "contains"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "has"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#NetRequirementsCalculation",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Net requirements calculation"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MaterialRequirementsPlanning"
+      },
+      {
+        "@id": "_:N29f32e585d88453c81ae16292c82168b"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "_:N29f32e585d88453c81ae16292c82168b",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#explodes"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#someValuesFrom": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#BillOfMaterials"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ValveAssembly",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Valve assembly"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#FinalAssembly"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Quotation",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Quotation"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QuoteToOrder"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#checks",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#ObjectProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "checks"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "reads"
+      },
+      {
+        "@value": "uses"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionPlanning",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Production planning"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PlanToProduce"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PaymentAdvice",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Payment advice"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PaymentRun"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#BillOfMaterials",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Bill of materials"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductDataManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "manages"
+      },
+      {
+        "@value": "owns"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "maintains"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PriceQuote",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Price quote"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PriceCalculation"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#EngineeringBOM",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Engineering BOM"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#BillOfMaterials"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "is a kind of"
+      },
+      {
+        "@value": "is a type of"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "is a"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MaterialRequirementsPlanning",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Material requirements planning"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionPlanning"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PickList",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Pick list"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Picking"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierBid",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Supplier bid"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#RequestForQuotation"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MasterScheduling",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Master scheduling"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionPlanning"
+      },
+      {
+        "@id": "_:Na72c698cfa774acba92e66cb7372d2f4"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "_:Na72c698cfa774acba92e66cb7372d2f4",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#checks"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#someValuesFrom": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#WorkCentre"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#TestCertificate",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Test certificate"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PressureTesting"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#GoodsReceipt",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Goods receipt"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Receiving"
+      },
+      {
+        "@id": "_:N96f155f8e227401d8f089c43a0c9876d"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "_:N96f155f8e227401d8f089c43a0c9876d",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#triggers"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#someValuesFrom": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#IncomingInspection"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SalesOrder",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Sales order"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OrderEntry"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PlannedOrderConversion",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Planned order conversion"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MaterialRequirementsPlanning"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OrderRelease",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Order release"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ShopFloorControl"
+      },
+      {
+        "@id": "_:N5ec68cb9573f4c509622a8b54104afe2"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "_:N5ec68cb9573f4c509622a8b54104afe2",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#uses"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#someValuesFrom": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Routing"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#RequestForQuotation",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Request for quotation"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierSelection"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OrderCapture",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Order capture"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QuoteToOrder"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#CapacityProfile",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Capacity profile"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#WorkCentre"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "carries"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "has"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QuoteToOrder",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Quote-to-order"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OrderToCash"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PurchaseOrderCreation",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Purchase order creation"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Purchasing"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#RootCauseAnalysis",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Root cause analysis"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#NonconformanceManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ResultsRecording",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Results recording"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QualityControl"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#StandardTime",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Standard time"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#RoutingOperation"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "carries"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "has"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ConsensusPlanning",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Consensus planning"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#DemandPlanning"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#uses",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#ObjectProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "uses"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "reads"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#inverseAction": [
+      {
+        "@value": "is used by"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PlanToProduce",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Plan-to-produce"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#AldermoorValves"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "operates"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "runs"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#DeliveryNote",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Delivery note"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Shipping"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SalesForecasting",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Sales forecasting"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#DemandPlanning"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MaterialMaster",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Material master"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductDataManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "manages"
+      },
+      {
+        "@value": "owns"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "maintains"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#CreditCheck",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Credit check"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OrderCapture"
+      },
+      {
+        "@id": "_:N48b9015c37434348820709d9ba8df44d"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "_:N48b9015c37434348820709d9ba8df44d",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#reads"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#someValuesFrom": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#CustomerMaster"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Purchasing",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Purchasing"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProcureToPay"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#TechnicalDatasheet",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Technical datasheet"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ConfigurationCheck"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionExecution",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Production execution"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PlanToProduce"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#UsageDecision",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Usage decision"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ResultsRecording"
+      },
+      {
+        "@id": "_:N84afee163c44421daeb97ce3676c6171"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "_:N84afee163c44421daeb97ce3676c6171",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#triggers"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#someValuesFrom": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#RootCauseAnalysis"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#DemandPlanning",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Demand planning"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PlanToProduce"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#triggers",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#ObjectProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "triggers"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "starts"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#inverseAction": [
+      {
+        "@value": "is triggered by"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#CashApplication",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Cash application"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Collection"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#reads",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#ObjectProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "reads"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "uses"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#inverseAction": [
+      {
+        "@value": "is read by"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProcureToPay",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Procure-to-pay"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#AldermoorValves"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "operates"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "runs"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ReworkOrder",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Rework order"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionOrder"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "is a kind of"
+      },
+      {
+        "@value": "is a type of"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "is a"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#CorrectiveAction",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Corrective action"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#NonconformanceManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#CustomerMaster",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Customer master"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PartnerDataManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "manages"
+      },
+      {
+        "@value": "owns"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "maintains"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierSelection",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Supplier selection"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Sourcing"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OrderEntry",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Order entry"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OrderCapture"
+      },
+      {
+        "@id": "_:N1a57ce7ce21d46ddbc363d57f50e974d"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "_:N1a57ce7ce21d46ddbc363d57f50e974d",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#reads"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#someValuesFrom": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MaterialMaster"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PressureTesting",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Pressure testing"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#FinalAssembly"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Fulfilment",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Fulfilment"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OrderToCash"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#NonconformanceManagement",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Nonconformance management"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QualityManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Dunning",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Dunning"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Collection"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionPlan",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Inspection plan"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionPlanning"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#RushOrder",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Rush order"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SalesOrder"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "is a kind of"
+      },
+      {
+        "@value": "is a type of"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "is a"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QualityControl",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Quality control"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QualityManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Sampling",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Sampling"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QualityControl"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Billing",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Billing"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OrderToCash"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#FinalInspection",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Final inspection"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionTypes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierAuditReport",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Supplier audit report"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierQualification"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ConfirmationRecord",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Confirmation record"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OperationConfirmation"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PurchaseRequisition",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Purchase requisition"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Requisitioning"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#CustomerInvoice",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Customer invoice"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Invoicing"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ThreeWayMatch",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Three-way match"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#InvoiceVerification"
+      },
+      {
+        "@id": "_:N750eeaffebe346ef8f7733efd52f8cde"
+      },
+      {
+        "@id": "_:N0676eb3cd7524617a89466898e7cf38b"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "_:N750eeaffebe346ef8f7733efd52f8cde",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#compares"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#someValuesFrom": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#GoodsReceiptNote"
+      }
+    ]
+  },
+  {
+    "@id": "_:N0676eb3cd7524617a89466898e7cf38b",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#compares"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#someValuesFrom": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PurchaseOrder"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Seals",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Seals"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SpendCategories"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#attaches",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#ObjectProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "attaches"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "includes"
+      },
+      {
+        "@value": "ships with"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionTypes",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Inspection types"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QualityControl"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "has"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#WorkCentre",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Work centre"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionDataManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "manages"
+      },
+      {
+        "@value": "owns"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "maintains"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Sourcing",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Sourcing"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProcureToPay"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ConfigurationCheck",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Configuration check"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Quotation"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ShopFloorControl",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Shop floor control"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionExecution"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#CreditDecision",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Credit decision"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#CreditCheck"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierQualification",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Supplier qualification"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierSelection"
+      },
+      {
+        "@id": "_:Nfa001fcbc1654041847c146c6019e84b"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "_:Nfa001fcbc1654041847c146c6019e84b",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#updates"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#someValuesFrom": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierMaster"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OperationConfirmation",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Operation confirmation"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ShopFloorControl"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PlannedOrder",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Planned order"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#NetRequirementsCalculation"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#RoutingOperation",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Routing operation"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Routing"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierMaster",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Supplier master"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PartnerDataManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "manages"
+      },
+      {
+        "@value": "owns"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "maintains"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SpendCategories",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Spend categories"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Sourcing"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "has"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#compares",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#ObjectProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "compares"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "checks"
+      },
+      {
+        "@value": "uses"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PutAway",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Put-away"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Receiving"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#explodes",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#ObjectProperty"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "explodes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "reads"
+      },
+      {
+        "@value": "uses"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PaymentRun",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Payment run"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierPayment"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Picking",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Picking"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Fulfilment"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Receiving",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Receiving"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProcureToPay"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#N8DReport",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "8D report"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#RootCauseAnalysis"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#QualityManagement",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Quality management"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#AldermoorValves"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "operates"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "runs"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PurchaseOrder",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Purchase order"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PurchaseOrderCreation"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#BlanketPurchaseOrder",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Blanket purchase order"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PurchaseOrder"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "is a kind of"
+      },
+      {
+        "@value": "is a type of"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "is a"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Routing",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Routing"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionDataManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "manages"
+      },
+      {
+        "@value": "owns"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "maintains"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Shipping",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Shipping"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Fulfilment"
+      },
+      {
+        "@id": "_:N68799c6774cd400cb34901463494909a"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "_:N68799c6774cd400cb34901463494909a",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Restriction"
+    ],
+    "http://www.w3.org/2002/07/owl#onProperty": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#attaches"
+      }
+    ],
+    "http://www.w3.org/2002/07/owl#someValuesFrom": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#TestCertificate"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#FinalAssembly",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Final assembly"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionExecution"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionCharacteristic",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Inspection characteristic"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionPlan"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "contains"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "lists"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#JobTraveller",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Job traveller"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OrderRelease"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Collection",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Collection"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Billing"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionOrder",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Production order"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PlannedOrderConversion"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MasterDataManagement",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Master data management"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#AldermoorValves"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "operates"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "runs"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#DunningLetter",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Dunning letter"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Dunning"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#DemandForecast",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Demand forecast"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SalesForecasting"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Castings",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Castings"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SpendCategories"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#IncomingInspection",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Incoming inspection"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionTypes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#OrderToCash",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Order-to-cash"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#AldermoorValves"
+      }
+    ],
+    "http://www.w3.org/2004/02/skos/core#altLabel": [
+      {
+        "@language": "en",
+        "@value": "Order to cash"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "operates"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "runs"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MasterProductionSchedule",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Master production schedule"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MasterScheduling"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierPayment",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Supplier payment"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProcureToPay"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#InProcessInspection",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "In-process inspection"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionTypes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Invoicing",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Invoicing"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Billing"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductDataManagement",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Product data management"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MasterDataManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#PriceCalculation",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Price calculation"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#Quotation"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "consists of"
+      },
+      {
+        "@value": "has"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "includes"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionDataManagement",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Production data management"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#MasterDataManagement"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "has"
+      },
+      {
+        "@value": "includes"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "consists of"
+      }
+    ]
+  },
+  {
+    "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#GoodsReceiptNote",
+    "@type": [
+      "http://www.w3.org/2002/07/owl#Class"
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#label": [
+      {
+        "@language": "en",
+        "@value": "Goods receipt note"
+      }
+    ],
+    "http://www.w3.org/2000/01/rdf-schema#subClassOf": [
+      {
+        "@id": "https://example.org/ontaix/evals/manufacturer_aldermoor#GoodsReceipt"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#acceptedAction": [
+      {
+        "@value": "creates"
+      },
+      {
+        "@value": "outputs"
+      }
+    ],
+    "https://example.org/ontaix/evals/vocab#birthAction": [
+      {
+        "@value": "produces"
+      }
+    ]
+  }
+]
