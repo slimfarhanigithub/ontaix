@@ -205,19 +205,15 @@ async def test_resource_endpoints_spend_the_proposal_budget(
     client: httpx.AsyncClient, tenant: TenantFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setitem(rate_limit_service.UNITS_PER_WINDOW, Budget.PROPOSAL, 1)
-    rate_limit_service.reset()
-    try:
-        first = await client.post(
-            "/concepts", json=concept(tenant, "Plant"), headers=tenant.builder.headers
-        )
-        second = await client.post(
-            "/concepts", json=concept(tenant, "Line"), headers=tenant.builder.headers
-        )
-        third = await client.post(
-            "/proposals", json=concept(tenant, "Shift"), headers=tenant.builder.headers
-        )
-    finally:
-        rate_limit_service.reset()
+    first = await client.post(
+        "/concepts", json=concept(tenant, "Plant"), headers=tenant.builder.headers
+    )
+    second = await client.post(
+        "/concepts", json=concept(tenant, "Line"), headers=tenant.builder.headers
+    )
+    third = await client.post(
+        "/proposals", json=concept(tenant, "Shift"), headers=tenant.builder.headers
+    )
     assert first.status_code == 202, first.text
     assert (second.status_code, third.status_code) == (429, 429)
     assert second.json()["code"] == "rate_limited"
@@ -227,21 +223,17 @@ async def test_a_company_with_its_starter_vocabulary_spends_thirteen_units(
     client: httpx.AsyncClient, tenant: TenantFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setitem(rate_limit_service.UNITS_PER_WINDOW, Budget.PROPOSAL, 12)
-    rate_limit_service.reset()
-    try:
-        refused = await client.post(
-            "/companies",
-            json={"name": f"Aurora {uuid.uuid4().hex[:6]}", "start": "starter_vocabulary"},
-            headers=tenant.admin.headers,
-        )
-        monkeypatch.setitem(rate_limit_service.UNITS_PER_WINDOW, Budget.PROPOSAL, 13)
-        added = await client.post(
-            "/companies",
-            json={"name": f"Aurora {uuid.uuid4().hex[:6]}", "start": "starter_vocabulary"},
-            headers=tenant.admin.headers,
-        )
-    finally:
-        rate_limit_service.reset()
+    refused = await client.post(
+        "/companies",
+        json={"name": f"Aurora {uuid.uuid4().hex[:6]}", "start": "starter_vocabulary"},
+        headers=tenant.admin.headers,
+    )
+    monkeypatch.setitem(rate_limit_service.UNITS_PER_WINDOW, Budget.PROPOSAL, 13)
+    added = await client.post(
+        "/companies",
+        json={"name": f"Aurora {uuid.uuid4().hex[:6]}", "start": "starter_vocabulary"},
+        headers=tenant.admin.headers,
+    )
     assert refused.status_code == 429, refused.text
     assert added.status_code == 201, added.text
     assert len(added.json()["proposals"]) == 13

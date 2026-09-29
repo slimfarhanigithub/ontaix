@@ -8,6 +8,8 @@ from pydantic import Field
 
 from app.models.api.base import ApiModel
 
+DEFAULT_LLM_MONTHLY_TOKEN_CAP = 2_000_000
+
 
 class Settings(ApiModel):
     voice: bool
@@ -27,6 +29,7 @@ class Settings(ApiModel):
     refresh: Literal["5 min", "15 min", "1 h", "daily"]
     agent_access: bool
     cost_cap: bool
+    llm_monthly_token_cap: int = Field(ge=0, le=1_000_000_000)
     egress_allowlist: list[str] = Field(default_factory=list)
 
 

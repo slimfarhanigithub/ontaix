@@ -41,7 +41,7 @@ async def get_domain_product(
     if product is None:
         raise not_found("domain product")
     if not can_read(caller.grants, product.company_id):
-        raise forbidden("you may not read this company")
+        raise forbidden("You may not read this company")
     return view.domain_product_dto(product)
 
 
@@ -54,7 +54,7 @@ async def set_hidden(
     if product is None:
         raise not_found("domain product")
     if not can_read(caller.grants, product.company_id):
-        raise forbidden("you may not change the view of this company")
+        raise forbidden("You may not change the view of this company")
     await domain_product_repository.set_hidden(session, product, hidden)
     dto = view.domain_product_dto(product)
     await audit_service.record(

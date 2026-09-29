@@ -1,0 +1,92 @@
+{
+  "segments": [
+    {
+      "index": 0,
+      "start": 8,
+      "end": 31
+    },
+    {
+      "index": 1,
+      "start": 32,
+      "end": 96
+    }
+  ],
+  "intents": [
+    {
+      "kind": "rel",
+      "subject": {
+        "candidate": "c0"
+      },
+      "object": {
+        "newLabel": "Services"
+      },
+      "action": "sells",
+      "domainKey": "sales",
+      "confidence": 0.93,
+      "segment": 0,
+      "source": {
+        "start": 8,
+        "end": 30
+      },
+      "span": "Insight sells services"
+    },
+    {
+      "kind": "rel",
+      "subject": {
+        "newLabel": "Services"
+      },
+      "object": {
+        "newLabel": "App"
+      },
+      "action": "focuses on",
+      "confidence": 0.88,
+      "explanation": "these services refers to Services from the first statement",
+      "segment": 1,
+      "source": {
+        "start": 32,
+        "end": 96
+      },
+      "listId": 0,
+      "statedCount": 3
+    },
+    {
+      "kind": "rel",
+      "subject": {
+        "newLabel": "Services"
+      },
+      "object": {
+        "newLabel": "Data"
+      },
+      "action": "focuses on",
+      "confidence": 0.88,
+      "explanation": "these services refers to Services from the first statement",
+      "segment": 1,
+      "source": {
+        "start": 32,
+        "end": 96
+      },
+      "listId": 0,
+      "statedCount": 3
+    },
+    {
+      "kind": "rel",
+      "subject": {
+        "newLabel": "Services"
+      },
+      "object": {
+        "newLabel": "AI"
+      },
+      "action": "focuses on",
+      "confidence": 0.88,
+      "explanation": "these services refers to Services from the first statement",
+      "segment": 1,
+      "source": {
+        "start": 32,
+        "end": 96
+      },
+      "listId": 0,
+      "statedCount": 3
+    }
+  ],
+  "unresolved": []
+}

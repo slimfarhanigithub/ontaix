@@ -1,0 +1,23 @@
+{
+  "intents": [
+    {
+      "kind": "rel",
+      "subject": {
+        "candidate": "c0"
+      },
+      "object": {
+        "newLabel": "Services"
+      },
+      "action": "sells",
+      "domainKey": "sales",
+      "confidence": 0.93,
+      "explanation": "Insight is the company root; services is a new concept it sells.",
+      "span": "Insight sells services",
+      "source": {
+        "start": 0,
+        "end": 22
+      }
+    }
+  ],
+  "unresolved": []
+}

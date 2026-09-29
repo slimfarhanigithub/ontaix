@@ -96,7 +96,7 @@ async def get_lineage(session: AsyncSession, caller: Caller, concept_id: uuid.UU
 async def propose_concept(
     session: AsyncSession, caller: Caller, draft: ConceptDraft | SpecDraft
 ) -> ProposalDto:
-    charge_proposals(caller)
+    await charge_proposals(caller)
     view = await load_view(session, caller.tenant_id)
     proposal = await proposal_service.create(session, caller, view, draft)
     return readable_proposal(
@@ -107,7 +107,7 @@ async def propose_concept(
 async def propose_rename(
     session: AsyncSession, caller: Caller, concept_id: uuid.UUID, label: str
 ) -> ProposalDto:
-    charge_proposals(caller)
+    await charge_proposals(caller)
     view = await load_view(session, caller.tenant_id)
     _readable_concept(caller, view, concept_id)
     draft = ChangeDraft(
@@ -122,7 +122,7 @@ async def propose_rename(
 async def propose_delete(
     session: AsyncSession, caller: Caller, concept_id: uuid.UUID
 ) -> ProposalDto:
-    charge_proposals(caller)
+    await charge_proposals(caller)
     view = await load_view(session, caller.tenant_id)
     _readable_concept(caller, view, concept_id)
     draft = ChangeDraft(change_kind="delete_concept", payload=ChangePayload(concept_id=concept_id))
@@ -137,7 +137,7 @@ def _readable_concept(caller: Caller, view: OntologyView, concept_id: uuid.UUID)
     if concept is None or concept.dying_at is not None:
         raise not_found("concept")
     if not can_read(caller.grants, concept.company_id):
-        raise forbidden("you may not read this company")
+        raise forbidden("You may not read this company")
     return concept
 
 

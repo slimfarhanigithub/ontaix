@@ -33,7 +33,7 @@ async def list_proposals(
     session: AsyncSession, caller: Caller, query: ListQuery
 ) -> PageOf[ProposalDto]:
     if not can_read_tenant(caller.grants):
-        raise forbidden("no role grants you access to the model")
+        raise forbidden("No role grants you access to the model")
     proposals = await proposal_repository.list_for_tenant(session, caller.tenant_id)
     view = await load_view(session, caller.tenant_id, proposals)
     states = query.filters.get("state", DEFAULT_STATES)
@@ -78,7 +78,7 @@ async def get_proposal(
 
 
 async def create_proposal(session: AsyncSession, caller: Caller, draft) -> ProposalDto:
-    charge(Budget.PROPOSAL, caller.tenant_id, caller.actor_kind.value, caller.user_id)
+    await charge(Budget.PROPOSAL, caller.tenant_id, caller.actor_kind.value, caller.user_id)
     view = await load_view(session, caller.tenant_id)
     [provenance] = await provenance_service.resolve(session, caller, view, [draft])
     proposal = await proposal_service.create(session, caller, view, draft, provenance=provenance)
@@ -92,7 +92,9 @@ async def create_batch(
 ) -> list[ProposalDto]:
     """One proposal unit per draft is charged for the whole call before anything is created."""
     drafts = provenance_service.with_batch_defaults(batch)
-    charge(Budget.PROPOSAL, caller.tenant_id, caller.actor_kind.value, caller.user_id, len(drafts))
+    await charge(
+        Budget.PROPOSAL, caller.tenant_id, caller.actor_kind.value, caller.user_id, len(drafts)
+    )
     view = await load_view(session, caller.tenant_id)
     provenances = await provenance_service.resolve(session, caller, view, drafts)
     created = await proposal_service.create_batch(session, caller, view, drafts, provenances)

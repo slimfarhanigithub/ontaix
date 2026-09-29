@@ -30,3 +30,12 @@ output "workload_identity_client_id" {
 output "log_analytics_workspace_id" {
   value = azurerm_log_analytics_workspace.main.id
 }
+
+output "foundry_endpoint" {
+  description = "Foundry endpoint (custom subdomain); callers authenticate with Entra ID."
+  value       = azurerm_cognitive_account.foundry.endpoint
+}
+
+output "foundry_deployment_name" {
+  value = azurerm_cognitive_deployment.chat.name
+}

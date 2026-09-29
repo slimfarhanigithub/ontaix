@@ -61,6 +61,20 @@ async def exists(
     return found is not None
 
 
+async def texts_between(
+    session: AsyncSession, tenant_id: uuid.UUID, import_id: uuid.UUID, first: int, last: int
+) -> dict[int, str]:
+    """The texts of the import's sentences with an index from `first` to `last`."""
+    result = await session.execute(
+        select(DocumentImportSentence.sentence_index, DocumentImportSentence.text).where(
+            DocumentImportSentence.tenant_id == tenant_id,
+            DocumentImportSentence.import_id == import_id,
+            DocumentImportSentence.sentence_index.between(first, last),
+        )
+    )
+    return {int(index): text for index, text in result.all()}
+
+
 async def claim_parse(
     session: AsyncSession, tenant_id: uuid.UUID, import_id: uuid.UUID, sentence_index: int
 ) -> SentenceRow | None:

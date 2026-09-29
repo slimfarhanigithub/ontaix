@@ -18,3 +18,9 @@ aks_node_count_max = 3
 
 postgres_sku_name   = "B_Standard_B2s"
 postgres_storage_mb = 32768
+
+foundry_public_network_access_enabled = true
+foundry_deployment_name               = "gpt-6-sol"
+foundry_model_version                 = "2026-09-22"
+foundry_deployment_sku                = "DataZoneStandard"
+foundry_deployment_capacity           = 100

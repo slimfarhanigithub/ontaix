@@ -16,6 +16,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.auth import DEV_USER_HEADER
 from app.clients.db_client import dispose_engine
+from app.clients.llm_client import check_llm_configuration
 from app.config import get_settings
 
 # Every ontology table has a foreign key to `tenant`; its mapping must be registered before the
@@ -25,6 +26,7 @@ from app.routers import (
     audit,
     companies,
     concepts,
+    cost,
     domain_products,
     health,
     imports,
@@ -33,6 +35,7 @@ from app.routers import (
     scene,
     teach,
 )
+from app.services import retention_purge_service
 from app.services.import_purge_service import purge_periodically
 from app.utilities.contention import is_contention
 from app.utilities.problems import ProblemError, busy
@@ -54,16 +57,26 @@ HTTP_STATUS_CODES = {
 
 @asynccontextmanager
 async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Runs the expired-import purge for the life of the process and cancels it on shutdown."""
-    purge = asyncio.create_task(
-        purge_periodically(get_settings().import_purge_interval_seconds), name="import-purge"
-    )
+    """Runs the expired-import purge and the retention purge for the life of the process and
+    cancels them on shutdown."""
+    settings = get_settings()
+    purges = [
+        asyncio.create_task(
+            purge_periodically(settings.import_purge_interval_seconds), name="import-purge"
+        ),
+        asyncio.create_task(
+            retention_purge_service.purge_periodically(settings.retention_purge_interval_seconds),
+            name="retention-purge",
+        ),
+    ]
     try:
         yield
     finally:
-        purge.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await purge
+        for purge in purges:
+            purge.cancel()
+        for purge in purges:
+            with contextlib.suppress(asyncio.CancelledError):
+                await purge
         await dispose_engine()
 
 
@@ -71,6 +84,7 @@ def create_app() -> FastAPI:
     """Build the FastAPI application and mount every router under /api/v1."""
     settings = get_settings()
     logging.basicConfig(level=settings.log_level)
+    check_llm_configuration(settings)
     if settings.is_dev:
         logger.warning(
             "environment is dev: the %s header is accepted without any other credential",
@@ -89,6 +103,7 @@ def create_app() -> FastAPI:
         teach,
         imports,
         audit,
+        cost,
     ):
         application.include_router(module.router, prefix=API_PREFIX)
     application.include_router(health.router, prefix=API_PREFIX)

@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ontaix:contract:teach-extraction:1.0.0",
+  "title": "Teach Extraction Output",
+  "description": "The only shape the language model step of POST /teach/parse may return (ADR 0008). Every free-text field refuses markup (< and >), C0 and C1 control characters, DEL, U+00A0, U+2028, U+2029 and every Unicode format character (category Cf) in the Basic Multilingual Plane: U+00AD, U+0600 to U+0605, U+061C, U+06DD, U+070F, U+0890, U+0891, U+08E2, U+180E, U+200B to U+200F, U+202A to U+202E, U+2060 to U+2064, U+2066 to U+206F, U+FEFF and U+FFF9 to U+FFFB. The API's normalisation step also refuses every Cf character outside that plane (U+110BD, U+110CD, U+13430 to U+1343F, U+1BCA0 to U+1BCA3, U+1D173 to U+1D17A, U+E0001, U+E0020 to U+E007F), which a JSON Schema pattern cannot list portably. The API validates every answer against this schema, normalises each action (NFKC, whitespace runs collapsed to one space, trimmed, lower-cased - the same normalisation the relation endpoints apply) and then checks that every cited candidate was in the list it sent, that no intent joins a concept to itself, that no normalised rel action is is a or equivalent to, and that every spec intent has a draftable form (ADR 0008). Any failure makes the whole answer invalid: no model draft is returned and the sentence is listed in unresolved. The API turns valid intents into drafts with the same mapping as the rule-based grammar; the model never writes and never produces a draft directly. Offsets are Unicode code points into the text the API sent (the typed sentence, the cited import sentence, or the whole speech transcript), as half-open ranges [start, end). The API also checks: segments ascend without overlapping, lie inside the text and span at most 400 code points each; every intent's segment exists and its source range lies inside that segment; for a speech transcript every intent names a segment. For text and document requests the API accepts at most 20 intents and 10 unresolved phrases and treats an answer without segments as one segment covering the whole sentence; the larger caps below are for speech transcripts only. A new label that repeats a newLabel introduced by an earlier intent of the same answer names that same new concept, and is drafted by parentLabel. Labels keep the speaker's casing under the existing label rule (the first character is capitalised, the rest is kept: Apps, Data, AI). Further API checks: every range has start < end; segments[i].index equals i; for a document request every intent's source lies inside the cited sentence; the subject, object and members of a grouping intent and both ends of a spec intent are new labels or taught-company candidates; memberAction is normalised and checked like action; no member repeats the subject, the object or another member. Grounding: every newLabel must appear in the caller's own input inside the intent's source range (after NFKC, whitespace collapse and case folding, allowing singular or plural); an intent that fails is not drafted and its text becomes unresolved with reason ungrounded_label. Order for each newLabel: normalise; reuse without grounding only a concept sent as a candidate in this call; a match to any other existing taught-company concept must be grounded first and then resolves to it; everything else must be grounded and becomes a new concept; self-join and member-repeat checks run after reuse. Grounding matches whole words or word sequences at Unicode word boundaries, never substrings; matching is word by word so the run maps back to the original input; the drafted label is sliced from the original input at that run, then NFKC-normalised and put through the label casing rule, never the model's string and never a slice of the normalised text. The answer is requested as compact JSON.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "intents",
+    "unresolved"
+  ],
+  "properties": {
+    "intents": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {
+        "$ref": "#/$defs/intent"
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "$ref": "#/$defs/unresolved"
+      }
+    },
+    "segments": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "$ref": "#/$defs/segment"
+      }
+    }
+  },
+  "$defs": {
+    "intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "subject",
+        "object",
+        "confidence",
+        "source"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "rel",
+            "spec"
+          ],
+          "description": "rel: subject action object. spec: subject is a kind of object (subject is the specialised child, object the parent), like the grammar's spec intent."
+        },
+        "subject": {
+          "$ref": "#/$defs/conceptRef"
+        },
+        "object": {
+          "$ref": "#/$defs/conceptRef"
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^A-Z<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
+          "description": "Required for rel, absent for spec. Lower-case present-tense verb phrase read subject to object, for example sells or focuses on; a canonical predicate of the reference lexicon when one has the same meaning. No leading or trailing space. After normalisation, is a and equivalent to are refused for rel."
+        },
+        "rule": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$",
+          "description": "spec only: the condition that defines the child, as in a machine that has run 5,000 hours."
+        },
+        "domainKey": {
+          "enum": [
+            "production",
+            "supply",
+            "sales",
+            "logistics",
+            "quality",
+            "maintenance",
+            "finance",
+            "people",
+            "engineering",
+            null
+          ],
+          "description": "The domain template the new concept belongs to, or null to inherit from its parent. A domain prefix typed in the sentence always wins."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "explanation": {
+          "type": "string",
+          "maxLength": 300,
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$",
+          "description": "Plain text, no markup: why this intent, for example which earlier concept a back-reference points to. At most 120 characters in a speech transcript answer (an API check)."
+        },
+        "span": {
+          "type": "string",
+          "maxLength": 400,
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$",
+          "description": "The part of the sentence this intent comes from. Used to order intents and to build unresolved text; never returned as is."
+        },
+        "segment": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 39,
+          "description": "Index of the segment the intent comes from; required for a speech transcript."
+        },
+        "source": {
+          "$ref": "#/$defs/span",
+          "description": "Required. The words inside the segment (for a transcript) or inside the cited sentence (for a document) that produced the intent; start < end (an API check). Every newLabel of the intent must appear in this range of the caller's own input (grounding)."
+        },
+        "members": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/conceptRef"
+          },
+          "description": "rel only. Set when the object is a grouping concept that the sentence names and lists members of (Services has 3 offerings, Apps, Data and AI): the object (Offerings) is born from the subject with action, and each member is born from the object with memberAction. Absent for a descriptive grouping noun (focused around three areas, app, data and AI), where each member is its own rel intent from the subject."
+        },
+        "memberAction": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^A-Z<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
+          "description": "rel with members only: the action of each member's birth relation, read object to member. Defaults to includes. Normalised and checked like action: never is a or equivalent to."
+        },
+        "statedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "The number the speaker stated for a list (the 3 of 3 offerings), when one was stated. With members it is compared with the number of members; without members it is compared with the number of intents sharing this intent's listId. Drafts always follow the list; a mismatch is explained in the draftNotes of the list's drafts."
+        },
+        "listId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 39,
+          "description": "Groups the separate rel intents that come from one spoken list with a descriptive grouping noun, so statedCount can be checked against them."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "rel"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "action"
+            ],
+            "not": {
+              "required": [
+                "rule"
+              ]
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "action"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "spec"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "members"
+                  ]
+                },
+                {
+                  "required": [
+                    "memberAction"
+                  ]
+                },
+                {
+                  "required": [
+                    "listId"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "required": [
+                "members"
+              ]
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "memberAction"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "statedCount"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "members"
+                ]
+              },
+              {
+                "required": [
+                  "listId"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "conceptRef": {
+      "description": "An existing concept cited by the handle the API sent in the candidate list (c0 is always the company root), or a new concept by label. A new label that matches an existing concept of the company (case-insensitive, singular or plural) is resolved to that concept by the API, as the grammar does.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidate"
+          ],
+          "properties": {
+            "candidate": {
+              "type": "string",
+              "pattern": "^c(0|[1-9][0-9]?|1[0-9]{2})$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "newLabel"
+          ],
+          "properties": {
+            "newLabel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "pattern": "^[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
+              "description": "No leading or trailing space, so a whitespace-only label is refused."
+            }
+          }
+        }
+      ]
+    },
+    "unresolved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "reason"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400,
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$",
+          "description": "Located in the sentence the API holds; the response carries the matching substring of that sentence, never this text."
+        },
+        "reason": {
+          "enum": [
+            "not_understood",
+            "ambiguous_reference",
+            "low_confidence",
+            "not_a_statement"
+          ]
+        },
+        "segment": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 39
+        },
+        "source": {
+          "$ref": "#/$defs/span",
+          "description": "Where the phrase is; when present and valid the API takes the response text from these offsets."
+        }
+      }
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3999
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4000
+        }
+      }
+    },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "start",
+        "end"
+      ],
+      "description": "One sentence of the text. For a speech transcript the model splits the words into sentences and leaves fillers, false starts and repeated words outside every segment.",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 39
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3999
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4000
+        }
+      }
+    }
+  }
+}

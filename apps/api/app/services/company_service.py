@@ -55,7 +55,7 @@ async def get_company(session: AsyncSession, caller: Caller, company_id: uuid.UU
     if company is None or company.dying_at is not None:
         raise not_found("company")
     if not can_read(caller.grants, company.id):
-        raise forbidden("you may not read this company")
+        raise forbidden("You may not read this company")
     return view.company_dto(company)
 
 
@@ -64,9 +64,9 @@ async def create_company(
 ) -> CompanyCreated:
     """Immediate and audited: the company, its domain products, its root, then starter proposals."""
     if not can_manage(caller.grants):
-        raise forbidden("adding a company requires Administrator")
+        raise forbidden("Adding a company requires Administrator")
     if body.start == "starter_vocabulary":
-        charge_proposals(caller, len(STARTER_VOCABULARY))
+        await charge_proposals(caller, len(STARTER_VOCABULARY))
     view = await load_view(session, caller.tenant_id)
     key = company_key(body.name)
     if any(c.key == key for c in view.companies.values()):
@@ -175,7 +175,7 @@ async def propose_starter_vocabulary(
 async def propose_remove_company(
     session: AsyncSession, caller: Caller, company_id: uuid.UUID
 ) -> ProposalDto:
-    charge_proposals(caller)
+    await charge_proposals(caller)
     view = await load_view(session, caller.tenant_id)
     company = view.companies.get(company_id)
     if company is None or company.dying_at is not None:
