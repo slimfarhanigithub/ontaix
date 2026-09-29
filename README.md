@@ -74,6 +74,10 @@ cd packages/connectors && uv sync && uv run pytest
 
 In this dev build the Studio identifies itself with `X-Ontaix-User`: `VITE_ONTAIX_DEV_USER`, else the seed's full-access demo user (`demo@northwind.com`: Administrator, Builder, Governor and Auditor), who can do everything in one tab; `?user=<email>` switches user per tab, for example the Builder (`sam.okafor@northwind.com`) or the Governor (`hugo.brandt@northwind.com`) to show separation of duties. Production builds send no such header. Ports come from `ONTAIX_API_PORT` and `ONTAIX_STUDIO_PORT`; Ctrl+C stops everything, the database included.
 
+### Voice With Azure AI Speech
+
+The teach bar microphone uses Azure AI Speech in France Central when the API has a Speech resource and its dedicated token identity configured, and the browser's own recogniser otherwise (and whenever Azure Speech is unavailable or fails). The token is minted only by the managed identity named by `ONTAIX_SPEECH_CLIENT_ID` (Terraform output `speech_identity_client_id`), which holds Cognitive Services Speech User on the Speech resource and nothing else; the API never passes its own or a developer's `az login` token to the browser. That identity is reachable only from the cluster, so a local stack answers `POST /speech/token` with 503 and uses the browser recogniser. The cluster sets `ONTAIX_SPEECH_RESOURCE_ID`, `ONTAIX_SPEECH_ENDPOINT` and `ONTAIX_SPEECH_CLIENT_ID` from the outputs `speech_resource_id`, `speech_endpoint` and `speech_identity_client_id`. The browser opens a WebSocket to the Speech service, so a Content Security Policy in front of the Studio must allow `wss://francecentral.stt.speech.microsoft.com` and `wss://<custom subdomain>.cognitiveservices.azure.com`.
+
 `pnpm --filter studio test:e2e` boots the same stack with the fixture seed on ports 8788 and 5788, checks both companies and their concept counts, teaches and approves one concept, and writes `tests/e2e/output/studio-both-companies.png`.
 
 Each Python package runs `uv run pytest` and `uv run ruff check`; the root `pnpm lint`, `pnpm test` and `pnpm build` cover every workspace package.
