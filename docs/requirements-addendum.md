@@ -351,6 +351,8 @@ Nothing is ever created silently: unresolved names become pending cells born fro
 
 ### 3.5 Story Interception
 
+> **Superseded By The Owner (decision row 62).** The product has no scripted story, so no sentence is intercepted: every sentence from the teach bar, a speech transcript or a document import is parsed. The extraction below describes the reference only.
+
 `teach` first checks the next scene's `match` regex (`L864`); a matching sentence plays that scene instead of being parsed. The regexes are, per scene: Production `/plant|production line|machine|shift/i`; Supply chain `/material|supplier|purchase|warehouse|stock/i`; Sales `/customer|sales order|quotation|price/i`; Logistics `/delivery|shipment|carrier|route/i`; Quality and maintenance `/inspection|defect|maintenance|hours|sensor/i`; Finance and people `/invoice|cost centre|budget|employee|training|certification/i`; Engineering `/specification|engineering|test|design/i`; Two products, one word `/defective|scrap|failed/i`; Resolution `/keep|both|kind of/i`; Wired to reality `/connect|system|sap|mes|wired|bind/i`; Acquisition `/acqui|aurora|buy|merge/i`; Align vocabularies `/align|means|equivalent|same/i`; Due diligence `/diligence|aurora.*erp|what is real|coverage/i`; It keeps learning `/keeps|learning|every/i`. This is demo behaviour; whether the product keeps a scripted story is ambiguity A9.
 
 ### 3.6 Voice And Import
@@ -701,6 +703,8 @@ Legend rows (`L225`): `Relation · continuous, brighter toward the target, the a
 
 ## 7. Seed Data: Northwind And Aurora
 
+> **Superseded By The Owner (decision row 62).** The scenes do not ship. Northwind Industries and Aurora Valves remain only as the dev and test fixture seed; a real tenant starts with its home company's root cell. The starter vocabulary `SEED` (7.2) stays as a product feature of the add-company dialog. The extraction below describes the reference only.
+
 ### 7.1 Northwind Industries
 
 Created by `reset()` (`L736`): `addCompany('Northwind Industries', 'industrial pumps · 4 plants · 2,300 people')`. Its concepts arrive scene by scene (`scenes` `L738`); every entry below is a proposal that the owner approves. Format: `parent → child` with the birth action and the child's domain product; `rel` rows are `pRelation` proposals between existing concepts.
@@ -837,6 +841,8 @@ The Studio is identical to the reference only if the API returns everything the 
 - Agent registry with platform, domain, owner, reads, cost, access flag; cost KPIs (measured, allocated, reads) and per-platform aggregates; `agentAccess` and `costCap` settings.
 
 ### 8.7 Story Mode
+
+> **Superseded By The Owner (decision row 62).** Story mode does not ship: no scene endpoints, no `sceneIdx`, no Finalise all. The text below records the option that was open before the decision.
 
 If the scripted story is kept (ambiguity A9), the API must run each scene's proposals server-side in the same order and pacing, expose `sceneIdx`, and support Finalise all as "play remaining scenes and approve everything".
 
