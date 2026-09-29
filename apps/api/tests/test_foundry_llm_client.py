@@ -317,7 +317,7 @@ def test_foundry_without_an_endpoint_starts_and_is_not_configured() -> None:
     settings = Settings(_env_file=None, llm_provider="azure_foundry", foundry_endpoint=None)
 
     check_llm_configuration(settings)
-    assert llm_client._configured(settings) is None
+    assert llm_client._configured(settings, "live") is None
 
 
 def test_an_unknown_provider_stops_start_up() -> None:

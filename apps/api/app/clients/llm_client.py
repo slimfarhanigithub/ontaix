@@ -16,10 +16,16 @@ import logging
 import time
 from dataclasses import dataclass
 from decimal import Decimal
-from enum import StrEnum
 from typing import Any, Protocol
 
-from app.config import ModelPrice, ReasoningEffort, Settings, get_settings
+from app.config import (
+    LLM_PROFILES,
+    LlmProfile,
+    LlmProfileSettings,
+    ModelPrice,
+    Settings,
+    get_settings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,23 +35,8 @@ CODE_POINTS_PER_TOKEN = 2
 BYTES_PER_TOKEN = 3
 # `llm_call.latency_ms` holds at most five minutes.
 MAX_LATENCY_MS = 300_000
-
-
-class LlmPurpose(StrEnum):
-    """Why Ontaix calls a model; each purpose has its own deployment, model and effort."""
-
-    TEACH_EXTRACTION = "teach_extraction"
-    CONCEPT_EXPANSION = "concept_expansion"
-    DOCUMENT_EXTRACTION = "document_extraction"
-
-
-@dataclass(frozen=True)
-class LlmProfile:
-    """The deployment (Azure AI Foundry), model name and reasoning effort of one purpose."""
-
-    deployment: str
-    model: str
-    reasoning_effort: ReasoningEffort
+# Providers reached keylessly through the Azure AI Foundry endpoint settings.
+FOUNDRY_PROVIDERS = ("azure_foundry", "anthropic_foundry")
 
 
 @dataclass(frozen=True)
@@ -110,69 +101,45 @@ class LlmClient(Protocol):
     async def complete(self, request: LlmRequest) -> LlmAnswer: ...
 
 
-_override: LlmClient | None = None
-_override_set = False
-_cached: dict[LlmPurpose, tuple[tuple[object, ...], LlmClient]] = {}
+# Clients installed per profile by tests; a profile without one is built from configuration.
+_overrides: dict[LlmProfile, LlmClient | None] = {}
+# One built client per profile, rebuilt when the settings it came from change.
+_cached: dict[LlmProfile, tuple[tuple[object, ...], LlmClient]] = {}
 
 
-def get_llm_client(purpose: LlmPurpose = LlmPurpose.TEACH_EXTRACTION) -> LlmClient | None:
-    """The client configured for `purpose`, or None when the provider has no endpoint, key or
-    price for its model."""
-    if _override_set:
-        return _override
-    return _configured(get_settings(), purpose)
+def get_llm_client(profile: LlmProfile = "live") -> LlmClient | None:
+    """The client of `profile`, or None when the provider has no endpoint, key or price."""
+    if profile in _overrides:
+        return _overrides[profile]
+    return _configured(get_settings(), profile)
 
 
-def set_llm_client(client: LlmClient | None) -> None:
-    """Replace the configured client of every purpose (tests); `reset_llm_client` restores
-    configuration."""
-    global _override, _override_set
-    _override, _override_set = client, True
+def set_llm_client(client: LlmClient | None, *profiles: LlmProfile) -> None:
+    """Replace the client of the given profiles, of every profile when none is given (tests);
+    `reset_llm_client` restores configuration."""
+    for profile in profiles or LLM_PROFILES:
+        _overrides[profile] = client
 
 
 def reset_llm_client() -> None:
-    global _override, _override_set
-    _override, _override_set = None, False
+    _overrides.clear()
 
 
 def check_llm_configuration(settings: Settings) -> None:
-    """Stops start-up when a provider is configured but the model of a purpose has no price.
+    """Stops start-up when a provider is configured but a model it calls has no price.
 
-    A provider without its endpoint (`azure_foundry`) or key (`anthropic`) is not an error: the
-    model step answers `not_configured` and the grammar runs alone.
+    The Foundry providers price each profile's deployment; `anthropic` prices its model. A
+    provider without its endpoint (`azure_foundry`, `anthropic_foundry`) or key (`anthropic`)
+    is not an error: the model step answers `not_configured` and the grammar runs alone.
     """
     if not _provider_configured(settings):
         return
-    variables = {
-        LlmPurpose.TEACH_EXTRACTION: "ONTAIX_LLM_MODEL",
-        LlmPurpose.CONCEPT_EXPANSION: "ONTAIX_EXPAND_MODEL",
-        LlmPurpose.DOCUMENT_EXTRACTION: "ONTAIX_DOCUMENT_EXTRACTION_MODEL",
-    }
-    for purpose, variable in variables.items():
-        model = profile_for(settings, purpose).model
+    for profile in LLM_PROFILES:
+        model = _priced_model(settings, profile)
         if model not in settings.llm_price_table:
             raise LlmConfigurationError(
-                f"ONTAIX_LLM_PRICE_TABLE has no price for {variable} {model!r}"
+                f"ONTAIX_LLM_PRICE_TABLE has no price for {model!r}, the {profile} profile's model"
             )
-
-
-def profile_for(settings: Settings, purpose: LlmPurpose) -> LlmProfile:
-    """The deployment, model and effort of a purpose; unset ones fall back to the teach ones."""
-    if purpose is LlmPurpose.CONCEPT_EXPANSION:
-        return LlmProfile(
-            settings.expand_deployment or settings.foundry_deployment,
-            settings.expand_model or settings.llm_model,
-            settings.expand_reasoning_effort,
-        )
-    if purpose is LlmPurpose.DOCUMENT_EXTRACTION:
-        return LlmProfile(
-            settings.document_extraction_deployment or settings.foundry_deployment,
-            settings.document_extraction_model or settings.llm_model,
-            settings.document_extraction_reasoning_effort,
-        )
-    return LlmProfile(
-        settings.foundry_deployment, settings.llm_model, settings.foundry_reasoning_effort
-    )
 
 
 def estimate_tokens(request: LlmRequest) -> int:
@@ -197,53 +164,71 @@ def elapsed_ms(started: float) -> int:
 
 
 def _provider_configured(settings: Settings) -> bool:
-    if settings.llm_provider == "azure_foundry":
+    if settings.llm_provider in FOUNDRY_PROVIDERS:
         return settings.foundry_endpoint is not None
     key = settings.anthropic_api_key
     return key is not None and bool(key.get_secret_value())
 
 
-def _configured(
-    settings: Settings, purpose: LlmPurpose = LlmPurpose.TEACH_EXTRACTION
-) -> LlmClient | None:
-    profile = profile_for(settings, purpose)
-    price = settings.llm_price_table.get(profile.model)
+def _priced_model(settings: Settings, profile: LlmProfile) -> str:
+    """The model `profile` records and prices: the Foundry deployment called, else the model."""
+    if settings.llm_provider in FOUNDRY_PROVIDERS:
+        return settings.llm_profile(profile).deployment
+    return settings.llm_model
+
+
+def _configured(settings: Settings, profile: LlmProfile) -> LlmClient | None:
+    price = settings.llm_price_table.get(_priced_model(settings, profile))
     if not _provider_configured(settings) or price is None:
         return None
-    if settings.llm_provider == "azure_foundry":
+    chosen = settings.llm_profile(profile)
+    if settings.llm_provider in FOUNDRY_PROVIDERS:
         fingerprint: tuple[object, ...] = (
             settings.llm_provider,
-            profile,
             price,
             settings.foundry_endpoint,
+            chosen.deployment,
+            chosen.reasoning_effort,
         )
     else:
         key = settings.anthropic_api_key.get_secret_value()  # type: ignore[union-attr]
         fingerprint = (
             settings.llm_provider,
-            profile.model,
+            settings.llm_model,
             price,
             hashlib.sha256(key.encode()).hexdigest(),
         )
-    cached = _cached.get(purpose)
+    cached = _cached.get(profile)
     if cached is None or cached[0] != fingerprint:
-        cached = (fingerprint, _build(settings, profile, price))
-        _cached[purpose] = cached
+        cached = (fingerprint, _build(settings, chosen, price))
+        _cached[profile] = cached
     return cached[1]
 
 
-def _build(settings: Settings, profile: LlmProfile, price: ModelPrice) -> LlmClient:
+def _build(settings: Settings, chosen: LlmProfileSettings, price: ModelPrice) -> LlmClient:
     if settings.llm_provider == "azure_foundry":
         from app.clients.foundry_llm_client import FoundryLlmClient
 
         return FoundryLlmClient(
             endpoint=settings.foundry_endpoint or "",
-            deployment=profile.deployment,
-            model=profile.model,
+            deployment=chosen.deployment,
+            model=chosen.deployment,
             price=price,
-            reasoning_effort=profile.reasoning_effort,
+            reasoning_effort=chosen.reasoning_effort,
+        )
+    if settings.llm_provider == "anthropic_foundry":
+        from app.clients.anthropic_foundry_llm_client import (
+            AnthropicFoundryLlmClient,
+            foundry_messages_url,
+        )
+
+        return AnthropicFoundryLlmClient(
+            base_url=foundry_messages_url(settings.foundry_endpoint or ""),
+            deployment=chosen.deployment,
+            price=price,
+            reasoning_effort=chosen.reasoning_effort,
         )
     from app.clients.anthropic_llm_client import AnthropicLlmClient
 
     key = settings.anthropic_api_key.get_secret_value()  # type: ignore[union-attr]
-    return AnthropicLlmClient(key, profile.model, price)
+    return AnthropicLlmClient(key, settings.llm_model, price)

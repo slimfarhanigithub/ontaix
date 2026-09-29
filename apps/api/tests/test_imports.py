@@ -105,6 +105,7 @@ async def test_text_import_is_stored_and_its_sentences_become_document_proposals
     body = response.json()
     assert body["fileName"] == "plant notes.txt"
     assert body["sentences"] == ["A plant has machines.", "Machines have sensors!"]
+    assert body["skipped"] == 1
     assert body["positions"] == [None, None]
     assert body["origin"] == "document"
     assert body["originDetail"] == {"fileName": "plant notes.txt", "mediaType": "text/plain"}

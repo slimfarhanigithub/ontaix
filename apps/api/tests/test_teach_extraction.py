@@ -175,10 +175,29 @@ async def test_without_a_provider_the_grammar_answers_and_the_sentence_is_unreso
     assert result["draftNotes"] == [{"extractor": "rules", "confidence": 1}] * 2
 
 
-async def test_a_sentence_the_grammar_reads_whole_never_calls_the_model(
+async def test_a_typed_sentence_goes_to_the_model_first_and_the_grammar_stands_when_it_fails(
     client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
 ) -> None:
     await configure(tenant)
+    fake_llm.answer(LlmProviderError("status", input_tokens=10, output_tokens=0, cost_eur=0))
+
+    result = await teach(client, tenant, tenant.company_id, "A plant has machines")
+
+    assert len(fake_llm.requests) == 1
+    # The grammar reads the sentence whole, so its result stands without being marked degraded.
+    assert (result["extractor"], result["llmOutcome"], result["degraded"]) == (
+        "rules",
+        "provider_error",
+        False,
+    )
+    assert result["outcome"] == "understood" and result["unresolved"] == []
+    assert [d["label"] for d in result["drafts"]] == ["Plant", "Machine"]
+
+
+async def test_with_the_step_off_a_sentence_the_grammar_reads_whole_never_calls_the_model(
+    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
+) -> None:
+    await configure(tenant, llm_monthly_token_cap=0)
 
     result = await teach(client, tenant, tenant.company_id, "A plant has machines")
 
@@ -187,7 +206,6 @@ async def test_a_sentence_the_grammar_reads_whole_never_calls_the_model(
         "not_triggered",
         False,
     )
-    assert result["outcome"] == "understood" and result["unresolved"] == []
     assert fake_llm.requests == []
 
 
@@ -459,10 +477,11 @@ async def test_a_spec_intent_citing_another_company_is_invalid(
     assert result["llmOutcome"] == "invalid_output"
 
 
-async def test_a_partly_understood_sentence_keeps_the_grammar_and_adds_the_model(
+async def test_a_sentence_the_grammar_reads_partly_takes_the_model_answer(
     client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
 ) -> None:
     await configure(tenant)
+    fake_llm.answer(LlmProviderError("status", input_tokens=0, output_tokens=0, cost_eur=0))
     seeded = await teach(client, tenant, tenant.company_id, "A plant has machines")
     created = await client.post(
         "/proposals/batch", json={"drafts": seeded["drafts"]}, headers=tenant.builder.headers
@@ -515,9 +534,9 @@ async def test_a_partly_understood_sentence_keeps_the_grammar_and_adds_the_model
 
     result = await run()
 
-    assert (result["extractor"], result["llmOutcome"]) == ("rules+llm", "used")
-    assert [d["label"] for d in result["drafts"]] == ["Downtime", "Report", "Downtime reports"]
-    assert [n["extractor"] for n in result["draftNotes"]] == ["rules", "rules", "llm"]
+    assert (result["extractor"], result["llmOutcome"]) == ("llm", "used")
+    assert [d["label"] for d in result["drafts"]] == ["Downtime", "Downtime reports"]
+    assert [n["extractor"] for n in result["draftNotes"]] == ["llm", "llm"]
     assert result["unresolved"] == [{"text": "downtime", "reason": "low_confidence"}]
     assert result["outcome"] == "partly_understood"
 

@@ -41,13 +41,12 @@ from app.clients.llm_client import (
     LlmAnswer,
     LlmCallError,
     LlmClient,
-    LlmPurpose,
     LlmRefused,
     LlmRequest,
     LlmTimeout,
     get_llm_client,
 )
-from app.config import Settings, get_settings
+from app.config import LlmProfile, Settings, get_settings
 from app.models.api.settings import DEFAULT_LLM_MONTHLY_TOKEN_CAP
 from app.models.storage.document_extraction_job import DocumentExtractionJob
 from app.repositories import (
@@ -77,8 +76,8 @@ from app.utilities.clock import get_clock
 
 logger = logging.getLogger(__name__)
 
-# TODO: pass the profile argument "deep" to get_llm_client once model profiles land.
-_PROFILE = LlmPurpose.DOCUMENT_EXTRACTION
+DEEP: LlmProfile = "deep"
+
 
 RENEW_SECONDS = 60.0
 MAX_UNRESOLVED = 5000
@@ -209,7 +208,7 @@ class _Run:
         ]
         if len(chunks) != job.chunks:
             await self._write({"chunks": len(chunks)})
-        client = get_llm_client(_PROFILE)
+        client = get_llm_client(DEEP)
         view = await self._view()
         cap = (
             view.settings.llm_monthly_token_cap if view.settings else DEFAULT_LLM_MONTHLY_TOKEN_CAP
@@ -280,7 +279,7 @@ class _Run:
                 "outline" if outline_pass else "section",
             ),
             output_schema=OUTLINE_SCHEMA if outline_pass else SECTION_SCHEMA,
-            max_output_tokens=bound + self.settings.document_extraction_reasoning_allowance_tokens,
+            max_output_tokens=bound + self.settings.llm_profile(DEEP).reasoning_allowance_tokens,
             timeout_seconds=self.settings.document_extraction_timeout_seconds,
         )
         upper = client.estimate_input_tokens(request) + request.max_output_tokens

@@ -144,7 +144,8 @@ async def test_expansion_suggests_a_branch_of_any_depth_and_proposes_a_selection
     user = fake_llm.requests[0].user
     for secret in (sales["id"], str(tenant.tenant_id), str(tenant.company_id), str(session_id)):
         assert secret not in user
-    assert fake_llm.requests[0].max_output_tokens == 128 * 200 + 8192
+    allowance = get_settings().llm_profile("deep").reasoning_allowance_tokens
+    assert fake_llm.requests[0].max_output_tokens == 128 * 200 + allowance
     assert fake_llm.requests[0].timeout_seconds == 120
 
     [call] = await rows(

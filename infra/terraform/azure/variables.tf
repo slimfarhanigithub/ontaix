@@ -174,3 +174,39 @@ variable "foundry_deployment_capacity" {
   type        = number
   default     = 100
 }
+
+variable "foundry_claude_location" {
+  description = "Region of the Foundry resource for Claude (not offered in France Central)."
+  type        = string
+  default     = "swedencentral"
+}
+
+variable "foundry_claude_location_short" {
+  description = "Short region token of the Claude resource, used in its name."
+  type        = string
+  default     = "sdc"
+}
+
+variable "foundry_claude_deployments" {
+  description = "Claude deployments on the Claude resource, keyed by model name (also the deployment name the API sends): catalogue version and GlobalStandard capacity."
+  type = map(object({
+    model_version = string
+    capacity      = number
+  }))
+  default = {}
+}
+
+variable "foundry_claude_organization" {
+  description = "Organisation attested to Anthropic on each Claude deployment: legal name, ISO 3166-1 alpha-2 country code, and lowercase industry (technology, finance, healthcare, education, retail, manufacturing, government, media, other)."
+  type = object({
+    name         = string
+    country_code = string
+    industry     = string
+  })
+  default = null
+
+  validation {
+    condition     = length(var.foundry_claude_deployments) == 0 || var.foundry_claude_organization != null
+    error_message = "Claude deployments need foundry_claude_organization."
+  }
+}

@@ -1695,6 +1695,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         origin: 'document',
         originDetail: { fileName: imp.fileName, mediaType: imp.mediaType },
         sentences: imp.sentences,
+        skipped: extracted.skipped,
         positions: imp.positions,
       } satisfies T.ImportResult);
     } catch (e) {

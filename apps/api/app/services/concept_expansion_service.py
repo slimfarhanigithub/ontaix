@@ -32,13 +32,12 @@ from app.auth import Caller
 from app.clients.db_client import get_session_factory
 from app.clients.llm_client import (
     LlmCallError,
-    LlmPurpose,
     LlmRefused,
     LlmRequest,
     LlmTimeout,
     get_llm_client,
 )
-from app.config import get_settings
+from app.config import LlmProfile, get_settings
 from app.models.api.expansion import (
     ExpansionNote,
     ExpansionOutcome,
@@ -63,8 +62,8 @@ from app.utilities.teach_parser import singular, title
 
 logger = logging.getLogger(__name__)
 
-# TODO: pass the profile argument "deep" to get_llm_client once model profiles land.
-_PROFILE = LlmPurpose.CONCEPT_EXPANSION
+DEEP: LlmProfile = "deep"
+
 
 ROOT_HANDLE = "e0"
 MIN_CONFIDENCE = 0.4
@@ -177,7 +176,7 @@ async def _suggest(
 async def _call(
     caller: Caller, view: OntologyView, concept: Concept, body: ExpansionRequest
 ) -> tuple[ExpansionOutcome, _Interpretation | None]:
-    client = get_llm_client(_PROFILE)
+    client = get_llm_client(DEEP)
     if client is None:
         return "not_configured", None
     cap = view.settings.llm_monthly_token_cap if view.settings else DEFAULT_LLM_MONTHLY_TOKEN_CAP
@@ -194,7 +193,7 @@ async def _call(
         system=SYSTEM_PROMPT,
         user=_context(view, concept, body, config.expand_context_labels),
         output_schema=OUTPUT_SCHEMA,
-        max_output_tokens=answer_bound + config.expand_reasoning_allowance_tokens,
+        max_output_tokens=answer_bound + config.llm_profile(DEEP).reasoning_allowance_tokens,
         timeout_seconds=config.expand_timeout_seconds,
     )
     upper_bound = client.estimate_input_tokens(request) + request.max_output_tokens

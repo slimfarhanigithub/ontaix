@@ -1,0 +1,423 @@
+# Gold tree for manufacturer_aldermoor.md. Reviewed twice against the document.
+company: Aldermoor Valves
+description: Business process handbook of a fictional valve manufacturer; stresses domain, process, sub-process, step and document hierarchy, plus master data entities and a process overview table.
+tags: [document, manufacturing, en, process-handbook]
+expected:
+  concepts:
+    - label: Order-to-cash
+      parent: [Aldermoor Valves]
+      action: [runs, has, operates]
+      aliases: [Order to cash]
+    - label: Procure-to-pay
+      parent: [Aldermoor Valves]
+      action: [runs, has, operates]
+    - label: Plan-to-produce
+      parent: [Aldermoor Valves]
+      action: [runs, has, operates]
+    - label: Quality management
+      parent: [Aldermoor Valves]
+      action: [runs, has, operates]
+    - label: Master data management
+      parent: [Aldermoor Valves]
+      action: [runs, has, operates]
+
+    - label: Quote-to-order
+      parent: [Order-to-cash]
+      action: [consists of, includes, has]
+    - label: Fulfilment
+      parent: [Order-to-cash]
+      action: [consists of, includes, has]
+    - label: Billing
+      parent: [Order-to-cash]
+      action: [consists of, includes, has]
+    - label: Quotation
+      parent: [Quote-to-order]
+      action: [consists of, includes, has]
+    - label: Order capture
+      parent: [Quote-to-order]
+      action: [consists of, includes, has]
+    - label: Configuration check
+      parent: [Quotation]
+      action: [includes, consists of, has]
+    - label: Price calculation
+      parent: [Quotation]
+      action: [includes, consists of, has]
+    - label: Technical datasheet
+      parent: [Configuration check]
+      action: [produces, creates, outputs]
+    - label: Price quote
+      parent: [Price calculation]
+      action: [produces, creates, outputs]
+    - label: Order entry
+      parent: [Order capture]
+      action: [consists of, includes, has]
+    - label: Credit check
+      parent: [Order capture]
+      action: [consists of, includes, has]
+    - label: Sales order
+      parent: [Order entry]
+      action: [produces, creates, outputs]
+    - label: Rush order
+      parent: [Sales order]
+      action: [is a, is a kind of, is a type of]
+    - label: Credit decision
+      parent: [Credit check]
+      action: [produces, creates, outputs]
+    - label: Picking
+      parent: [Fulfilment]
+      action: [includes, consists of, has]
+    - label: Shipping
+      parent: [Fulfilment]
+      action: [includes, consists of, has]
+    - label: Pick list
+      parent: [Picking]
+      action: [produces, creates, outputs]
+    - label: Delivery note
+      parent: [Shipping]
+      action: [produces, creates, outputs]
+    - label: Invoicing
+      parent: [Billing]
+      action: [consists of, includes, has]
+    - label: Collection
+      parent: [Billing]
+      action: [consists of, includes, has]
+    - label: Customer invoice
+      parent: [Invoicing]
+      action: [produces, creates, outputs]
+    - label: Cash application
+      parent: [Collection]
+      action: [consists of, includes, has]
+    - label: Dunning
+      parent: [Collection]
+      action: [consists of, includes, has]
+    - label: Dunning letter
+      parent: [Dunning]
+      action: [produces, creates, outputs]
+
+    - label: Sourcing
+      parent: [Procure-to-pay]
+      action: [consists of, includes, has]
+    - label: Purchasing
+      parent: [Procure-to-pay]
+      action: [consists of, includes, has]
+    - label: Receiving
+      parent: [Procure-to-pay]
+      action: [consists of, includes, has]
+    - label: Supplier payment
+      parent: [Procure-to-pay]
+      action: [consists of, includes, has]
+    - label: Spend categories
+      parent: [Sourcing]
+      action: [has, includes]
+    - label: Castings
+      parent: [Spend categories]
+      action: [includes, has]
+    - label: Electronics
+      parent: [Spend categories]
+      action: [includes, has]
+    - label: Seals
+      parent: [Spend categories]
+      action: [includes, has]
+    - label: Supplier selection
+      parent: [Sourcing]
+      action: [consists of, includes, has]
+    - label: Supplier qualification
+      parent: [Supplier selection]
+      action: [includes, consists of, has]
+    - label: Request for quotation
+      parent: [Supplier selection]
+      action: [includes, consists of, has]
+    - label: Supplier audit report
+      parent: [Supplier qualification]
+      action: [produces, creates, outputs]
+    - label: Supplier bid
+      parent: [Request for quotation]
+      action: [produces, creates, outputs]
+    - label: Requisitioning
+      parent: [Purchasing]
+      action: [consists of, includes, has]
+    - label: Purchase order creation
+      parent: [Purchasing]
+      action: [consists of, includes, has]
+    - label: Purchase requisition
+      parent: [Requisitioning]
+      action: [produces, creates, outputs]
+    - label: Purchase order
+      parent: [Purchase order creation]
+      action: [produces, creates, outputs]
+    - label: Blanket purchase order
+      parent: [Purchase order]
+      action: [is a, is a kind of, is a type of]
+    - label: Goods receipt
+      parent: [Receiving]
+      action: [consists of, includes, has]
+    - label: Put-away
+      parent: [Receiving]
+      action: [consists of, includes, has]
+    - label: Goods receipt note
+      parent: [Goods receipt]
+      action: [produces, creates, outputs]
+    - label: Invoice verification
+      parent: [Supplier payment]
+      action: [consists of, includes, has]
+    - label: Payment run
+      parent: [Supplier payment]
+      action: [consists of, includes, has]
+    - label: Three-way match
+      parent: [Invoice verification]
+      action: [includes, consists of, has]
+    - label: Match exception
+      parent: [Three-way match]
+      action: [produces, creates, outputs]
+    - label: Payment advice
+      parent: [Payment run]
+      action: [produces, creates, outputs]
+
+    - label: Demand planning
+      parent: [Plan-to-produce]
+      action: [consists of, includes, has]
+    - label: Production planning
+      parent: [Plan-to-produce]
+      action: [consists of, includes, has]
+    - label: Production execution
+      parent: [Plan-to-produce]
+      action: [consists of, includes, has]
+    - label: Sales forecasting
+      parent: [Demand planning]
+      action: [consists of, includes, has]
+    - label: Consensus planning
+      parent: [Demand planning]
+      action: [consists of, includes, has]
+    - label: Demand forecast
+      parent: [Sales forecasting]
+      action: [produces, creates, outputs]
+    - label: Consensus plan
+      parent: [Consensus planning]
+      action: [produces, creates, outputs]
+    - label: Master scheduling
+      parent: [Production planning]
+      action: [consists of, includes, has]
+    - label: Material requirements planning
+      parent: [Production planning]
+      action: [consists of, includes, has]
+    - label: Master production schedule
+      parent: [Master scheduling]
+      action: [produces, creates, outputs]
+    - label: Net requirements calculation
+      parent: [Material requirements planning]
+      action: [includes, consists of, has]
+    - label: Planned order conversion
+      parent: [Material requirements planning]
+      action: [includes, consists of, has]
+    - label: Planned order
+      parent: [Net requirements calculation]
+      action: [produces, creates, outputs]
+    - label: Production order
+      parent: [Planned order conversion]
+      action: [produces, creates, outputs]
+    - label: Rework order
+      parent: [Production order]
+      action: [is a, is a kind of, is a type of]
+    - label: Shop floor control
+      parent: [Production execution]
+      action: [consists of, includes, has]
+    - label: Final assembly
+      parent: [Production execution]
+      action: [consists of, includes, has]
+    - label: Order release
+      parent: [Shop floor control]
+      action: [includes, consists of, has]
+    - label: Operation confirmation
+      parent: [Shop floor control]
+      action: [includes, consists of, has]
+    - label: Job traveller
+      parent: [Order release]
+      action: [produces, creates, outputs]
+    - label: Confirmation record
+      parent: [Operation confirmation]
+      action: [produces, creates, outputs]
+    - label: Valve assembly
+      parent: [Final assembly]
+      action: [includes, consists of, has]
+    - label: Pressure testing
+      parent: [Final assembly]
+      action: [includes, consists of, has]
+    - label: Test certificate
+      parent: [Pressure testing]
+      action: [produces, creates, outputs]
+
+    - label: Quality planning
+      parent: [Quality management]
+      action: [consists of, includes, has]
+    - label: Quality control
+      parent: [Quality management]
+      action: [consists of, includes, has]
+    - label: Nonconformance management
+      parent: [Quality management]
+      action: [consists of, includes, has]
+    - label: Inspection planning
+      parent: [Quality planning]
+      action: [includes, consists of, has]
+    - label: Inspection plan
+      parent: [Inspection planning]
+      action: [produces, creates, outputs]
+    - label: Inspection characteristic
+      parent: [Inspection plan]
+      action: [lists, has, contains]
+    - label: Inspection types
+      parent: [Quality control]
+      action: [has, includes]
+    - label: Incoming inspection
+      parent: [Inspection types]
+      action: [includes, has]
+    - label: In-process inspection
+      parent: [Inspection types]
+      action: [includes, has]
+    - label: Final inspection
+      parent: [Inspection types]
+      action: [includes, has]
+    - label: Sampling
+      parent: [Quality control]
+      action: [includes, consists of, has]
+    - label: Results recording
+      parent: [Quality control]
+      action: [includes, consists of, has]
+    - label: Usage decision
+      parent: [Results recording]
+      action: [produces, creates, outputs]
+    - label: Root cause analysis
+      parent: [Nonconformance management]
+      action: [consists of, includes, has]
+    - label: Corrective action
+      parent: [Nonconformance management]
+      action: [consists of, includes, has]
+    - label: 8D report
+      parent: [Root cause analysis]
+      action: [produces, creates, outputs]
+    - label: CAPA record
+      parent: [Corrective action]
+      action: [produces, creates, outputs]
+
+    - label: Product data management
+      parent: [Master data management]
+      action: [consists of, includes, has]
+    - label: Production data management
+      parent: [Master data management]
+      action: [consists of, includes, has]
+    - label: Partner data management
+      parent: [Master data management]
+      action: [consists of, includes, has]
+    - label: Material master
+      parent: [Product data management]
+      action: [maintains, manages, owns]
+    - label: Bill of materials
+      parent: [Product data management]
+      action: [maintains, manages, owns]
+    - label: BOM item
+      parent: [Bill of materials]
+      action: [has, contains, includes]
+    - label: Engineering BOM
+      parent: [Bill of materials]
+      action: [is a, is a kind of, is a type of]
+    - label: Routing
+      parent: [Production data management]
+      action: [maintains, manages, owns]
+    - label: Work centre
+      parent: [Production data management]
+      action: [maintains, manages, owns]
+    - label: Routing operation
+      parent: [Routing]
+      action: [consists of, has, includes]
+    - label: Standard time
+      parent: [Routing operation]
+      action: [has, carries]
+    - label: Capacity profile
+      parent: [Work centre]
+      action: [has, carries]
+    - label: Customer master
+      parent: [Partner data management]
+      action: [maintains, manages, owns]
+    - label: Supplier master
+      parent: [Partner data management]
+      action: [maintains, manages, owns]
+
+  relations:
+    - from: Order entry
+      to: Material master
+      action: [reads, uses]
+      inverse: [is read by]
+    - from: Credit check
+      to: Customer master
+      action: [reads, uses]
+      inverse: [is read by]
+    - from: Shipping
+      to: Test certificate
+      action: [attaches, includes, ships with]
+    - from: Supplier qualification
+      to: Supplier master
+      action: [updates, writes to, maintains]
+      inverse: [is updated by]
+    - from: Goods receipt
+      to: Incoming inspection
+      action: [triggers, starts]
+      inverse: [is triggered by]
+    - from: Three-way match
+      to: Purchase order
+      action: [compares, checks, uses]
+    - from: Three-way match
+      to: Goods receipt note
+      action: [compares, checks, uses]
+    - from: Master scheduling
+      to: Work centre
+      action: [checks, reads, uses]
+    - from: Net requirements calculation
+      to: Bill of materials
+      action: [explodes, reads, uses]
+    - from: Order release
+      to: Routing
+      action: [uses, reads]
+      inverse: [is used by]
+    - from: Usage decision
+      to: Root cause analysis
+      action: [triggers, starts]
+      inverse: [is triggered by]
+optional:
+  - Carrow
+  - Leventon
+  - Brisk Hill
+  - Supplier invoice
+  - Head of sales
+  - Logistics manager
+  - Credit controller
+  - Procurement manager
+  - Purchasing lead
+  - Warehouse manager
+  - Accounts payable lead
+  - Demand planner
+  - Supply chain manager
+  - Plant manager
+  - Quality engineering lead
+  - Quality manager
+  - Master data lead
+  - Commercial director
+  - Procurement director
+  - Operations director
+  - Quality director
+  - Finance director
+  - Process owner
+  - Key user
+  - Data steward
+  - ERP system
+  - Manufacturing execution system
+  - Supplier portal
+  - Test bench
+  - On-time delivery
+  - Days sales outstanding
+  - Schedule adherence
+  - First pass yield
+  - Supplier defect rate
+  - Letter of credit
+  - Milestone payment
+  - Customer enquiry
+  - Spare parts order
+  - Suspense account

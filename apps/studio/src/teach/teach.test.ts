@@ -2,7 +2,7 @@ import { api } from '../api/client';
 import { ApiError, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
 import { addCompany, addLink, addNode } from '../canvas/state';
 import { store } from '../store/store';
-import { ONTOLOGY_NOT_AVAILABLE, importDocument, teach, teachSessionId, withoutKnown } from './teach';
+import { ONTOLOGY_NOT_AVAILABLE, SPEECH_PARSE_TIMEOUT_MS, importDocument, skippedText, speechStream, teach, teachSessionId, withoutKnown } from './teach';
 
 const result: TeachResult = {
   outcome: 'not_understood',
@@ -49,6 +49,191 @@ describe('teach sessions', () => {
     }
 
     expect(sent.map((b) => b.sessionId)).toEqual([teachSessionId('company-a'), teachSessionId('company-a')]);
+  });
+});
+
+describe('speaking to the teach bar', () => {
+  let before: typeof store.s.activeCompany;
+
+  beforeEach(() => {
+    before = store.s.activeCompany;
+    store.s.activeCompany = { sid: 'company-a' } as typeof before;
+  });
+  afterEach(() => {
+    store.s.activeCompany = before;
+    vi.restoreAllMocks();
+  });
+
+  /** A parse that answers when the test says so. */
+  function heldParses() {
+    const sent: TeachRequest[] = [];
+    const answers: ((r: TeachResult) => void)[] = [];
+    const refusals: ((err: unknown) => void)[] = [];
+    vi.spyOn(api, 'teachParse').mockImplementation(
+      (body) =>
+        new Promise<TeachResult>((resolve, reject) => {
+          sent.push(body);
+          answers.push(resolve);
+          refusals.push(reject);
+        }),
+    );
+    return { sent, answers, refusals };
+  }
+
+  /** Lets pending promise callbacks run. */
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  const draft = (label: string) => ({ type: 'concept', companyId: 'company-a', parentId: 'root', label }) as ProposalDraft;
+
+  it('sends one sentence at a time, in spoken order, as speech in the same session', async () => {
+    const { sent, answers } = heldParses();
+    vi.spyOn(api, 'createProposalBatch').mockResolvedValue([]);
+    const stream = speechStream();
+
+    stream.sentence('Insight sells services. ');
+    stream.sentence('They are focused on data.');
+    stream.sentence('It has a platform.');
+    await tick();
+    expect(sent.map((b) => b.text)).toEqual(['Insight sells services.']);
+    answers[0](result);
+    await tick();
+    expect(sent.map((b) => b.text)).toEqual(['Insight sells services.', 'They are focused on data.']);
+    answers[1](result);
+    await tick();
+    answers[2](result);
+    await stream.settled();
+
+    expect(sent.map((b) => b.text)).toEqual(['Insight sells services.', 'They are focused on data.', 'It has a platform.']);
+    expect(sent.every((b) => b.origin === 'speech')).toBe(true);
+    expect(new Set(sent.map((b) => b.sessionId))).toEqual(new Set([teachSessionId('company-a')]));
+  });
+
+  it('never has two sentences in flight and proposes each before the next is sent', async () => {
+    let inFlight = 0;
+    let most = 0;
+    const order: string[] = [];
+    vi.spyOn(api, 'teachParse').mockImplementation(async (body) => {
+      most = Math.max(most, ++inFlight);
+      order.push(`parse ${body.text}`);
+      await tick();
+      inFlight--;
+      return { ...result, outcome: 'understood', drafts: [draft(body.text as string)] };
+    });
+    vi.spyOn(api, 'createProposalBatch').mockImplementation(async (drafts) => {
+      order.push(`propose ${(drafts[0] as { label: string }).label}`);
+      return [];
+    });
+    const stream = speechStream();
+
+    stream.sentence('Services');
+    stream.sentence('Data');
+    await stream.settled();
+
+    expect(most).toBe(1);
+    expect(order).toEqual(['parse Services', 'propose Services', 'parse Data', 'propose Data']);
+  });
+
+  it('shows a refused sentence in its place and goes on with the next', async () => {
+    const { answers, refusals } = heldParses();
+    const order: string[] = [];
+    vi.spyOn(store, 'refused').mockImplementation(() => void order.push('refused'));
+    vi.spyOn(store, 'caption').mockImplementation((kicker) => void order.push(kicker));
+    const stream = speechStream();
+
+    stream.sentence('Insight sells services.');
+    stream.sentence('They are focused on data.');
+    await tick();
+    refusals[0](new ApiError(422, { code: 'validation_failed', title: 'Too long', status: 422 } as ApiError['problem']));
+    await tick();
+    answers[1]({ ...result, outcome: 'not_understood' });
+    await stream.settled();
+
+    expect(order).toEqual(['refused', 'Not understood']);
+  });
+
+  it('keeps one request in flight across recordings started one after another', async () => {
+    let inFlight = 0;
+    let most = 0;
+    const sent: string[] = [];
+    vi.spyOn(api, 'teachParse').mockImplementation(async (body) => {
+      most = Math.max(most, ++inFlight);
+      sent.push(body.text as string);
+      await tick();
+      inFlight--;
+      return result;
+    });
+    vi.spyOn(store, 'caption').mockImplementation(() => undefined);
+
+    const first = speechStream();
+    first.sentence('Insight sells services.');
+    const second = speechStream();
+    second.sentence('They are focused on data.');
+    await second.settled();
+
+    expect(most).toBe(1);
+    expect(sent).toEqual(['Insight sells services.', 'They are focused on data.']);
+  });
+
+  it('gives up a parse with no answer after the timeout and moves on', async () => {
+    vi.useFakeTimers();
+    try {
+      const sent: string[] = [];
+      vi.spyOn(api, 'teachParse').mockImplementation((body) => {
+        sent.push(body.text as string);
+        return sent.length === 1 ? new Promise<TeachResult>(() => undefined) : Promise.resolve(result);
+      });
+      const toast = vi.spyOn(store, 'toast2').mockImplementation(() => undefined);
+      vi.spyOn(store, 'caption').mockImplementation(() => undefined);
+      const stream = speechStream();
+
+      stream.sentence('Insight sells services.');
+      stream.sentence('They are focused on data.');
+      await vi.advanceTimersByTimeAsync(SPEECH_PARSE_TIMEOUT_MS - 1);
+      expect(sent).toEqual(['Insight sells services.']);
+      await vi.advanceTimersByTimeAsync(1);
+      await stream.settled();
+
+      expect(sent).toEqual(['Insight sells services.', 'They are focused on data.']);
+      expect(toast).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows one toast for a run of 429 refusals and sends the sentences again after Retry-After', async () => {
+    vi.useFakeTimers();
+    try {
+      const limited = () => new ApiError(429, { code: 'rate_limited', title: 'Too many requests', status: 429 } as ApiError['problem'], 2);
+      const answers = [limited(), limited(), limited(), result, result];
+      const sent: { text: string; at: number }[] = [];
+      vi.spyOn(api, 'teachParse').mockImplementation(async (body) => {
+        sent.push({ text: body.text as string, at: Date.now() });
+        const next = answers.shift();
+        if (next instanceof ApiError) throw next;
+        return next as TeachResult;
+      });
+      const refused = vi.spyOn(store, 'refused').mockImplementation(() => undefined);
+      vi.spyOn(store, 'caption').mockImplementation(() => undefined);
+      const start = Date.now();
+      const stream = speechStream();
+
+      stream.sentence('one');
+      stream.sentence('two');
+      stream.sentence('three');
+      await vi.runAllTimersAsync();
+      await stream.settled();
+
+      expect(refused).toHaveBeenCalledTimes(1);
+      expect(sent.map((s) => s.text)).toEqual(['one', 'one', 'two', 'two', 'three']);
+      expect(sent.map((s) => s.at - start)).toEqual([0, 2000, 2000, 4000, 4000]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends nothing for a sentence with no words', () => {
+    const { sent } = heldParses();
+    speechStream().sentence('   ');
+    expect(sent).toEqual([]);
   });
 });
 
@@ -226,5 +411,45 @@ describe('Ontology import mode', () => {
     expect(ONTOLOGY_NOT_AVAILABLE).toBe('Ontology import is not available yet');
     expect(upload).not.toHaveBeenCalled();
     expect(store.ui.importing).toBe(false);
+  });
+});
+
+describe('importing a document', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('names the skipped short fragments only when there are some', () => {
+    expect(skippedText(0)).toBe('');
+    expect(skippedText(1)).toBe(' 1 short fragment skipped.');
+    expect(skippedText(3)).toBe(' 3 short fragments skipped.');
+  });
+
+  it('shows the skipped fragments in the import caption', async () => {
+    const before = store.s.activeCompany;
+    const skip = store.s.SKIP;
+    store.s.activeCompany = { sid: 'company-a' } as typeof before;
+    store.s.SKIP = true;
+    vi.spyOn(api, 'importSentences').mockResolvedValue({
+      importId: 'i',
+      expiresAt: '2026-09-29T00:00:00Z',
+      fileName: 'brief.md',
+      origin: 'document',
+      originDetail: { fileName: 'brief.md', mediaType: 'text/markdown' },
+      sentences: ['Insight sells services.'],
+      skipped: 3,
+    });
+    vi.spyOn(api, 'teachParse').mockResolvedValue(result);
+    vi.spyOn(store, 'refreshProposals').mockResolvedValue();
+    const caption = vi.spyOn(store, 'caption');
+    try {
+      await importDocument(new File(['x'], 'brief.md'));
+    } finally {
+      store.s.activeCompany = before;
+      store.s.SKIP = skip;
+    }
+
+    expect(caption).toHaveBeenLastCalledWith(
+      'Import finished',
+      'brief.md: 1 sentences read, 0 proposals waiting for approval on the right. 3 short fragments skipped.',
+    );
   });
 });

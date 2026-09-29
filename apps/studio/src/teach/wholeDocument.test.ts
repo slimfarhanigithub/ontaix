@@ -10,6 +10,7 @@ const imported: ImportResult = {
   origin: 'document',
   originDetail: { fileName: 'handbook.docx', mediaType: 'text/plain' },
   sentences: ['The plant runs production lines.'],
+  skipped: 0,
 };
 
 const job = (over: Partial<DocumentExtraction>): DocumentExtraction => ({

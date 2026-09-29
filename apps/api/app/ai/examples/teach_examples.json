@@ -1,0 +1,3619 @@
+{
+ "fixed": [
+  {
+   "id": "fixed-deep-chain",
+   "source": {
+    "set": "case",
+    "id": "en-text-chain-five-levels"
+   },
+   "tags": [
+    "deep-chain"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Ferrant Pumps",
+    "sentence": "Ferrant Pumps runs the Lyon plant, which has an assembly hall that holds line 4, where the torque station uses a calibrated wrench.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Ferrant Pumps",
+      "parent": null
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "runs",
+      "object": {
+       "newLabel": "Lyon plant"
+      },
+      "confidence": 0.9,
+      "span": "Ferrant Pumps runs the Lyon plant",
+      "source": {
+       "start": 0,
+       "end": 33
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Lyon plant"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Assembly hall"
+      },
+      "confidence": 0.9,
+      "span": "Lyon plant, which has an assembly hall",
+      "source": {
+       "start": 23,
+       "end": 61
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Assembly hall"
+      },
+      "action": "holds",
+      "object": {
+       "newLabel": "Line 4"
+      },
+      "confidence": 0.9,
+      "span": "assembly hall that holds line 4",
+      "source": {
+       "start": 48,
+       "end": 79
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Line 4"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Torque station"
+      },
+      "confidence": 0.9,
+      "span": "line 4, where the torque station",
+      "source": {
+       "start": 73,
+       "end": 105
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Torque station"
+      },
+      "action": "uses",
+      "object": {
+       "newLabel": "Calibrated wrench"
+      },
+      "confidence": 0.9,
+      "span": "the torque station uses a calibrated wrench",
+      "source": {
+       "start": 87,
+       "end": 130
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "fixed-grouping-noun",
+   "source": {
+    "set": "case",
+    "id": "en-text-grouping-channels"
+   },
+   "tags": [
+    "grouping",
+    "reuse"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Aldwick Foods",
+    "sentence": "Sales has three channels: retail stores, the web shop and marketplaces.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Aldwick Foods",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Sales",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Channels"
+      },
+      "members": [
+       {
+        "newLabel": "Retail stores"
+       },
+       {
+        "newLabel": "Web shop"
+       },
+       {
+        "newLabel": "Marketplaces"
+       }
+      ],
+      "memberAction": "includes",
+      "statedCount": 3,
+      "confidence": 0.9,
+      "span": "Sales has three channels: retail stores, the web shop and marketplaces",
+      "source": {
+       "start": 0,
+       "end": 70
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "fixed-descriptive-list",
+   "source": {
+    "set": "case",
+    "id": "en-text-descriptive-regions-minimal-pair"
+   },
+   "tags": [
+    "descriptive-list",
+    "reuse"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Kellbrook Logistics",
+    "sentence": "Our delivery network operates in three regions: North, South and East.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Kellbrook Logistics",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Delivery network",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "operates in",
+      "object": {
+       "newLabel": "North"
+      },
+      "statedCount": 3,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "delivery network operates in three regions: North",
+      "source": {
+       "start": 4,
+       "end": 53
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "operates in",
+      "object": {
+       "newLabel": "South"
+      },
+      "statedCount": 3,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "South",
+      "source": {
+       "start": 55,
+       "end": 60
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "operates in",
+      "object": {
+       "newLabel": "East"
+      },
+      "statedCount": 3,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "East",
+      "source": {
+       "start": 65,
+       "end": 69
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "fixed-role",
+   "source": {
+    "set": "case",
+    "id": "en-text-partner-att-that"
+   },
+   "tags": [
+    "role-pattern",
+    "relative-clause",
+    "inner-punctuation"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Pelion Fibre",
+    "sentence": "AT&T is a partner of Pelion Fibre that buys wholesale fibre and roaming.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Pelion Fibre",
+      "parent": null
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Partner"
+      },
+      "members": [
+       {
+        "newLabel": "AT&T"
+       }
+      ],
+      "memberAction": "includes",
+      "confidence": 0.9,
+      "span": "AT&T is a partner of Pelion Fibre",
+      "source": {
+       "start": 0,
+       "end": 33
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "AT&T"
+      },
+      "action": "buys",
+      "object": {
+       "newLabel": "Wholesale fibre"
+      },
+      "confidence": 0.9,
+      "span": "AT&T is a partner of Pelion Fibre that buys wholesale fibre",
+      "source": {
+       "start": 0,
+       "end": 59
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "AT&T"
+      },
+      "action": "buys",
+      "object": {
+       "newLabel": "Roaming"
+      },
+      "confidence": 0.9,
+      "span": "AT&T is a partner of Pelion Fibre that buys wholesale fibre and roaming",
+      "source": {
+       "start": 0,
+       "end": 71
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "fixed-reuse",
+   "source": {
+    "set": "case",
+    "id": "en-text-reuse-and-cross-link"
+   },
+   "tags": [
+    "reuse",
+    "cross-domain"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Halden Engineering",
+    "sentence": "Each invoice has payment terms and a due date, and the contract sets the payment terms.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Halden Engineering",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Customer",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Contract",
+      "parent": "c1"
+     },
+     {
+      "handle": "c3",
+      "label": "Invoice",
+      "parent": "c2"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c3"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Payment terms"
+      },
+      "confidence": 0.9,
+      "span": "invoice has payment terms",
+      "source": {
+       "start": 5,
+       "end": 30
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c3"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Due date"
+      },
+      "confidence": 0.9,
+      "span": "invoice has payment terms and a due date",
+      "source": {
+       "start": 5,
+       "end": 45
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "sets",
+      "object": {
+       "newLabel": "Payment terms"
+      },
+      "confidence": 0.9,
+      "span": "the contract sets the payment terms",
+      "source": {
+       "start": 51,
+       "end": 86
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  }
+ ],
+ "library": [
+  {
+   "id": "en-speech-descriptive-back-reference",
+   "source": {
+    "set": "case",
+    "id": "en-speech-adr-owner-spoken"
+   },
+   "tags": [
+    "speech",
+    "fillers",
+    "back-reference",
+    "descriptive-list"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Insight",
+    "sentence": "so um insight sells services and uh these services are are focused around three areas you know apps data and AI",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Insight",
+      "parent": null
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "sells",
+      "object": {
+       "newLabel": "Services"
+      },
+      "confidence": 0.9,
+      "span": "insight sells services",
+      "source": {
+       "start": 6,
+       "end": 28
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Services"
+      },
+      "action": "focuses on",
+      "object": {
+       "newLabel": "Apps"
+      },
+      "statedCount": 3,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "these services are are focused around three areas you know apps",
+      "source": {
+       "start": 36,
+       "end": 99
+      },
+      "segment": 1,
+      "explanation": "these services: the Services just introduced"
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Services"
+      },
+      "action": "focuses on",
+      "object": {
+       "newLabel": "Data"
+      },
+      "statedCount": 3,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "data",
+      "source": {
+       "start": 100,
+       "end": 104
+      },
+      "segment": 1
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Services"
+      },
+      "action": "focuses on",
+      "object": {
+       "newLabel": "AI"
+      },
+      "statedCount": 3,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "AI",
+      "source": {
+       "start": 109,
+       "end": 111
+      },
+      "segment": 1
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 6,
+      "end": 28
+     },
+     {
+      "index": 1,
+      "start": 36,
+      "end": 111
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-correction",
+   "source": {
+    "set": "case",
+    "id": "en-speech-correction-i-meant"
+   },
+   "tags": [
+    "speech",
+    "correction",
+    "reuse"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Orbis IT",
+    "sentence": "the helpdesk handles incidents and uh changes sorry I meant service requests not changes changes go to the change board",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Orbis IT",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Helpdesk",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "handles",
+      "object": {
+       "newLabel": "Incidents"
+      },
+      "confidence": 0.9,
+      "span": "the helpdesk handles incidents",
+      "source": {
+       "start": 0,
+       "end": 30
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "handles",
+      "object": {
+       "newLabel": "Service requests"
+      },
+      "confidence": 0.9,
+      "span": "service requests",
+      "source": {
+       "start": 60,
+       "end": 76
+      },
+      "segment": 0,
+      "explanation": "sorry I meant replaces changes"
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Changes"
+      },
+      "action": "goes to",
+      "object": {
+       "newLabel": "Change board"
+      },
+      "confidence": 0.9,
+      "span": "changes go to the change board",
+      "source": {
+       "start": 89,
+       "end": 119
+      },
+      "segment": 1
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 0,
+      "end": 88
+     },
+     {
+      "index": 1,
+      "start": 89,
+      "end": 119
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-relations-between-existing",
+   "source": {
+    "set": "case",
+    "id": "en-speech-cross-domain-it"
+   },
+   "tags": [
+    "speech",
+    "cross-domain",
+    "back-reference",
+    "reuse"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Ferrant Pumps",
+    "sentence": "so when a sales order comes in um it's checked against the credit limit and then the warehouse picks it",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Ferrant Pumps",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Sales order",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Warehouse",
+      "parent": "c0"
+     },
+     {
+      "handle": "c3",
+      "label": "Credit limit",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "is checked against",
+      "object": {
+       "candidate": "c3"
+      },
+      "confidence": 0.9,
+      "span": "a sales order comes in um it's checked against the credit limit",
+      "source": {
+       "start": 8,
+       "end": 71
+      },
+      "segment": 0,
+      "explanation": "it is the sales order"
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "picks",
+      "object": {
+       "candidate": "c1"
+      },
+      "confidence": 0.9,
+      "span": "the warehouse picks it",
+      "source": {
+       "start": 81,
+       "end": 103
+      },
+      "segment": 1,
+      "explanation": "it is the sales order"
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 3,
+      "end": 71
+     },
+     {
+      "index": 1,
+      "start": 81,
+      "end": 103
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-two-roles",
+   "source": {
+    "set": "case",
+    "id": "en-speech-customer-also-supplier"
+   },
+   "tags": [
+    "speech",
+    "role-pattern",
+    "relative-clause",
+    "back-reference",
+    "grouping"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Mirelle Stores",
+    "sentence": "okay so our customers include Brevik Shipping and Kellbrook Logistics and uh Kellbrook is also a supplier of ours which provides warehousing",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Mirelle Stores",
+      "parent": null
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Customers"
+      },
+      "members": [
+       {
+        "newLabel": "Brevik Shipping"
+       },
+       {
+        "newLabel": "Kellbrook Logistics"
+       }
+      ],
+      "memberAction": "includes",
+      "confidence": 0.9,
+      "span": "our customers include Brevik Shipping and Kellbrook Logistics",
+      "source": {
+       "start": 8,
+       "end": 69
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Supplier"
+      },
+      "members": [
+       {
+        "newLabel": "Kellbrook Logistics"
+       }
+      ],
+      "memberAction": "includes",
+      "confidence": 0.9,
+      "span": "Kellbrook is also a supplier of ours",
+      "source": {
+       "start": 77,
+       "end": 113
+      },
+      "segment": 1,
+      "explanation": "Kellbrook is Kellbrook Logistics; ours is Mirelle Stores"
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Kellbrook Logistics"
+      },
+      "action": "provides",
+      "object": {
+       "newLabel": "Warehousing"
+      },
+      "confidence": 0.9,
+      "span": "Kellbrook is also a supplier of ours which provides warehousing",
+      "source": {
+       "start": 77,
+       "end": 140
+      },
+      "segment": 1
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 8,
+      "end": 69
+     },
+     {
+      "index": 1,
+      "start": 77,
+      "end": 140
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-false-starts",
+   "source": {
+    "set": "case",
+    "id": "en-speech-false-starts"
+   },
+   "tags": [
+    "speech",
+    "fillers",
+    "deep-chain"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Eastbury General Hospital",
+    "sentence": "our our hospital has has a a emergency department and the emergency department does triage and uh triage assigns a triage category",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Eastbury General Hospital",
+      "parent": null
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Emergency department"
+      },
+      "confidence": 0.9,
+      "span": "our hospital has has a a emergency department",
+      "source": {
+       "start": 4,
+       "end": 49
+      },
+      "segment": 0,
+      "explanation": "our hospital is Eastbury General Hospital"
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Emergency department"
+      },
+      "action": "does",
+      "object": {
+       "newLabel": "Triage"
+      },
+      "confidence": 0.9,
+      "span": "the emergency department does triage",
+      "source": {
+       "start": 54,
+       "end": 90
+      },
+      "segment": 1
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Triage"
+      },
+      "action": "assigns",
+      "object": {
+       "newLabel": "Triage category"
+      },
+      "confidence": 0.9,
+      "span": "triage assigns a triage category",
+      "source": {
+       "start": 98,
+       "end": 130
+      },
+      "segment": 2
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 4,
+      "end": 49
+     },
+     {
+      "index": 1,
+      "start": 54,
+      "end": 90
+     },
+     {
+      "index": 2,
+      "start": 98,
+      "end": 130
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-count-corrected",
+   "source": {
+    "set": "case",
+    "id": "en-speech-grouping-teams-corrected"
+   },
+   "tags": [
+    "speech",
+    "grouping",
+    "count-mismatch",
+    "correction",
+    "reuse"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Halden Engineering",
+    "sentence": "procurement has two teams strategic sourcing and uh operational buying actually make that three there's also supplier onboarding",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Halden Engineering",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Procurement",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Teams"
+      },
+      "members": [
+       {
+        "newLabel": "Strategic sourcing"
+       },
+       {
+        "newLabel": "Operational buying"
+       },
+       {
+        "newLabel": "Supplier onboarding"
+       }
+      ],
+      "memberAction": "includes",
+      "statedCount": 3,
+      "confidence": 0.9,
+      "span": "procurement has two teams strategic sourcing and uh operational buying actually make that three there's also supplier onboarding",
+      "source": {
+       "start": 0,
+       "end": 128
+      },
+      "segment": 0,
+      "explanation": "actually make that three corrects the count"
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 0,
+      "end": 128
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-hesitation",
+   "source": {
+    "set": "case",
+    "id": "en-speech-hesitation-month-end"
+   },
+   "tags": [
+    "speech",
+    "fillers",
+    "back-reference",
+    "not-a-statement",
+    "reuse"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Merrow Insurance",
+    "sentence": "hmm let me think what else oh yes the finance team closes the books every month with a month-end close and that has an accruals step and a reconciliation step is that right yes",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Merrow Insurance",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Finance team",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "runs",
+      "object": {
+       "newLabel": "Month-end close"
+      },
+      "confidence": 0.9,
+      "span": "the finance team closes the books every month with a month-end close",
+      "source": {
+       "start": 34,
+       "end": 102
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Month-end close"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Accruals step"
+      },
+      "confidence": 0.9,
+      "span": "that has an accruals step",
+      "source": {
+       "start": 107,
+       "end": 132
+      },
+      "segment": 1,
+      "explanation": "that is the month-end close"
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Month-end close"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Reconciliation step"
+      },
+      "confidence": 0.9,
+      "span": "that has an accruals step and a reconciliation step",
+      "source": {
+       "start": 107,
+       "end": 158
+      },
+      "segment": 1
+     }
+    ],
+    "unresolved": [
+     {
+      "text": "is that right",
+      "reason": "not_a_statement",
+      "source": {
+       "start": 159,
+       "end": 172
+      }
+     }
+    ],
+    "segments": [
+     {
+      "index": 0,
+      "start": 34,
+      "end": 102
+     },
+     {
+      "index": 1,
+      "start": 107,
+      "end": 158
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-role-and-subsidiaries",
+   "source": {
+    "set": "case",
+    "id": "en-speech-owner-adnoc-client"
+   },
+   "tags": [
+    "speech",
+    "role-pattern",
+    "grouping",
+    "relative-clause",
+    "inner-punctuation",
+    "fillers"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Insight",
+    "sentence": "so um ADNOC is a client of insight uh that has multiple subsidiaries including L&S gas sour gas offshore onshore XRG and drilling",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Insight",
+      "parent": null
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Client"
+      },
+      "members": [
+       {
+        "newLabel": "ADNOC"
+       }
+      ],
+      "memberAction": "includes",
+      "confidence": 0.9,
+      "span": "ADNOC is a client of insight",
+      "source": {
+       "start": 6,
+       "end": 34
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "ADNOC"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Subsidiaries"
+      },
+      "members": [
+       {
+        "newLabel": "L&S"
+       },
+       {
+        "newLabel": "Gas"
+       },
+       {
+        "newLabel": "Sour gas"
+       },
+       {
+        "newLabel": "Offshore"
+       },
+       {
+        "newLabel": "Onshore"
+       },
+       {
+        "newLabel": "XRG"
+       },
+       {
+        "newLabel": "Drilling"
+       }
+      ],
+      "memberAction": "includes",
+      "confidence": 0.9,
+      "span": "ADNOC is a client of insight uh that has multiple subsidiaries including L&S gas sour gas offshore onshore XRG and drilling",
+      "source": {
+       "start": 6,
+       "end": 129
+      },
+      "segment": 0,
+      "explanation": "that has describes ADNOC, the subject"
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 6,
+      "end": 129
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-product-structure",
+   "source": {
+    "set": "case",
+    "id": "en-speech-product-structure"
+   },
+   "tags": [
+    "speech",
+    "deep-chain",
+    "reuse",
+    "run-on"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Ferrant Pumps",
+    "sentence": "so a pump is made of a casing an impeller and a motor and the motor has a stator and a rotor and the rotor carries the bearings and the bearings need grease",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Ferrant Pumps",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Pump",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "is made of",
+      "object": {
+       "newLabel": "Casing"
+      },
+      "confidence": 0.9,
+      "span": "a pump is made of a casing",
+      "source": {
+       "start": 3,
+       "end": 29
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "is made of",
+      "object": {
+       "newLabel": "Impeller"
+      },
+      "confidence": 0.9,
+      "span": "an impeller",
+      "source": {
+       "start": 30,
+       "end": 41
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "is made of",
+      "object": {
+       "newLabel": "Motor"
+      },
+      "confidence": 0.9,
+      "span": "a motor",
+      "source": {
+       "start": 46,
+       "end": 53
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Motor"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Stator"
+      },
+      "confidence": 0.9,
+      "span": "the motor has a stator",
+      "source": {
+       "start": 58,
+       "end": 80
+      },
+      "segment": 1
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Motor"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Rotor"
+      },
+      "confidence": 0.9,
+      "span": "the motor has a stator and a rotor",
+      "source": {
+       "start": 58,
+       "end": 92
+      },
+      "segment": 1
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Rotor"
+      },
+      "action": "carries",
+      "object": {
+       "newLabel": "Bearings"
+      },
+      "confidence": 0.9,
+      "span": "the rotor carries the bearings",
+      "source": {
+       "start": 97,
+       "end": 127
+      },
+      "segment": 2
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Bearings"
+      },
+      "action": "needs",
+      "object": {
+       "newLabel": "Grease"
+      },
+      "confidence": 0.9,
+      "span": "the bearings need grease",
+      "source": {
+       "start": 132,
+       "end": 156
+      },
+      "segment": 3
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 3,
+      "end": 53
+     },
+     {
+      "index": 1,
+      "start": 58,
+      "end": 92
+     },
+     {
+      "index": 2,
+      "start": 97,
+      "end": 127
+     },
+     {
+      "index": 3,
+      "start": 132,
+      "end": 156
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-text-back-reference-turn",
+   "source": {
+    "set": "case",
+    "id": "en-text-adr-owner-sentences"
+   },
+   "tags": [
+    "text",
+    "back-reference",
+    "descriptive-list",
+    "multi-turn"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Insight",
+    "sentence": "these services are focused around three areas, app, data and AI",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Insight",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Services",
+      "parent": "c0"
+     }
+    ],
+    "sessionTurns": [
+     {
+      "sentence": "Insight sells services",
+      "referenced": [
+       "c0"
+      ],
+      "introduced": [
+       "c1"
+      ]
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "focuses on",
+      "object": {
+       "newLabel": "App"
+      },
+      "statedCount": 3,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "these services are focused around three areas, app",
+      "source": {
+       "start": 0,
+       "end": 50
+      },
+      "explanation": "these services: c1 from the earlier turn"
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "focuses on",
+      "object": {
+       "newLabel": "Data"
+      },
+      "statedCount": 3,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "data",
+      "source": {
+       "start": 52,
+       "end": 56
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "focuses on",
+      "object": {
+       "newLabel": "AI"
+      },
+      "statedCount": 3,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "AI",
+      "source": {
+       "start": 61,
+       "end": 63
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "en-text-those-turn",
+   "source": {
+    "set": "case",
+    "id": "en-text-back-reference-those"
+   },
+   "tags": [
+    "text",
+    "back-reference",
+    "reuse",
+    "multi-turn"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Northbeam Consulting",
+    "sentence": "Those key accounts each get an account manager and a quarterly business review.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Northbeam Consulting",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Clients",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Key accounts",
+      "parent": "c1"
+     }
+    ],
+    "sessionTurns": [
+     {
+      "sentence": "Our clients include key accounts.",
+      "referenced": [
+       "c1",
+       "c2"
+      ],
+      "introduced": []
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "gets",
+      "object": {
+       "newLabel": "Account manager"
+      },
+      "confidence": 0.9,
+      "span": "Those key accounts each get an account manager",
+      "source": {
+       "start": 0,
+       "end": 46
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "gets",
+      "object": {
+       "newLabel": "Quarterly business review"
+      },
+      "confidence": 0.9,
+      "span": "Those key accounts each get an account manager and a quarterly business review",
+      "source": {
+       "start": 0,
+       "end": 78
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "en-text-subsidiaries-and-existing-role",
+   "source": {
+    "set": "case",
+    "id": "en-text-client-subsidiaries-existing"
+   },
+   "tags": [
+    "text",
+    "role-pattern",
+    "grouping",
+    "reuse"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Northbeam Consulting",
+    "sentence": "Castor Energy has several subsidiaries including Castor Wind, Castor Grid and Castor Retail, and Castor Grid is itself a client of Northbeam.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Northbeam Consulting",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Client",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Castor Energy",
+      "parent": "c1"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Subsidiaries"
+      },
+      "members": [
+       {
+        "newLabel": "Castor Wind"
+       },
+       {
+        "newLabel": "Castor Grid"
+       },
+       {
+        "newLabel": "Castor Retail"
+       }
+      ],
+      "memberAction": "includes",
+      "confidence": 0.9,
+      "span": "Castor Energy has several subsidiaries including Castor Wind, Castor Grid and Castor Retail",
+      "source": {
+       "start": 0,
+       "end": 91
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "has",
+      "object": {
+       "candidate": "c1"
+      },
+      "members": [
+       {
+        "newLabel": "Castor Grid"
+       }
+      ],
+      "memberAction": "includes",
+      "confidence": 0.9,
+      "span": "Castor Grid is itself a client of Northbeam",
+      "source": {
+       "start": 97,
+       "end": 140
+      },
+      "explanation": "Northbeam already has Client (c1)"
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "en-text-descriptive-count-mismatch",
+   "source": {
+    "set": "case",
+    "id": "en-text-descriptive-count-mismatch"
+   },
+   "tags": [
+    "text",
+    "descriptive-list",
+    "count-mismatch",
+    "reuse"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Lumen Utilities",
+    "sentence": "Customers can pay in two ways: card, bank transfer and direct debit.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Lumen Utilities",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Customer",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "pays by",
+      "object": {
+       "newLabel": "Card"
+      },
+      "statedCount": 2,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "Customers can pay in two ways: card",
+      "source": {
+       "start": 0,
+       "end": 35
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "pays by",
+      "object": {
+       "newLabel": "Bank transfer"
+      },
+      "statedCount": 2,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "bank transfer",
+      "source": {
+       "start": 37,
+       "end": 50
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "pays by",
+      "object": {
+       "newLabel": "Direct debit"
+      },
+      "statedCount": 2,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "direct debit",
+      "source": {
+       "start": 55,
+       "end": 67
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "en-text-grouping-then-descriptive",
+   "source": {
+    "set": "case",
+    "id": "en-text-grouping-then-descriptive"
+   },
+   "tags": [
+    "text",
+    "grouping",
+    "descriptive-list",
+    "back-reference"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Orbis IT",
+    "sentence": "The IT department is organised in two teams: Platform and Workplace. The platform team works in three locations, Paris, Lisbon and Warsaw.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Orbis IT",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "IT department",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "is organised in",
+      "object": {
+       "newLabel": "Teams"
+      },
+      "members": [
+       {
+        "newLabel": "Platform"
+       },
+       {
+        "newLabel": "Workplace"
+       }
+      ],
+      "memberAction": "includes",
+      "statedCount": 2,
+      "confidence": 0.9,
+      "span": "The IT department is organised in two teams: Platform and Workplace",
+      "source": {
+       "start": 0,
+       "end": 67
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Platform"
+      },
+      "action": "works in",
+      "object": {
+       "newLabel": "Paris"
+      },
+      "statedCount": 3,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "The platform team works in three locations, Paris",
+      "source": {
+       "start": 69,
+       "end": 118
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Platform"
+      },
+      "action": "works in",
+      "object": {
+       "newLabel": "Lisbon"
+      },
+      "statedCount": 3,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "Lisbon",
+      "source": {
+       "start": 120,
+       "end": 126
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Platform"
+      },
+      "action": "works in",
+      "object": {
+       "newLabel": "Warsaw"
+      },
+      "statedCount": 3,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "Warsaw",
+      "source": {
+       "start": 131,
+       "end": 137
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "en-text-is-a-existing-parent",
+   "source": {
+    "set": "case",
+    "id": "en-text-is-a-existing-parent"
+   },
+   "tags": [
+    "text",
+    "is-a",
+    "reuse"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Halden Engineering",
+    "sentence": "A framework agreement is a kind of contract, and a call-off order is a type of contract too.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Halden Engineering",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Contract",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Framework agreement"
+      },
+      "object": {
+       "candidate": "c1"
+      },
+      "confidence": 0.9,
+      "span": "A framework agreement is a kind of contract",
+      "source": {
+       "start": 0,
+       "end": 43
+      }
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Call-off order"
+      },
+      "object": {
+       "candidate": "c1"
+      },
+      "confidence": 0.9,
+      "span": "a call-off order is a type of contract too",
+      "source": {
+       "start": 49,
+       "end": 91
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "en-text-role-customer",
+   "source": {
+    "set": "case",
+    "id": "en-text-role-customer-of"
+   },
+   "tags": [
+    "text",
+    "role-pattern"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Northbeam Consulting",
+    "sentence": "Brightline Retail is a customer of Northbeam Consulting.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Northbeam Consulting",
+      "parent": null
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Customer"
+      },
+      "members": [
+       {
+        "newLabel": "Brightline Retail"
+       }
+      ],
+      "memberAction": "includes",
+      "confidence": 0.9,
+      "span": "Brightline Retail is a customer of Northbeam Consulting",
+      "source": {
+       "start": 0,
+       "end": 55
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "en-text-verb-variety",
+   "source": {
+    "set": "case",
+    "id": "en-text-verb-variety"
+   },
+   "tags": [
+    "text",
+    "reuse"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Kellbrook Logistics",
+    "sentence": "The warehouse stores pallets, picks orders and ships parcels.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Kellbrook Logistics",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Warehouse",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "stores",
+      "object": {
+       "newLabel": "Pallets"
+      },
+      "confidence": 0.9,
+      "span": "The warehouse stores pallets",
+      "source": {
+       "start": 0,
+       "end": 28
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "picks",
+      "object": {
+       "newLabel": "Orders"
+      },
+      "confidence": 0.9,
+      "span": "picks orders",
+      "source": {
+       "start": 30,
+       "end": 42
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "ships",
+      "object": {
+       "newLabel": "Parcels"
+      },
+      "confidence": 0.9,
+      "span": "ships parcels",
+      "source": {
+       "start": 47,
+       "end": 60
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "fr-speech-roles",
+   "source": {
+    "set": "case",
+    "id": "fr-speech-fournisseur-division"
+   },
+   "tags": [
+    "speech",
+    "fr",
+    "role-pattern",
+    "relative-clause",
+    "inner-punctuation",
+    "fillers"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Fonderie Maubrac",
+    "sentence": "alors euh Maubrac Outillage est un fournisseur de la fonderie euh qui livre les moules et les noyaux et R&D est une division de la fonderie",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Fonderie Maubrac",
+      "parent": null
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "a",
+      "object": {
+       "newLabel": "Fournisseur"
+      },
+      "members": [
+       {
+        "newLabel": "Maubrac Outillage"
+       }
+      ],
+      "memberAction": "comprend",
+      "confidence": 0.9,
+      "span": "Maubrac Outillage est un fournisseur de la fonderie",
+      "source": {
+       "start": 10,
+       "end": 61
+      },
+      "segment": 0,
+      "explanation": "la fonderie is Fonderie Maubrac"
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Maubrac Outillage"
+      },
+      "action": "livre",
+      "object": {
+       "newLabel": "Moules"
+      },
+      "confidence": 0.9,
+      "span": "Maubrac Outillage est un fournisseur de la fonderie euh qui livre les moules",
+      "source": {
+       "start": 10,
+       "end": 86
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Maubrac Outillage"
+      },
+      "action": "livre",
+      "object": {
+       "newLabel": "Noyaux"
+      },
+      "confidence": 0.9,
+      "span": "Maubrac Outillage est un fournisseur de la fonderie euh qui livre les moules et les noyaux",
+      "source": {
+       "start": 10,
+       "end": 100
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "a",
+      "object": {
+       "newLabel": "Division"
+      },
+      "members": [
+       {
+        "newLabel": "R&D"
+       }
+      ],
+      "memberAction": "comprend",
+      "confidence": 0.9,
+      "span": "R&D est une division de la fonderie",
+      "source": {
+       "start": 104,
+       "end": 139
+      },
+      "segment": 1
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 10,
+      "end": 100
+     },
+     {
+      "index": 1,
+      "start": 104,
+      "end": 139
+     }
+    ]
+   }
+  },
+  {
+   "id": "fr-speech-back-reference",
+   "source": {
+    "set": "case",
+    "id": "fr-speech-ils-elle"
+   },
+   "tags": [
+    "speech",
+    "fr",
+    "back-reference",
+    "run-on"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Transports Kerlann",
+    "sentence": "alors on a des entrepôts euh ils ont tous un quai et une cour et la cour elle a des places de remorque",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Transports Kerlann",
+      "parent": null
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "a",
+      "object": {
+       "newLabel": "Entrepôts"
+      },
+      "confidence": 0.9,
+      "span": "on a des entrepôts",
+      "source": {
+       "start": 6,
+       "end": 24
+      },
+      "segment": 0,
+      "explanation": "on is Transports Kerlann"
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Entrepôts"
+      },
+      "action": "ont",
+      "object": {
+       "newLabel": "Quai"
+      },
+      "confidence": 0.9,
+      "span": "ils ont tous un quai",
+      "source": {
+       "start": 29,
+       "end": 49
+      },
+      "segment": 1,
+      "explanation": "ils are the entrepôts"
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Entrepôts"
+      },
+      "action": "ont",
+      "object": {
+       "newLabel": "Cour"
+      },
+      "confidence": 0.9,
+      "span": "ils ont tous un quai et une cour",
+      "source": {
+       "start": 29,
+       "end": 61
+      },
+      "segment": 1
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Cour"
+      },
+      "action": "a",
+      "object": {
+       "newLabel": "Places de remorque"
+      },
+      "confidence": 0.9,
+      "span": "la cour elle a des places de remorque",
+      "source": {
+       "start": 65,
+       "end": 102
+      },
+      "segment": 2
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 6,
+      "end": 24
+     },
+     {
+      "index": 1,
+      "start": 29,
+      "end": 61
+     },
+     {
+      "index": 2,
+      "start": 65,
+      "end": 102
+     }
+    ]
+   }
+  },
+  {
+   "id": "fr-text-chain",
+   "source": {
+    "set": "case",
+    "id": "fr-text-chaine-six-niveaux"
+   },
+   "tags": [
+    "text",
+    "fr",
+    "deep-chain"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Groupe Vauclair",
+    "sentence": "La direction financière pilote la comptabilité fournisseurs, qui comprend le traitement des factures ; le traitement des factures commence par la saisie, et la saisie produit une pièce comptable avec des lignes d'écriture.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Groupe Vauclair",
+      "parent": null
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Direction financière"
+      },
+      "action": "pilote",
+      "object": {
+       "newLabel": "Comptabilité fournisseurs"
+      },
+      "confidence": 0.9,
+      "span": "La direction financière pilote la comptabilité fournisseurs",
+      "source": {
+       "start": 0,
+       "end": 59
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Comptabilité fournisseurs"
+      },
+      "action": "comprend",
+      "object": {
+       "newLabel": "Traitement des factures"
+      },
+      "confidence": 0.9,
+      "span": "la comptabilité fournisseurs, qui comprend le traitement des factures",
+      "source": {
+       "start": 31,
+       "end": 100
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Traitement des factures"
+      },
+      "action": "commence par",
+      "object": {
+       "newLabel": "Saisie"
+      },
+      "confidence": 0.9,
+      "span": "le traitement des factures commence par la saisie",
+      "source": {
+       "start": 103,
+       "end": 152
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Saisie"
+      },
+      "action": "produit",
+      "object": {
+       "newLabel": "Pièce comptable"
+      },
+      "confidence": 0.9,
+      "span": "la saisie produit une pièce comptable",
+      "source": {
+       "start": 157,
+       "end": 194
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Pièce comptable"
+      },
+      "action": "a",
+      "object": {
+       "newLabel": "Lignes d'écriture"
+      },
+      "confidence": 0.9,
+      "span": "une pièce comptable avec des lignes d'écriture",
+      "source": {
+       "start": 175,
+       "end": 221
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "fr-text-is-a",
+   "source": {
+    "set": "case",
+    "id": "fr-text-est-un-type-de"
+   },
+   "tags": [
+    "text",
+    "fr",
+    "is-a",
+    "reuse"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Groupe Vauclair",
+    "sentence": "Un contrat-cadre est un type de contrat, et un bon de commande aussi.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Groupe Vauclair",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Contrat",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Contrat-cadre"
+      },
+      "object": {
+       "candidate": "c1"
+      },
+      "confidence": 0.9,
+      "span": "Un contrat-cadre est un type de contrat",
+      "source": {
+       "start": 0,
+       "end": 39
+      }
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Bon de commande"
+      },
+      "object": {
+       "candidate": "c1"
+      },
+      "confidence": 0.9,
+      "span": "un bon de commande aussi",
+      "source": {
+       "start": 44,
+       "end": 68
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "fr-text-descriptive-count-mismatch",
+   "source": {
+    "set": "case",
+    "id": "fr-text-regions-ecart-compte"
+   },
+   "tags": [
+    "text",
+    "fr",
+    "descriptive-list",
+    "count-mismatch",
+    "reuse"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Transports Kerlann",
+    "sentence": "Nos agences sont réparties dans deux régions : Bretagne, Normandie et Pays de la Loire.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Transports Kerlann",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Agences",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "sont réparties dans",
+      "object": {
+       "newLabel": "Bretagne"
+      },
+      "statedCount": 2,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "Nos agences sont réparties dans deux régions : Bretagne",
+      "source": {
+       "start": 0,
+       "end": 55
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "sont réparties dans",
+      "object": {
+       "newLabel": "Normandie"
+      },
+      "statedCount": 2,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "Normandie",
+      "source": {
+       "start": 57,
+       "end": 66
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "sont réparties dans",
+      "object": {
+       "newLabel": "Pays de la Loire"
+      },
+      "statedCount": 2,
+      "listId": 0,
+      "confidence": 0.9,
+      "span": "Pays de la Loire",
+      "source": {
+       "start": 70,
+       "end": 86
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "fr-text-turn-reuse",
+   "source": {
+    "set": "case",
+    "id": "fr-text-deja-connu"
+   },
+   "tags": [
+    "text",
+    "fr",
+    "reuse",
+    "multi-turn"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Maison Terrell",
+    "sentence": "Chaque commande client comporte des lignes de commande et une adresse de livraison.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Maison Terrell",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Client",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Commande client",
+      "parent": "c1"
+     }
+    ],
+    "sessionTurns": [
+     {
+      "sentence": "Les clients passent des commandes client.",
+      "referenced": [
+       "c1",
+       "c2"
+      ],
+      "introduced": []
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "comporte",
+      "object": {
+       "newLabel": "Lignes de commande"
+      },
+      "confidence": 0.9,
+      "span": "Chaque commande client comporte des lignes de commande",
+      "source": {
+       "start": 0,
+       "end": 54
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "comporte",
+      "object": {
+       "newLabel": "Adresse de livraison"
+      },
+      "confidence": 0.9,
+      "span": "Chaque commande client comporte des lignes de commande et une adresse de livraison",
+      "source": {
+       "start": 0,
+       "end": 82
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "doc-grouping-count-mismatch",
+   "source": {
+    "set": "document",
+    "id": "bank_harbourline"
+   },
+   "tags": [
+    "document",
+    "grouping",
+    "count-mismatch",
+    "reuse"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "Harbourline Bank",
+    "sentence": "Due diligence has three tiers: simplified due diligence and enhanced due diligence.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Harbourline Bank",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Customer onboarding",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Due diligence",
+      "parent": "c1"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Tiers"
+      },
+      "members": [
+       {
+        "newLabel": "Simplified due diligence"
+       },
+       {
+        "newLabel": "Enhanced due diligence"
+       }
+      ],
+      "memberAction": "includes",
+      "statedCount": 3,
+      "confidence": 0.9,
+      "span": "Due diligence has three tiers: simplified due diligence and enhanced due diligence",
+      "source": {
+       "start": 0,
+       "end": 82
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "doc-is-a",
+   "source": {
+    "set": "document",
+    "id": "bank_harbourline"
+   },
+   "tags": [
+    "document",
+    "is-a",
+    "reuse"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "Harbourline Bank",
+    "sentence": "A fixed-rate mortgage is a kind of mortgage.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Harbourline Bank",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Lending",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Product lines",
+      "parent": "c1"
+     },
+     {
+      "handle": "c3",
+      "label": "Mortgage",
+      "parent": "c2"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Fixed-rate mortgage"
+      },
+      "object": {
+       "candidate": "c3"
+      },
+      "confidence": 0.9,
+      "span": "A fixed-rate mortgage is a kind of mortgage",
+      "source": {
+       "start": 0,
+       "end": 43
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "doc-consists-of",
+   "source": {
+    "set": "document",
+    "id": "bank_harbourline"
+   },
+   "tags": [
+    "document",
+    "deep-chain",
+    "reuse"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "Harbourline Bank",
+    "sentence": "Underwriting consists of credit scoring, affordability assessment and credit decisioning.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Harbourline Bank",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Lending",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Underwriting",
+      "parent": "c1"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "consists of",
+      "object": {
+       "newLabel": "Credit scoring"
+      },
+      "confidence": 0.9,
+      "span": "Underwriting consists of credit scoring",
+      "source": {
+       "start": 0,
+       "end": 39
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "consists of",
+      "object": {
+       "newLabel": "Affordability assessment"
+      },
+      "confidence": 0.9,
+      "span": "affordability assessment",
+      "source": {
+       "start": 41,
+       "end": 65
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "consists of",
+      "object": {
+       "newLabel": "Credit decisioning"
+      },
+      "confidence": 0.9,
+      "span": "credit decisioning",
+      "source": {
+       "start": 70,
+       "end": 88
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "doc-steps",
+   "source": {
+    "set": "document",
+    "id": "hospital_eastmere"
+   },
+   "tags": [
+    "document",
+    "deep-chain",
+    "reuse"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "Eastmere General Hospital",
+    "sentence": "Emergency admission consists of triage and the admission decision.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Eastmere General Hospital",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Patient admission",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Emergency admission",
+      "parent": "c1"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "consists of",
+      "object": {
+       "newLabel": "Triage"
+      },
+      "confidence": 0.9,
+      "span": "Emergency admission consists of triage",
+      "source": {
+       "start": 0,
+       "end": 38
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "consists of",
+      "object": {
+       "newLabel": "Admission decision"
+      },
+      "confidence": 0.9,
+      "span": "the admission decision",
+      "source": {
+       "start": 43,
+       "end": 65
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "doc-includes",
+   "source": {
+    "set": "document",
+    "id": "telecom_tessaline"
+   },
+   "tags": [
+    "document",
+    "deep-chain",
+    "reuse"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "Tessaline Telecom",
+    "sentence": "Service activation includes SIM activation and fibre line activation.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Tessaline Telecom",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Fulfilment",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Service configuration and activation",
+      "parent": "c1"
+     },
+     {
+      "handle": "c3",
+      "label": "Service activation",
+      "parent": "c2"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c3"
+      },
+      "action": "includes",
+      "object": {
+       "newLabel": "SIM activation"
+      },
+      "confidence": 0.9,
+      "span": "Service activation includes SIM activation",
+      "source": {
+       "start": 0,
+       "end": 42
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c3"
+      },
+      "action": "includes",
+      "object": {
+       "newLabel": "Fibre line activation"
+      },
+      "confidence": 0.9,
+      "span": "fibre line activation",
+      "source": {
+       "start": 47,
+       "end": 68
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "doc-record",
+   "source": {
+    "set": "document",
+    "id": "telecom_tessaline"
+   },
+   "tags": [
+    "document",
+    "reuse"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "Tessaline Telecom",
+    "sentence": "Order tracking raises a jeopardy alert when an order is at risk of missing its promised date.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Tessaline Telecom",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Fulfilment",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Order handling",
+      "parent": "c1"
+     },
+     {
+      "handle": "c3",
+      "label": "Order tracking",
+      "parent": "c2"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c3"
+      },
+      "action": "raises",
+      "object": {
+       "newLabel": "Jeopardy alert"
+      },
+      "confidence": 0.9,
+      "span": "Order tracking raises a jeopardy alert",
+      "source": {
+       "start": 0,
+       "end": 38
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "doc-fr-is-a",
+   "source": {
+    "set": "document",
+    "id": "agency_valmont_fr"
+   },
+   "tags": [
+    "document",
+    "fr",
+    "is-a",
+    "reuse"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "Agence territoriale de Valmont",
+    "sentence": "La subvention de fonctionnement est un type de subvention aux associations.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Agence territoriale de Valmont",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Subvention aux associations",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Subvention de fonctionnement"
+      },
+      "object": {
+       "candidate": "c1"
+      },
+      "confidence": 0.9,
+      "span": "La subvention de fonctionnement est un type de subvention aux associations",
+      "source": {
+       "start": 0,
+       "end": 74
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "goodrelations-business-entity",
+   "source": {
+    "set": "benchmark",
+    "id": "goodrelations"
+   },
+   "tags": [
+    "document",
+    "benchmark",
+    "reuse"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "GoodRelations",
+    "sentence": "A business entity has at least a primary mailing address and contact details.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "GoodRelations",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Business entity",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Primary mailing address"
+      },
+      "confidence": 0.9,
+      "span": "A business entity has at least a primary mailing address",
+      "source": {
+       "start": 0,
+       "end": 56
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Contact details"
+      },
+      "confidence": 0.9,
+      "span": "contact details",
+      "source": {
+       "start": 61,
+       "end": 76
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "goodrelations-location-examples",
+   "source": {
+    "set": "benchmark",
+    "id": "goodrelations"
+   },
+   "tags": [
+    "document",
+    "benchmark",
+    "is-a",
+    "reuse"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "GoodRelations",
+    "sentence": "A location is a point or area of interest from which a particular product or service is available, e.g. a store, a bus stop, a gas station, or a ticket booth.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "GoodRelations",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Location",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Store"
+      },
+      "object": {
+       "candidate": "c1"
+      },
+      "confidence": 0.9,
+      "span": "a store",
+      "source": {
+       "start": 104,
+       "end": 111
+      }
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Bus stop"
+      },
+      "object": {
+       "candidate": "c1"
+      },
+      "confidence": 0.9,
+      "span": "a bus stop",
+      "source": {
+       "start": 113,
+       "end": 123
+      }
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Gas station"
+      },
+      "object": {
+       "candidate": "c1"
+      },
+      "confidence": 0.9,
+      "span": "a gas station",
+      "source": {
+       "start": 125,
+       "end": 138
+      }
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Ticket booth"
+      },
+      "object": {
+       "candidate": "c1"
+      },
+      "confidence": 0.9,
+      "span": "a ticket booth",
+      "source": {
+       "start": 143,
+       "end": 157
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "goodrelations-location-parts",
+   "source": {
+    "set": "benchmark",
+    "id": "goodrelations"
+   },
+   "tags": [
+    "document",
+    "benchmark",
+    "reuse"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "GoodRelations",
+    "sentence": "Locations are characterized by an address or geographical position and a set of opening hour specifications for various days of the week.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "GoodRelations",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Location",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "is characterized by",
+      "object": {
+       "newLabel": "Address"
+      },
+      "confidence": 0.9,
+      "span": "Locations are characterized by an address",
+      "source": {
+       "start": 0,
+       "end": 41
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "is characterized by",
+      "object": {
+       "newLabel": "Geographical position"
+      },
+      "confidence": 0.9,
+      "span": "geographical position",
+      "source": {
+       "start": 45,
+       "end": 66
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "is characterized by",
+      "object": {
+       "newLabel": "Opening hour specifications"
+      },
+      "confidence": 0.9,
+      "span": "opening hour specifications",
+      "source": {
+       "start": 80,
+       "end": 107
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "goodrelations-price-specifications",
+   "source": {
+    "set": "benchmark",
+    "id": "goodrelations"
+   },
+   "tags": [
+    "document",
+    "benchmark",
+    "is-a",
+    "back-reference",
+    "reuse"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "GoodRelations",
+    "sentence": "There can be unit price specifications, payment charge specifications, and delivery charge specifications.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "GoodRelations",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Offering",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Price specification",
+      "parent": "c1"
+     }
+    ],
+    "neighbours": {
+     "before": [
+      "This links a gr:Offering to a gr:PriceSpecification or specifications."
+     ],
+     "after": []
+    }
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Unit price specifications"
+      },
+      "object": {
+       "candidate": "c2"
+      },
+      "confidence": 0.9,
+      "span": "unit price specifications",
+      "source": {
+       "start": 13,
+       "end": 38
+      },
+      "explanation": "kinds of the price specification named before"
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Payment charge specifications"
+      },
+      "object": {
+       "candidate": "c2"
+      },
+      "confidence": 0.9,
+      "span": "payment charge specifications",
+      "source": {
+       "start": 40,
+       "end": 69
+      }
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Delivery charge specifications"
+      },
+      "object": {
+       "candidate": "c2"
+      },
+      "confidence": 0.9,
+      "span": "delivery charge specifications",
+      "source": {
+       "start": 75,
+       "end": 105
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "goodrelations-identifier",
+   "source": {
+    "set": "benchmark",
+    "id": "goodrelations"
+   },
+   "tags": [
+    "document",
+    "benchmark",
+    "reuse"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "GoodRelations",
+    "sentence": "The Global Location Number is a thirteen-digit number used to identify parties and physical locations.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "GoodRelations",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Global Location Number",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "identifies",
+      "object": {
+       "newLabel": "Parties"
+      },
+      "confidence": 0.9,
+      "span": "The Global Location Number is a thirteen-digit number used to identify parties",
+      "source": {
+       "start": 0,
+       "end": 78
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "identifies",
+      "object": {
+       "newLabel": "Physical locations"
+      },
+      "confidence": 0.9,
+      "span": "physical locations",
+      "source": {
+       "start": 83,
+       "end": 101
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "goodrelations-warranty-promise",
+   "source": {
+    "set": "benchmark",
+    "id": "goodrelations"
+   },
+   "tags": [
+    "document",
+    "benchmark",
+    "reuse",
+    "cross-domain"
+   ],
+   "input": {
+    "mode": "document",
+    "company": "GoodRelations",
+    "sentence": "A warranty promise is characterized by its temporal duration (usually starting with the date of purchase) and its gr:WarrantyScope.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "GoodRelations",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Warranty promise",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Warranty scope",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "is characterized by",
+      "object": {
+       "newLabel": "Temporal duration"
+      },
+      "confidence": 0.9,
+      "span": "A warranty promise is characterized by its temporal duration",
+      "source": {
+       "start": 0,
+       "end": 60
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "is characterized by",
+      "object": {
+       "candidate": "c2"
+      },
+      "confidence": 0.9,
+      "span": "its gr:WarrantyScope",
+      "source": {
+       "start": 110,
+       "end": 130
+      },
+      "explanation": "gr:WarrantyScope names the existing Warranty scope"
+     }
+    ],
+    "unresolved": []
+   }
+  }
+ ]
+}

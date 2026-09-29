@@ -1,0 +1,369 @@
+# Gold tree for agency_valmont_fr.md. Reviewed twice against the document.
+company: Agence territoriale de Valmont
+description: Guide des processus d'une agence territoriale française fictive (permis, services aux usagers, aides, contrôle), rédigé en français avec regroupements, types et un décalage de comptage.
+tags: [document, public-sector, fr, process-handbook, service-catalogue]
+expected:
+  concepts:
+    # Pôle Permis
+    - label: Pôle Permis
+      parent: [Agence territoriale de Valmont]
+      action: [comprend, includes, has]
+    - label: Autorisation d'urbanisme
+      parent: [Pôle Permis]
+      action: [délivre, issues, grants, handles]
+    - label: Permis de construire
+      parent: [Autorisation d'urbanisme]
+      action: [est un type de, is a, est un]
+    - label: Déclaration préalable
+      parent: [Autorisation d'urbanisme]
+      action: [est un type de, is a, est un]
+    - label: Permis d'aménager
+      parent: [Autorisation d'urbanisme]
+      action: [est un type de, is a, est un]
+    - label: Cycle d'instruction
+      parent: [Pôle Permis]
+      action: [pilote, runs, manages, operates]
+    - label: Dépôt du dossier
+      parent: [Cycle d'instruction]
+      action: [se compose de, consists of, includes]
+    - label: Instruction technique
+      parent: [Cycle d'instruction]
+      action: [se compose de, consists of, includes]
+    - label: Consultation des services
+      parent: [Cycle d'instruction]
+      action: [se compose de, consists of, includes]
+    - label: Décision
+      parent: [Cycle d'instruction]
+      action: [se compose de, consists of, includes]
+    - label: Recours
+      parent: [Cycle d'instruction]
+      action: [se compose de, consists of, includes]
+    - label: Réception au guichet
+      parent: [Dépôt du dossier]
+      action: [comprend, includes, consists of]
+    - label: Saisie du dossier
+      parent: [Dépôt du dossier]
+      action: [comprend, includes, consists of]
+    - label: Vérification de complétude
+      parent: [Dépôt du dossier]
+      action: [comprend, includes, consists of]
+    - label: Dossier de demande
+      parent: [Réception au guichet]
+      action: [reçoit, receives, handles]
+    - label: Récépissé de dépôt
+      parent: [Vérification de complétude]
+      action: [produit, produces, issues]
+    - label: Demande de pièces complémentaires
+      parent: [Vérification de complétude]
+      action: [produit, produces, issues]
+    - label: Analyse réglementaire
+      parent: [Instruction technique]
+      action: [se compose de, consists of, includes]
+    - label: Visite sur site
+      parent: [Instruction technique]
+      action: [se compose de, consists of, includes]
+    - label: Rédaction du rapport
+      parent: [Instruction technique]
+      action: [se compose de, consists of, includes]
+    - label: Rapport d'instruction
+      parent: [Rédaction du rapport]
+      action: [produit, produces, creates]
+    - label: Avis patrimonial
+      parent: [Consultation des services]
+      action: [comprend, includes, consists of]
+    - label: Avis du gestionnaire de réseaux
+      parent: [Consultation des services]
+      action: [comprend, includes, consists of]
+    - label: Avis de sécurité incendie
+      parent: [Consultation des services]
+      action: [comprend, includes, consists of]
+    - label: Signature de l'arrêté
+      parent: [Décision]
+      action: [comprend, includes, consists of]
+    - label: Notification au demandeur
+      parent: [Décision]
+      action: [comprend, includes, consists of]
+    - label: Arrêté d'autorisation
+      parent: [Signature de l'arrêté]
+      action: [produit, produces, issues]
+    - label: Arrêté de refus
+      parent: [Signature de l'arrêté]
+      action: [produit, produces, issues]
+    - label: Recours gracieux
+      parent: [Recours]
+      action: [se compose de, consists of, includes]
+    - label: Recours contentieux
+      parent: [Recours]
+      action: [se compose de, consists of, includes]
+    # Pôle Services aux usagers
+    - label: Pôle Services aux usagers
+      parent: [Agence territoriale de Valmont]
+      action: [comprend, includes, has]
+    - label: Accueil
+      parent: [Pôle Services aux usagers]
+      action: [comprend, includes, consists of]
+    - label: Prise de rendez-vous
+      parent: [Pôle Services aux usagers]
+      action: [comprend, includes, consists of]
+    - label: État civil
+      parent: [Pôle Services aux usagers]
+      action: [comprend, includes, consists of]
+    - label: Traitement des réclamations
+      parent: [Pôle Services aux usagers]
+      action: [comprend, includes, consists of]
+    - label: Canaux
+      parent: [Accueil]
+      action: [dispose de, has, a]
+    - label: Guichet physique
+      parent: [Canaux]
+      action: [comprend, includes, has]
+    - label: Accueil téléphonique
+      parent: [Canaux]
+      action: [comprend, includes, has]
+    - label: Portail usagers
+      parent: [Canaux]
+      action: [comprend, includes, has]
+    - label: Fiche de passage
+      parent: [Accueil]
+      action: [produit, produces, creates]
+    - label: Demande de créneau
+      parent: [Prise de rendez-vous]
+      action: [se compose de, consists of, includes]
+    - label: Confirmation du rendez-vous
+      parent: [Prise de rendez-vous]
+      action: [se compose de, consists of, includes]
+    - label: Rappel par SMS
+      parent: [Prise de rendez-vous]
+      action: [se compose de, consists of, includes]
+    - label: Courriel de confirmation
+      parent: [Confirmation du rendez-vous]
+      action: [produit, produces, sends]
+    - label: Délivrance d'actes
+      parent: [État civil]
+      action: [comprend, includes, consists of]
+    - label: Enregistrement des naissances
+      parent: [État civil]
+      action: [comprend, includes, consists of]
+    - label: Célébration des mariages
+      parent: [État civil]
+      action: [comprend, includes, consists of]
+    - label: Copie intégrale
+      parent: [Délivrance d'actes]
+      action: [produit, produces, issues]
+    - label: Extrait d'acte
+      parent: [Délivrance d'actes]
+      action: [produit, produces, issues]
+    - label: Acte de naissance
+      parent: [Enregistrement des naissances]
+      action: [produit, produces, creates]
+    - label: Publication des bans
+      parent: [Célébration des mariages]
+      action: [comprend, includes, consists of]
+    - label: Cérémonie civile
+      parent: [Célébration des mariages]
+      action: [comprend, includes, consists of]
+    - label: Livret de famille
+      parent: [Cérémonie civile]
+      action: [produit, produces, issues]
+    - label: Enregistrement de la réclamation
+      parent: [Traitement des réclamations]
+      action: [se compose de, consists of, includes]
+    - label: Analyse de la réclamation
+      parent: [Traitement des réclamations]
+      action: [se compose de, consists of, includes]
+    - label: Réponse à l'usager
+      parent: [Traitement des réclamations]
+      action: [se compose de, consists of, includes]
+    - label: Accusé de réception
+      parent: [Enregistrement de la réclamation]
+      action: [produit, produces, sends]
+    - label: Lettre de réponse
+      parent: [Réponse à l'usager]
+      action: [produit, produces, sends]
+    # Pôle Aides et subventions
+    - label: Pôle Aides et subventions
+      parent: [Agence territoriale de Valmont]
+      action: [comprend, includes, has]
+    - label: Dispositifs
+      parent: [Pôle Aides et subventions]
+      action: [gère, manages, has, runs]
+    - label: Aide à la rénovation énergétique
+      parent: [Dispositifs]
+      action: [comprend, includes, has]
+    - label: Subvention aux associations
+      parent: [Dispositifs]
+      action: [comprend, includes, has]
+    - label: Chèque rénovation
+      parent: [Aide à la rénovation énergétique]
+      action: [est un type de, is a, est un]
+    - label: Subvention de fonctionnement
+      parent: [Subvention aux associations]
+      action: [est un type de, is a, est un]
+    - label: Subvention d'investissement
+      parent: [Subvention aux associations]
+      action: [est un type de, is a, est un]
+    - label: Parcours de subvention
+      parent: [Pôle Aides et subventions]
+      action: [conduit, runs, manages, operates]
+    - label: Appel à projets
+      parent: [Parcours de subvention]
+      action: [se compose de, consists of, includes]
+    - label: Dépôt de la demande
+      parent: [Parcours de subvention]
+      action: [se compose de, consists of, includes]
+    - label: Instruction de la demande
+      parent: [Parcours de subvention]
+      action: [se compose de, consists of, includes]
+    - label: Commission d'attribution
+      parent: [Parcours de subvention]
+      action: [se compose de, consists of, includes]
+    - label: Versement
+      parent: [Parcours de subvention]
+      action: [se compose de, consists of, includes]
+    - label: Règlement d'intervention
+      parent: [Appel à projets]
+      action: [produit, produces, publishes]
+    - label: Récépissé de demande
+      parent: [Dépôt de la demande]
+      action: [produit, produces, issues]
+    - label: Contrôle d'éligibilité
+      parent: [Instruction de la demande]
+      action: [comprend, includes, consists of]
+    - label: Analyse budgétaire
+      parent: [Instruction de la demande]
+      action: [comprend, includes, consists of]
+    - label: Délibération d'attribution
+      parent: [Commission d'attribution]
+      action: [produit, produces, issues]
+    - label: Avance
+      parent: [Versement]
+      action: [se compose de, consists of, includes]
+    - label: Solde
+      parent: [Versement]
+      action: [se compose de, consists of, includes]
+    - label: Compte rendu financier
+      parent: [Solde]
+      action: [exige, requires, needs]
+    # Pôle Contrôle et conformité
+    - label: Pôle Contrôle et conformité
+      parent: [Agence territoriale de Valmont]
+      action: [comprend, includes, has]
+    - label: Contrôle des travaux
+      parent: [Pôle Contrôle et conformité]
+      action: [comprend, includes, consists of]
+    - label: Contrôle des aides
+      parent: [Pôle Contrôle et conformité]
+      action: [comprend, includes, consists of]
+    - label: Traitement des infractions
+      parent: [Pôle Contrôle et conformité]
+      action: [comprend, includes, consists of]
+    - label: Réception de la déclaration d'achèvement
+      parent: [Contrôle des travaux]
+      action: [se compose de, consists of, includes]
+    - label: Visite de récolement
+      parent: [Contrôle des travaux]
+      action: [se compose de, consists of, includes]
+    - label: Délivrance de l'attestation
+      parent: [Contrôle des travaux]
+      action: [se compose de, consists of, includes]
+    - label: Procès-verbal de récolement
+      parent: [Visite de récolement]
+      action: [produit, produces, creates]
+    - label: Attestation de conformité
+      parent: [Délivrance de l'attestation]
+      action: [produit, produces, issues]
+    - label: Contrôle sur pièces
+      parent: [Contrôle des aides]
+      action: [comprend, includes, consists of]
+    - label: Contrôle sur place
+      parent: [Contrôle des aides]
+      action: [comprend, includes, consists of]
+    - label: Factures acquittées
+      parent: [Contrôle sur pièces]
+      action: [examine, examines, reviews, checks]
+    - label: Rapport de contrôle
+      parent: [Contrôle sur place]
+      action: [produit, produces, creates]
+    - label: Constat d'infraction
+      parent: [Traitement des infractions]
+      action: [se compose de, consists of, includes]
+    - label: Mise en demeure
+      parent: [Traitement des infractions]
+      action: [se compose de, consists of, includes]
+    - label: Transmission au parquet
+      parent: [Traitement des infractions]
+      action: [se compose de, consists of, includes]
+    - label: Procès-verbal d'infraction
+      parent: [Constat d'infraction]
+      action: [produit, produces, creates]
+    - label: Arrêté interruptif de travaux
+      parent: [Mise en demeure]
+      action: [produit, produces, issues]
+  relations:
+    - from: Guichet physique
+      to: Récépissé de dépôt
+      action: [délivre, issues, hands over]
+    - from: Rapport d'instruction
+      to: Avis patrimonial
+      action: [reprend, includes, uses]
+    - from: Recours gracieux
+      to: Arrêté de refus
+      action: [vise, targets, challenges]
+    - from: Portail usagers
+      to: Demande de créneau
+      action: [alimente, feeds, supplies]
+    - from: Analyse de la réclamation
+      to: Rapport d'instruction
+      action: [consulte, reads, uses]
+    - from: Chèque rénovation
+      to: Déclaration préalable
+      action: [exige, requires, needs]
+    - from: Délibération d'attribution
+      to: Versement
+      action: [déclenche, triggers, starts]
+      inverse: [est déclenché par, is triggered by]
+    - from: Visite de récolement
+      to: Arrêté d'autorisation
+      action: [vérifie, checks, verifies]
+    - from: Contrôle sur place
+      to: Compte rendu financier
+      action: [vérifie, checks, verifies]
+    - from: Transmission au parquet
+      to: Procès-verbal d'infraction
+      action: [s'appuie sur, relies on, uses]
+optional:
+  - Géoplan
+  - Civilis
+  - Subventia
+  - Entrepôt de données
+  - Tableau de bord
+  - Directeur général
+  - Chef de pôle
+  - Instructeur
+  - Agent d'accueil
+  - Contrôleur assermenté
+  - Référent qualité
+  - Rôles
+  - Comité de direction
+  - Conseil d'administration
+  - Service juridique mutualisé
+  - Service informatique mutualisé
+  - Indicateurs de performance
+  - Délai moyen d'instruction
+  - Délai de réponse aux réclamations
+  - Délai de versement
+  - Taux de dossiers complets au dépôt
+  - Revue qualité
+  - Revue mensuelle
+  - Plan d'action
+  - Action corrective
+  - Lettre recommandée
+  - Accord tacite
+  - Mémoire en défense
+  - Guide des processus
+  - Catalogue de services
+  - Juge administratif
+  - Registres d'état civil
+  - Plan de financement
+  - Servitudes
+  - Reversement partiel

@@ -1,0 +1,48 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex:   <http://example.com/acme#> .
+
+<http://example.com/acme> a owl:Ontology ;
+    rdfs:comment "A tiny synthetic business ontology for the gold importer tests."@en .
+
+ex:Acme a owl:Class ; rdfs:label "Acme Corp"@en .
+
+ex:Sales a owl:Class ; rdfs:subClassOf ex:Acme ; rdfs:label "Sales"@en .
+ex:Operations a owl:Class ; rdfs:subClassOf ex:Acme ; rdfs:label "Operations"@en, "Opérations"@fr .
+
+ex:Customer a owl:Class ;
+    rdfs:subClassOf ex:Sales ;
+    rdfs:subClassOf [ a owl:Restriction ; owl:onProperty ex:prefersProduct ; owl:someValuesFrom ex:Product ] ;
+    owl:disjointWith ex:Product ;
+    rdfs:label "Customer"@en .
+
+ex:Order a owl:Class ;
+    rdfs:subClassOf ex:Sales ;
+    rdfs:subClassOf [ a owl:Restriction ; owl:onProperty ex:orderDate ; owl:allValuesFrom xsd:date ] ;
+    rdfs:label "Order"@en .
+
+ex:OnlineOrder a owl:Class ; rdfs:subClassOf ex:Order ; rdfs:label "Online Order"@en .
+ex:ExpressOnlineOrder a owl:Class ; rdfs:subClassOf ex:OnlineOrder .
+
+ex:Delivery a owl:Class ; rdfs:subClassOf ex:Operations, ex:Sales ; rdfs:label "Delivery"@en .
+ex:Product a owl:Class ; rdfs:subClassOf owl:Thing ; rdfs:label "Product"@en .
+
+ex:places a owl:ObjectProperty ;
+    rdfs:label "places (0..*)"@en ;
+    rdfs:domain ex:Customer ; rdfs:range ex:Order .
+
+ex:shipsProduct a owl:ObjectProperty ; rdfs:domain ex:Delivery ; rdfs:range ex:Product .
+
+ex:containsItem a owl:ObjectProperty ;
+    rdfs:label "contains"@en ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( ex:Order ex:Delivery ) ] ;
+    rdfs:range ex:Product .
+
+ex:prefersProduct a owl:ObjectProperty .
+
+ex:orderDate a owl:DatatypeProperty ; rdfs:domain ex:Order ; rdfs:range xsd:date .
+
+ex:BigCo a owl:NamedIndividual, ex:Customer ; rdfs:label "BigCo"@en ; ex:prefersProduct ex:Widget .
+ex:Widget a owl:NamedIndividual, ex:Product ; rdfs:label "Widget"@en .
