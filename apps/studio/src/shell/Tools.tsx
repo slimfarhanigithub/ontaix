@@ -1,12 +1,14 @@
 /**
  * The tool row above the teach bar. Markup from reference/ontaix-studio-reference.html lines
  * 194-201 without the Finalise all button; behaviours from lines 548-565 (arrange, coverage,
- * skip), 616 (add a company) and 904-906 (import, drag and drop).
+ * skip), 616 (add a company) and 904-906 (import, drag and drop). Import opens the import dialog,
+ * where the reading mode is chosen before the file picker opens.
  */
 import { useEffect, useRef } from 'react';
 
 import { importDocument } from '../teach/teach';
 import { openAddCompany } from './AddCompany';
+import { importMode, openImportDialog } from './ImportDialog';
 import { useStore } from './dom';
 
 export function Tools() {
@@ -19,7 +21,7 @@ export function Tools() {
     const drop = (e: DragEvent) => {
       e.preventDefault();
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) void importDocument(f);
+      if (f) void importDocument(f, importMode());
     };
     addEventListener('dragover', over);
     addEventListener('drop', drop);
@@ -49,7 +51,7 @@ export function Tools() {
         title="Import a document and detect concepts and relations (I)"
         style={{ display: settings && !settings.importDocs ? 'none' : undefined }}
         disabled={st.ui.importing}
-        onClick={() => file.current?.click()}
+        onClick={openImportDialog}
       >
         <svg viewBox="0 0 16 16">
           <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10" />
@@ -65,7 +67,7 @@ export function Tools() {
         onChange={(e) => {
           const f = e.currentTarget.files?.[0];
           e.currentTarget.value = '';
-          if (f) void importDocument(f);
+          if (f) void importDocument(f, importMode());
         }}
       />
       <button type="button" id="arrange" title={st.arrangeTitle()} onClick={() => st.arrange()}>

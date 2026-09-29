@@ -337,7 +337,7 @@ async def test_settlement_counts_reasoning_tokens_as_output(
     monkeypatch.setenv("ONTAIX_LLM_PRICE_TABLE", PRICE_TABLE)
     get_settings.cache_clear()
     install(monkeypatch, responding(completion(strict_answer("insight_sells_services"))))
-    monkeypatch.setattr(llm_client, "_cached", None)
+    monkeypatch.setattr(llm_client, "_cached", {})
     reset_llm_client()
     try:
         r = await client.post(

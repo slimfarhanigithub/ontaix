@@ -16,6 +16,7 @@ from app.models.storage.base import RoleName, ScopeKind
 
 APPROVING_ROLES = frozenset({RoleName.OWNER, RoleName.GOVERNOR})
 PROPOSING_ROLES = frozenset({RoleName.OWNER, RoleName.BUILDER, RoleName.AGENT})
+BUILDING_ROLES = frozenset({RoleName.OWNER, RoleName.BUILDER})
 AUDIT_ROLES = frozenset({RoleName.ADMINISTRATOR, RoleName.GOVERNOR, RoleName.AUDITOR})
 
 
@@ -79,6 +80,13 @@ def can_propose(grants: tuple[Grant, ...], scope: Scope, everyone_teaches: bool)
         if everyone_teaches and g.role is RoleName.MEMBER and g.contains(scope):
             return True
     return False
+
+
+def can_propose_as_builder(grants: tuple[Grant, ...], scope: Scope) -> bool:
+    """`proposal.create` in scope through the Owner or Builder role only: what concept expansion
+    and whole-document extraction require, since both spend large model budgets. Members who
+    teach through `everyoneTeaches` and agents never qualify."""
+    return any(g.role in BUILDING_ROLES and g.contains(scope) for g in grants)
 
 
 def can_propose_anywhere(grants: tuple[Grant, ...], everyone_teaches: bool) -> bool:

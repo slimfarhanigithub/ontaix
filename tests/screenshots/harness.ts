@@ -44,10 +44,11 @@ export const VIEWPORTS: Viewport[] = [
 const STORY_ONLY_CSS = '#sceneNum,#sceneName,#next,#finalise{display:none!important}';
 /**
  * Owner additions absent from the reference, hidden in both pages with `display: none`: the
- * drawer's Delete button. The reference has no such element, so the rule changes nothing there;
- * in the Studio the drawer's other actions lay out as the reference's.
+ * drawer's Expand and Delete buttons and the import dialog's mode choice. The reference has no
+ * such elements, so the rule changes nothing there; in the Studio the drawer's other actions lay
+ * out as the reference's.
  */
-const OWNER_ADDITIONS_CSS = '#drDelete{display:none!important}';
+const OWNER_ADDITIONS_CSS = '#drExpand,#drDelete,#imMode{display:none!important}';
 /** The caption, hidden while the reference still shows the story's opening caption. */
 const OPENING_CAPTION_CSS = '.caption{visibility:hidden!important}';
 /** The teach placeholder, made transparent in one-company scenes with live teaching on, where the reference shows story text. */

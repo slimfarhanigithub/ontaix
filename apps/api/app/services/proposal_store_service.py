@@ -135,7 +135,7 @@ async def store(
         deps=deps,
         wait_for=wait_for,
         html=html,
-        why=why or None,
+        why=provenance.why or why or None,
         caption=caption,
         payload={**payload, PAYLOAD_COMPANY_IDS: [str(c) for c in unique_ids]},
         concept_id=concept_id,

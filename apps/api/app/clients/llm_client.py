@@ -3,7 +3,8 @@
 The rest of the API sees only this module. A request carries the system instructions, one user
 message and the JSON schema the answer must follow; the answer carries the raw JSON text, token
 counts, the estimated euro cost and the latency. A timeout or a provider failure raises
-`LlmTimeout` or `LlmProviderError`, each with the tokens the provider reported (0 when none).
+`LlmTimeout` or `LlmProviderError` (`LlmRefused` for a content filter or a declining model),
+each with the tokens the provider reported (0 when none).
 No provider type, SDK class or credential leaves the implementation modules.
 """
 
@@ -15,9 +16,10 @@ import logging
 import time
 from dataclasses import dataclass
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any, Protocol
 
-from app.config import ModelPrice, Settings, get_settings
+from app.config import ModelPrice, ReasoningEffort, Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,25 @@ logger = logging.getLogger(__name__)
 # (scripts where one character is a token or more), so a reservation errs on counting too much.
 CODE_POINTS_PER_TOKEN = 2
 BYTES_PER_TOKEN = 3
+# `llm_call.latency_ms` holds at most five minutes.
+MAX_LATENCY_MS = 300_000
+
+
+class LlmPurpose(StrEnum):
+    """Why Ontaix calls a model; each purpose has its own deployment, model and effort."""
+
+    TEACH_EXTRACTION = "teach_extraction"
+    CONCEPT_EXPANSION = "concept_expansion"
+    DOCUMENT_EXTRACTION = "document_extraction"
+
+
+@dataclass(frozen=True)
+class LlmProfile:
+    """The deployment (Azure AI Foundry), model name and reasoning effort of one purpose."""
+
+    deployment: str
+    model: str
+    reasoning_effort: ReasoningEffort
 
 
 @dataclass(frozen=True)
@@ -72,6 +93,10 @@ class LlmProviderError(LlmCallError):
     """The provider refused, failed, rate-limited, or stopped before a complete answer."""
 
 
+class LlmRefused(LlmProviderError):
+    """The provider's content filter blocked the request or the answer, or the model declined."""
+
+
 class LlmConfigurationError(RuntimeError):
     """The configured provider cannot run: raised at start-up, never during a request."""
 
@@ -87,18 +112,20 @@ class LlmClient(Protocol):
 
 _override: LlmClient | None = None
 _override_set = False
-_cached: tuple[tuple[object, ...], LlmClient] | None = None
+_cached: dict[LlmPurpose, tuple[tuple[object, ...], LlmClient]] = {}
 
 
-def get_llm_client() -> LlmClient | None:
-    """The configured client, or None when the provider has no endpoint, key or price."""
+def get_llm_client(purpose: LlmPurpose = LlmPurpose.TEACH_EXTRACTION) -> LlmClient | None:
+    """The client configured for `purpose`, or None when the provider has no endpoint, key or
+    price for its model."""
     if _override_set:
         return _override
-    return _configured(get_settings())
+    return _configured(get_settings(), purpose)
 
 
 def set_llm_client(client: LlmClient | None) -> None:
-    """Replace the configured client (tests); `reset_llm_client` restores configuration."""
+    """Replace the configured client of every purpose (tests); `reset_llm_client` restores
+    configuration."""
     global _override, _override_set
     _override, _override_set = client, True
 
@@ -109,15 +136,43 @@ def reset_llm_client() -> None:
 
 
 def check_llm_configuration(settings: Settings) -> None:
-    """Stops start-up when a provider is configured but its model has no price.
+    """Stops start-up when a provider is configured but the model of a purpose has no price.
 
     A provider without its endpoint (`azure_foundry`) or key (`anthropic`) is not an error: the
     model step answers `not_configured` and the grammar runs alone.
     """
-    if _provider_configured(settings) and settings.llm_model not in settings.llm_price_table:
-        raise LlmConfigurationError(
-            f"ONTAIX_LLM_PRICE_TABLE has no price for ONTAIX_LLM_MODEL {settings.llm_model!r}"
+    if not _provider_configured(settings):
+        return
+    variables = {
+        LlmPurpose.TEACH_EXTRACTION: "ONTAIX_LLM_MODEL",
+        LlmPurpose.CONCEPT_EXPANSION: "ONTAIX_EXPAND_MODEL",
+        LlmPurpose.DOCUMENT_EXTRACTION: "ONTAIX_DOCUMENT_EXTRACTION_MODEL",
+    }
+    for purpose, variable in variables.items():
+        model = profile_for(settings, purpose).model
+        if model not in settings.llm_price_table:
+            raise LlmConfigurationError(
+                f"ONTAIX_LLM_PRICE_TABLE has no price for {variable} {model!r}"
+            )
+
+
+def profile_for(settings: Settings, purpose: LlmPurpose) -> LlmProfile:
+    """The deployment, model and effort of a purpose; unset ones fall back to the teach ones."""
+    if purpose is LlmPurpose.CONCEPT_EXPANSION:
+        return LlmProfile(
+            settings.expand_deployment or settings.foundry_deployment,
+            settings.expand_model or settings.llm_model,
+            settings.expand_reasoning_effort,
         )
+    if purpose is LlmPurpose.DOCUMENT_EXTRACTION:
+        return LlmProfile(
+            settings.document_extraction_deployment or settings.foundry_deployment,
+            settings.document_extraction_model or settings.llm_model,
+            settings.document_extraction_reasoning_effort,
+        )
+    return LlmProfile(
+        settings.foundry_deployment, settings.llm_model, settings.foundry_reasoning_effort
+    )
 
 
 def estimate_tokens(request: LlmRequest) -> int:
@@ -137,8 +192,8 @@ def cost_eur(price: ModelPrice, input_tokens: int, output_tokens: int) -> float:
 
 
 def elapsed_ms(started: float) -> int:
-    """Milliseconds since `started` (a `time.monotonic()` value), capped at one minute."""
-    return min(60_000, max(0, int((time.monotonic() - started) * 1000)))
+    """Milliseconds since `started` (a `time.monotonic()` value), capped at five minutes."""
+    return min(MAX_LATENCY_MS, max(0, int((time.monotonic() - started) * 1000)))
 
 
 def _provider_configured(settings: Settings) -> bool:
@@ -148,45 +203,47 @@ def _provider_configured(settings: Settings) -> bool:
     return key is not None and bool(key.get_secret_value())
 
 
-def _configured(settings: Settings) -> LlmClient | None:
-    global _cached
-    price = settings.llm_price_table.get(settings.llm_model)
+def _configured(
+    settings: Settings, purpose: LlmPurpose = LlmPurpose.TEACH_EXTRACTION
+) -> LlmClient | None:
+    profile = profile_for(settings, purpose)
+    price = settings.llm_price_table.get(profile.model)
     if not _provider_configured(settings) or price is None:
         return None
     if settings.llm_provider == "azure_foundry":
         fingerprint: tuple[object, ...] = (
             settings.llm_provider,
-            settings.llm_model,
+            profile,
             price,
             settings.foundry_endpoint,
-            settings.foundry_deployment,
-            settings.foundry_reasoning_effort,
         )
     else:
         key = settings.anthropic_api_key.get_secret_value()  # type: ignore[union-attr]
         fingerprint = (
             settings.llm_provider,
-            settings.llm_model,
+            profile.model,
             price,
             hashlib.sha256(key.encode()).hexdigest(),
         )
-    if _cached is None or _cached[0] != fingerprint:
-        _cached = (fingerprint, _build(settings, price))
-    return _cached[1]
+    cached = _cached.get(purpose)
+    if cached is None or cached[0] != fingerprint:
+        cached = (fingerprint, _build(settings, profile, price))
+        _cached[purpose] = cached
+    return cached[1]
 
 
-def _build(settings: Settings, price: ModelPrice) -> LlmClient:
+def _build(settings: Settings, profile: LlmProfile, price: ModelPrice) -> LlmClient:
     if settings.llm_provider == "azure_foundry":
         from app.clients.foundry_llm_client import FoundryLlmClient
 
         return FoundryLlmClient(
             endpoint=settings.foundry_endpoint or "",
-            deployment=settings.foundry_deployment,
-            model=settings.llm_model,
+            deployment=profile.deployment,
+            model=profile.model,
             price=price,
-            reasoning_effort=settings.foundry_reasoning_effort,
+            reasoning_effort=profile.reasoning_effort,
         )
     from app.clients.anthropic_llm_client import AnthropicLlmClient
 
     key = settings.anthropic_api_key.get_secret_value()  # type: ignore[union-attr]
-    return AnthropicLlmClient(key, settings.llm_model, price)
+    return AnthropicLlmClient(key, profile.model, price)

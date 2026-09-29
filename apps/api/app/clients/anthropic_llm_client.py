@@ -18,6 +18,7 @@ import anthropic
 from app.clients.llm_client import (
     LlmAnswer,
     LlmProviderError,
+    LlmRefused,
     LlmRequest,
     LlmTimeout,
     cost_eur,
@@ -87,6 +88,6 @@ class AnthropicLlmClient:
         output_tokens = usage.output_tokens
         cost = cost_eur(self._price, input_tokens, output_tokens)
         if message.stop_reason == "refusal":
-            raise LlmProviderError("refusal", input_tokens, output_tokens, cost, latency_ms)
+            raise LlmRefused("refusal", input_tokens, output_tokens, cost, latency_ms)
         text = "".join(block.text for block in message.content if block.type == "text")
         return LlmAnswer(text, input_tokens, output_tokens, cost, latency_ms)

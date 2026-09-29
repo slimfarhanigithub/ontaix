@@ -127,3 +127,22 @@ def _key(tenant_id: uuid.UUID, import_id: uuid.UUID, sentence_index: int) -> tup
         DocumentImportSentence.import_id == import_id,
         DocumentImportSentence.sentence_index == sentence_index,
     )
+
+
+async def list_for_import(
+    session: AsyncSession, tenant_id: uuid.UUID, import_id: uuid.UUID
+) -> list[SentenceRow]:
+    """Every sentence of the import, in document order."""
+    result = await session.execute(
+        select(
+            DocumentImportSentence.text,
+            DocumentImportSentence.position_unit,
+            DocumentImportSentence.position_index,
+        )
+        .where(
+            DocumentImportSentence.tenant_id == tenant_id,
+            DocumentImportSentence.import_id == import_id,
+        )
+        .order_by(DocumentImportSentence.sentence_index)
+    )
+    return [SentenceRow(*row) for row in result.all()]

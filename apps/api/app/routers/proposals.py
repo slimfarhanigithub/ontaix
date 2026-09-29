@@ -1,4 +1,4 @@
-"""Proposals: list, create, batch, decisions and the bulk runs."""
+"""Proposals: list, create, batch, decisions, branch approval and the bulk runs."""
 
 from __future__ import annotations
 
@@ -11,12 +11,13 @@ from app.auth import CallerDependency, SessionDependency
 from app.models.api.drafts import ProposalBatch, ProposalDraft
 from app.models.api.page import PageOf
 from app.models.api.proposal import (
+    BranchResult,
     BulkResult,
     DecisionResult,
     Proposal,
     RejectRequest,
 )
-from app.services import decision_service, proposal_read_service
+from app.services import branch_approval_service, decision_service, proposal_read_service
 from app.utilities.listing import parse_list_query
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,11 @@ async def approve_proposal(
     proposal_id: uuid.UUID, session: SessionDependency, caller: CallerDependency
 ) -> DecisionResult:
     return await decision_service.approve(session, caller, proposal_id)
+
+
+@router.post("/proposals/{proposal_id}/approve-branch", response_model=BranchResult)
+async def approve_proposal_branch(proposal_id: uuid.UUID, caller: CallerDependency) -> BranchResult:
+    return await branch_approval_service.approve_branch(caller, proposal_id)
 
 
 @router.post("/proposals/{proposal_id}/second-approve", response_model=DecisionResult)

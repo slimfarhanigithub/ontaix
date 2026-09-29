@@ -304,8 +304,10 @@ async def test_cost_rows_hold_counts_only_and_feed_the_cost_summary(
         "output_tokens",
         "cost_eur",
         "latency_ms",
+        "pages",
         "outcome",
     }
+    assert call["pages"] is None
     assert (call["purpose"], call["provider"], call["model"], call["outcome"]) == (
         "teach_extraction",
         "fake",

@@ -1,6 +1,8 @@
 /**
  * The proposed-changes panel: nothing enters the model without approval here. Markup from
  * reference/ontaix-studio-reference.html lines 209-213; rows from `renderProps` (lines 587-592).
+ * `Approve branch`, on a ready concept or specialisation with open proposals below it, is an
+ * owner addition absent from the reference, in the row's existing button style.
  */
 import type { Proposal } from '../api/types';
 import { NEUTRAL } from '../canvas/constants';
@@ -16,6 +18,12 @@ const KIND: Record<Proposal['type'], string> = {
   bind: 'Binding',
   attr: 'Attribute',
 };
+
+/** The proposals `Approve branch` decides, the proposal itself included; 0 when the button is not offered. */
+export function branchSize(p: Proposal): number {
+  const below = p.openBelow ?? 0;
+  return p.ready && (p.type === 'concept' || p.type === 'spec') && below > 0 ? below + 1 : 0;
+}
 
 export function Panel() {
   const st = useStore();
@@ -70,6 +78,11 @@ export function Panel() {
                   <button className="no" onClick={() => void st.reject(p)}>
                     Reject
                   </button>
+                  {branchSize(p) ? (
+                    <button className="branch" onClick={() => void st.approveBranch(p)}>
+                      {`Approve branch (${branchSize(p)})`}
+                    </button>
+                  ) : null}
                   {ok ? null : <span className="wait">{`after ${p.waitFor || 'a previous item'}`}</span>}
                 </div>
               </div>

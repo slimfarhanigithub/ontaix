@@ -28,6 +28,8 @@ from app.routers import (
     concepts,
     cost,
     domain_products,
+    expansions,
+    extractions,
     health,
     imports,
     proposals,
@@ -35,7 +37,7 @@ from app.routers import (
     scene,
     teach,
 )
-from app.services import retention_purge_service
+from app.services import document_extraction_runner_service, retention_purge_service
 from app.services.import_purge_service import purge_periodically
 from app.utilities.contention import is_contention
 from app.utilities.problems import ProblemError, busy
@@ -57,8 +59,8 @@ HTTP_STATUS_CODES = {
 
 @asynccontextmanager
 async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Runs the expired-import purge and the retention purge for the life of the process and
-    cancels them on shutdown."""
+    """Runs the expired-import purge, the retention purge and the whole-document extraction
+    runner for the life of the process and cancels them on shutdown."""
     settings = get_settings()
     purges = [
         asyncio.create_task(
@@ -67,6 +69,12 @@ async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
         asyncio.create_task(
             retention_purge_service.purge_periodically(settings.retention_purge_interval_seconds),
             name="retention-purge",
+        ),
+        asyncio.create_task(
+            document_extraction_runner_service.run_periodically(
+                settings.document_extraction_poll_seconds
+            ),
+            name="document-extraction-runner",
         ),
     ]
     try:
@@ -100,8 +108,10 @@ def create_app() -> FastAPI:
         concepts,
         relations,
         proposals,
+        expansions,
         teach,
         imports,
+        extractions,
         audit,
         cost,
     ):

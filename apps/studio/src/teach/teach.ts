@@ -12,9 +12,12 @@ import { bySid } from '../canvas/state';
 import type { Node } from '../canvas/types';
 import { random } from '../runtime/rng';
 import { store } from '../store/store';
+import { readWholeDocument } from './wholeDocument';
 
 /** Pause between two imported sentences, as in the reference. */
 const IMPORT_PACE_MS = 450;
+/** Pause after the whole-document failure caption, before sentence by sentence begins. */
+const FALLBACK_PAUSE_MS = 1500;
 /** The longest `Retry-After` a refused batch is retried after; a longer wait is shown as refused. */
 const BATCH_RETRY_MAX_S = 60;
 
@@ -235,13 +238,26 @@ export function leftOutText(plan: DuplicatePlan): string {
     : known;
 }
 
-/** Uploads a document to the API, which extracts and stores its sentences; each is then taught like a spoken one. */
-export async function importDocument(file: File | null | undefined): Promise<void> {
+/** How an imported document is read: sentence by sentence, or as a whole by the model. */
+export type ImportMode = 'sentences' | 'document';
+
+/**
+ * Uploads a document to the API, which extracts and stores its sentences. Sentence by sentence,
+ * each is then taught like a spoken one; as a whole, the API maps the document into one tree of
+ * proposals, and the sentences are taught one by one when that reading is not available.
+ */
+export async function importDocument(file: File | null | undefined, mode: ImportMode = 'sentences'): Promise<void> {
   if (!file || store.ui.importing) return;
   store.ui.importing = true;
   store.bump();
   try {
     const imported = await api.importSentences(file);
+    const co = store.s.activeCompany;
+    if (mode === 'document' && co?.sid) {
+      if ((await readWholeDocument(imported, co.sid)) !== 'unavailable') return;
+      // The failure caption stays readable before the sentence-by-sentence captions replace it.
+      await wait(FALLBACK_PAUSE_MS);
+    }
     const sents = imported.sentences;
     const before = store.ui.proposals.length;
     store.caption(
