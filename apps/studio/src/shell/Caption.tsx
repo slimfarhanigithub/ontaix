@@ -5,12 +5,14 @@
 import { useEffect, useRef } from 'react';
 
 import { REDUCED } from '../canvas/constants';
+import { useDelayed } from './busy';
 import { useStore } from './dom';
 
 export function Caption() {
   const st = useStore();
   const { kicker, text, seq } = st.ui.caption;
   const ref = useRef<HTMLParagraphElement>(null);
+  const processing = useDelayed(st.ui.processing > 0);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -28,7 +30,15 @@ export function Caption() {
   }, [seq, text]);
   return (
     <div className="caption">
-      <small id="captionKicker">{kicker}</small>
+      <small id="captionKicker">
+        {processing ? (
+          <>
+            <span className="spin"></span>Processing
+          </>
+        ) : (
+          kicker
+        )}
+      </small>
       <p id="captionText" ref={ref}></p>
     </div>
   );

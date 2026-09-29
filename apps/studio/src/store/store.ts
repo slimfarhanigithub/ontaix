@@ -96,6 +96,10 @@ export interface UiState {
   linkBox: LinkBoxState | null;
   toasts: Toast[];
   importing: boolean;
+  /** Teach bar parses in flight: typed sentences, queued spoken sentences and document imports. */
+  processing: number;
+  /** The cell whose Expand suggestions are loading. */
+  expanding: Node | null;
   listening: boolean;
   /** Open dialogs, bottom first. */
   dialogs: DialogEntry[];
@@ -153,6 +157,8 @@ class StudioStore {
       linkBox: null,
       toasts: [],
       importing: false,
+      processing: 0,
+      expanding: null,
       listening: false,
       dialogs: [],
       adminPage: 'sources',

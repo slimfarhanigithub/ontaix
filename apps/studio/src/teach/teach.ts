@@ -13,6 +13,7 @@ import type { Node } from '../canvas/types';
 import { random } from '../runtime/rng';
 import { store } from '../store/store';
 import { importOntology } from './ontology';
+import { beginProcessing } from './processing';
 import { readWholeDocument } from './wholeDocument';
 
 /** Pause between two imported sentences, as in the reference. */
@@ -63,7 +64,12 @@ export async function teach(text: string, origin: InputOrigin = 'text'): Promise
   text = text.trim();
   const co = store.s.activeCompany;
   if (!text || !co || !co.sid) return;
-  await parseAndPropose({ companyId: co.sid, text, origin, sessionId: teachSessionId(co.sid) });
+  const end = beginProcessing();
+  try {
+    await parseAndPropose({ companyId: co.sid, text, origin, sessionId: teachSessionId(co.sid) });
+  } finally {
+    end();
+  }
 }
 
 /** Teaches the active company one stored sentence of a document import. */
@@ -106,9 +112,11 @@ export function speechStream(): SpeechStream {
     sentence(text) {
       if (!companyId) return;
       for (const piece of speechPieces(text)) {
+        const end = beginProcessing();
         speechTail = speechTail
           .then(() => teachSpoken({ companyId, text: piece, origin: 'speech', sessionId }))
-          .catch(showSpeechRefusal);
+          .catch(showSpeechRefusal)
+          .finally(end);
       }
     },
     settled: () => speechTail,
@@ -380,7 +388,7 @@ export async function importDocument(file: File | null | undefined, mode: Import
   if (!file || store.ui.importing) return;
   if (mode === 'ontology') return importOntology(file);
   store.ui.importing = true;
-  store.bump();
+  const end = beginProcessing();
   try {
     const imported = await api.importSentences(file);
     const co = store.s.activeCompany;
@@ -410,6 +418,6 @@ export async function importDocument(file: File | null | undefined, mode: Import
     store.caption('Import failed', `${file.name} could not be read (${reason}). Text, Markdown, CSV, Word and PDF are supported.`);
   } finally {
     store.ui.importing = false;
-    store.bump();
+    end();
   }
 }

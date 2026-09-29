@@ -3,6 +3,7 @@
  * (`pageOverview`, `pageSettings`, `pageAppearance`, reference lines 971-984).
  */
 import { DOMAIN_TEMPLATES, DEFAULT_COLORS } from '../../canvas/constants';
+import { BusyButton } from '../../shell/busy';
 import { useStore } from '../../shell/dom';
 import { changeColour, changeRefresh, renderAdmin, resetColours } from '../actions';
 import { SetRow, Tg } from '../Toggle';
@@ -166,9 +167,9 @@ export function Appearance() {
         </label>
       </div>
       <div style={{ marginTop: '16px' }}>
-        <button className="btn" data-act="resetColors" onClick={resetColours}>
+        <BusyButton className="btn" data-act="resetColors" onClick={resetColours}>
           Reset to defaults
-        </button>
+        </BusyButton>
       </div>
     </>
   );
