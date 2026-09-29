@@ -4,14 +4,17 @@ The step runs behind the grammar, only when a fallback trigger holds. In order: 
 be configured and the tenant's monthly token cap above 0; the caller's hourly `llm` budget is
 charged; the call's upper bound is reserved against the monthly cap and committed; the adapter
 calls the model with nothing but the sentence, the session's recent turns, the company name, up
-to 200 candidate concepts as per-call handles (`c0` is the company root), the domain templates
-and the action guidance. The reservation is settled and a cost record stored whatever happens.
-A valid answer is mapped to drafts with the grammar's mapping; anything else leaves the
-grammar's result standing and the step reports why. The step never raises.
+to 200 candidate concepts as per-call handles (`c0` is the company root), the domain templates,
+the action guidance and up to three worked examples from the example library, picked by lexical
+likeness to the text; the reservation's estimate counts those examples. The reservation is
+settled and a cost record stored whatever happens. A valid answer is mapped to drafts with the
+grammar's mapping; anything else leaves the grammar's result standing and the step reports why.
+The step never raises.
 """
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import re
@@ -23,16 +26,21 @@ from typing import Any, Literal
 from pydantic import ValidationError
 
 from app.ai.prompts.teach_extraction import (
+    EXAMPLE_LIBRARY,
     MAX_OUTPUT_TOKENS,
+    MAX_RETRIEVED_EXAMPLE_TOKENS,
+    MAX_RETRIEVED_EXAMPLES,
     OUTPUT_SCHEMA,
     SPEECH_MAX_OUTPUT_TOKENS,
     SYSTEM_PROMPT,
+    render_example,
 )
 from app.auth import Caller
 from app.clients.llm_client import (
     LlmCallError,
     LlmRequest,
     LlmTimeout,
+    estimate_tokens,
     get_llm_client,
 )
 from app.config import get_settings
@@ -51,6 +59,7 @@ from app.services.ontology_view_service import OntologyView
 from app.services.rate_limit_service import Budget, try_charge
 from app.services.teach_draft_service import Drafter, End, PlannedIntent, phrase_in
 from app.utilities.action_text import has_refused_character, normalise_action
+from app.utilities.example_selection import most_similar, within_budget
 from app.utilities.permissions import can_read
 from app.utilities.teach_parser import singular, title
 
@@ -103,6 +112,8 @@ _HYPHEN = "-"
 _LABEL_JOINERS = frozenset("&./-'’+")
 # A full stop followed by whitespace, or any other sentence-ending mark, ends a sentence.
 _SENTENCE_END = re.compile(r"\.\s|[!?;:]")
+# A word that tells the example ranking the reading mode, so a transcript favours transcripts.
+_MODE_WORD = {"sentence": "mode_sentence", "speech": "mode_speech", "document": "mode_document"}
 
 
 @dataclass
@@ -370,7 +381,36 @@ def _context(
     }
     if reading.mode == "document":
         data["neighbours"] = {"before": list(reading.before), "after": list(reading.after)}
-    return json.dumps(data, ensure_ascii=False)
+    # The retrieved examples come first, after the fixed prefix and before the caller's text.
+    return json.dumps({"examples": examples_for(text, reading.mode), **data}, ensure_ascii=False)
+
+
+def examples_for(text: str, mode: str) -> list[dict[str, Any]]:
+    """The library examples most like `text` read in `mode`, best first: at most
+    MAX_RETRIEVED_EXAMPLES, together within MAX_RETRIEVED_EXAMPLE_TOKENS estimated tokens."""
+    shown, texts, costs = _library()
+    ranked = most_similar(f"{text} {_MODE_WORD.get(mode, '')}", texts)
+    chosen = within_budget(ranked, costs, MAX_RETRIEVED_EXAMPLES, MAX_RETRIEVED_EXAMPLE_TOKENS)
+    return [shown[i] for i in chosen]
+
+
+def example_tokens(example: dict[str, Any]) -> int:
+    """The estimated input tokens one shown example adds, by the call's own estimate."""
+    return estimate_tokens(LlmRequest("", json.dumps(example, ensure_ascii=False), {}, 0, 0))
+
+
+@functools.cache
+def _library() -> tuple[list[dict[str, Any]], list[str], list[int]]:
+    """The library examples as shown to the model, as ranked, and their estimated tokens."""
+    shown = [render_example(e) for e in EXAMPLE_LIBRARY]
+    return shown, [_example_text(e) for e in EXAMPLE_LIBRARY], [example_tokens(e) for e in shown]
+
+
+def _example_text(example: dict[str, Any]) -> str:
+    """What the ranking compares: the example's text, its candidates' labels and its mode."""
+    data = example["input"]
+    labels = " ".join(c["label"] for c in data.get("candidates", []))
+    return f"{data['sentence']} {labels} {_MODE_WORD[data['mode']]}"
 
 
 def _interpret(
