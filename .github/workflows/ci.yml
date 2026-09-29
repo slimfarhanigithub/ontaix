@@ -1,16 +1,24 @@
 name: ci
 
-# Application checks for every pull request and every push to main.
-#   Python packages (api, gateway, connectors): uv sync, ruff, pytest
-#   Studio: pnpm install, vitest, vite build
-#   Screens: Playwright screenshot regression of the Studio against the reference, in 10 shards
-#   E2E: the Studio against the real API on the local stack (postgres:16 service)
+# Application checks, run only for the parts a change touches (GitHub Free minutes).
+#   Python packages (api, gateway, connectors): uv sync, ruff, pytest - when the package or contracts change
+#   Studio: pnpm install, vitest, vite build - when the Studio, tests or contracts change
+#   E2E: the Studio against the real API - on pull requests that touch the API, the Studio or tests/e2e
+#   Screens: screenshot regression against the reference, in 10 shards - only on demand, through
+#     the `screens` pull request label or a manual run with `screens` set
 # Infrastructure has its own workflow (infra.yml).
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      screens:
+        description: Run the screenshot suite
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -20,13 +28,47 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-24.04
+    outputs:
+      packages: ${{ steps.diff.outputs.packages }}
+      studio: ${{ steps.diff.outputs.studio }}
+      e2e: ${{ steps.diff.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - id: diff
+        name: changed areas
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$BASE" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
+            files="everything"
+          else
+            files=$(git diff --name-only "$BASE" HEAD)
+          fi
+          echo "$files"
+          hit() { [ "$files" = "everything" ] || echo "$files" | grep -qE "$1"; }
+          shared='^(contracts/|\.github/workflows/ci\.yml)'
+          packages=""
+          hit "^apps/api/|$shared" && packages="$packages\"apps/api\","
+          hit "^apps/gateway/|$shared" && packages="$packages\"apps/gateway\","
+          hit "^packages/connectors/|$shared" && packages="$packages\"packages/connectors\","
+          echo "packages=[${packages%,}]" >> "$GITHUB_OUTPUT"
+          hit "^apps/studio/|^tests/|^pnpm-lock\.yaml|^package\.json|$shared" && echo studio=true >> "$GITHUB_OUTPUT" || echo studio=false >> "$GITHUB_OUTPUT"
+          hit "^apps/api/|^apps/studio/|^tests/e2e/|^scripts/|$shared" && echo e2e=true >> "$GITHUB_OUTPUT" || echo e2e=false >> "$GITHUB_OUTPUT"
+
   python:
     name: ${{ matrix.package }}
+    needs: changes
+    if: needs.changes.outputs.packages != '[]'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        package: [apps/api, apps/gateway, packages/connectors]
+        package: ${{ fromJSON(needs.changes.outputs.packages) }}
     defaults:
       run:
         working-directory: ${{ matrix.package }}
@@ -63,6 +105,8 @@ jobs:
 
   studio:
     name: apps/studio
+    needs: changes
+    if: needs.changes.outputs.studio == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -81,6 +125,9 @@ jobs:
 
   screens:
     name: apps/studio screenshots (${{ matrix.shard }}/10)
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.screens) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'screens'))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -114,6 +161,8 @@ jobs:
 
   e2e:
     name: e2e (Studio against the API)
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-24.04
     services:
       postgres:
