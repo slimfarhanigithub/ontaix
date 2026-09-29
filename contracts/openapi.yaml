@@ -673,7 +673,7 @@ paths:
     post:
       tags: [Relations]
       summary: Propose a relation between two concepts
-      description: Creates a `relation` proposal. Action `is a` produces an `isa` relation, `equivalent to` produces a `same` relation. Refused with `409 duplicate_relation` when the triple exists and `409 cross_company_disabled` when the ends belong to different companies and the switch is off.
+      description: Creates a `relation` proposal. The action is normalised first - NFKC, whitespace runs collapsed to one space, trimmed, lower-cased - on this endpoint and on every other path that proposes a relation (drafts, batch, teach extraction). Normalised action `is a` produces an `isa` relation, `equivalent to` produces a `same` relation. Refused with `409 duplicate_relation` when the triple exists and `409 cross_company_disabled` when the ends belong to different companies and the switch is off.
       operationId: proposeRelation
       x-ontaix-permission: proposal.create
       requestBody:
@@ -3858,7 +3858,7 @@ components:
         unresolved:
           type: array
           maxItems: 20
-          description: Phrases of the sentence that produced no draft, with the reason. Empty when everything was understood.
+          description: Phrases of the sentence that produced no draft, with the reason. Empty when everything was understood. Each `text` is a substring of the sentence the server holds (or the whole sentence), never text taken from the model. At most 20 entries; phrases beyond the 20th are dropped from the list, and the result stays `partly_understood` or `not_understood`.
           items:
             $ref: '#/components/schemas/UnresolvedPhrase'
         origin:
@@ -3878,11 +3878,13 @@ components:
           description: The domain prefix stripped from the sentence, if any.
         intents:
           type: array
+          maxItems: 60
           items:
             $ref: '#/components/schemas/Intent'
         drafts:
           type: array
-          description: Proposal drafts in submission order, ready for `POST /proposals/batch`; each carries the request's `origin` and `importRef`.
+          maxItems: 60
+          description: Proposal drafts in submission order, ready for `POST /proposals/batch`; each carries the request's `origin` and `importRef`. At most 60, counting grammar and model drafts together. When the result would hold more, the server keeps the intents whose drafts fit, in sentence order (grammar intents first for `rules+llm`), drops the rest with their drafts, and lists their text as one `unresolved` entry with reason `too_many_drafts`.
           items:
             $ref: '#/components/schemas/ProposalDraft'
         statements:
@@ -3944,11 +3946,11 @@ components:
           type: string
           minLength: 1
           maxLength: 400
-          description: The phrase, or the whole sentence when the model step failed or was skipped.
+          description: A substring of the sentence the server holds, or the whole sentence when the model step failed or was skipped. For a phrase the model reported, the server uses the matching substring of the sentence and the whole sentence when there is no exact match.
         reason:
           type: string
-          enum: [not_understood, ambiguous_reference, low_confidence, model_unavailable, model_invalid_output]
-          description: '`not_understood` - neither the grammar nor the model found an intent. `ambiguous_reference` - the model could not tell what a back-reference points to. `low_confidence` - the model reported a confidence below 0.4. `model_unavailable` - the model step was triggered and did not answer (`llmOutcome` `not_configured`, `rate_limited`, `budget_exhausted`, `timeout` or `provider_error`). `model_invalid_output` - the answer failed validation.'
+          enum: [not_understood, ambiguous_reference, low_confidence, model_unavailable, model_invalid_output, too_many_drafts]
+          description: '`not_understood` - neither the grammar nor the model found an intent. `ambiguous_reference` - the model could not tell what a back-reference points to. `low_confidence` - the model reported a confidence below 0.4. `model_unavailable` - the model step was triggered and did not answer (`llmOutcome` `not_configured`, `rate_limited`, `budget_exhausted`, `timeout` or `provider_error`). `model_invalid_output` - the answer failed validation. `too_many_drafts` - the intents beyond the 60-draft cap of `drafts`.'
 
     CurrentUser:
       type: object
