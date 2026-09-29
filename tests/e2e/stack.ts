@@ -21,6 +21,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
       ONTAIX_API_PORT: String(API_PORT),
       ONTAIX_STUDIO_PORT: String(STUDIO_PORT),
       ONTAIX_SEED: 'fixture',
+      ONTAIX_PGDATA: 'ephemeral',
     },
     stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
   });
