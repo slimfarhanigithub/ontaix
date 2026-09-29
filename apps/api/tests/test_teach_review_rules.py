@@ -311,24 +311,26 @@ async def test_ranges_and_caps(client, tenant: TenantFixture):
         assert r["llmOutcome"] == "invalid_output", name
     t = "we sell services. services have data. um data matters"
     seg = [{"index": 0, "start": 0, "end": 17}, {"index": 1, "start": 18, "end": 38}]
+    # Segments that overlap, are out of order, or would be widened into each other by a
+    # source are repaired rather than refused: a text this short is one segment.
     speech_cases = {
         "overlap": [{"index": 0, "start": 0, "end": 20}, {"index": 1, "start": 18, "end": 38}],
         "bad index": [{"index": 0, "start": 0, "end": 17}, {"index": 2, "start": 18, "end": 38}],
-        "too long": None,
     }
     for name, segs in speech_cases.items():
-        if segs is None:
-            continue
         install(
             lambda ctx, segs=segs: answer(
                 intent(C0, new("Services"), 3, 16, "sells", segment=0), segments=segs
             )
         )
         r = await post(client, tenant, company_id, t, "speech")
-        assert r["llmOutcome"] == "invalid_output", name
+        assert r["llmOutcome"] == "used", name
+        assert [d["label"] for d in r["drafts"]] == ["Services"], name
+        assert r["segments"] == [{"index": 0, "span": {"start": 0, "end": len(t)}}], name
     install(lambda ctx: answer(intent(C0, new("Data"), 3, 30, "has", segment=0), segments=seg))
     r = await post(client, tenant, company_id, t, "speech")
-    assert r["llmOutcome"] == "invalid_output"
+    assert r["llmOutcome"] == "used"
+    assert len(r["segments"]) == 1
     install(lambda ctx: answer(intent(C0, new("Services"), 3, 16, "sells"), segments=seg))
     r = await post(client, tenant, company_id, t, "speech")
     assert r["llmOutcome"] == "invalid_output"
