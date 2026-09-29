@@ -238,8 +238,8 @@ export function leftOutText(plan: DuplicatePlan): string {
     : known;
 }
 
-/** How an imported document is read: sentence by sentence, or as a whole by the model. */
-export type ImportMode = 'sentences' | 'document';
+/** How an imported document is read: sentence by sentence, as a whole by the model, or as an ontology. */
+export type ImportMode = 'sentences' | 'document' | 'ontology';
 
 /**
  * Uploads a document to the API, which extracts and stores its sentences. Sentence by sentence,
@@ -248,6 +248,8 @@ export type ImportMode = 'sentences' | 'document';
  */
 export async function importDocument(file: File | null | undefined, mode: ImportMode = 'sentences'): Promise<void> {
   if (!file || store.ui.importing) return;
+  // TODO: route `ontology` to ontology import (POST /ontology-imports) once that path lands.
+  if (mode === 'ontology') return;
   store.ui.importing = true;
   store.bump();
   try {

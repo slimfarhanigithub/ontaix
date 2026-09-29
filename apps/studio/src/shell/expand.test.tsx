@@ -8,7 +8,7 @@ import { store } from '../store/store';
 import { Dialog } from './Dialog';
 import { Drawer } from './Drawer';
 import { canExpandFromDrawer, noSuggestionsText, openExpandDialog, toggleSelection } from './ExpandDialog';
-import { IMPORT_MODES, ImportModeRows, importMode } from './ImportMode';
+import { IMPORT_MODES, ImportModePill, importMode } from './ImportMode';
 import { Panel, branchSize } from './Panel';
 
 const flush = () => act(() => new Promise((r) => setTimeout(r, 0)));
@@ -192,23 +192,18 @@ describe('Approve branch', () => {
 });
 
 describe('Import mode', () => {
-  it('offers sentence by sentence, the default, and whole document as radio rows', () => {
-    const { container } = render(<ImportModeRows />);
-    const rows = [...container.querySelectorAll('#imMode .chk')];
-    expect(rows.map((r) => [r.querySelector('b')?.textContent, r.querySelector('small')?.textContent])).toEqual([
-      ['Sentence by sentence', 'Each sentence is taught on its own'],
-      ['Whole document', 'The model maps the whole document into one tree of proposals'],
-    ]);
-    expect(IMPORT_MODES.map((m) => m.mode)).toEqual(['sentences', 'document']);
-    const inputs = [...container.querySelectorAll<HTMLInputElement>('#imMode input')];
-    expect(inputs.map((i) => [i.type, i.checked])).toEqual([
-      ['radio', true],
-      ['radio', false],
-    ]);
-    expect(importMode()).toBe('sentences');
-    fireEvent.click(inputs[1]);
-    expect(importMode()).toBe('document');
-    fireEvent.click(inputs[0]);
-    expect(importMode()).toBe('sentences');
+  it('cycles Sentences, Whole document and Ontology on one pill, Sentences by default', () => {
+    const { container } = render(<ImportModePill hidden={false} />);
+    const pill = container.querySelector<HTMLButtonElement>('#imMode');
+    if (!pill) throw new Error('no #imMode pill');
+    const seen = () => [pill.textContent, pill.getAttribute('aria-pressed'), importMode()];
+    expect(IMPORT_MODES.map((m) => m.label)).toEqual(['Sentences', 'Whole document', 'Ontology']);
+    expect(seen()).toEqual(['Sentences', 'false', 'sentences']);
+    fireEvent.click(pill);
+    expect(seen()).toEqual(['Whole document', 'true', 'document']);
+    fireEvent.click(pill);
+    expect(seen()).toEqual(['Ontology', 'true', 'ontology']);
+    fireEvent.click(pill);
+    expect(seen()).toEqual(['Sentences', 'false', 'sentences']);
   });
 });

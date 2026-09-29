@@ -2,13 +2,13 @@
  * The tool row above the teach bar. Markup from reference/ontaix-studio-reference.html lines
  * 194-201 without the Finalise all button; behaviours from lines 548-565 (arrange, coverage,
  * skip), 616 (add a company) and 904-906 (import, drag and drop). The file is read with the
- * mode checked in `#imMode`.
+ * mode `#imMode` shows.
  */
 import { useEffect, useRef } from 'react';
 
 import { importDocument } from '../teach/teach';
 import { openAddCompany } from './AddCompany';
-import { ImportModeRows, importMode } from './ImportMode';
+import { ImportModePill, importMode } from './ImportMode';
 import { useStore } from './dom';
 
 export function Tools() {
@@ -70,7 +70,7 @@ export function Tools() {
           if (f) void importDocument(f, importMode());
         }}
       />
-      <ImportModeRows />
+      <ImportModePill hidden={!!settings && !settings.importDocs} />
       <button type="button" id="arrange" title={st.arrangeTitle()} onClick={() => st.arrange()}>
         <svg viewBox="0 0 16 16">
           <circle cx="8" cy="3" r="1.6" />
