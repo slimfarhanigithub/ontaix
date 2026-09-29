@@ -15,6 +15,7 @@ import { title } from '../nl/parser';
 import { DialogFrame } from '../shell/Dialog';
 import { store } from '../store/store';
 import { attempt, directory, failed, fetchAll, invalidateDirectory } from './adminData';
+import { conceptDeletion, deletionText } from './conceptDeletion';
 import { isDisableConfirmed } from './confirmText';
 import { List, type Column } from './List';
 import { en } from './listModel';
@@ -258,10 +259,15 @@ export function renameDialog(n: Node): void {
   });
 }
 
-export function deleteNodeDialog(n: Node, rels: number): void {
+/** Confirms deleting a concept, naming the descendants and relations that go with it; used by the drawer and Entities. */
+export function deleteNodeDialog(n: Node): void {
+  const { descendants, relations } = conceptDeletion(store.s, n);
   confirmDialog(
     `Delete ${n.label}?`,
-    `This proposes a change for approval. Its ${plural(rels, 'relation')} and any specialisation of it go with it.`,
+    deletionText(
+      descendants.map((d) => d.label),
+      relations,
+    ),
     'Propose deletion',
     () => {
       if (n.sid)
