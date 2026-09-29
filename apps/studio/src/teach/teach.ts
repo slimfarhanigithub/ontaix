@@ -1,6 +1,6 @@
 /**
- * The three ways content enters the model: text typed in the teach bar, a speech transcript from
- * the teach bar microphone, and a document uploaded to the API. Each sentence goes through
+ * The three ways content enters the model: text typed in the teach bar, sentences spoken into the
+ * teach bar microphone, and a document uploaded to the API. Each sentence goes through
  * `POST /teach/parse` and the drafts it returns are proposed; nothing is written without approval.
  * Captions and pacing follow reference/ontaix-studio-reference.html lines 864-903 (`teach`,
  * `importDocument`) on its import path, where no sentence is intercepted.
@@ -69,14 +69,73 @@ async function teachSentence(importRef: ImportRef): Promise<void> {
   await parseAndPropose({ companyId: co.sid, importRef, sessionId: teachSessionId(co.sid) });
 }
 
+/** The longest spoken sentence one request carries, in characters, as the API allows for `speech`. */
+const SPEECH_MAX_CHARS = 4000;
+
+/** One recording of the teach bar microphone. */
+export interface SpeechStream {
+  /** Queues one finished spoken sentence for the parser. */
+  sentence(text: string): void;
+  /** Resolves once every queued sentence is parsed and proposed. */
+  settled(): Promise<void>;
+}
+
+/**
+ * Opens a recording for the active company. Each finished sentence joins a queue and is parsed as
+ * `speech` in the company's teach session, one request at a time: the next sentence goes out once
+ * the previous one is answered (or refused) and its drafts are proposed, so its back-references
+ * resolve through the stored session turn and the proposals it builds on. Queueing never blocks
+ * listening.
+ */
+export function speechStream(): SpeechStream {
+  const co = store.s.activeCompany;
+  const companyId = co?.sid;
+  const sessionId = companyId ? teachSessionId(companyId) : '';
+  let queue: Promise<void> = Promise.resolve();
+  return {
+    sentence(text) {
+      if (!companyId) return;
+      for (const piece of speechPieces(text)) {
+        queue = queue
+          .then(() => parseAndPropose({ companyId, text: piece, origin: 'speech', sessionId }))
+          .catch((err) => store.refused(err));
+      }
+    },
+    settled: () => queue,
+  };
+}
+
+/** A spoken sentence trimmed and, past the API's limit, cut at its last space before the limit. */
+function speechPieces(text: string): string[] {
+  const pieces: string[] = [];
+  let rest = text.trim();
+  while (rest.length > SPEECH_MAX_CHARS) {
+    const space = rest.lastIndexOf(' ', SPEECH_MAX_CHARS);
+    const cut = space > 0 ? space : SPEECH_MAX_CHARS;
+    pieces.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) pieces.push(rest);
+  return pieces;
+}
+
 async function parseAndPropose(request: TeachRequest): Promise<void> {
-  let result: TeachResult;
+  const result = await parse(request);
+  if (result) await propose(result);
+}
+
+/** Parses one sentence; a refusal is shown and yields null. */
+async function parse(request: TeachRequest): Promise<TeachResult | null> {
   try {
-    result = await api.teachParse(request);
+    return await api.teachParse(request);
   } catch (err) {
     store.refused(err);
-    return;
+    return null;
   }
+}
+
+/** Proposes a parse's drafts and captions its outcome. */
+async function propose(result: TeachResult): Promise<void> {
   // All drafts of one parse leave as one all-or-nothing batch.
   if (result.drafts.length) await submitBatch(result.drafts.map(withSeed));
   if (result.outcome === 'understood') {

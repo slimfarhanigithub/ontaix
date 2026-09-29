@@ -2,7 +2,7 @@ import { api } from '../api/client';
 import { ApiError, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
 import { addCompany, addLink, addNode } from '../canvas/state';
 import { store } from '../store/store';
-import { importDocument, skippedText, teach, teachSessionId, withoutKnown } from './teach';
+import { importDocument, skippedText, speechStream, teach, teachSessionId, withoutKnown } from './teach';
 
 const result: TeachResult = {
   outcome: 'not_understood',
@@ -49,6 +49,111 @@ describe('teach sessions', () => {
     }
 
     expect(sent.map((b) => b.sessionId)).toEqual([teachSessionId('company-a'), teachSessionId('company-a')]);
+  });
+});
+
+describe('speaking to the teach bar', () => {
+  let before: typeof store.s.activeCompany;
+
+  beforeEach(() => {
+    before = store.s.activeCompany;
+    store.s.activeCompany = { sid: 'company-a' } as typeof before;
+  });
+  afterEach(() => {
+    store.s.activeCompany = before;
+    vi.restoreAllMocks();
+  });
+
+  /** A parse that answers when the test says so. */
+  function heldParses() {
+    const sent: TeachRequest[] = [];
+    const answers: ((r: TeachResult) => void)[] = [];
+    const refusals: ((err: unknown) => void)[] = [];
+    vi.spyOn(api, 'teachParse').mockImplementation(
+      (body) =>
+        new Promise<TeachResult>((resolve, reject) => {
+          sent.push(body);
+          answers.push(resolve);
+          refusals.push(reject);
+        }),
+    );
+    return { sent, answers, refusals };
+  }
+
+  /** Lets pending promise callbacks run. */
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  const draft = (label: string) => ({ type: 'concept', companyId: 'company-a', parentId: 'root', label }) as ProposalDraft;
+
+  it('sends one sentence at a time, in spoken order, as speech in the same session', async () => {
+    const { sent, answers } = heldParses();
+    vi.spyOn(api, 'createProposalBatch').mockResolvedValue([]);
+    const stream = speechStream();
+
+    stream.sentence('Insight sells services. ');
+    stream.sentence('They are focused on data.');
+    stream.sentence('It has a platform.');
+    await tick();
+    expect(sent.map((b) => b.text)).toEqual(['Insight sells services.']);
+    answers[0](result);
+    await tick();
+    expect(sent.map((b) => b.text)).toEqual(['Insight sells services.', 'They are focused on data.']);
+    answers[1](result);
+    await tick();
+    answers[2](result);
+    await stream.settled();
+
+    expect(sent.map((b) => b.text)).toEqual(['Insight sells services.', 'They are focused on data.', 'It has a platform.']);
+    expect(sent.every((b) => b.origin === 'speech')).toBe(true);
+    expect(new Set(sent.map((b) => b.sessionId))).toEqual(new Set([teachSessionId('company-a')]));
+  });
+
+  it('never has two sentences in flight and proposes each before the next is sent', async () => {
+    let inFlight = 0;
+    let most = 0;
+    const order: string[] = [];
+    vi.spyOn(api, 'teachParse').mockImplementation(async (body) => {
+      most = Math.max(most, ++inFlight);
+      order.push(`parse ${body.text}`);
+      await tick();
+      inFlight--;
+      return { ...result, outcome: 'understood', drafts: [draft(body.text as string)] };
+    });
+    vi.spyOn(api, 'createProposalBatch').mockImplementation(async (drafts) => {
+      order.push(`propose ${(drafts[0] as { label: string }).label}`);
+      return [];
+    });
+    const stream = speechStream();
+
+    stream.sentence('Services');
+    stream.sentence('Data');
+    await stream.settled();
+
+    expect(most).toBe(1);
+    expect(order).toEqual(['parse Services', 'propose Services', 'parse Data', 'propose Data']);
+  });
+
+  it('shows a refused sentence in its place and goes on with the next', async () => {
+    const { answers, refusals } = heldParses();
+    const order: string[] = [];
+    vi.spyOn(store, 'refused').mockImplementation(() => void order.push('refused'));
+    vi.spyOn(store, 'caption').mockImplementation((kicker) => void order.push(kicker));
+    const stream = speechStream();
+
+    stream.sentence('Insight sells services.');
+    stream.sentence('They are focused on data.');
+    await tick();
+    refusals[0](new ApiError(429, { code: 'rate_limited', title: 'Too many requests', status: 429 } as ApiError['problem'], 30));
+    await tick();
+    answers[1]({ ...result, outcome: 'not_understood' });
+    await stream.settled();
+
+    expect(order).toEqual(['refused', 'Not understood']);
+  });
+
+  it('sends nothing for a sentence with no words', () => {
+    const { sent } = heldParses();
+    speechStream().sentence('   ');
+    expect(sent).toEqual([]);
   });
 });
 

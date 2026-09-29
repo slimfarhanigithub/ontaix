@@ -21,9 +21,12 @@ class FakeRecognition {
   stop(): void {
     this.onend?.();
   }
-  hear(...finals: string[]): void {
-    const results = finals.map((t) => Object.assign([{ transcript: t }], { isFinal: true }));
-    this.onresult?.({ results });
+  /** Delivers the recogniser's whole result list: each entry is final, or still being recognised with `~` in front. */
+  hear(...results: string[]): void {
+    const list = results.map((t) =>
+      Object.assign([{ transcript: t.replace(/^~/, '') }], { isFinal: !t.startsWith('~') }),
+    );
+    this.onresult?.({ results: list });
   }
 }
 
@@ -38,26 +41,85 @@ describe('the microphone', () => {
     delete (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition;
   });
 
-  it('sends the whole transcript once, as speech, when the speaker stops', async () => {
+  async function listen() {
     const teachModule = await import('../teach/teach');
+    const sentence = vi.fn();
+    const stream = vi.spyOn(teachModule, 'speechStream').mockReturnValue({ sentence, settled: () => Promise.resolve() });
     const teach = vi.spyOn(teachModule, 'teach').mockResolvedValue();
     const { TeachBar } = await import('./TeachBar');
     const { container } = render(<TeachBar />);
-
     fireEvent.click(container.querySelector('#mic') as Element);
     const rec = FakeRecognition.last as FakeRecognition;
+    return { container, rec, sentence, stream, teach };
+  }
+
+  it('sends each finished sentence at once, as speech, while the speaker goes on', async () => {
+    const { rec, sentence, stream, teach } = await listen();
     expect(rec.continuous).toBe(true);
+
+    act(() => rec.hear('~so, uh, Insight sells'));
+    expect(sentence).not.toHaveBeenCalled();
     act(() => rec.hear('so, uh, Insight sells services. '));
+    expect(sentence.mock.calls).toEqual([['so, uh, Insight sells services. ']]);
+    act(() => rec.hear('so, uh, Insight sells services. ', '~These services are'));
     act(() => rec.hear('so, uh, Insight sells services. ', 'These services are focused around three areas, app, data and AI.'));
+
+    expect(sentence.mock.calls).toEqual([
+      ['so, uh, Insight sells services. '],
+      ['These services are focused around three areas, app, data and AI.'],
+    ]);
+    expect(stream).toHaveBeenCalledTimes(1);
     expect(teach).not.toHaveBeenCalled();
+  });
+
+  it('shows words still being recognised in the input without sending them', async () => {
+    const { container, rec, sentence } = await listen();
+
+    act(() => rec.hear('Insight sells services. ', '~These services'));
+
+    expect(sentence.mock.calls).toEqual([['Insight sells services. ']]);
+    expect((container.querySelector('#say') as HTMLInputElement).value).toBe('Insight sells services. These services');
+  });
+
+  it('sends the words never finished as the last sentence when the speaker stops', async () => {
+    const { container, rec, sentence } = await listen();
+
+    act(() => rec.hear('Insight sells services. ', '~These services are focused on data'));
     act(() => {
       vi.advanceTimersByTime(1500);
     });
 
-    expect(teach).toHaveBeenCalledTimes(1);
-    expect(teach).toHaveBeenCalledWith(
-      'so, uh, Insight sells services. These services are focused around three areas, app, data and AI.',
-      'speech',
-    );
+    expect(sentence.mock.calls).toEqual([['Insight sells services. '], ['These services are focused on data']]);
+    expect((container.querySelector('#say') as HTMLInputElement).value).toBe('');
+  });
+
+  it('drains the queue on stop, sending the words never finished last, one request at a time', async () => {
+    const { api } = await import('../api/client');
+    const { store } = await import('../store/store');
+    store.s.activeCompany = { sid: 'company-a' } as typeof store.s.activeCompany;
+    const sent: string[] = [];
+    let inFlight = 0;
+    let most = 0;
+    vi.spyOn(api, 'teachParse').mockImplementation(async (body) => {
+      most = Math.max(most, ++inFlight);
+      sent.push(body.text as string);
+      await new Promise((r) => setTimeout(r, 1000));
+      inFlight--;
+      return { outcome: 'not_understood', drafts: [], caption: '' } as unknown as Awaited<ReturnType<typeof api.teachParse>>;
+    });
+    vi.spyOn(store, 'caption').mockImplementation(() => undefined);
+    const { TeachBar } = await import('./TeachBar');
+    const { container } = render(<TeachBar />);
+    fireEvent.click(container.querySelector('#mic') as Element);
+    const rec = FakeRecognition.last as FakeRecognition;
+
+    act(() => rec.hear('Insight sells services. ', 'They focus on data. ', '~It has a platform'));
+    act(() => rec.stop());
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(sent).toEqual(['Insight sells services.', 'They focus on data.', 'It has a platform']);
+    expect(most).toBe(1);
   });
 });
