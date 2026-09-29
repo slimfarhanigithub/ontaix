@@ -238,6 +238,9 @@ export function leftOutText(plan: DuplicatePlan): string {
     : known;
 }
 
+/** The refusal toast's text for a file picked in Ontology mode before ontology import exists. */
+export const ONTOLOGY_NOT_AVAILABLE = 'Ontology import is not available yet';
+
 /** How an imported document is read: sentence by sentence, as a whole by the model, or as an ontology. */
 export type ImportMode = 'sentences' | 'document' | 'ontology';
 
@@ -248,8 +251,12 @@ export type ImportMode = 'sentences' | 'document' | 'ontology';
  */
 export async function importDocument(file: File | null | undefined, mode: ImportMode = 'sentences'): Promise<void> {
   if (!file || store.ui.importing) return;
-  // TODO: route `ontology` to ontology import (POST /ontology-imports) once that path lands.
-  if (mode === 'ontology') return;
+  // TODO: route `ontology` to ontology import (POST /ontology-imports) once that path lands;
+  // until then the file is refused with a toast and nothing is uploaded.
+  if (mode === 'ontology') {
+    store.toast2('Refused', ONTOLOGY_NOT_AVAILABLE);
+    return;
+  }
   store.ui.importing = true;
   store.bump();
   try {
