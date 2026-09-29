@@ -80,11 +80,12 @@ CREATE TABLE tenant_settings (
   refresh              refresh_interval NOT NULL DEFAULT '15 min',
   agent_access         boolean NOT NULL DEFAULT true,
   cost_cap             boolean NOT NULL DEFAULT true,
+  llm_monthly_token_cap bigint NOT NULL DEFAULT 2000000 CHECK (llm_monthly_token_cap BETWEEN 0 AND 1000000000),
   egress_allowlist     text[] NOT NULL DEFAULT '{}',
   updated_at           timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT tenant_settings_colors_is_object CHECK (jsonb_typeof(colors) = 'object')
 );
-COMMENT ON TABLE tenant_settings IS 'The 22 tenant settings plus appearance and the connector egress allowlist; the two locked settings are enforced by CHECK constraints.';
+COMMENT ON TABLE tenant_settings IS 'The 22 tenant settings plus appearance, the connector egress allowlist and the monthly token cap of Ontaix''s own language model calls (0 turns the teach extraction model step off); the two locked settings are enforced by CHECK constraints.';
 
 CREATE TABLE tenant_view_state (
   tenant_id   uuid PRIMARY KEY REFERENCES tenant(id) ON DELETE CASCADE,
@@ -398,6 +399,47 @@ CREATE TABLE cost_allocation (
 );
 COMMENT ON TABLE cost_allocation IS 'The euro amount allocated to agent reads for a tenant and month, shown against the measured cost.';
 
+CREATE TABLE llm_call (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id      uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  occurred_at    timestamptz NOT NULL DEFAULT now(),
+  actor_kind     actor_kind NOT NULL CHECK (actor_kind IN ('user', 'agent')),
+  actor_id       uuid NOT NULL,
+  company_id     uuid,
+  purpose        text NOT NULL CHECK (purpose IN ('teach_extraction')),
+  provider       text NOT NULL CHECK (provider ~ '^[a-z0-9][a-z0-9_.-]{0,59}$'),
+  model          text NOT NULL CHECK (char_length(model) BETWEEN 1 AND 120 AND model ~ '^[A-Za-z0-9][A-Za-z0-9_.:/@-]*$'),
+  input_tokens   integer NOT NULL CHECK (input_tokens >= 0),
+  output_tokens  integer NOT NULL CHECK (output_tokens >= 0),
+  cost_eur       numeric(12,6) NOT NULL CHECK (cost_eur >= 0),
+  latency_ms     integer NOT NULL CHECK (latency_ms BETWEEN 0 AND 60000),
+  outcome        text NOT NULL CHECK (outcome IN ('used', 'invalid_output', 'timeout', 'provider_error')),
+  UNIQUE (tenant_id, id)
+);
+CREATE INDEX llm_call_by_month ON llm_call (tenant_id, occurred_at);
+CREATE INDEX llm_call_by_occurred ON llm_call (occurred_at);
+COMMENT ON TABLE llm_call IS 'One cost record per call Ontaix makes to a language model provider, including failed and timed-out calls: who caused it (actor_id and company_id are plain uuids so the record survives the actor or company), why (purpose), which provider and model, token counts, the estimated euro cost from the deployment price table, latency and outcome. It never holds the sentence, the prompt, the answer or any credential. Cost management sums it per month; a purge deletes rows older than 400 days across all tenants through llm_call_by_occurred. It is inserted in its own short transaction after the call, never inside the request transaction.';
+
+CREATE TABLE llm_month_usage (
+  tenant_id  uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  month      date NOT NULL CHECK (month = date_trunc('month', month)::date),
+  tokens     bigint NOT NULL DEFAULT 0 CHECK (tokens >= 0),
+  PRIMARY KEY (tenant_id, month)
+);
+COMMENT ON TABLE llm_month_usage IS 'Tokens counted against tenant_settings.llm_monthly_token_cap per calendar month (UTC). Before a call the API reserves its upper bound (estimated input plus the maximum output tokens) with INSERT ... SELECT $reserve WHERE $reserve <= $cap ON CONFLICT (tenant_id, month) DO UPDATE SET tokens = llm_month_usage.tokens + EXCLUDED.tokens WHERE llm_month_usage.tokens + EXCLUDED.tokens <= $cap RETURNING tokens; zero rows returned means the cap is reached and the model step is skipped. The reservation commits in its own short transaction before the provider is called, never inside the request transaction, so no row lock is held during the call. After the call, in another short transaction, it settles with UPDATE ... SET tokens = greatest(tokens + $actual - $reserved, 0) WHERE tenant_id = $tenant AND month = $reserved_month, always the month the reservation was made in, even when the call ends in the next month. A call that times out or fails settles its actual count (0 when the provider reports none), which releases the rest of the reservation. A reservation whose process dies before settling stays counted until the month ends. Shared by every API replica.';
+
+CREATE TABLE rate_budget_window (
+  tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  actor_kind    actor_kind NOT NULL CHECK (actor_kind IN ('user', 'agent')),
+  actor_id      uuid NOT NULL,
+  budget        text NOT NULL CHECK (budget IN ('import', 'parse', 'proposal', 'llm')),
+  window_start  timestamptz NOT NULL CHECK (extract(epoch FROM window_start) = floor(extract(epoch FROM window_start) / 3600) * 3600),
+  spent         integer NOT NULL CHECK (spent >= 0),
+  PRIMARY KEY (tenant_id, actor_kind, actor_id, budget, window_start)
+);
+CREATE INDEX rate_budget_window_by_start ON rate_budget_window (window_start);
+COMMENT ON TABLE rate_budget_window IS 'Units spent per user or agent, per budget, per clock hour (window_start is a whole UTC hour), shared by every API replica. A charge of $n against $limit is one statement: INSERT INTO rate_budget_window (tenant_id, actor_kind, actor_id, budget, window_start, spent) SELECT $tenant, $kind, $actor, $budget, $window, $n WHERE $n <= $limit ON CONFLICT (tenant_id, actor_kind, actor_id, budget, window_start) DO UPDATE SET spent = rate_budget_window.spent + EXCLUDED.spent WHERE rate_budget_window.spent + EXCLUDED.spent <= $limit RETURNING spent; zero rows returned means the budget is exhausted and the call is refused (429 rate_limited, or llmOutcome rate_limited for the llm budget). actor_id is a plain uuid so a charge never waits on a foreign key lock. A purge every 15 minutes deletes windows that started more than 2 hours ago.';
+
 -- ---------------------------------------------------------------------------
 -- Proposals and approvals
 -- ---------------------------------------------------------------------------
@@ -425,7 +467,7 @@ CREATE TABLE document_import (
   CONSTRAINT document_import_file_name CHECK (
     char_length(file_name) BETWEEN 1 AND 255
     AND octet_length(file_name) <= 1020
-    AND file_name !~ '[/\\:\x01-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u061c\u2066-\u2069\ufeff]'
+    AND file_name !~ '[/\\:\x01-\x1f\x7f-\x9f\u200b-\u200f\u2028\u2029\u202a-\u202e\u061c\u2066-\u2069\ufeff]'
   ),
   CONSTRAINT document_import_media_type CHECK (media_type IN (
     'text/plain', 'text/markdown', 'text/csv', 'application/json',
@@ -451,6 +493,34 @@ CREATE TABLE document_import_sentence (
   CONSTRAINT document_import_sentence_position_pair CHECK ((position_unit IS NULL) = (position_index IS NULL))
 );
 COMMENT ON TABLE document_import_sentence IS 'Extracted sentences of an import in document order. parse_count caps teach parses per sentence at 3 and drafted_at marks the one proposal call allowed to cite the sentence; both are claimed with a conditional UPDATE ... RETURNING inside the calling transaction, and zero rows returned means the claim failed.';
+
+CREATE TABLE teach_session_turn (
+  tenant_id    uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  actor_kind   actor_kind NOT NULL CHECK (actor_kind IN ('user', 'agent')),
+  actor_id     uuid NOT NULL,
+  company_id   uuid NOT NULL,
+  session_id   uuid NOT NULL,
+  turn_index   integer NOT NULL CHECK (turn_index >= 0),
+  sentence     text NOT NULL CHECK (char_length(sentence) BETWEEN 1 AND 400),
+  extractor    text NOT NULL CHECK (extractor IN ('rules', 'llm', 'rules+llm')),
+  concept_ids  uuid[] NOT NULL DEFAULT '{}',
+  new_labels   text[] NOT NULL DEFAULT '{}',
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  expires_at   timestamptz NOT NULL DEFAULT now() + interval '2 hours',
+  PRIMARY KEY (tenant_id, actor_kind, actor_id, company_id, session_id, turn_index),
+  FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT teach_session_turn_concept_ids CHECK (
+    cardinality(concept_ids) <= 50 AND array_position(concept_ids, NULL) IS NULL
+  ),
+  CONSTRAINT teach_session_turn_new_labels CHECK (
+    cardinality(new_labels) <= 50
+    AND array_position(new_labels, NULL) IS NULL
+    AND char_length(array_to_string(new_labels, '')) <= 6000
+  ),
+  CONSTRAINT teach_session_turn_two_hours CHECK (expires_at = created_at + interval '2 hours')
+);
+CREATE INDEX teach_session_turn_by_expiry ON teach_session_turn (expires_at);
+COMMENT ON TABLE teach_session_turn IS 'The recent sentences of one teach bar session, so the teach extraction model step can resolve back-references. Keyed by tenant, caller (actor_kind, actor_id), company and the client-generated session_id; only that caller reads it. concept_ids are the existing concepts the sentence referenced (re-checked at read time: a stored id is used only if the concept still exists and would be a valid candidate now - taught company, or another company only while crossCompany is on and the caller may read it), new_labels the labels it introduced (resolved to ids at the next sentence when a proposal has created them). Turns are stored in one short transaction after the parse result is built: SELECT pg_advisory_xact_lock(hashtextextended(tenant_id || '':'' || actor_kind || '':'' || actor_id || '':'' || company_id || '':'' || session_id, 0)); INSERT ... SELECT coalesce(max(turn_index) + 1, 0) FROM teach_session_turn WHERE <session key>; DELETE the same session''s turns with turn_index <= n - 8. The advisory lock serialises concurrent sentences of one session, so turn numbers never collide and at most 8 turns are kept. If storing the turn fails anyway, the turn is not kept and the parse still answers 200; it is never an error. Reads ignore rows past expires_at (2 hours after each sentence); a purge every 15 minutes deletes them.';
 
 CREATE TABLE proposal (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -506,7 +576,7 @@ CREATE TABLE proposal (
       AND jsonb_typeof(origin_detail -> 'fileName') = 'string'
       AND char_length(origin_detail ->> 'fileName') BETWEEN 1 AND 255
       AND octet_length(origin_detail ->> 'fileName') <= 1020
-      AND (origin_detail ->> 'fileName') !~ '[/\\:\x01-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u061c\u2066-\u2069\ufeff]'
+      AND (origin_detail ->> 'fileName') !~ '[/\\:\x01-\x1f\x7f-\x9f\u200b-\u200f\u2028\u2029\u202a-\u202e\u061c\u2066-\u2069\ufeff]'
       AND jsonb_typeof(origin_detail -> 'mediaType') = 'string'
       AND (origin_detail ->> 'mediaType') IN (
         'text/plain', 'text/markdown', 'text/csv', 'application/json',

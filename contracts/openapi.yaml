@@ -21,7 +21,9 @@ info:
 
     Contention: every operation that creates or decides a proposal serialises on the tenant's decision lock. When that lock, or any row lock the same transaction waits for afterwards, is not granted within the lock timeout, or the transaction ends in a deadlock or serialisation failure, the operation writes nothing and answers `503` with code `busy` and a `Retry-After` header; the client retries the same request. `unavailable` is reserved for a capability or dependency that is down, which clients do not retry automatically.
 
-    Rate limits: operations that parse text, import documents, create proposals or open outbound connections return `429` with code `rate_limited` when a per-user or per-agent budget is exceeded; the `Retry-After` header says when to retry.
+    Rate limits: operations that parse text, import documents, create proposals or open outbound connections return `429` with code `rate_limited` when a per-user or per-agent budget is exceeded; the `Retry-After` header says when to retry. Budgets are counted in the database (`rate_budget_window`), so every API replica shares them.
+
+    Language model: Ontaix calls a language model in one place only, the fallback step of `POST /teach/parse` (ADR 0008). The model produces drafts, never writes, and its absence, failure or budget exhaustion never turns a request into an error.
 
     CORS: the API answers an explicit origin allow-list from configuration, never a wildcard. Authentication is bearer tokens only, no cookies, so there is no CSRF surface.
   license:
@@ -55,7 +57,7 @@ tags:
   - name: Proposals
     description: The approval queue - create, list, approve, second-approve, reject with cascade, approve-all, reject-all.
   - name: Teach
-    description: The three ways content enters the model - text typed in the teach bar, speech from the teach bar microphone (transcribed on the client and sent as text), and documents (text extracted server-side). All three end in the same parser and produce proposal drafts; nothing is written without approval.
+    description: The three ways content enters the model - text typed in the teach bar, speech from the teach bar microphone (transcribed on the client and sent as text), and documents (text extracted server-side). All three end in the same parser, with a language model fallback for sentences the grammar cannot handle, and produce proposal drafts; nothing is written without approval.
   - name: Identity
     description: Current user, native users directory, groups, memberships, roles and scopes.
   - name: Agents
@@ -671,7 +673,7 @@ paths:
     post:
       tags: [Relations]
       summary: Propose a relation between two concepts
-      description: Creates a `relation` proposal. Action `is a` produces an `isa` relation, `equivalent to` produces a `same` relation. Refused with `409 duplicate_relation` when the triple exists and `409 cross_company_disabled` when the ends belong to different companies and the switch is off.
+      description: Creates a `relation` proposal. The action is normalised first - NFKC, whitespace runs collapsed to one space, trimmed, lower-cased - on this endpoint and on every other path that proposes a relation (drafts, batch, teach extraction). Normalised action `is a` produces an `isa` relation, `equivalent to` produces a `same` relation. Refused with `409 duplicate_relation` when the triple exists and `409 cross_company_disabled` when the ends belong to different companies and the switch is off.
       operationId: proposeRelation
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1440,6 +1442,9 @@ paths:
       tags: [Teach]
       summary: Parse a sentence into intents and proposal drafts
       description: Writes nothing to the model. Runs the rule-based grammar (domain prefix, specialisation patterns, verb lexicon, list splitting, passives) against the company's current labels and returns the intents, the drafts the client may submit to `POST /proposals/batch`, and the caption outcome (`understood`, `partly_understood`, `not_understood`). No ontology row is written. The sentence comes from one of the three entry paths - `text` typed in the teach bar, `text` holding a speech transcript (the Studio transcribes the microphone and sends the final transcript, so speech has no endpoint of its own), or `importRef` citing a stored sentence of a document import, whose text the server reads from the import. Every path is parsed the same way. A call with `importRef` increments that sentence's parse counter, and a sentence may be parsed at most 3 times (`409 import_sentence_used` after that). A call with `importRef` spends no parse unit, because the import charged one per sentence; a call with `text` spends one parse unit. Refusals - `409 channel_disabled` when `text` is sent while the `liveTeaching` setting is off, when `origin` is `speech` while the `voice` setting is off, or when `importRef` is sent while the `importDocs` setting is off. `origin` is declared by the client, so the `voice` check stops only honest clients; the Studio also hides the microphone when `voice` is off. `404` for an import of another tenant or actor, `410 import_expired` past its expiry.
+
+
+        Language model fallback (ADR 0008). The rule-based grammar always runs first. A language model extraction step runs afterwards only when at least one trigger holds - the rules understand nothing (`not_understood`) or only part of the sentence (`partly_understood`); the sentence holds a back-reference word (`these`, `those`, `it`, `they`, `them`, `this`) as a whole word; the sentence holds a list preamble (a count word `two` to `twelve` or a number, then one to three words, then `,` or `:`, as in `three areas, app, data and AI`); or the sentence holds a verb form that is not a variant of the reference lexicon (checked against a verb word list shipped with the API, which never changes the lexicon). The model receives the sentence, the session's recent turns, the company name, up to 200 candidate concepts of the company and the domain templates, and returns intents only; the server validates them against `contracts/teach-extraction.schema.json` and turns them into drafts with the same rules as the grammar. Nothing the model returns is written - it becomes drafts the client submits as proposals for a human to approve. When the model output is invalid, or the step fails or is skipped, no model draft is returned and the whole sentence is listed in `unresolved` with the reason. When a back-reference, list preamble or unknown verb triggered the step and the model answered validly, its intents replace the grammar's; when only `partly_understood` triggered it, the grammar's intents are kept and the model's are added after removing duplicates. Each call to the model spends one unit of the caller's `llm` budget (hourly, per user or agent) and reserves tokens from the tenant's `llmMonthlyTokenCap`; either being exhausted skips the step. A skipped, failed, timed-out (15 seconds at most) or invalid model step never fails the request - the response is `200` with the grammar's result, `extractor` `rules`, `degraded` true and `llmOutcome` saying why. The model is configured per deployment (provider and model name); no provider name, key or model name appears in this API.
       operationId: parseTeach
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1465,6 +1470,10 @@ paths:
                   $ref: '#/components/schemas/InputOrigin'
                 importRef:
                   $ref: '#/components/schemas/ImportRef'
+                sessionId:
+                  type: string
+                  format: uuid
+                  description: Generated by the client once per teach bar session (a new one when the Studio loads or the company changes) and sent with every sentence of that session, so the model step can resolve back-references such as `these services`. The server keeps the last 8 sentences of a session with the concepts each one referenced or introduced, keyed by tenant, caller, company and session; each sentence is kept for 2 hours. A session is readable only by the caller that created it, in the same tenant and company; an unknown or expired `sessionId` starts an empty session and is never an error. Without `sessionId` the sentence is parsed with no history.
       responses:
         '410':
           $ref: '#/components/responses/Gone'
@@ -1575,7 +1584,7 @@ paths:
                     format: date-time
                   fileName:
                     type: string
-                    pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u061c\u2066-\u2069\ufeff]{1,255}$'
+                    pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028\u2029\u202a-\u202e\u061c\u2066-\u2069\ufeff]{1,255}$'
                     maxLength: 255
                     description: The basename of the uploaded file name, the same value as `originDetail.fileName`.
                   origin:
@@ -1590,7 +1599,7 @@ paths:
                       fileName:
                         type: string
                         maxLength: 255
-                        pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u061c\u2066-\u2069\ufeff]{1,255}$'
+                        pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028\u2029\u202a-\u202e\u061c\u2066-\u2069\ufeff]{1,255}$'
                       mediaType:
                         type: string
                         enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf]
@@ -2183,7 +2192,7 @@ paths:
     patch:
       tags: [Settings]
       summary: Change settings
-      description: Immediate; every changed key writes an audit entry `<key> enabled|disabled`. `approvalRequired` and `readOnlyConnectors` are locked (`409 locked_setting`). Turning `crossCompany` off here is refused with `409 confirmation_required` when cross-company relations exist; use the dedicated disable endpoint.
+      description: Immediate; every changed key writes an audit entry `<key> enabled|disabled` (`llmMonthlyTokenCap set to <n>` for the token cap). `approvalRequired` and `readOnlyConnectors` are locked (`409 locked_setting`). Turning `crossCompany` off here is refused with `409 confirmation_required` when cross-company relations exist; use the dedicated disable endpoint.
       operationId: updateSettings
       x-ontaix-permission: settings.write
       requestBody:
@@ -3429,8 +3438,8 @@ components:
           type: string
           minLength: 1
           maxLength: 255
-          pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u061c\u2066-\u2069\ufeff]{1,255}$'
-          description: The basename of the uploaded file name - the server strips any directory part and refuses `/`, `\`, `:`, C0 and C1 control characters, DEL, the bidirectional controls U+061C, U+200E, U+200F, U+202A to U+202E and U+2066 to U+2069, and U+FEFF. At most 255 characters and at most 1020 bytes in UTF-8 (the byte bound is checked by the server, `422`). User-supplied text - HTML-escaped wherever the server interpolates it (`Proposal.html`, captions, audit `what`), and rendered by the Studio as text only.
+          pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028\u2029\u202a-\u202e\u061c\u2066-\u2069\ufeff]{1,255}$'
+          description: The basename of the uploaded file name - the server strips any directory part and refuses `/`, `\`, `:`, C0 and C1 control characters, DEL, the bidirectional controls U+061C, U+200E, U+200F, U+202A to U+202E and U+2066 to U+2069, the zero-width characters U+200B to U+200D, the line and paragraph separators U+2028 and U+2029, and U+FEFF. At most 255 characters and at most 1020 bytes in UTF-8 (the byte bound is checked by the server, `422`). User-supplied text - HTML-escaped wherever the server interpolates it (`Proposal.html`, captions, audit `what`), and rendered by the Studio as text only.
         mediaType:
           type: string
           enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf]
@@ -3827,8 +3836,31 @@ components:
 
     TeachResult:
       type: object
-      required: [outcome, domainKey, intents, drafts, caption, origin, originDetail]
+      required: [outcome, domainKey, intents, drafts, caption, origin, originDetail, extractor, degraded, llmOutcome, draftNotes, unresolved]
       properties:
+        extractor:
+          type: string
+          enum: [rules, llm, rules+llm]
+          description: Who produced the returned intents - `rules` when the model step did not run or gave no valid answer; `llm` when the model's valid answer replaced the grammar's (triggered by a back-reference, a list preamble, an unknown verb or a `not_understood` grammar outcome); `rules+llm` when the grammar's intents were kept and the model's were added (triggered by `partly_understood` alone).
+        degraded:
+          type: boolean
+          description: True when the model step was triggered but did not contribute - `llmOutcome` is `not_configured`, `rate_limited`, `budget_exhausted`, `timeout`, `provider_error` or `invalid_output`. The result is then the grammar's alone and the sentence is listed in `unresolved`.
+        llmOutcome:
+          type: string
+          enum: [not_triggered, used, not_configured, rate_limited, budget_exhausted, timeout, provider_error, invalid_output]
+          description: What happened to the model step. `not_triggered` - no fallback trigger held. `used` - the model answered and its output validated. `not_configured` - the deployment has no model provider or key. `rate_limited` - the caller's hourly `llm` budget is spent. `budget_exhausted` - the tenant's `llmMonthlyTokenCap` is reached (or is 0). `timeout` - no answer within 15 seconds. `provider_error` - the provider refused or failed. `invalid_output` - the answer did not validate against `contracts/teach-extraction.schema.json` or cited a candidate that was not sent. None of these is an error status; the response is `200`.
+        draftNotes:
+          type: array
+          maxItems: 60
+          description: One entry per element of `drafts`, in the same order. Advisory for the reviewer; never submitted with the draft.
+          items:
+            $ref: '#/components/schemas/DraftNote'
+        unresolved:
+          type: array
+          maxItems: 20
+          description: Phrases of the sentence that produced no draft, with the reason. Empty when everything was understood. Each `text` is a substring of the sentence the server holds (or the whole sentence), never text taken from the model. At most 20 entries; phrases beyond the 20th are dropped from the list, and the result stays `partly_understood` or `not_understood`.
+          items:
+            $ref: '#/components/schemas/UnresolvedPhrase'
         origin:
           $ref: '#/components/schemas/Origin'
         originDetail:
@@ -3838,6 +3870,7 @@ components:
         outcome:
           type: string
           enum: [understood, partly_understood, not_understood]
+          description: Computed on the final result - `understood` when there is at least one intent and `unresolved` is empty, `partly_understood` when there are intents and `unresolved` is not empty, `not_understood` when there is no intent.
         domainKey:
           oneOf:
             - $ref: '#/components/schemas/DomainKey'
@@ -3845,11 +3878,13 @@ components:
           description: The domain prefix stripped from the sentence, if any.
         intents:
           type: array
+          maxItems: 60
           items:
             $ref: '#/components/schemas/Intent'
         drafts:
           type: array
-          description: Proposal drafts in submission order, ready for `POST /proposals/batch`; each carries the request's `origin` and `importRef`.
+          maxItems: 60
+          description: Proposal drafts in submission order, ready for `POST /proposals/batch`; each carries the request's `origin` and `importRef`. At most 60, counting grammar and model drafts together. When the result would hold more, the server keeps the intents whose drafts fit, in sentence order (grammar intents first for `rules+llm`), drops the rest with their drafts, and lists their text as one `unresolved` entry with reason `too_many_drafts`.
           items:
             $ref: '#/components/schemas/ProposalDraft'
         statements:
@@ -3875,12 +3910,47 @@ components:
           type: string
         rule:
           type: string
+          description: The grammar pattern that matched, or `llm` for an intent returned by the model step.
         subjectResolved:
           type: [string, 'null']
           format: uuid
         objectResolved:
           type: [string, 'null']
           format: uuid
+
+    DraftNote:
+      type: object
+      additionalProperties: false
+      required: [extractor, confidence]
+      properties:
+        extractor:
+          type: string
+          enum: [rules, llm]
+          description: Whether the grammar or the model step produced the draft.
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: 1 for a grammar draft. For a model draft, the confidence the model reported for the intent the draft came from; intents reported below 0.4 are not drafted and appear in `unresolved` with reason `low_confidence`. Advisory only - every draft still needs a human approval.
+        explanation:
+          type: string
+          maxLength: 300
+          description: Model drafts only - a short plain-text reason, for example `these services refers to Services from the previous sentence`. Text only, never markup; HTML-escaped wherever the server interpolates it and rendered by any client as text.
+
+    UnresolvedPhrase:
+      type: object
+      additionalProperties: false
+      required: [text, reason]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 400
+          description: A substring of the sentence the server holds, or the whole sentence when the model step failed or was skipped. For a phrase the model reported, the server uses the matching substring of the sentence and the whole sentence when there is no exact match.
+        reason:
+          type: string
+          enum: [not_understood, ambiguous_reference, low_confidence, model_unavailable, model_invalid_output, too_many_drafts]
+          description: '`not_understood` - neither the grammar nor the model found an intent. `ambiguous_reference` - the model could not tell what a back-reference points to. `low_confidence` - the model reported a confidence below 0.4. `model_unavailable` - the model step was triggered and did not answer (`llmOutcome` `not_configured`, `rate_limited`, `budget_exhausted`, `timeout` or `provider_error`). `model_invalid_output` - the answer failed validation. `too_many_drafts` - the intents beyond the 60-draft cap of `drafts`.'
 
     CurrentUser:
       type: object
@@ -4132,10 +4202,56 @@ components:
                 type: number
               sharePercent:
                 type: integer
+        llm:
+          $ref: '#/components/schemas/LlmUsage'
+
+    LlmUsage:
+      type: object
+      additionalProperties: false
+      description: Language model calls Ontaix itself made for the tenant in the month (teach extraction), from the `llm_call` cost records. Separate from the agent figures - `measuredEur` and `byPlatform` stay agent reads through the gateway. The Studio's Cost management page shows no new element for it until the UI contract records one.
+      required: [calls, inputTokens, outputTokens, tokensUsed, tokenCap, costEur, byPurpose]
+      properties:
+        calls:
+          type: integer
+          minimum: 0
+        inputTokens:
+          type: integer
+          minimum: 0
+        outputTokens:
+          type: integer
+          minimum: 0
+        tokensUsed:
+          type: integer
+          minimum: 0
+          description: Tokens counted against `tokenCap` this month (input plus output, including reservations of calls still running).
+        tokenCap:
+          type: integer
+          minimum: 0
+          description: The tenant's `llmMonthlyTokenCap` setting.
+        costEur:
+          type: number
+          minimum: 0
+          description: Estimated cost in euros from the deployment's price table for each model; an estimate, not the provider's invoice.
+        byPurpose:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [purpose, calls, costEur]
+            properties:
+              purpose:
+                type: string
+                enum: [teach_extraction]
+              calls:
+                type: integer
+                minimum: 0
+              costEur:
+                type: number
+                minimum: 0
 
     Settings:
       type: object
-      required: [voice, importDocs, liveTeaching, everyoneTeaches, approvalRequired, twoApprovers, autoAttrs, notifyOwners, multiCompany, crossCompany, animations, coverageDefault, legend, readOnlyConnectors, refresh, agentAccess, costCap]
+      required: [voice, importDocs, liveTeaching, everyoneTeaches, approvalRequired, twoApprovers, autoAttrs, notifyOwners, multiCompany, crossCompany, animations, coverageDefault, legend, readOnlyConnectors, refresh, agentAccess, costCap, llmMonthlyTokenCap]
       properties:
         voice:
           type: boolean
@@ -4175,6 +4291,9 @@ components:
           type: boolean
         costCap:
           type: boolean
+          description: Stop agents at 100 percent of the euro allocation. Does not govern Ontaix's own language model calls, which `llmMonthlyTokenCap` bounds.
+        llmMonthlyTokenCap:
+          $ref: '#/components/schemas/LlmMonthlyTokenCap'
         egressAllowlist:
           type: array
           maxItems: 200
@@ -4218,12 +4337,21 @@ components:
           type: boolean
         costCap:
           type: boolean
+        llmMonthlyTokenCap:
+          $ref: '#/components/schemas/LlmMonthlyTokenCap'
         egressAllowlist:
           type: array
           maxItems: 200
           items:
             type: string
             maxLength: 300
+
+    LlmMonthlyTokenCap:
+      type: integer
+      minimum: 0
+      maximum: 1000000000
+      default: 2000000
+      description: Tokens (input plus output) Ontaix's own language model calls may use for the tenant per calendar month (UTC), enforced whatever `costCap` says. `0` turns the model step off. When the cap is reached the teach parse still answers `200` with the grammar's result and `llmOutcome` `budget_exhausted`. A change writes the audit entry `llmMonthlyTokenCap set to <n>`.
 
     Appearance:
       type: object
