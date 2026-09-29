@@ -341,6 +341,146 @@ paths:
         '503':
           $ref: '#/components/responses/Busy'
 
+  /companies/{companyId}/learning:
+    parameters:
+      - $ref: '#/components/parameters/CompanyId'
+    get:
+      tags: [Companies]
+      summary: List what Ontaix has learnt from usage in a company
+      description: |
+        Usage learning (ADR 0014). Returns the company's learning switch, its active lessons (approve, reject and correct examples), its active speech aliases and the habits summary derived from its approved relations, as the model receives them. Administrator at tenant scope only (`settings.write`); `404` for a company of another tenant. There is no Studio screen for learning: the Studio shows nothing new, and this API is for administrators and support tools. Paginated over lessons; filterable - `signal`, `task`; sortable - `createdAt`. Aliases are returned whole (at most 1,000). Lesson and alias text is company content written by people or models - rendered as text by any client.
+      operationId: listCompanyLearning
+      x-ontaix-permission: settings.write
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: The company's learning.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyLearning'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Companies]
+      summary: Turn usage learning on or off for a company
+      description: Immediate and audited (kind `learning`, `Learning enabled|disabled for <company>`). Administrator at tenant scope only. While off, no lesson is captured and none is sent to a model for the company; existing lessons are kept (use reset to remove them). Default on.
+      operationId: setCompanyLearning
+      x-ontaix-permission: settings.write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: The new switch.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [companyId, enabled]
+                properties:
+                  companyId:
+                    $ref: '#/components/schemas/Id'
+                  enabled:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /companies/{companyId}/learning/{lessonId}:
+    parameters:
+      - $ref: '#/components/parameters/CompanyId'
+      - name: lessonId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [Companies]
+      summary: Delete one lesson or alias
+      description: Deletes one lesson (`learning_example`) or one speech alias (`company_alias`) of the company, active or retired, at once and for good; it is never sent to a model again. Administrator at tenant scope only; audited (kind `learning`, `Lesson deleted`, no lesson text in the entry). `404` when the id is not a lesson or alias of this company.
+      operationId: deleteCompanyLesson
+      x-ontaix-permission: settings.write
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /companies/{companyId}/learning/reset:
+    parameters:
+      - $ref: '#/components/parameters/CompanyId'
+    post:
+      tags: [Companies]
+      summary: Forget everything learnt in a company
+      description: Deletes every lesson and alias of the company, active and retired, and the pending teach parse records that could still produce lessons. The switch keeps its value. Requires `confirm` set to `reset` in the body (`422 confirmation_required` or `confirmation_mismatch` otherwise). Administrator at tenant scope only; audited (kind `learning`, `Learning reset for <company> - <n> lessons, <m> aliases`).
+      operationId: resetCompanyLearning
+      x-ontaix-permission: settings.write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirm]
+              properties:
+                confirm:
+                  type: string
+                  const: reset
+      responses:
+        '200':
+          description: What was removed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lessons, aliases]
+                properties:
+                  lessons:
+                    type: integer
+                    minimum: 0
+                  aliases:
+                    type: integer
+                    minimum: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
   /domain-products:
     get:
       tags: [Companies]
@@ -1292,6 +1432,10 @@ paths:
                   $ref: '#/components/schemas/InputOrigin'
                 importRef:
                   $ref: '#/components/schemas/ImportRef'
+                parseId:
+                  type: string
+                  format: uuid
+                  description: The `TeachResult.parseId` these drafts came from (ADR 0014). Optional and advisory - it only links the created proposals to the stored parse for usage learning, matching each draft to the parse's drafts (an unmatched draft is linked as edited). A parse of another user, company or tenant, or an expired one, is ignored silently, never an error; it never changes what is created.
                 drafts:
                   type: array
                   minItems: 1
@@ -4467,6 +4611,10 @@ components:
       type: object
       required: [outcome, domainKey, intents, drafts, caption, origin, originDetail, extractor, degraded, llmOutcome, draftNotes, unresolved]
       properties:
+        parseId:
+          type: [string, 'null']
+          format: uuid
+          description: Set when the parse was recorded for usage learning (ADR 0014) - a user caller, learning on for the company, at least one draft; the client sends it back as `parseId` with `POST /proposals/batch`. Null otherwise.
         extractor:
           type: string
           enum: [rules, llm, rules+llm]
@@ -5045,6 +5193,135 @@ components:
           enum: [en-GB, en-US]
           description: The recognition language the deployment is configured for (`ONTAIX_SPEECH_LANGUAGE`, default `en-GB`). English only.
 
+    CompanyLearning:
+      type: object
+      additionalProperties: false
+      required: [companyId, enabled, page, pageSize, total, lessons, aliases, habits]
+      properties:
+        companyId:
+          $ref: '#/components/schemas/Id'
+        enabled:
+          type: boolean
+          description: The company's learning switch.
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+          description: Lessons matching the filter, active and retired.
+        lessons:
+          type: array
+          items:
+            $ref: '#/components/schemas/Lesson'
+        aliases:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/CompanyAlias'
+        habits:
+          $ref: '#/components/schemas/LearningHabits'
+
+    Lesson:
+      type: object
+      additionalProperties: false
+      required: [id, signal, task, origin, sourceText, bulk, createdAt, retiredAt, retiredReason, proposalIds]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        signal:
+          type: string
+          enum: [approve, reject, correct]
+        task:
+          type: string
+          enum: [teach, expand, extraction]
+        origin:
+          type: string
+          enum: [text, speech, document, suggestion]
+        sourceText:
+          type: string
+          maxLength: 4000
+          description: The sentence, speech text, document sentence or expansion request the lesson comes from.
+        modelOutput:
+          type: [object, 'null']
+          description: What the model produced (reject and correct).
+        finalStructure:
+          type: [object, 'null']
+          description: What people approved (approve and correct).
+        correctsId:
+          type: [string, 'null']
+          format: uuid
+          description: For a correct lesson, the reject lesson it answers, when that was captured.
+        bulk:
+          type: boolean
+        proposalIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/Id'
+        createdAt:
+          type: string
+          format: date-time
+        retiredAt:
+          type: [string, 'null']
+          format: date-time
+        retiredReason:
+          type: [string, 'null']
+          enum: [contradicted, superseded, cap, null]
+
+    CompanyAlias:
+      type: object
+      additionalProperties: false
+      required: [id, heard, meant, conceptId, hits, createdAt, retiredAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        heard:
+          type: string
+          maxLength: 120
+        meant:
+          type: string
+          maxLength: 120
+        conceptId:
+          type: [string, 'null']
+          format: uuid
+        hits:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        retiredAt:
+          type: [string, 'null']
+          format: date-time
+
+    LearningHabits:
+      type: object
+      additionalProperties: false
+      description: Derived on read from the company's approved relations and concepts, never stored.
+      required: [verbs, naming]
+      properties:
+        verbs:
+          type: array
+          maxItems: 20
+          description: The most used actions of approved relations, most used first.
+          items:
+            type: object
+            additionalProperties: false
+            required: [action, count]
+            properties:
+              action:
+                type: string
+              count:
+                type: integer
+                minimum: 1
+        naming:
+          type: array
+          maxItems: 5
+          description: Short plain statements of naming patterns, for example `labels are plural nouns` or `acronyms kept upper-case`.
+          items:
+            type: string
+            maxLength: 120
+
     CurrentUser:
       type: object
       required: [user, effectiveRoles, permissions]
@@ -5570,7 +5847,7 @@ components:
           $ref: '#/components/schemas/Actor'
         kind:
           type: string
-          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`, `speech` (a speech recognition token was issued, ADR 0013).
+          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`, `speech` (a speech recognition token was issued, ADR 0013), `learning` (usage learning switched, a lesson deleted or a company's learning reset, ADR 0014).
         what:
           type: string
         ok:
