@@ -47,6 +47,7 @@ from app.models.storage.concept import Concept
 from app.repositories.llm_call_repository import CallRecord
 from app.repositories.teach_session_turn_repository import StoredTurn
 from app.services import llm_usage_service
+from app.services.ontology_view_service import OntologyView
 from app.services.rate_limit_service import Budget, try_charge
 from app.services.teach_draft_service import Drafter, End, PlannedIntent, phrase_in
 from app.utilities.action_text import has_refused_character, normalise_action
@@ -64,6 +65,29 @@ MAX_SEGMENT_CHARS = 400
 MAX_EXPLANATION = 300
 MAX_LABEL_CHARS = 120
 DEFAULT_MEMBER_ACTION = "includes"
+# `X is a <role> of Y` is drafted as Y has <Role>, <Role> includes X.
+ROLE_NOUNS = frozenset(
+    {
+        "client",
+        "customer",
+        "partner",
+        "supplier",
+        "vendor",
+        "subsidiary",
+        "division",
+        "member",
+        "affiliate",
+        "distributor",
+        "reseller",
+        "contractor",
+        "agent",
+        "branch",
+        "unit",
+    }
+)
+ROLE_ACTION = "has"
+ROLE_MEMBER_ACTION = "includes"
+_ROLE_PATTERN = re.compile(r"^(?:is|are) (?:a|an|the|one of the) ([a-z]+?) of$")
 REFUSED_ACTIONS = frozenset({"is a", "equivalent to"})
 
 _WORDS = re.compile(r"[a-z0-9][a-z0-9&'-]*")
@@ -75,6 +99,10 @@ _MID_NUM = frozenset(
 )
 _MID_NUM_LET = frozenset("\u0027\u002e\u2018\u2019\u2024\ufe52\uff07\uff0e")
 _HYPHEN = "-"
+# Punctuation that may join the words of one name inside a grounded label.
+_LABEL_JOINERS = frozenset("&./-'’+")
+# A full stop followed by whitespace, or any other sentence-ending mark, ends a sentence.
+_SENTENCE_END = re.compile(r"\.\s|[!?;:]")
 
 
 @dataclass
@@ -107,6 +135,15 @@ class Reading:
     def model_first(self) -> bool:
         """Speech and document sentences go to the model first; typed text to the grammar."""
         return self.mode != "sentence"
+
+
+def enabled(view: OntologyView) -> bool:
+    """True when the step can be tried: a provider is configured and the tenant's monthly token
+    cap is above 0. Budgets and the provider's answer are checked when the step runs."""
+    if get_llm_client() is None:
+        return False
+    settings = view.settings
+    return (settings.llm_monthly_token_cap if settings else DEFAULT_LLM_MONTHLY_TOKEN_CAP) > 0
 
 
 async def run(
@@ -314,6 +351,7 @@ def _context(
     data: dict[str, Any] = {
         "mode": reading.mode,
         "sentence": text,
+        "sentenceLength": len(text),
         "domainPrefix": drafter.dom_key,
         "company": view.companies[drafter.company_id].name,
         "sessionTurns": [
@@ -356,6 +394,7 @@ def _interpret(
     sent = {c.id for c in handles}
     cross_company = bool(drafter.view.settings and drafter.view.settings.cross_company)
     checked: list[_Checked] = []
+    earlier = _grounded_labels(answer, sources, text)
     for intent, source in zip(answer.intents, sources, strict=True):
         if reading.speech and intent.segment is None:
             raise _InvalidAnswer("a transcript intent names no segment")
@@ -368,10 +407,12 @@ def _interpret(
         if not seg_start <= source[0] < source[1] <= seg_end:
             raise _InvalidAnswer("an intent's source lies outside its segment")
         # Each new label is reused as a candidate sent in this call, or grounded in the
-        # caller's words inside the source range; the self-join checks run after that.
+        # caller's words inside the source range; the self-join checks run after that. An
+        # ungrounded subject or object sinks the intent; an ungrounded member is left out alone.
         raw = [intent.subject, intent.object, *(intent.members or [])]
-        placed = [_end(ref, handles, sent, drafter, text, source) for ref in raw]
-        grounded = all(end is not None for end in placed)
+        placed = [_end(ref, handles, sent, drafter, text, source, earlier) for ref in raw]
+        grounded = placed[0] is not None and placed[1] is not None
+        dropped = sum(1 for end in placed[2:] if end is None)
         ends = [end for end in placed if end is not None]
         if any(_same(a, b) for i, a in enumerate(ends) for b in ends[i + 1 :]):
             raise _InvalidAnswer("an intent joins a concept to itself or repeats a member")
@@ -393,9 +434,29 @@ def _interpret(
             action = _action(intent.action)
             if intent.members:
                 member_action = _action(intent.member_action or DEFAULT_MEMBER_ACTION)
-        subject, obj, *members = placed if grounded else [placed[0], placed[1]]
+        subject, obj = placed[0], placed[1]
+        members = [end for end in placed[2:] if end is not None] if grounded else []
+        # A grouping stays inside the taught company, so a role is read only between its own
+        # concepts or new labels.
+        own = grounded and not foreign
+        role = _role_end(action, obj, drafter, text, source) if own else None
+        if role is not None and subject is not None and not members:
+            # `X is a <role> of Y`: Y has the role, and the role includes X.
+            subject, obj, members = obj, role, [subject]
+            action, member_action = ROLE_ACTION, ROLE_MEMBER_ACTION
         checked.append(
-            _Checked(intent, subject, obj, members, action, member_action, index, source, grounded)
+            _Checked(
+                intent,
+                subject,
+                obj,
+                members,
+                action,
+                member_action,
+                index,
+                source,
+                grounded,
+                dropped,
+            )
         )
 
     offset = len(sentence) - len(text)
@@ -423,6 +484,8 @@ def _interpret(
         if intent.confidence < MIN_CONFIDENCE:
             step.unresolved.append(UnresolvedPhrase(text=where, reason="low_confidence"))
             continue
+        if c.dropped:
+            step.unresolved.append(UnresolvedPhrase(text=where, reason="ungrounded_label"))
         note = DraftNote(
             extractor="llm",
             confidence=intent.confidence,
@@ -457,8 +520,9 @@ def _interpret(
                 _note_count(planned, stated[list_id], list_sizes[list_id])
     for phrase in answer.unresolved:
         where = None
-        if phrase.source is not None and phrase.source.start < phrase.source.end <= len(text):
-            where = sentence[phrase.source.start + offset : phrase.source.end + offset]
+        if phrase.source is not None and phrase.source.start < len(text):
+            start, end = phrase.source.start, min(phrase.source.end, len(text))
+            where = sentence[start + offset : end + offset]
         step.unresolved.append(
             UnresolvedPhrase(
                 text=(where or phrase_in(sentence, phrase.text))[:400], reason=phrase.reason
@@ -478,6 +542,8 @@ class _Checked:
     segment: int
     source: tuple[int, int]
     grounded: bool
+    # Members of a grouping intent left out as ungrounded.
+    dropped: int = 0
 
 
 def _ranges(
@@ -497,9 +563,9 @@ def _ranges(
         return whole, [_locate(intent, text, words, whole, 0) for intent in answer.intents]
     snapped: list[tuple[int, int]] = []
     for i, seg in enumerate(answer.segments):
-        if seg.index != i or seg.end > len(text):
-            raise _InvalidAnswer("a segment is out of order or outside the text")
-        snapped.append(_snap(text, words, seg.start, seg.end))
+        if seg.index != i:
+            raise _InvalidAnswer("a segment is out of order")
+        snapped.append(_snap(text, words, *_clamp(seg.start, seg.end, text)))
     owners = [intent.segment if intent.segment is not None else 0 for intent in answer.intents]
     sources = [
         _locate(intent, text, words, snapped, own)
@@ -516,6 +582,15 @@ def _ranges(
         out.append((start, end))
         last_end = end
     return out, sources
+
+
+def _clamp(start: int, end: int, text: str) -> tuple[int, int]:
+    """A model range with its end clamped to the text's length: the model overshoots range ends
+    by a character or two. A range left empty by the clamp makes the answer invalid."""
+    end = min(end, len(text))
+    if start >= end:
+        raise _InvalidAnswer("a range lies outside the text")
+    return start, end
 
 
 def _snap(text: str, words: list[tuple[int, int]], start: int, end: int) -> tuple[int, int]:
@@ -551,7 +626,7 @@ def _locate(
     nearest the model's own start. The range is always a slice of the caller's input, so
     grounding still judges it word by word. Without a quote, or when no occurrence qualifies,
     the model's offsets stand."""
-    claimed = (intent.source.start, intent.source.end)
+    claimed = _clamp(intent.source.start, intent.source.end, text)
     quote = (intent.span or "").strip()
     if not quote:
         return claimed
@@ -614,27 +689,68 @@ def _ground(label: str, text: str, source: tuple[int, int]) -> str | None:
 
     Words are found over the whole input, so a source range that cuts into a word grounds
     nothing; only words lying wholly inside the range count. Each word is normalised on its own
-    (NFKC, case folded, singular), so the matched run maps back to the original words, and only
-    whitespace may separate them. The label is sliced from the original input and put through
-    the casing rule and the label rules, never taken from the model's string."""
+    (NFKC, case folded, singular), so the matched run maps back to the original words. Between
+    two words the label must carry the same characters as the input: whitespace (any run
+    compares as one space) or the joining punctuation of names (`L&S`, `R&D`, `A/B`, `O'Neil`);
+    a sentence end, a comma or any other character never joins words into one label.
+    Characters around the words are dropped, except an abbreviation's closing full stop
+    (`S.A.`), which the input must carry too. The label is sliced from the original input and
+    put through the casing rule and the label rules, never taken from the model's string."""
     start, end = source
     words = _words(text)
     if any(a < start < b or a < end < b for a, b in words):
         return None
     inside = [(a, b) for a, b in words if a >= start and b <= end]
     label = unicodedata.normalize("NFC", label)
-    wanted = [_fold(label[a:b]) for a, b in _words(label)]
+    label_words = _words(label)
+    wanted = [_fold(label[a:b]) for a, b in label_words]
     n = len(wanted)
+    if not n:
+        return None
+    gaps = [label[x[1] : y[0]] for x, y in zip(label_words, label_words[1:], strict=False)]
+    # Characters around the label's words are not part of it, except an abbreviation's closing
+    # full stop (`S.A.`).
+    abbreviation = "." in label[label_words[-1][0] : label_words[-1][1]]
+    tail = "." if abbreviation and label[label_words[-1][1] :].startswith(".") else ""
+    if any(not _joins_label(g) for g in gaps):
+        return None
     for i in range(len(inside) - n + 1):
         run = inside[i : i + n]
-        if not n or [_fold(text[a:b]) for a, b in run] != wanted:
+        if [_fold(text[a:b]) for a, b in run] != wanted:
             continue
-        if any(not text[x[1] : y[0]].isspace() for x, y in zip(run, run[1:], strict=False)):
+        spoken = [text[x[1] : y[0]] for x, y in zip(run, run[1:], strict=False)]
+        if any(_gap(a) != _gap(b) for a, b in zip(spoken, gaps, strict=True)):
             continue
-        candidate = title(unicodedata.normalize("NFKC", text[run[0][0] : run[-1][1]]))
+        first, last = run[0][0], run[-1][1] + len(tail)
+        if last > end or text[run[-1][1] : last] != tail:
+            continue
+        if _part_of_name(text, first, last):
+            continue
+        candidate = title(unicodedata.normalize("NFKC", text[first:last]))
         if _valid_label(candidate):
             return candidate
     return None
+
+
+def _part_of_name(text: str, first: int, last: int) -> bool:
+    """True when joining punctuation ties `text[first:last]` to a word next to it, as `L` is
+    tied to `S` in `L&S`: the run is then only part of a name."""
+    before = first >= 2 and text[first - 1] in _LABEL_JOINERS and _word_char(text[first - 2])
+    after = last + 1 < len(text) and text[last] in _LABEL_JOINERS and _word_char(text[last + 1])
+    return before or after
+
+
+def _joins_label(gap: str) -> bool:
+    """True when `gap` may sit between two words of a label: whitespace and joining
+    punctuation, never a sentence end."""
+    if any(c not in _LABEL_JOINERS and not c.isspace() for c in gap):
+        return False
+    return not _SENTENCE_END.search(gap)
+
+
+def _gap(gap: str) -> str:
+    """A gap between two words as compared: NFKC, every whitespace run as one space."""
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", gap))
 
 
 def _words(text: str) -> list[tuple[int, int]]:
@@ -741,10 +857,13 @@ def _end(
     drafter: Drafter,
     text: str,
     source: tuple[int, int],
+    earlier: list[str] | None = None,
 ) -> End | None:
     """An intent end: a cited candidate; a new label naming a candidate sent in this call,
-    reused as is; or a new label grounded in the caller's words (then resolved to an existing
-    concept of the company when one has that label). None when a new label is ungrounded."""
+    reused as is; or a new label grounded in the caller's words - inside this intent's range,
+    or as a label another intent of the same answer grounded in its own range (`earlier`) - and
+    then resolved to an existing concept of the company when one has that label. None when a
+    new label is ungrounded."""
     if isinstance(ref, CandidateRef):
         index = int(ref.candidate[1:])
         if index >= len(handles):
@@ -755,7 +874,61 @@ def _end(
     reused = drafter.resolve(label)
     if reused is not None and reused.id in sent:
         return End(reused, reused.label, reused.label)
-    spoken = _ground(label, text, source)
+    spoken = _ground(label, text, source) or _repeated(label, earlier or [])
+    if spoken is None:
+        return None
+    return End(drafter.resolve(spoken), spoken, spoken, cited_new=True)
+
+
+def _grounded_labels(
+    answer: TeachExtractionAnswer, sources: list[tuple[int, int]], text: str
+) -> list[str]:
+    """The new labels of the answer that are grounded inside their own intent's range, each as
+    the caller's words sliced from the input."""
+    labels: list[str] = []
+    for intent, source in zip(answer.intents, sources, strict=True):
+        for ref in [intent.subject, intent.object, *(intent.members or [])]:
+            if isinstance(ref, CandidateRef):
+                continue
+            spoken = _ground(title(unicodedata.normalize("NFKC", ref.new_label)), text, source)
+            if spoken is not None and spoken not in labels:
+                labels.append(spoken)
+    return labels
+
+
+def _repeated(label: str, earlier: list[str]) -> str | None:
+    """The label another intent of the answer already grounded that `label` repeats, word for
+    word as the grounding compares words, or None. The result is that intent's slice of the
+    caller's input, so only the caller's own words can name a new concept."""
+    for spoken in earlier:
+        if (_ground(label, spoken, (0, len(spoken))) or "").casefold() == spoken.casefold():
+            return spoken
+    return None
+
+
+def _role_end(
+    action: str | None,
+    holder: End | None,
+    drafter: Drafter,
+    text: str,
+    source: tuple[int, int],
+) -> End | None:
+    """The role concept of a `rel` intent whose action reads `is a <role> of`: the holder's
+    existing child of that label, else the company's concept of that label, else the role noun
+    as a new label grounded in the caller's words. None for any other action, or when the noun
+    is not in the caller's words."""
+    found = _ROLE_PATTERN.match(action or "")
+    if found is None or holder is None:
+        return None
+    noun = found.group(1)
+    if singular(noun) not in ROLE_NOUNS:
+        return None
+    wanted = {noun, singular(noun)}
+    if holder.concept is not None:
+        for child in drafter.view.children_of(holder.concept.id):
+            if {child.label.lower(), singular(child.label.lower())} & wanted:
+                return End(child, child.label, child.label)
+    spoken = _ground(title(noun), text, source)
     if spoken is None:
         return None
     return End(drafter.resolve(spoken), spoken, spoken, cited_new=True)

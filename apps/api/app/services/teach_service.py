@@ -103,10 +103,13 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
     whole = [(0, len(sentence))]
     grammar: GrammarPlan | None = None
     triggers: set = set()
+    # Every origin goes to the model first while the step is on; typed text keeps the grammar
+    # and its fallback triggers for when the step is off or does not answer.
+    model_first = source.reading.model_first or teach_extraction_service.enabled(view)
     if not source.reading.model_first:
         grammar = plan_grammar(drafter, text)
         triggers = fallback_triggers(text, grammar.outcome)
-    if grammar is not None and not triggers:
+    if grammar is not None and not triggers and not model_first:
         kept = assemble(grammar.planned, sentence)
         caption = grammar.caption
         result = _result("rules", "not_triggered", kept, dom_key, caption, source, whole)
@@ -122,9 +125,16 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
                 grammar, segments = _grammar_by_segment(drafter, sentence)
             else:
                 grammar, segments = grammar or plan_grammar(drafter, text), whole
-            result, kept = _degraded(grammar, step, segments, sentence, dom_key, source)
+            if grammar is not None and not triggers and not source.reading.model_first:
+                # Typed text the grammar reads whole: its result stands as it would with the
+                # step off, and the outcome says why the model did not answer.
+                kept = assemble(grammar.planned, sentence)
+                caption = grammar.caption
+                result = _result("rules", step.outcome, kept, dom_key, caption, source, whole)
+            else:
+                result, kept = _degraded(grammar, step, segments, sentence, dom_key, source)
         else:
-            replace = source.reading.model_first or replaces_grammar(triggers)
+            replace = model_first or replaces_grammar(triggers)
             segments = step.segments or whole
             result, kept = _with_model(grammar, step, replace, sentence, dom_key, source, segments)
     await teach_session_service.store_turns(key, result.extractor, _turns(source, result, kept))

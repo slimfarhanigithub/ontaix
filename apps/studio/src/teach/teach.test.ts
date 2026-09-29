@@ -2,7 +2,7 @@ import { api } from '../api/client';
 import { ApiError, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
 import { addCompany, addLink, addNode } from '../canvas/state';
 import { store } from '../store/store';
-import { teach, teachSessionId, withoutKnown } from './teach';
+import { importDocument, skippedText, teach, teachSessionId, withoutKnown } from './teach';
 
 const result: TeachResult = {
   outcome: 'not_understood',
@@ -212,5 +212,45 @@ describe('leaving out what the canvas already holds', () => {
       'Left out, already in the model: Sales. Also left out, as the existing concept stands under another parent: Leads.',
     );
     vi.restoreAllMocks();
+  });
+});
+
+describe('importing a document', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('names the skipped short fragments only when there are some', () => {
+    expect(skippedText(0)).toBe('');
+    expect(skippedText(1)).toBe(' 1 short fragment skipped.');
+    expect(skippedText(3)).toBe(' 3 short fragments skipped.');
+  });
+
+  it('shows the skipped fragments in the import caption', async () => {
+    const before = store.s.activeCompany;
+    const skip = store.s.SKIP;
+    store.s.activeCompany = { sid: 'company-a' } as typeof before;
+    store.s.SKIP = true;
+    vi.spyOn(api, 'importSentences').mockResolvedValue({
+      importId: 'i',
+      expiresAt: '2026-09-29T00:00:00Z',
+      fileName: 'brief.md',
+      origin: 'document',
+      originDetail: { fileName: 'brief.md', mediaType: 'text/markdown' },
+      sentences: ['Insight sells services.'],
+      skipped: 3,
+    });
+    vi.spyOn(api, 'teachParse').mockResolvedValue(result);
+    vi.spyOn(store, 'refreshProposals').mockResolvedValue();
+    const caption = vi.spyOn(store, 'caption');
+    try {
+      await importDocument(new File(['x'], 'brief.md'));
+    } finally {
+      store.s.activeCompany = before;
+      store.s.SKIP = skip;
+    }
+
+    expect(caption).toHaveBeenLastCalledWith(
+      'Import finished',
+      'brief.md: 1 sentences read, 0 proposals waiting for approval on the right. 3 short fragments skipped.',
+    );
   });
 });

@@ -49,15 +49,25 @@ export interface Extracted {
   fileName: string;
   mediaType: ImportMediaType;
   sentences: ExtractedSentence[];
+  /** Pieces of text left out of `sentences`. */
+  skipped: number;
 }
 
 /** Splits text into sentences of 13 to 399 characters. */
 export function sentencesOf(text: string): string[] {
+  return piecesOf(text).filter((x) => x.length > 12 && x.length < 400);
+}
+
+/** The pieces of text `sentencesOf` leaves out that hold a letter or a digit. */
+export function skippedOf(text: string): number {
+  return piecesOf(text).filter((x) => (x.length <= 12 || x.length >= 400) && /[\p{L}\p{N}]/u.test(x)).length;
+}
+
+function piecesOf(text: string): string[] {
   return text
     .replace(/\s+/g, ' ')
     .split(/(?<=[.!?])\s+|\n+/)
-    .map((x) => x.trim())
-    .filter((x) => x.length > 12 && x.length < 400);
+    .map((x) => x.trim());
 }
 
 /** The basename of an uploaded file name, refused (never rewritten) when it breaks a rule. */
@@ -87,13 +97,15 @@ export async function extractDocument(rawName: string, contentType: string, byte
   const units = await unitsOf(mediaType, bytes);
   let chars = 0;
   const sentences: ExtractedSentence[] = [];
+  let skipped = 0;
   for (const unit of units) {
     chars += unit.text.length;
     if (chars > MAX_CHARS) throw tooLarge('the document holds more than 2,000,000 characters of text');
     for (const text of sentencesOf(unit.text)) sentences.push({ text, position: unit.position });
+    skipped += skippedOf(unit.text);
     if (sentences.length > MAX_SENTENCES) throw tooLarge('the document holds more than 2,000 sentences');
   }
-  return { fileName, mediaType, sentences };
+  return { fileName, mediaType, sentences, skipped };
 }
 
 /** Why the bytes are not a file of the media type: a Word document is a ZIP archive, a PDF

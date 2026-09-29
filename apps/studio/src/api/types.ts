@@ -214,6 +214,8 @@ export interface ImportResult {
   origin: 'document';
   originDetail: { fileName: string; mediaType: ImportMediaType };
   sentences: string[];
+  /** Pieces of extracted text left out of `sentences`, such as those under 13 characters. */
+  skipped: number;
   positions?: (DocumentPosition | null)[];
 }
 

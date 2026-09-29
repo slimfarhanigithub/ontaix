@@ -296,8 +296,12 @@ async def test_ranges_and_caps(client, tenant: TenantFixture):
     company_id, _ = await add_company(tenant, "Insight")
     await configure(tenant)
     s = "these services use data"
+    # An end past the text is clamped to the text's length, not refused.
+    install(lambda ctx: answer(intent(C0, new("Data"), 0, len(s) + 1, "uses")))
+    r = await post(client, tenant, company_id, s)
+    assert r["llmOutcome"] == "used" and [d["label"] for d in r["drafts"]] == ["Data"]
     cases = {
-        "end past text": answer(intent(C0, new("Data"), 0, len(s) + 1, "uses")),
+        "start past text": answer(intent(C0, new("Data"), len(s), len(s) + 2, "uses")),
         "21 intents": answer(*[intent(C0, new("Data"), 0, len(s), "uses")] * 21),
         "start==end": answer(intent(C0, new("Data"), 3, 3, "uses")),
     }

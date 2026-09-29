@@ -55,7 +55,17 @@ REFUSED_FILE_NAME_CHARS = re.compile(
 WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 DOCX_BODY = "word/document.xml"
 
-_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+# A Markdown heading, a bullet or numbered list item, or a table row sits on a line of its own.
+_HEADING = re.compile(r"^\s{0,3}#{1,6}\s")
+_LIST_ITEM = re.compile(r"^\s*(?:[-*+•‣⁃–▪◦]|\d{1,3}[.)]|[a-zA-Z][.)])\s")
+_TABLE_ROW = re.compile(r"^\s*\||\t")
+_UNDERLINE = re.compile(r"^\s*(?:=+|-+)\s*$")
+# Clause boundaries a long sentence is cut after, in order of preference.
+_CLAUSE_ENDS = (
+    re.compile(r"[;:]\s"),
+    re.compile(r",\s(?=(?:and|or|but|so|yet|nor|while|whereas|because|which|including)\b)"),
+)
 
 
 @dataclass(frozen=True)
@@ -123,8 +133,9 @@ def content_mismatch(data: bytes, media_type: str) -> str | None:
     return None
 
 
-def extract_sentences(data: bytes, media_type: str) -> tuple[list[Sentence], int]:
-    """The sentences of a document in order, and the number of extracted characters."""
+def extract_sentences(data: bytes, media_type: str) -> tuple[list[Sentence], int, int]:
+    """The sentences of a document in order, the number of extracted characters, and the number
+    of text pieces left out as shorter than 13 characters."""
     if media_type == DOCX:
         blocks = _docx_paragraphs(data)
         unit = "paragraph"
@@ -140,20 +151,97 @@ def extract_sentences(data: bytes, media_type: str) -> tuple[list[Sentence], int
         unit = None
     extracted = sum(len(b) for b in blocks)
     sentences: list[Sentence] = []
+    skipped = 0
     for i, block in enumerate(blocks, start=1):
-        for s in sentences_of(block):
+        kept, left_out = split_sentences(block)
+        skipped += left_out
+        for s in kept:
             sentences.append(Sentence(s, unit, i if unit else None))
             if len(sentences) > MAX_SENTENCES:
                 raise DocumentTooLargeError(f"more than {MAX_SENTENCES} sentences")
-    return sentences, extracted
+    return sentences, extracted, skipped
 
 
 def sentences_of(text: str) -> list[str]:
-    """Sentences of 13 to 399 characters, split on sentence punctuation or newlines."""
-    parts = _SENTENCE_SPLIT.split(re.sub(r"\s+", " ", text))
-    return [
-        p for p in (x.strip() for x in parts) if MIN_SENTENCE_CHARS <= len(p) <= MAX_SENTENCE_CHARS
-    ]
+    """Sentences of 13 to 399 characters, in order; see `split_sentences`."""
+    return split_sentences(text)[0]
+
+
+def split_sentences(text: str) -> tuple[list[str], int]:
+    """Sentences of 13 to 399 characters, in order, and the number of pieces left out.
+
+    The text is first cut into blocks at the line breaks that end something: a blank line, a
+    heading, a list item or a table row. A line break that only wraps a paragraph is a space.
+    Each block is split on sentence punctuation, and a sentence longer than 399 characters is
+    cut after a clause boundary (`;`, `:`, or a comma before a conjunction), else at the last
+    space, else at 399 characters, so no text is lost to the length limit. Pieces shorter than
+    13 characters are left out and counted when they hold a letter or a digit; a table rule
+    such as `|---|` holds neither."""
+    parts: list[str] = []
+    for block in _blocks(text):
+        flat = re.sub(r"\s+", " ", block).strip()
+        # A list marker such as `1.` stays with the item's first sentence.
+        marker = _LIST_ITEM.match(flat)
+        lead = flat[: marker.end()] if marker else ""
+        sentences = _SENTENCE_SPLIT.split(flat[len(lead) :])
+        sentences[0] = lead + sentences[0]
+        for sentence in sentences:
+            parts.extend(_fit(sentence.strip()))
+    kept = [p for p in parts if len(p) >= MIN_SENTENCE_CHARS]
+    left_out = sum(1 for p in parts if len(p) < MIN_SENTENCE_CHARS and any(c.isalnum() for c in p))
+    return kept, left_out
+
+
+def _blocks(text: str) -> list[str]:
+    """The text cut at blank lines and around headings, list items and table rows; the other
+    line breaks stay inside a block."""
+    blocks: list[str] = []
+    current: list[str] = []
+
+    def close() -> None:
+        if current:
+            blocks.append(" ".join(current))
+            current.clear()
+
+    for line in re.split(r"\r\n|\r|\n", text):
+        if not line.strip() or _UNDERLINE.match(line):
+            close()
+            continue
+        if _HEADING.match(line) or _TABLE_ROW.search(line):
+            close()
+            blocks.append(line)
+            continue
+        if _LIST_ITEM.match(line):
+            close()
+        current.append(line)
+    close()
+    return blocks
+
+
+def _fit(sentence: str) -> list[str]:
+    """`sentence` in pieces of at most 399 characters, each cut at the best boundary before the
+    limit; only the whitespace at a cut is dropped."""
+    pieces: list[str] = []
+    rest = sentence
+    while len(rest) > MAX_SENTENCE_CHARS:
+        # Both sides of a cut keep at least 13 characters, so neither is left out.
+        limit = min(MAX_SENTENCE_CHARS, len(rest) - MIN_SENTENCE_CHARS)
+        window = rest[: limit + 1]
+        cut = 0
+        for pattern in _CLAUSE_ENDS:
+            ends = [m.start() + 1 for m in pattern.finditer(window)]
+            ends = [e for e in ends if MIN_SENTENCE_CHARS <= e <= limit]
+            if ends:
+                cut = ends[-1]
+                break
+        if not cut:
+            space = window.rfind(" ", MIN_SENTENCE_CHARS)
+            cut = space if space > 0 else limit
+        pieces.append(rest[:cut].strip())
+        rest = rest[cut:].strip()
+    if rest:
+        pieces.append(rest)
+    return pieces
 
 
 def _check_chars(count: int) -> None:

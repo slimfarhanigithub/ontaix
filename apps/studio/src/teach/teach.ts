@@ -235,6 +235,12 @@ export function leftOutText(plan: DuplicatePlan): string {
     : known;
 }
 
+/** The import caption's note on the text pieces the API left out, empty when there are none. */
+export function skippedText(skipped: number): string {
+  if (!(skipped > 0)) return '';
+  return ` ${skipped} short fragment${skipped === 1 ? '' : 's'} skipped.`;
+}
+
 /** Uploads a document to the API, which extracts and stores its sentences; each is then taught like a spoken one. */
 export async function importDocument(file: File | null | undefined): Promise<void> {
   if (!file || store.ui.importing) return;
@@ -256,7 +262,7 @@ export async function importDocument(file: File | null | undefined): Promise<voi
     const added = store.ui.proposals.length - before;
     store.caption(
       'Import finished',
-      `${imported.fileName}: ${sents.length} sentences read, ${added} proposal${added === 1 ? '' : 's'} waiting for approval on the right.`,
+      `${imported.fileName}: ${sents.length} sentences read, ${added} proposal${added === 1 ? '' : 's'} waiting for approval on the right.${skippedText(imported.skipped)}`,
     );
   } catch (err) {
     const reason = err instanceof ApiError ? err.problem.detail || err.problem.title : (err as Error).message;
