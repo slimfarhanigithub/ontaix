@@ -3,7 +3,9 @@
  * reference/ontaix-studio-reference.html line 214; content from `openDrawer` (lines 637-646)
  * and `showLineage` (lines 653-662). Labels, subs, names and freshness are rendered as text.
  * Delete, offered for approved concepts, is an owner addition absent from the reference; it opens
- * the same proposal dialog as the admin portal's Entities page.
+ * the same proposal dialog as the admin portal's Entities page. Expand, offered for approved
+ * concepts and the company root just before Delete, is another owner addition; it opens the
+ * expansion dialog.
  */
 import { useEffect } from 'react';
 
@@ -12,6 +14,7 @@ import { canDeleteFromDrawer } from '../admin/conceptDeletion';
 import { ancestorsOf, childrenOf, descendantsOf } from '../canvas/lineage';
 import type { Node } from '../canvas/types';
 import { useStore } from './dom';
+import { canExpandFromDrawer, openExpandDialog } from './ExpandDialog';
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const safeColour = (c: string, fallback: string) => (HEX.test(c) ? c : fallback);
@@ -139,10 +142,13 @@ export function Drawer() {
             <span className={`state ${a.state === 'proposed' ? 'new' : ''}`}>
               {a.state === 'proposed' ? 'found in data · pending' : 'approved'}
             </span>
-            <span className="col">{`${a.type} · ${a.col}`}</span>
-            <div className="fill" title={`${a.fill} percent filled`}>
-              <i style={{ width: `${Math.max(0, Math.min(100, Number(a.fill) || 0))}%` }}></i>
-            </div>
+            {/* A taught attribute shows its value where a source attribute shows its column, and has no fill bar. */}
+            <span className="col">{`${a.type} · ${a.value ?? a.col}`}</span>
+            {a.value === undefined ? (
+              <div className="fill" title={`${a.fill} percent filled`}>
+                <i style={{ width: `${Math.max(0, Math.min(100, Number(a.fill) || 0))}%` }}></i>
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -165,6 +171,11 @@ export function Drawer() {
         >
           Lineage
         </button>
+        {canExpandFromDrawer(n) ? (
+          <button id="drExpand" onClick={() => openExpandDialog(n)}>
+            Expand
+          </button>
+        ) : null}
         {canDeleteFromDrawer(n) ? (
           <button id="drDelete" onClick={() => deleteNodeDialog(n)}>
             Delete

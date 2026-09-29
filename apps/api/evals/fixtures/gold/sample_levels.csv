@@ -1,0 +1,9 @@
+Level 1,Level 2,Level 3,Action,Accepted actions,Definition
+Sales,,,runs,has; operates,Everything about selling.
+,Order,,,,A request to buy.
+,,Online Order,is a,,
+,Invoice,,produces,,
+Operations,,,runs,,
+,Delivery,,,,
+,,,,,
+,,Express Delivery,,,A delivery under a named level 2 carried from above.

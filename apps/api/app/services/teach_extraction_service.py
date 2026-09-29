@@ -4,40 +4,57 @@ The step runs behind the grammar, only when a fallback trigger holds. In order: 
 be configured and the tenant's monthly token cap above 0; the caller's hourly `llm` budget is
 charged; the call's upper bound is reserved against the monthly cap and committed; the adapter
 calls the model with nothing but the sentence, the session's recent turns, the company name, up
-to 200 candidate concepts as per-call handles (`c0` is the company root), the domain templates
-and the action guidance. The reservation is settled and a cost record stored whatever happens.
-A valid answer is mapped to drafts with the grammar's mapping; anything else leaves the
-grammar's result standing and the step reports why. The step never raises.
+to 200 candidate concepts as per-call handles (`c0` is the company root), the domain templates,
+the action guidance and up to three worked examples from the example library, picked by lexical
+likeness to the text; the reservation's estimate counts those examples. The reservation is
+settled and a cost record stored whatever happens. A valid answer is mapped to drafts with the
+grammar's mapping; anything else leaves the grammar's result standing and the step reports why.
+The step never raises.
 """
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import re
+import time
 import unicodedata
 import uuid
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from pydantic import ValidationError
 
 from app.ai.prompts.teach_extraction import (
+    EXAMPLE_LIBRARY,
     MAX_OUTPUT_TOKENS,
+    MAX_RETRIEVED_EXAMPLE_TOKENS,
+    MAX_RETRIEVED_EXAMPLES,
     OUTPUT_SCHEMA,
     SPEECH_MAX_OUTPUT_TOKENS,
+    SPEECH_OUTPUT_SCHEMA,
     SYSTEM_PROMPT,
+    render_example,
 )
 from app.auth import Caller
 from app.clients.llm_client import (
     LlmCallError,
     LlmRequest,
     LlmTimeout,
+    estimate_tokens,
     get_llm_client,
 )
-from app.config import get_settings
+from app.config import LlmProfile, get_settings
 from app.models.api.settings import DEFAULT_LLM_MONTHLY_TOKEN_CAP
-from app.models.api.teach import DraftNote, LlmOutcome, SourceSpan, UnresolvedPhrase
+from app.models.api.teach import (
+    DraftNote,
+    LlmOutcome,
+    SourceSpan,
+    UnresolvedPhrase,
+    UnresolvedReason,
+)
 from app.models.llm.teach_extraction_answer import (
     AnswerIntent,
     CandidateRef,
@@ -47,10 +64,13 @@ from app.models.storage.concept import Concept
 from app.repositories.llm_call_repository import CallRecord
 from app.repositories.teach_session_turn_repository import StoredTurn
 from app.services import llm_usage_service
+from app.services.ontology_view_service import OntologyView
 from app.services.rate_limit_service import Budget, try_charge
 from app.services.teach_draft_service import Drafter, End, PlannedIntent, phrase_in
 from app.utilities.action_text import has_refused_character, normalise_action
+from app.utilities.example_selection import most_similar, within_budget
 from app.utilities.permissions import can_read
+from app.utilities.sound_alike import sounds_like_name
 from app.utilities.teach_parser import singular, title
 
 logger = logging.getLogger(__name__)
@@ -63,7 +83,37 @@ MAX_SENTENCE_PHRASES = 10
 MAX_SEGMENT_CHARS = 400
 MAX_EXPLANATION = 300
 MAX_LABEL_CHARS = 120
+MAX_ATTRIBUTE_NAME = 80
+MAX_ATTRIBUTE_VALUE = 200
+# The inflections an attribute name may differ by from the caller's word; the shortest word an
+# inflection is added to, and the shortest stem two inflected words may share.
+_INFLECTIONS = ("ing", "es", "ed", "s", "d")
+_MIN_STEM = 3
+_MIN_SHARED_STEM = 4
 DEFAULT_MEMBER_ACTION = "includes"
+# `X is a <role> of Y` is drafted as Y has <Role>, <Role> includes X.
+ROLE_NOUNS = frozenset(
+    {
+        "client",
+        "customer",
+        "partner",
+        "supplier",
+        "vendor",
+        "subsidiary",
+        "division",
+        "member",
+        "affiliate",
+        "distributor",
+        "reseller",
+        "contractor",
+        "agent",
+        "branch",
+        "unit",
+    }
+)
+ROLE_ACTION = "has"
+ROLE_MEMBER_ACTION = "includes"
+_ROLE_PATTERN = re.compile(r"^(?:is|are) (?:a|an|the|one of the) ([a-z]+?) of$")
 REFUSED_ACTIONS = frozenset({"is a", "equivalent to"})
 
 _WORDS = re.compile(r"[a-z0-9][a-z0-9&'-]*")
@@ -75,6 +125,12 @@ _MID_NUM = frozenset(
 )
 _MID_NUM_LET = frozenset("\u0027\u002e\u2018\u2019\u2024\ufe52\uff07\uff0e")
 _HYPHEN = "-"
+# Punctuation that may join the words of one name inside a grounded label.
+_LABEL_JOINERS = frozenset("&./-'’+")
+# A full stop followed by whitespace, or any other sentence-ending mark, ends a sentence.
+_SENTENCE_END = re.compile(r"\.\s|[!?;:]")
+# A word that tells the example ranking the reading mode, so a transcript favours transcripts.
+_MODE_WORD = {"sentence": "mode_sentence", "speech": "mode_speech", "document": "mode_document"}
 
 
 @dataclass
@@ -88,6 +144,22 @@ class ModelStep:
 
 class _InvalidAnswer(Exception):
     """The answer failed the schema or a check the schema cannot express."""
+
+
+class _Stages:
+    """Milliseconds spent in each named stage of one step, for the debug log."""
+
+    def __init__(self) -> None:
+        self._last = time.perf_counter()
+        self._spent: list[tuple[str, int]] = []
+
+    def mark(self, stage: str) -> None:
+        now = time.perf_counter()
+        self._spent.append((stage, int((now - self._last) * 1000)))
+        self._last = now
+
+    def __str__(self) -> str:
+        return " ".join(f"{stage}={ms}ms" for stage, ms in self._spent)
 
 
 @dataclass(frozen=True)
@@ -109,6 +181,16 @@ class Reading:
         return self.mode != "sentence"
 
 
+def enabled(view: OntologyView, profile: LlmProfile) -> bool:
+    """True when the step can be tried on `profile`: its provider is configured and the tenant's
+    monthly token cap is above 0. Budgets and the provider's answer are checked when the step
+    runs."""
+    if get_llm_client(profile) is None:
+        return False
+    settings = view.settings
+    return (settings.llm_monthly_token_cap if settings else DEFAULT_LLM_MONTHLY_TOKEN_CAP) > 0
+
+
 async def run(
     caller: Caller,
     drafter: Drafter,
@@ -116,10 +198,13 @@ async def run(
     text: str,
     turns: list[StoredTurn],
     reading: Reading | None = None,
+    *,
+    profile: LlmProfile,
 ) -> ModelStep:
-    """The model step for `sentence` (`text` is the sentence after its domain prefix)."""
+    """The model step for `sentence` (`text` is the sentence after its domain prefix), on the
+    caller's model profile. Budgets and the monthly cap are the same for every profile."""
     try:
-        return await _run(caller, drafter, sentence, text, turns, reading or Reading())
+        return await _run(caller, drafter, sentence, text, turns, reading or Reading(), profile)
     except Exception:
         logger.exception("the teach extraction step failed; the grammar's result stands")
         return ModelStep("provider_error")
@@ -132,8 +217,9 @@ async def _run(
     text: str,
     turns: list[StoredTurn],
     reading: Reading,
+    profile: LlmProfile,
 ) -> ModelStep:
-    client = get_llm_client()
+    client = get_llm_client(profile)
     if client is None:
         return ModelStep("not_configured")
     settings = drafter.view.settings
@@ -141,26 +227,31 @@ async def _run(
     if cap <= 0:
         return ModelStep("budget_exhausted")
     actor_kind = caller.actor_kind.value
+    stages = _Stages()
     if not await try_charge(Budget.LLM, caller.tenant_id, actor_kind, caller.user_id):
         return ModelStep("rate_limited")
+    stages.mark("budget")
     handles = _candidates(caller, drafter, text, turns)
     config = get_settings()
+    allowance = config.llm_profile(profile).reasoning_allowance_tokens
     request = LlmRequest(
         system=SYSTEM_PROMPT,
         user=_context(drafter, text, turns, handles, reading),
-        output_schema=OUTPUT_SCHEMA,
+        output_schema=SPEECH_OUTPUT_SCHEMA if reading.speech else OUTPUT_SCHEMA,
         # The answer bound plus the reasoning allowance: a provider's output bound counts
         # reasoning tokens too. The answer's own size is bounded by its validation.
         max_output_tokens=(SPEECH_MAX_OUTPUT_TOKENS if reading.speech else MAX_OUTPUT_TOKENS)
-        + config.llm_reasoning_allowance_tokens,
+        + allowance,
         timeout_seconds=(
             config.llm_speech_timeout_seconds if reading.speech else config.llm_timeout_seconds
         ),
     )
+    stages.mark("context")
     upper_bound = client.estimate_input_tokens(request) + request.max_output_tokens
     reservation = await llm_usage_service.reserve(caller.tenant_id, upper_bound, cap)
     if reservation is None:
         return ModelStep("budget_exhausted")
+    stages.mark("reserve")
 
     def record(outcome: str, tokens_in: int, tokens_out: int, cost: float, ms: int) -> CallRecord:
         return CallRecord(
@@ -193,6 +284,7 @@ async def _run(
             outcome = "provider_error"
             return ModelStep(outcome)
         usage = (answer.input_tokens, answer.output_tokens, answer.cost_eur, answer.latency_ms)
+        stages.mark("model")
         try:
             step = _interpret(answer.text, handles, drafter, sentence, text, reading)
         except _InvalidAnswer as exc:
@@ -204,7 +296,16 @@ async def _run(
         outcome = "used"
         return step
     finally:
+        stages.mark("interpret")
         await _settle(reservation, record(outcome, *usage))
+        stages.mark("settle")
+        logger.debug(
+            "teach extraction on %s (%s, %d input tokens estimated): %s",
+            profile,
+            outcome,
+            upper_bound - request.max_output_tokens,
+            stages,
+        )
 
 
 async def _settle(reservation: llm_usage_service.Reservation, record: CallRecord) -> None:
@@ -314,6 +415,7 @@ def _context(
     data: dict[str, Any] = {
         "mode": reading.mode,
         "sentence": text,
+        "sentenceLength": len(text),
         "domainPrefix": drafter.dom_key,
         "company": view.companies[drafter.company_id].name,
         "sessionTurns": [
@@ -332,7 +434,36 @@ def _context(
     }
     if reading.mode == "document":
         data["neighbours"] = {"before": list(reading.before), "after": list(reading.after)}
-    return json.dumps(data, ensure_ascii=False)
+    # The retrieved examples come first, after the fixed prefix and before the caller's text.
+    return json.dumps({"examples": examples_for(text, reading.mode), **data}, ensure_ascii=False)
+
+
+def examples_for(text: str, mode: str) -> list[dict[str, Any]]:
+    """The library examples most like `text` read in `mode`, best first: at most
+    MAX_RETRIEVED_EXAMPLES, together within MAX_RETRIEVED_EXAMPLE_TOKENS estimated tokens."""
+    shown, texts, costs = _library()
+    ranked = most_similar(f"{text} {_MODE_WORD.get(mode, '')}", texts)
+    chosen = within_budget(ranked, costs, MAX_RETRIEVED_EXAMPLES, MAX_RETRIEVED_EXAMPLE_TOKENS)
+    return [shown[i] for i in chosen]
+
+
+def example_tokens(example: dict[str, Any]) -> int:
+    """The estimated input tokens one shown example adds, by the call's own estimate."""
+    return estimate_tokens(LlmRequest("", json.dumps(example, ensure_ascii=False), {}, 0, 0))
+
+
+@functools.cache
+def _library() -> tuple[list[dict[str, Any]], list[str], list[int]]:
+    """The library examples as shown to the model, as ranked, and their estimated tokens."""
+    shown = [render_example(e) for e in EXAMPLE_LIBRARY]
+    return shown, [_example_text(e) for e in EXAMPLE_LIBRARY], [example_tokens(e) for e in shown]
+
+
+def _example_text(example: dict[str, Any]) -> str:
+    """What the ranking compares: the example's text, its candidates' labels and its mode."""
+    data = example["input"]
+    labels = " ".join(c["label"] for c in data.get("candidates", []))
+    return f"{data['sentence']} {labels} {_MODE_WORD[data['mode']]}"
 
 
 def _interpret(
@@ -356,6 +487,7 @@ def _interpret(
     sent = {c.id for c in handles}
     cross_company = bool(drafter.view.settings and drafter.view.settings.cross_company)
     checked: list[_Checked] = []
+    earlier = _grounded_labels(answer, sources, text)
     for intent, source in zip(answer.intents, sources, strict=True):
         if reading.speech and intent.segment is None:
             raise _InvalidAnswer("a transcript intent names no segment")
@@ -367,11 +499,28 @@ def _interpret(
         seg_start, seg_end = segments[index]
         if not seg_start <= source[0] < source[1] <= seg_end:
             raise _InvalidAnswer("an intent's source lies outside its segment")
+        if intent.kind == "attr":
+            _check_attr_subject(intent.subject, handles, drafter)
+            checked.append(_Checked(intent, None, None, [], None, None, index, source, True))
+            continue
+        assert intent.object is not None
         # Each new label is reused as a candidate sent in this call, or grounded in the
-        # caller's words inside the source range; the self-join checks run after that.
+        # caller's words inside the source range; the self-join checks run after that. An
+        # ungrounded subject or object sinks the intent; an ungrounded member is left out alone.
         raw = [intent.subject, intent.object, *(intent.members or [])]
-        placed = [_end(ref, handles, sent, drafter, text, source) for ref in raw]
-        grounded = all(end is not None for end in placed)
+        placed = [_end(ref, handles, sent, drafter, text, source, earlier) for ref in raw]
+        # Speech recognition mishears names: a new label that sounds like the name of one of
+        # the company's concepts is never drafted beside it; the phrase is listed instead. Each
+        # end left out keeps its own reason.
+        reasons: list[UnresolvedReason | None] = [
+            None if end is not None else "ungrounded_label" for end in placed
+        ]
+        if reading.speech:
+            for i, end in enumerate(placed):
+                if end is not None and _misheard(end, drafter):
+                    placed[i], reasons[i] = None, "ambiguous_reference"
+        grounded = placed[0] is not None and placed[1] is not None
+        dropped = sum(1 for end in placed[2:] if end is None)
         ends = [end for end in placed if end is not None]
         if any(_same(a, b) for i, a in enumerate(ends) for b in ends[i + 1 :]):
             raise _InvalidAnswer("an intent joins a concept to itself or repeats a member")
@@ -393,9 +542,35 @@ def _interpret(
             action = _action(intent.action)
             if intent.members:
                 member_action = _action(intent.member_action or DEFAULT_MEMBER_ACTION)
-        subject, obj, *members = placed if grounded else [placed[0], placed[1]]
+        subject, obj = placed[0], placed[1]
+        members = [end for end in placed[2:] if end is not None] if grounded else []
+        # A grouping stays inside the taught company, so a role is read only between its own
+        # concepts or new labels.
+        own = grounded and not foreign
+        role = _role_end(action, obj, drafter, text, source) if own else None
+        if role is not None and subject is not None and not members:
+            # `X is a <role> of Y`: Y has the role, and the role includes X.
+            subject, obj, members = obj, role, [subject]
+            action, member_action = ROLE_ACTION, ROLE_MEMBER_ACTION
+            # `Partner is a partner of Acme` would make the role include itself.
+            flipped = [subject, obj, *members]
+            if any(_same(a, b) for i, a in enumerate(flipped) for b in flipped[i + 1 :]):
+                raise _InvalidAnswer("an intent joins a concept to itself or repeats a member")
         checked.append(
-            _Checked(intent, subject, obj, members, action, member_action, index, source, grounded)
+            _Checked(
+                intent,
+                subject,
+                obj,
+                members,
+                action,
+                member_action,
+                index,
+                source,
+                grounded,
+                dropped,
+                _distinct(reasons[:2]),
+                _distinct(reasons[2:]),
+            )
         )
 
     offset = len(sentence) - len(text)
@@ -407,6 +582,8 @@ def _interpret(
         else [(0, len(sentence))],
     )
     lists: dict[int, list[PlannedIntent]] = {}
+    # Attributes this answer drafts: (concept id or new label, name) to value.
+    taught: dict[tuple[str, str], str] = {}
     list_sizes: dict[int, int] = {}
     stated: dict[int, int] = {}
     for c in checked:
@@ -417,12 +594,26 @@ def _interpret(
                 stated.setdefault(intent.list_id, intent.stated_count)
         span = (c.source[0] + offset, c.source[1] + offset)
         where = sentence[span[0] : span[1]][:400]
+        if intent.kind == "attr":
+            attr = _plan_attr(c, handles, sent, drafter, text, taught, offset)
+            if isinstance(attr, PlannedIntent):
+                step.planned.append(attr)
+            elif attr is not None:
+                step.unresolved.append(UnresolvedPhrase(text=where, reason=attr))
+            continue
         if not c.grounded or c.subject is None or c.obj is None:
-            step.unresolved.append(UnresolvedPhrase(text=where, reason="ungrounded_label"))
+            for reason in c.end_reasons or ("ungrounded_label",):
+                step.unresolved.append(UnresolvedPhrase(text=where, reason=reason))
             continue
         if intent.confidence < MIN_CONFIDENCE:
             step.unresolved.append(UnresolvedPhrase(text=where, reason="low_confidence"))
             continue
+        if c.dropped:
+            for reason in c.member_reasons:
+                step.unresolved.append(UnresolvedPhrase(text=where, reason=reason))
+            if not c.members:
+                # A group whose every member is ungrounded is not drafted empty.
+                continue
         note = DraftNote(
             extractor="llm",
             confidence=intent.confidence,
@@ -457,8 +648,9 @@ def _interpret(
                 _note_count(planned, stated[list_id], list_sizes[list_id])
     for phrase in answer.unresolved:
         where = None
-        if phrase.source is not None and phrase.source.start < phrase.source.end <= len(text):
-            where = sentence[phrase.source.start + offset : phrase.source.end + offset]
+        if phrase.source is not None and phrase.source.start < len(text):
+            start, end = phrase.source.start, min(phrase.source.end, len(text))
+            where = sentence[start + offset : end + offset]
         step.unresolved.append(
             UnresolvedPhrase(
                 text=(where or phrase_in(sentence, phrase.text))[:400], reason=phrase.reason
@@ -478,6 +670,12 @@ class _Checked:
     segment: int
     source: tuple[int, int]
     grounded: bool
+    # Members of a grouping intent left out as ungrounded or misheard.
+    dropped: int = 0
+    # Why the subject or object, and why members, were left out: ungrounded_label, or
+    # ambiguous_reference for a label that sounds like an existing name; each reason once.
+    end_reasons: tuple[UnresolvedReason, ...] = ()
+    member_reasons: tuple[UnresolvedReason, ...] = ()
 
 
 def _ranges(
@@ -486,8 +684,8 @@ def _ranges(
     """The answer's segments in order (one covering the text when it gives none), and each
     intent's source range.
 
-    The model's segment offsets are approximate: each segment is trimmed of surrounding
-    whitespace and a boundary that cuts a word is moved out to the word's edge. Each intent's
+    The model's segment offsets are approximate: a boundary that cuts a word is moved to the
+    word's nearer edge and each segment is trimmed of surrounding whitespace. Each intent's
     source is then located from its quote, and a segment is widened to cover the sources of its
     intents; a source is never chosen where that widening would reach into another segment. The
     order, overlap and length checks run on the result."""
@@ -497,9 +695,11 @@ def _ranges(
         return whole, [_locate(intent, text, words, whole, 0) for intent in answer.intents]
     snapped: list[tuple[int, int]] = []
     for i, seg in enumerate(answer.segments):
-        if seg.index != i or seg.end > len(text):
-            raise _InvalidAnswer("a segment is out of order or outside the text")
-        snapped.append(_snap(text, words, seg.start, seg.end))
+        if seg.index != i:
+            raise _InvalidAnswer("a segment is out of order")
+        if i and seg.start < answer.segments[i - 1].end:
+            raise _InvalidAnswer("segments overlap, go backwards or are too long")
+        snapped.append(_snap(text, words, *_clamp(seg.start, seg.end, text)))
     owners = [intent.segment if intent.segment is not None else 0 for intent in answer.intents]
     sources = [
         _locate(intent, text, words, snapped, own)
@@ -518,18 +718,43 @@ def _ranges(
     return out, sources
 
 
+def _clamp(start: int, end: int, text: str) -> tuple[int, int]:
+    """A model range with its end clamped to the text's length: the model overshoots range ends
+    by a character or two. A range left empty by the clamp makes the answer invalid."""
+    end = min(end, len(text))
+    if start >= end:
+        raise _InvalidAnswer("a range lies outside the text")
+    return start, end
+
+
 def _snap(text: str, words: list[tuple[int, int]], start: int, end: int) -> tuple[int, int]:
-    """`[start, end)` without surrounding whitespace, with a boundary inside a word moved out
-    to that word's edge."""
+    """`[start, end)` with a boundary inside a word moved to that word's nearer edge, out of the
+    range on a tie, and without surrounding whitespace.
+
+    A model's offsets drift by a few code points along a transcript, so a boundary that cuts a
+    word mostly lies next to the gap the model meant; moving it to the nearer edge keeps two
+    neighbouring segments from both claiming the cut word. When that leaves the range without a
+    word, both boundaries move out instead."""
+    near_start, near_end = start, end
+    out_start, out_end = start, end
+    for a, b in words:
+        if a < start < b:
+            near_start = a if start - a <= b - start else b
+            out_start = a
+        if a < end < b:
+            near_end = b if b - end <= end - a else a
+            out_end = b
+    start, end = _trim(text, near_start, near_end)
+    if start >= end:
+        start, end = _trim(text, out_start, out_end)
+    return start, end
+
+
+def _trim(text: str, start: int, end: int) -> tuple[int, int]:
     while start < end and text[start].isspace():
         start += 1
     while end > start and text[end - 1].isspace():
         end -= 1
-    for a, b in words:
-        if a < start < b:
-            start = a
-        if a < end < b:
-            end = b
     return start, end
 
 
@@ -551,7 +776,7 @@ def _locate(
     nearest the model's own start. The range is always a slice of the caller's input, so
     grounding still judges it word by word. Without a quote, or when no occurrence qualifies,
     the model's offsets stand."""
-    claimed = (intent.source.start, intent.source.end)
+    claimed = _clamp(intent.source.start, intent.source.end, text)
     quote = (intent.span or "").strip()
     if not quote:
         return claimed
@@ -609,32 +834,104 @@ def _occurrences_folded(text: str, quote: str) -> list[tuple[int, int]]:
     return out
 
 
+def ground_in_sentence(label: str, sentence: str) -> tuple[str, int, int] | None:
+    """The words of `sentence` that `label` names, as a label with their code-point range, or
+    None: the teach grounding rule applied to one whole document sentence."""
+    return _grounded_run(label, sentence, (0, len(sentence)))
+
+
+def quote_range(text: str, quote: str) -> tuple[int, int] | None:
+    """The first occurrence of `quote` in `text`, exact or after whitespace collapse and case
+    folding, as a code-point range; None when it does not occur."""
+    quote = quote.strip()
+    if not quote:
+        return None
+    found = _occurrences_exact(text, quote) or _occurrences_folded(text, quote)
+    return found[0] if found else None
+
+
 def _ground(label: str, text: str, source: tuple[int, int]) -> str | None:
-    """The caller's own words in `text[source]` that `label` names, as a label, or None.
+    """The caller's own words in `text[source]` that `label` names, as a label, or None."""
+    grounded = _grounded_run(label, text, source)
+    return grounded[0] if grounded else None
+
+
+def _grounded_run(label: str, text: str, source: tuple[int, int]) -> tuple[str, int, int] | None:
+    """The caller's own words in `text[source]` that `label` names, as a label with their range.
 
     Words are found over the whole input, so a source range that cuts into a word grounds
     nothing; only words lying wholly inside the range count. Each word is normalised on its own
-    (NFKC, case folded, singular), so the matched run maps back to the original words, and only
-    whitespace may separate them. The label is sliced from the original input and put through
-    the casing rule and the label rules, never taken from the model's string."""
+    (NFKC, case folded, singular), so the matched run maps back to the original words. Between
+    two words the label must carry the same characters as the input: whitespace (any run
+    compares as one space) or the joining punctuation of names (`L&S`, `R&D`, `A/B`, `O'Neil`);
+    a sentence end, a comma or any other character never joins words into one label.
+    Characters around the words are dropped, except an abbreviation's closing full stop
+    (`S.A.`), which the input must carry too. The label is sliced from the original input and
+    put through the casing rule and the label rules, never taken from the model's string."""
+    for first, last in _runs(label, text, source, _fold):
+        candidate = title(unicodedata.normalize("NFKC", text[first:last]))
+        if _valid_label(candidate):
+            return candidate, first, last
+    return None
+
+
+def _runs(
+    phrase: str, text: str, source: tuple[int, int], fold: Callable[[str], str]
+) -> Iterator[tuple[int, int]]:
+    """Ranges of `text[source]` whose whole words match the words of `phrase` one by one under
+    `fold`, with the same separators between them, in order; see `_ground`."""
     start, end = source
     words = _words(text)
     if any(a < start < b or a < end < b for a, b in words):
-        return None
+        return
     inside = [(a, b) for a, b in words if a >= start and b <= end]
-    label = unicodedata.normalize("NFC", label)
-    wanted = [_fold(label[a:b]) for a, b in _words(label)]
+    phrase = unicodedata.normalize("NFC", phrase)
+    phrase_words = _words(phrase)
+    wanted = [fold(phrase[a:b]) for a, b in phrase_words]
     n = len(wanted)
+    if not n:
+        return
+    gaps = [phrase[x[1] : y[0]] for x, y in zip(phrase_words, phrase_words[1:], strict=False)]
+    # Characters around the phrase's words are not part of it, except an abbreviation's
+    # closing full stop (`S.A.`).
+    abbreviation = "." in phrase[phrase_words[-1][0] : phrase_words[-1][1]]
+    tail = "." if abbreviation and phrase[phrase_words[-1][1] :].startswith(".") else ""
+    if any(not _joins_label(g) for g in gaps):
+        return
     for i in range(len(inside) - n + 1):
         run = inside[i : i + n]
-        if not n or [_fold(text[a:b]) for a, b in run] != wanted:
+        if [fold(text[a:b]) for a, b in run] != wanted:
             continue
-        if any(not text[x[1] : y[0]].isspace() for x, y in zip(run, run[1:], strict=False)):
+        spoken = [text[x[1] : y[0]] for x, y in zip(run, run[1:], strict=False)]
+        if any(_gap(a) != _gap(b) for a, b in zip(spoken, gaps, strict=True)):
             continue
-        candidate = title(unicodedata.normalize("NFKC", text[run[0][0] : run[-1][1]]))
-        if _valid_label(candidate):
-            return candidate
-    return None
+        first, last = run[0][0], run[-1][1] + len(tail)
+        if last > end or text[run[-1][1] : last] != tail:
+            continue
+        if _part_of_name(text, first, last):
+            continue
+        yield first, last
+
+
+def _part_of_name(text: str, first: int, last: int) -> bool:
+    """True when joining punctuation ties `text[first:last]` to a word next to it, as `L` is
+    tied to `S` in `L&S`: the run is then only part of a name."""
+    before = first >= 2 and text[first - 1] in _LABEL_JOINERS and _word_char(text[first - 2])
+    after = last + 1 < len(text) and text[last] in _LABEL_JOINERS and _word_char(text[last + 1])
+    return before or after
+
+
+def _joins_label(gap: str) -> bool:
+    """True when `gap` may sit between two words of a label: whitespace and joining
+    punctuation, never a sentence end."""
+    if any(c not in _LABEL_JOINERS and not c.isspace() for c in gap):
+        return False
+    return not _SENTENCE_END.search(gap)
+
+
+def _gap(gap: str) -> str:
+    """A gap between two words as compared: NFKC, every whitespace run as one space."""
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", gap))
 
 
 def _words(text: str) -> list[tuple[int, int]]:
@@ -741,10 +1038,13 @@ def _end(
     drafter: Drafter,
     text: str,
     source: tuple[int, int],
+    earlier: list[str] | None = None,
 ) -> End | None:
     """An intent end: a cited candidate; a new label naming a candidate sent in this call,
-    reused as is; or a new label grounded in the caller's words (then resolved to an existing
-    concept of the company when one has that label). None when a new label is ungrounded."""
+    reused as is; or a new label grounded in the caller's words - inside this intent's range,
+    or as a label another intent of the same answer grounded in its own range (`earlier`) - and
+    then resolved to an existing concept of the company when one has that label. None when a
+    new label is ungrounded."""
     if isinstance(ref, CandidateRef):
         index = int(ref.candidate[1:])
         if index >= len(handles):
@@ -755,10 +1055,225 @@ def _end(
     reused = drafter.resolve(label)
     if reused is not None and reused.id in sent:
         return End(reused, reused.label, reused.label)
-    spoken = _ground(label, text, source)
+    spoken = _ground(label, text, source) or _repeated(label, earlier or [])
     if spoken is None:
         return None
     return End(drafter.resolve(spoken), spoken, spoken, cited_new=True)
+
+
+def _misheard(end: End, drafter: Drafter) -> bool:
+    """True when `end` is a new label the model gave no candidate for, and it sounds like, but
+    is not, the proper name of one of the company's concepts (`Ahmedabus` beside `Amdaris`)."""
+    if end.concept is not None:
+        return False
+    companies = [company.name for company in drafter.view.companies.values()]
+    return any(sounds_like_name(end.label, c.label, company_names=companies) for c in drafter.mine)
+
+
+def _distinct(reasons: list[UnresolvedReason | None]) -> tuple[UnresolvedReason, ...]:
+    return tuple(dict.fromkeys(r for r in reasons if r is not None))
+
+
+def _grounded_labels(
+    answer: TeachExtractionAnswer, sources: list[tuple[int, int]], text: str
+) -> list[str]:
+    """The new labels of the answer that are grounded inside their own intent's range, each as
+    the caller's words sliced from the input."""
+    labels: list[str] = []
+    for intent, source in zip(answer.intents, sources, strict=True):
+        if intent.kind == "attr":
+            continue
+        for ref in [intent.subject, intent.object, *(intent.members or [])]:
+            if ref is None or isinstance(ref, CandidateRef):
+                continue
+            spoken = _ground(title(unicodedata.normalize("NFKC", ref.new_label)), text, source)
+            if spoken is not None and spoken not in labels:
+                labels.append(spoken)
+    return labels
+
+
+def _repeated(label: str, earlier: list[str]) -> str | None:
+    """The label another intent of the answer already grounded that `label` repeats, word for
+    word as the grounding compares words, or None. The result is that intent's slice of the
+    caller's input, so only the caller's own words can name a new concept."""
+    for spoken in earlier:
+        if (_ground(label, spoken, (0, len(spoken))) or "").casefold() == spoken.casefold():
+            return spoken
+    return None
+
+
+def _role_end(
+    action: str | None,
+    holder: End | None,
+    drafter: Drafter,
+    text: str,
+    source: tuple[int, int],
+) -> End | None:
+    """The role concept of a `rel` intent whose action reads `is a <role> of`: the holder's
+    existing child of that label, else the company's concept of that label, else the role noun
+    as a new label grounded in the caller's words. None for any other action, or when the noun
+    is not in the caller's words."""
+    found = _ROLE_PATTERN.match(action or "")
+    if found is None or holder is None:
+        return None
+    noun = found.group(1)
+    if singular(noun) not in ROLE_NOUNS:
+        return None
+    wanted = {noun, singular(noun)}
+    if holder.concept is not None:
+        for child in drafter.view.children_of(holder.concept.id):
+            if {child.label.lower(), singular(child.label.lower())} & wanted:
+                return End(child, child.label, child.label)
+    spoken = _ground(title(noun), text, source)
+    if spoken is None:
+        return None
+    return End(drafter.resolve(spoken), spoken, spoken, cited_new=True)
+
+
+def _check_attr_subject(ref: Any, handles: list[Concept], drafter: Drafter) -> None:
+    """An attr intent's cited subject was sent and belongs to the taught company."""
+    if not isinstance(ref, CandidateRef):
+        return
+    index = int(ref.candidate[1:])
+    if index >= len(handles):
+        raise _InvalidAnswer("a cited candidate was not sent")
+    if handles[index].company_id != drafter.company_id:
+        raise _InvalidAnswer("an attribute is taught on a concept of the taught company only")
+
+
+def _plan_attr(
+    c: _Checked,
+    handles: list[Concept],
+    sent: set[uuid.UUID],
+    drafter: Drafter,
+    text: str,
+    taught: dict[tuple[str, str], str],
+    offset: int,
+) -> PlannedIntent | UnresolvedReason | None:
+    """The planned attribute of an attr intent; the reason it is not drafted; or None for a
+    repeat of an attribute the same answer already drafts with the same value.
+
+    The subject resolves to a sent candidate, to a concept an earlier intent introduces, or to
+    an existing concept of the taught company named in the caller's words; the name and the
+    value are grounded in the caller's words inside the intent's source range."""
+    intent = c.intent
+    assert intent.attribute_name is not None and intent.attribute_value is not None
+    subject = _attr_subject(intent.subject, handles, sent, drafter, text, c.source)
+    name = _ground_name(intent.attribute_name, text, c.source)
+    value = _ground_value(intent.attribute_value, text, c.source)
+    if subject is None or name is None or value is None:
+        return "ungrounded_label"
+    if intent.confidence < MIN_CONFIDENCE:
+        return "low_confidence"
+    concept = subject.concept
+    key = (str(concept.id) if concept else subject.label.lower(), name)
+    existing = drafter.view.attribute_named(concept.id, name) if concept else None
+    held = existing.value if existing is not None else None
+    if existing is not None and (held is None or held.casefold() != value.casefold()):
+        return "attribute_exists"
+    if key in taught:
+        return None if taught[key].casefold() == value.casefold() else "attribute_exists"
+    span = (c.source[0] + offset, c.source[1] + offset)
+    note = DraftNote(
+        extractor="llm",
+        confidence=intent.confidence,
+        explanation=intent.explanation,
+        segment=c.segment,
+        source_span=SourceSpan(start=span[0], end=span[1]),
+    )
+    planned = drafter.model_attr(subject, name, value, intent.value_type or "text", note, held)
+    if held is None:
+        taught[key] = value
+    planned.span = intent.span
+    planned.segment = c.segment
+    return planned
+
+
+def _attr_subject(
+    ref: Any,
+    handles: list[Concept],
+    sent: set[uuid.UUID],
+    drafter: Drafter,
+    text: str,
+    source: tuple[int, int],
+) -> End | None:
+    """The concept an attr intent describes, or None. A new label is reused as a candidate sent
+    in this call, else names a concept an earlier intent of the answer introduces, else must be
+    grounded in the caller's words and then name an existing concept of the taught company; it
+    never introduces a concept."""
+    if isinstance(ref, CandidateRef):
+        concept = handles[int(ref.candidate[1:])]
+        return End(concept, concept.label, concept.label)
+    label = title(unicodedata.normalize("NFKC", ref.new_label))
+    reused = drafter.resolve(label)
+    if reused is not None and reused.id in sent:
+        return End(reused, reused.label, reused.label)
+    introduced = drafter.introduced_label(label)
+    if introduced is not None:
+        return End(None, introduced, introduced, cited_new=True)
+    spoken = _ground(label, text, source)
+    concept = drafter.resolve(spoken) if spoken else None
+    if concept is None or spoken is None:
+        return None
+    return End(concept, concept.label, spoken)
+
+
+def _ground_value(value: str, text: str, source: tuple[int, int]) -> str | None:
+    """The caller's own words in `text[source]` that `value` quotes, word for word (NFKC and
+    case folded, no singular or plural), sliced from the input with its whitespace runs
+    collapsed; None when the input does not carry them."""
+    for first, last in _runs(value, text, source, _fold_exact):
+        spoken = " ".join(unicodedata.normalize("NFKC", text[first:last]).split())
+        if 0 < len(spoken) <= MAX_ATTRIBUTE_VALUE and not has_refused_character(spoken):
+            return spoken
+    return None
+
+
+def _ground_name(name: str, text: str, source: tuple[int, int]) -> str | None:
+    """`name` lower-cased when each of its words is a word of `text[source]` or an inflection
+    of one (see `_inflects`: `billing` for `billed`, `base` for `based`), else None. The name is
+    words separated by single spaces, nothing else."""
+    start, end = source
+    words = _words(text)
+    if any(a < start < b or a < end < b for a, b in words):
+        return None
+    spoken = [_fold_exact(text[a:b]) for a, b in words if a >= start and b <= end]
+    normalised = unicodedata.normalize("NFKC", name).casefold()
+    name_words = [normalised[a:b] for a, b in _words(normalised)]
+    if not name_words or " ".join(name_words) != normalised:
+        return None
+    if len(normalised) > MAX_ATTRIBUTE_NAME or has_refused_character(normalised):
+        return None
+    if any(not any(_inflects(w, said) for said in spoken) for w in name_words):
+        return None
+    return normalised
+
+
+def _inflects(a: str, b: str) -> bool:
+    """True when `a` and `b` are the same word, when one is the other plus an allowed suffix
+    (`base` and `based`), or when both are one stem of at least four characters plus an
+    allowed suffix each (`billed` and `billing`). A shorter shared stem is not enough, so
+    `rats` and `rated` or `bass` and `based` differ."""
+    if a == b:
+        return True
+    short, long = sorted((a, b), key=len)
+    if len(short) >= _MIN_STEM and any(long == short + suffix for suffix in _INFLECTIONS):
+        return True
+    return bool(_stems(a) & _stems(b))
+
+
+def _stems(word: str) -> set[str]:
+    """The stems `word` gives with one allowed suffix removed, each at least
+    `_MIN_SHARED_STEM` characters long."""
+    return {
+        word[: -len(suffix)]
+        for suffix in _INFLECTIONS
+        if word.endswith(suffix) and len(word) - len(suffix) >= _MIN_SHARED_STEM
+    }
+
+
+def _fold_exact(word: str) -> str:
+    return unicodedata.normalize("NFKC", word).casefold()
 
 
 def _same(a: End, b: End) -> bool:

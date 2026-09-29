@@ -25,6 +25,7 @@ class Outbox(Base):
     visibility: Mapped[str]
     company_ids: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), server_default=text("'{}'"))
     domain_key: Mapped[str | None] = mapped_column(ForeignKey("domain_template.key"))
+    recipient_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     actor_kind: Mapped[ActorKind] = mapped_column(pg_enum(ActorKind, "actor_kind"))
     actor_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     bulk: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))

@@ -1,0 +1,246 @@
+{
+  "@context": {
+    "ex": "http://example.com/acme#",
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#"
+  },
+  "@graph": [
+    {
+      "@id": "ex:OnlineOrder",
+      "@type": "owl:Class",
+      "rdfs:label": {
+        "@language": "en",
+        "@value": "Online Order"
+      },
+      "rdfs:subClassOf": {
+        "@id": "ex:Order"
+      }
+    },
+    {
+      "@id": "ex:Acme",
+      "@type": "owl:Class",
+      "rdfs:label": {
+        "@language": "en",
+        "@value": "Acme Corp"
+      }
+    },
+    {
+      "@id": "ex:places",
+      "@type": "owl:ObjectProperty",
+      "rdfs:domain": {
+        "@id": "ex:Customer"
+      },
+      "rdfs:label": {
+        "@language": "en",
+        "@value": "places (0..*)"
+      },
+      "rdfs:range": {
+        "@id": "ex:Order"
+      }
+    },
+    {
+      "@id": "ex:Order",
+      "@type": "owl:Class",
+      "rdfs:label": {
+        "@language": "en",
+        "@value": "Order"
+      },
+      "rdfs:subClassOf": [
+        {
+          "@id": "ex:Sales"
+        },
+        {
+          "@id": "_:ndf866ff6ef4c4e02b3e6105f7176b135b2"
+        }
+      ]
+    },
+    {
+      "@id": "_:ndf866ff6ef4c4e02b3e6105f7176b135b2",
+      "@type": "owl:Restriction",
+      "owl:allValuesFrom": {
+        "@id": "xsd:date"
+      },
+      "owl:onProperty": {
+        "@id": "ex:orderDate"
+      }
+    },
+    {
+      "@id": "ex:shipsProduct",
+      "@type": "owl:ObjectProperty",
+      "rdfs:domain": {
+        "@id": "ex:Delivery"
+      },
+      "rdfs:range": {
+        "@id": "ex:Product"
+      }
+    },
+    {
+      "@id": "ex:Product",
+      "@type": "owl:Class",
+      "rdfs:label": {
+        "@language": "en",
+        "@value": "Product"
+      },
+      "rdfs:subClassOf": {
+        "@id": "owl:Thing"
+      }
+    },
+    {
+      "@id": "ex:containsItem",
+      "@type": "owl:ObjectProperty",
+      "rdfs:domain": {
+        "@id": "_:ndf866ff6ef4c4e02b3e6105f7176b135b3"
+      },
+      "rdfs:label": {
+        "@language": "en",
+        "@value": "contains"
+      },
+      "rdfs:range": {
+        "@id": "ex:Product"
+      }
+    },
+    {
+      "@id": "_:ndf866ff6ef4c4e02b3e6105f7176b135b3",
+      "@type": "owl:Class",
+      "owl:unionOf": {
+        "@list": [
+          {
+            "@id": "ex:Order"
+          },
+          {
+            "@id": "ex:Delivery"
+          }
+        ]
+      }
+    },
+    {
+      "@id": "http://example.com/acme",
+      "@type": "owl:Ontology",
+      "rdfs:comment": {
+        "@language": "en",
+        "@value": "A tiny synthetic business ontology for the gold importer tests."
+      }
+    },
+    {
+      "@id": "ex:orderDate",
+      "@type": "owl:DatatypeProperty",
+      "rdfs:domain": {
+        "@id": "ex:Order"
+      },
+      "rdfs:range": {
+        "@id": "xsd:date"
+      }
+    },
+    {
+      "@id": "ex:Widget",
+      "@type": [
+        "owl:NamedIndividual",
+        "ex:Product"
+      ],
+      "rdfs:label": {
+        "@language": "en",
+        "@value": "Widget"
+      }
+    },
+    {
+      "@id": "ex:Customer",
+      "@type": "owl:Class",
+      "owl:disjointWith": {
+        "@id": "ex:Product"
+      },
+      "rdfs:label": {
+        "@language": "en",
+        "@value": "Customer"
+      },
+      "rdfs:subClassOf": [
+        {
+          "@id": "ex:Sales"
+        },
+        {
+          "@id": "_:ndf866ff6ef4c4e02b3e6105f7176b135b1"
+        }
+      ]
+    },
+    {
+      "@id": "_:ndf866ff6ef4c4e02b3e6105f7176b135b1",
+      "@type": "owl:Restriction",
+      "owl:onProperty": {
+        "@id": "ex:prefersProduct"
+      },
+      "owl:someValuesFrom": {
+        "@id": "ex:Product"
+      }
+    },
+    {
+      "@id": "ex:ExpressOnlineOrder",
+      "@type": "owl:Class",
+      "rdfs:subClassOf": {
+        "@id": "ex:OnlineOrder"
+      }
+    },
+    {
+      "@id": "ex:BigCo",
+      "@type": [
+        "owl:NamedIndividual",
+        "ex:Customer"
+      ],
+      "ex:prefersProduct": {
+        "@id": "ex:Widget"
+      },
+      "rdfs:label": {
+        "@language": "en",
+        "@value": "BigCo"
+      }
+    },
+    {
+      "@id": "ex:prefersProduct",
+      "@type": "owl:ObjectProperty"
+    },
+    {
+      "@id": "ex:Operations",
+      "@type": "owl:Class",
+      "rdfs:label": [
+        {
+          "@language": "en",
+          "@value": "Operations"
+        },
+        {
+          "@language": "fr",
+          "@value": "Opérations"
+        }
+      ],
+      "rdfs:subClassOf": {
+        "@id": "ex:Acme"
+      }
+    },
+    {
+      "@id": "ex:Delivery",
+      "@type": "owl:Class",
+      "rdfs:label": {
+        "@language": "en",
+        "@value": "Delivery"
+      },
+      "rdfs:subClassOf": [
+        {
+          "@id": "ex:Operations"
+        },
+        {
+          "@id": "ex:Sales"
+        }
+      ]
+    },
+    {
+      "@id": "ex:Sales",
+      "@type": "owl:Class",
+      "rdfs:label": {
+        "@language": "en",
+        "@value": "Sales"
+      },
+      "rdfs:subClassOf": {
+        "@id": "ex:Acme"
+      }
+    }
+  ]
+}

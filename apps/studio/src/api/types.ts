@@ -67,8 +67,12 @@ export interface Attribute {
   sourceId?: string | null;
   name: string;
   type: AttributeType;
-  col: string;
-  fill: number;
+  /** Source column path; null for a taught attribute. */
+  col: string | null;
+  /** Fill percentage; null for a taught attribute. */
+  fill: number | null;
+  /** A taught attribute's value as stated; null for an attribute read from a source. */
+  value?: string | null;
   state: 'proposed' | 'approved';
 }
 
@@ -168,9 +172,8 @@ export interface DraftSeed {
   seed?: number;
 }
 
-/** How a proposal's content entered Ontaix; `document` and `ontology_import` are set by the
- * server only. */
-export type Origin = 'text' | 'speech' | 'document' | 'ontology_import';
+/** How a proposal's content entered Ontaix; `document`, `suggestion` and `ontology_import` are set by the server only. */
+export type Origin = 'text' | 'speech' | 'document' | 'suggestion' | 'ontology_import';
 /** The origin a client declares on a draft or a teach parse. */
 export type InputOrigin = 'text' | 'speech';
 
@@ -220,6 +223,8 @@ export interface ImportResult {
   origin: 'document';
   originDetail: { fileName: string; mediaType: ImportMediaType };
   sentences: string[];
+  /** Pieces of extracted text left out of `sentences`, such as those under 13 characters. */
+  skipped: number;
   positions?: (DocumentPosition | null)[];
 }
 
@@ -322,14 +327,22 @@ export interface BindingDraft extends DraftOrigin {
   caption?: string;
 }
 
+/**
+ * An attribute read from a bound source (`col` and `fill`), or taught (`value`, type text,
+ * number or date). The concept is given by id, or by label and company when an earlier draft of
+ * the same batch introduces it.
+ */
 export interface AttributeDraft extends DraftOrigin {
   type: 'attr';
-  conceptId: string;
+  conceptId?: string;
+  conceptLabel?: string;
+  companyId?: string;
   sourceId?: string;
   name: string;
   attributeType: AttributeType;
-  col: string;
-  fill: number;
+  col?: string;
+  fill?: number;
+  value?: string;
 }
 
 export type ChangeKind =
@@ -413,6 +426,8 @@ export interface Proposal {
   createdAt: string;
   decidedAt?: string | null;
   artefacts?: Artefacts;
+  /** Open proposals in the branch of a `concept` or `spec` proposal other than itself; 0 or absent otherwise. */
+  openBelow?: number;
 }
 
 export interface AuditEntry {
@@ -504,8 +519,9 @@ export interface Scene {
   connectors: ConnectorType[];
 }
 
+/** For `attr`, the subject is the concept, the predicate the attribute name and the object the value. */
 export interface Intent {
-  kind: 'spec' | 'rel';
+  kind: 'spec' | 'rel' | 'attr';
   subject: string;
   predicate?: string;
   object: string;
@@ -545,7 +561,8 @@ export interface UnresolvedPhrase {
     | 'too_many_drafts'
     | 'not_a_statement'
     | 'ungrounded_label'
-    | 'too_many_segments';
+    | 'too_many_segments'
+    | 'attribute_exists';
 }
 
 export type LlmOutcome =
@@ -585,6 +602,141 @@ export interface TeachRequest {
   importRef?: ImportRef;
   /** One per teach bar session and company, so the model step can resolve back-references. */
   sessionId?: string;
+}
+
+// ------------------------------------------------------------ concept expansion
+
+/** `POST /concepts/{conceptId}/expand`: optional steering from the caller. */
+export interface ExpansionRequest {
+  depth?: number;
+  maxChildren?: number;
+  focus?: string;
+  sessionId?: string;
+}
+
+export type ExpansionOutcome =
+  | 'used'
+  | 'not_configured'
+  | 'rate_limited'
+  | 'budget_exhausted'
+  | 'timeout'
+  | 'provider_error'
+  | 'refused'
+  | 'invalid_output';
+
+/** One note per expansion draft: confidence, rationale, depth (null for a relation) and the drafts it requires. */
+export interface ExpansionNote {
+  confidence: number;
+  rationale: string;
+  depth: number | null;
+  requires: number[];
+}
+
+export interface ExpansionSkip {
+  label: string;
+  reason: 'existing_label' | 'duplicate_in_response' | 'low_confidence' | 'over_cap' | 'parent_skipped' | 'duplicate_relation';
+}
+
+/** Expansion drafts in the contract's shape: a concept by `parentId` or `parentLabel`, a relation by id or label ends. */
+export type ExpansionDraft =
+  | (Omit<ConceptDraft, 'parentId'> & { parentId?: string })
+  | (Omit<RelationDraft, 'aId' | 'bId'> & { aId?: string; bId?: string; companyId?: string });
+
+export interface ExpansionResult {
+  expansionId: string | null;
+  expiresAt: string | null;
+  conceptId: string;
+  llmOutcome: ExpansionOutcome;
+  degraded: boolean;
+  drafts: ExpansionDraft[];
+  notes: ExpansionNote[];
+  skipped: ExpansionSkip[];
+}
+
+// ------------------------------------------------------------ whole-document extraction
+
+export type ExtractionState = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+export type ExtractionFailure =
+  | 'not_configured'
+  | 'budget_exhausted'
+  | 'rate_limited'
+  | 'job_timeout'
+  | 'no_drafts'
+  | 'import_expired'
+  | 'too_many_attempts'
+  | 'internal';
+
+export interface DocumentExtraction {
+  id: string;
+  importId: string | null;
+  companyId: string;
+  state: ExtractionState;
+  phase: 'outline' | 'sections' | 'mapping' | null;
+  chunks: number;
+  outlineChunksDone: number;
+  sectionChunksDone: number;
+  outlineNodes: number;
+  tokensUsed: number;
+  tokenCeiling: number;
+  nodeCeiling: number;
+  draftCount: number;
+  degraded: boolean;
+  failureReason: ExtractionFailure | null;
+  cancelRequested: boolean;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  expiresAt: string | null;
+  submittedAt: string | null;
+}
+
+export type OutlineRole = 'domain_area' | 'process' | 'subprocess' | 'step' | 'entity' | 'group';
+
+export interface OutlineNode {
+  index: number;
+  parentIndex: number | null;
+  parentConceptId?: string | null;
+  conceptId: string | null;
+  label: string;
+  role: OutlineRole;
+  depth: number;
+  sentenceIndex: number;
+}
+
+export interface DocumentDraftNote {
+  pass: 'outline' | 'section';
+  confidence: number;
+  explanation?: string;
+  role?: OutlineRole;
+  depth: number | null;
+  requires: number[];
+  sentenceIndex: number;
+  sourceSpan?: { start: number; end: number };
+}
+
+export interface ExtractionUnresolved {
+  chunk?: number;
+  sentenceIndex?: number;
+  label?: string;
+  reason: string;
+}
+
+export interface DocumentExtractionResult {
+  extractionId: string;
+  outline: OutlineNode[];
+  drafts: ProposalDraft[];
+  notes: DocumentDraftNote[];
+  unresolved: ExtractionUnresolved[];
+}
+
+/** `POST /proposals/{proposalId}/approve-branch`: what one call approved; `complete` false asks for another call. */
+export interface BranchResult {
+  rootId: string;
+  approved: number;
+  skipped: number;
+  remaining: number;
+  batches: number;
+  complete: boolean;
 }
 
 export interface Page {

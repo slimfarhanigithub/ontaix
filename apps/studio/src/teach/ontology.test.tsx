@@ -2,9 +2,8 @@ import { fireEvent, render } from '@testing-library/react';
 
 import { api } from '../api/client';
 import { ApiError, type OntologyImportResult, type Proposal } from '../api/types';
-import { ImportModeRows, importFile } from '../shell/ImportMode';
+import { ImportModePill, importMode } from '../shell/ImportMode';
 import { store } from '../store/store';
-import * as teachModule from './teach';
 import { browserLanguages, importOntology } from './ontology';
 
 const mapped: OntologyImportResult = {
@@ -77,30 +76,14 @@ describe('ontology import', () => {
 });
 
 describe('#imMode', () => {
-  afterEach(() => vi.restoreAllMocks());
-
-  it('offers sentence by sentence and ontology, and reads a file with the checked mode', () => {
-    vi.spyOn(store, 'refreshProposals').mockResolvedValue();
-    const imports = vi.spyOn(teachModule, 'importDocument').mockResolvedValue();
-    const mapping = vi.spyOn(api, 'importOntology').mockResolvedValue({ ...mapped, drafts: [], notes: [] });
-    const { container } = render(<ImportModeRows />);
-
-    const rows = container.querySelectorAll('#imMode .chk');
-    expect([...rows].map((r) => r.querySelector('b')?.textContent)).toEqual(['Sentence by sentence', 'Ontology']);
-    expect((container.querySelector('#imMode input:checked') as HTMLInputElement).value).toBe('sentences');
-    importFile(new File(['x'], 'notes.txt'));
-    expect(imports).toHaveBeenCalledTimes(1);
-
-    const before = store.s.activeCompany;
-    store.s.activeCompany = { sid: 'company-a' } as typeof before;
-    try {
-      fireEvent.click(container.querySelector('#imMode input[value=ontology]') as Element);
-      importFile(new File(['x'], 'tree.csv'));
-    } finally {
-      store.s.activeCompany = before;
-      fireEvent.click(container.querySelector('#imMode input[value=sentences]') as Element);
+  it('cycles Sentences, Whole document and Ontology', () => {
+    const { container } = render(<ImportModePill hidden={false} />);
+    const pill = container.querySelector('#imMode') as HTMLButtonElement;
+    const seen = [importMode()];
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(pill);
+      seen.push(importMode());
     }
-    expect(mapping).toHaveBeenCalledTimes(1);
-    expect(imports).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual(['sentences', 'document', 'ontology', 'sentences']);
   });
 });

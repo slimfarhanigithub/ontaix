@@ -1,0 +1,85 @@
+# Gold tree for structure_lestrade_logistique_fr.md. Reviewed twice against the document.
+company: Lestrade Logistique
+description: Manuel des procédures d'exploitation d'un prestataire logistique français fictif (réception, stockage, préparation, expédition, litiges, inventaire), collé depuis Word avec titres, listes, tableaux RACI et phrases longues.
+tags: [document, document-structure, logistics, fr]
+expected:
+  concepts:
+    # Réseau d'entrepôts
+    - {label: Entrepôts, parent: [Lestrade Logistique], action: [exploite, operates, runs]}
+    - {label: Entrepôt de Corbas, parent: [Entrepôts], action: [comprend, includes, has]}
+    - {label: Entrepôt de Fos-sur-Mer, parent: [Entrepôts], action: [comprend, includes, has]}
+    - {label: Entrepôt de Lesquin, parent: [Entrepôts], action: [comprend, includes, has]}
+    - {label: Entrepôt de Saran, parent: [Entrepôts], action: [comprend, includes, has]}
+    - {label: Zone sous douane, parent: [Entrepôt de Fos-sur-Mer], action: [dispose de, has, includes]}
+    # Réception
+    - {label: Réception, parent: [Lestrade Logistique], action: [s'organise autour de, runs, has, includes]}
+    - {label: Prise de rendez-vous, parent: [Réception], action: [comprend, includes, has, consists of]}
+    - {label: Déchargement, parent: [Réception], action: [comprend, includes, has, consists of]}
+    - {label: Contrôle à réception, parent: [Réception], action: [comprend, includes, has, consists of]}
+    - {label: Contrôle quantitatif, parent: [Contrôle à réception], action: [se compose de, consists of, includes]}
+    - {label: Contrôle qualitatif, parent: [Contrôle à réception], action: [se compose de, consists of, includes]}
+    - {label: Émission des réserves, parent: [Contrôle à réception], action: [se compose de, consists of, includes]}
+    - {label: Saisie dans le WMS, parent: [Contrôle à réception], action: [se compose de, consists of, includes]}
+    - {label: Fiche de non-conformité, parent: [Émission des réserves], action: [produit, produces, issues]}
+    - {label: Photographies des colis endommagés, parent: [Fiche de non-conformité], action: [comprend, includes, contains], aliases: [Photographies des colis]}
+    - {label: Numéro de lot, parent: [Fiche de non-conformité], action: [comprend, includes, contains]}
+    # Stockage
+    - {label: Stockage, parent: [Lestrade Logistique], action: [s'organise autour de, runs, has, includes]}
+    - {label: Adressage, parent: [Stockage], action: [comprend, includes, has]}
+    - {label: Réapprovisionnement des emplacements, parent: [Stockage], action: [comprend, includes, has]}
+    - {label: Gestion des marchandises dangereuses, parent: [Stockage], action: [comprend, includes, has]}
+    - {label: Adressage dynamique, parent: [Adressage], action: [is a, est un, est un type de]}
+    - {label: Adressage fixe, parent: [Adressage], action: [is a, est un, est un type de]}
+    - {label: Registre des matières dangereuses, parent: [Gestion des marchandises dangereuses], action: [tient, maintains, keeps]}
+    # Préparation de commandes
+    - {label: Préparation de commandes, parent: [Lestrade Logistique], action: [s'organise autour de, runs, has, includes]}
+    - {label: Cycle de préparation, parent: [Préparation de commandes], action: [comprend, includes, has]}
+    - {label: Traitement des commandes urgentes, parent: [Préparation de commandes], action: [comprend, includes, has]}
+    - {label: Lancement de la vague, parent: [Cycle de préparation], action: [se compose de, consists of, includes]}
+    - {label: Prélèvement, parent: [Cycle de préparation], action: [se compose de, consists of, includes]}
+    - {label: Contrôle de préparation, parent: [Cycle de préparation], action: [se compose de, consists of, includes]}
+    - {label: Emballage, parent: [Cycle de préparation], action: [se compose de, consists of, includes]}
+    - {label: Étiquetage, parent: [Cycle de préparation], action: [se compose de, consists of, includes]}
+    - {label: Liste de prélèvement, parent: [Lancement de la vague], action: [produit, produces, delivers]}
+    - {label: Bac de préparation, parent: [Prélèvement], action: [produit, produces, delivers]}
+    - {label: Bon de contrôle, parent: [Contrôle de préparation], action: [produit, produces, delivers]}
+    - {label: Colis fermé, parent: [Emballage], action: [produit, produces, delivers]}
+    - {label: Étiquette transporteur, parent: [Étiquetage], action: [produit, produces, delivers]}
+    # Expédition
+    - {label: Expédition, parent: [Lestrade Logistique], action: [s'organise autour de, runs, has, includes]}
+    - {label: Consolidation des colis, parent: [Expédition], action: [comprend, includes, has]}
+    - {label: Chargement, parent: [Expédition], action: [comprend, includes, has]}
+    - {label: Émission des documents de transport, parent: [Expédition], action: [comprend, includes, has]}
+    - {label: Lettre de voiture, parent: [Émission des documents de transport], action: [produit, produces, issues]}
+    - {label: Bordereau de remise, parent: [Émission des documents de transport], action: [produit, produces, issues]}
+    # Gestion des litiges
+    - {label: Gestion des litiges, parent: [Lestrade Logistique], action: [s'organise autour de, runs, has, includes]}
+    - {label: Traitement des réclamations clients, parent: [Gestion des litiges], action: [comprend, includes, has]}
+    - {label: Litiges transporteurs, parent: [Gestion des litiges], action: [comprend, includes, has]}
+    - {label: Enregistrement de la réclamation, parent: [Traitement des réclamations clients], action: [se compose de, consists of, includes]}
+    - {label: Analyse des causes, parent: [Traitement des réclamations clients], action: [se compose de, consists of, includes]}
+    - {label: Proposition d'indemnisation, parent: [Traitement des réclamations clients], action: [se compose de, consists of, includes]}
+    - {label: Clôture du litige, parent: [Traitement des réclamations clients], action: [se compose de, consists of, includes]}
+    - {label: Rapport d'analyse, parent: [Analyse des causes], action: [produit, produces, issues]}
+    - {label: Plan d'actions correctives, parent: [Rapport d'analyse], action: [comprend, includes, contains]}
+    # Inventaire
+    - {label: Inventaire, parent: [Lestrade Logistique], action: [s'organise autour de, runs, has, includes]}
+    - {label: Inventaire tournant, parent: [Inventaire], action: [comprend, includes, has]}
+    - {label: Inventaire annuel, parent: [Inventaire], action: [comprend, includes, has]}
+    - {label: Préparation de l'inventaire, parent: [Inventaire annuel], action: [se compose de, consists of, includes]}
+    - {label: Comptage, parent: [Inventaire annuel], action: [se compose de, consists of, includes]}
+    - {label: Recomptage des écarts, parent: [Inventaire annuel], action: [se compose de, consists of, includes]}
+    - {label: Validation des écarts, parent: [Inventaire annuel], action: [se compose de, consists of, includes]}
+    - {label: Ajustement des stocks, parent: [Inventaire annuel], action: [se compose de, consists of, includes]}
+    - {label: Procès-verbal d'inventaire, parent: [Validation des écarts], action: [produit, produces, issues]}
+    - {label: État des écarts valorisés, parent: [Procès-verbal d'inventaire], action: [comprend, includes, contains]}
+    - {label: Liste des références recomptées, parent: [Procès-verbal d'inventaire], action: [comprend, includes, contains]}
+  relations:
+    - {from: Contrôle de préparation, to: Liste de prélèvement, action: [vérifie, checks, verifies], inverse: [est vérifié par, is checked by]}
+    - {from: Chargement, to: Bordereau de remise, action: [exige, requires, needs], inverse: [est exigé par, is required by]}
+    - {from: Émission des réserves, to: Traitement des réclamations clients, action: [alimente, feeds, supplies], inverse: [est alimenté par, is fed by]}
+    - {from: Analyse des causes, to: Fiche de non-conformité, action: [consulte, reads, uses], inverse: [est consulté par, is read by]}
+    - {from: Proposition d'indemnisation, to: Lettre de voiture, action: [s'appuie sur, relies on, uses], inverse: [sert de base à, is used by]}
+    - {from: Réapprovisionnement des emplacements, to: Inventaire tournant, action: [déclenche, triggers, starts], inverse: [est déclenché par, is triggered by]}
+    - {from: Ajustement des stocks, to: Registre des matières dangereuses, action: [met à jour, updates], inverse: [est mis à jour par, is updated by]}
+optional: [Chef d'équipe, Responsable de site, Contrôleur de gestion, Pilote de flux, Préparateur, Contrôleur qualité, Opérateur d'emballage, Cariste, Chef de quai, Service client, Responsable qualité, Direction des opérations, WMS, Portail de prise de rendez-vous, Zone tampon de réception, Enregistrements vidéo, Matrice RACI, Nom du chauffeur, Immatriculation du véhicule, Identité des équipes de comptage, Plomb de sécurité, Analyse approfondie, Audit croisé, Registre]

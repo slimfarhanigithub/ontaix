@@ -15,6 +15,7 @@ from app.models.storage.proposal import Proposal
 from app.repositories import proposal_repository
 from app.services import proposal_service, provenance_service
 from app.services.ontology_view_service import OntologyView, load_view
+from app.services.proposal_branch_service import OPEN_STATES, BranchIndex, annotate
 from app.services.rate_limit_service import Budget, charge
 from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.listing import ListQuery, paginate
@@ -53,9 +54,14 @@ async def list_proposals(
         )
     ]
     page, total = paginate(rows, query, {"createdAt": lambda p: p.created_at}, "createdAt")
+    branches = BranchIndex(view, [p for p in proposals if p.state in OPEN_STATES])
     return PageOf[ProposalDto](
         items=[
-            readable_proposal(caller.grants, view.proposal_dto(p, view.proposal_artefacts(p)))
+            annotate(
+                readable_proposal(caller.grants, view.proposal_dto(p, view.proposal_artefacts(p))),
+                p,
+                branches,
+            )
             for p in page
         ],
         page=query.page,
@@ -72,9 +78,9 @@ async def get_proposal(
         raise not_found("proposal")
     view = await load_view(session, caller.tenant_id, [proposal])
     _ensure_readable(caller, view, proposal)
-    return readable_proposal(
-        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
-    )
+    branches = BranchIndex(view, await proposal_repository.list_open(session, caller.tenant_id))
+    dto = view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    return annotate(readable_proposal(caller.grants, dto), proposal, branches)
 
 
 async def create_proposal(session: AsyncSession, caller: Caller, draft) -> ProposalDto:

@@ -3,7 +3,8 @@
 The rest of the API sees only this module. A request carries the system instructions, one user
 message and the JSON schema the answer must follow; the answer carries the raw JSON text, token
 counts, the estimated euro cost and the latency. A timeout or a provider failure raises
-`LlmTimeout` or `LlmProviderError`, each with the tokens the provider reported (0 when none).
+`LlmTimeout` or `LlmProviderError` (`LlmRefused` for a content filter or a declining model),
+each with the tokens the provider reported (0 when none).
 No provider type, SDK class or credential leaves the implementation modules.
 """
 
@@ -17,7 +18,14 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Protocol
 
-from app.config import ModelPrice, Settings, get_settings
+from app.config import (
+    LLM_PROFILES,
+    LlmProfile,
+    LlmProfileSettings,
+    ModelPrice,
+    Settings,
+    get_settings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +33,10 @@ logger = logging.getLogger(__name__)
 # (scripts where one character is a token or more), so a reservation errs on counting too much.
 CODE_POINTS_PER_TOKEN = 2
 BYTES_PER_TOKEN = 3
+# `llm_call.latency_ms` holds at most five minutes.
+MAX_LATENCY_MS = 300_000
+# Providers reached keylessly through the Azure AI Foundry endpoint settings.
+FOUNDRY_PROVIDERS = ("azure_foundry", "anthropic_foundry")
 
 
 @dataclass(frozen=True)
@@ -72,6 +84,10 @@ class LlmProviderError(LlmCallError):
     """The provider refused, failed, rate-limited, or stopped before a complete answer."""
 
 
+class LlmRefused(LlmProviderError):
+    """The provider's content filter blocked the request or the answer, or the model declined."""
+
+
 class LlmConfigurationError(RuntimeError):
     """The configured provider cannot run: raised at start-up, never during a request."""
 
@@ -85,40 +101,61 @@ class LlmClient(Protocol):
     async def complete(self, request: LlmRequest) -> LlmAnswer: ...
 
 
-_override: LlmClient | None = None
-_override_set = False
-_cached: tuple[tuple[object, ...], LlmClient] | None = None
+# Clients installed per profile by tests; a profile without one is built from configuration.
+_overrides: dict[LlmProfile, LlmClient | None] = {}
+# One built client per profile, rebuilt when the settings it came from change.
+_cached: dict[LlmProfile, tuple[tuple[object, ...], LlmClient]] = {}
 
 
-def get_llm_client() -> LlmClient | None:
-    """The configured client, or None when the provider has no endpoint, key or price."""
-    if _override_set:
-        return _override
-    return _configured(get_settings())
+def get_llm_client(profile: LlmProfile = "live") -> LlmClient | None:
+    """The client of `profile`, or None when the provider has no endpoint, key or price."""
+    if profile in _overrides:
+        return _overrides[profile]
+    return _configured(get_settings(), profile)
 
 
-def set_llm_client(client: LlmClient | None) -> None:
-    """Replace the configured client (tests); `reset_llm_client` restores configuration."""
-    global _override, _override_set
-    _override, _override_set = client, True
+def set_llm_client(client: LlmClient | None, *profiles: LlmProfile) -> None:
+    """Replace the client of the given profiles, of every profile when none is given (tests);
+    `reset_llm_client` restores configuration."""
+    for profile in profiles or LLM_PROFILES:
+        _overrides[profile] = client
 
 
 def reset_llm_client() -> None:
-    global _override, _override_set
-    _override, _override_set = None, False
+    _overrides.clear()
+
+
+async def warm_llm_clients() -> None:
+    """Prepares every configured profile's client for its first call - for Claude on Foundry,
+    the Entra ID token and an open TLS connection, with no model call. A client without a
+    `warm` method needs none. Never raises: a failed warm-up leaves the work to the first call."""
+    for profile in LLM_PROFILES:
+        try:
+            warm = getattr(get_llm_client(profile), "warm", None)
+            if warm is not None:
+                await warm()
+        except Exception as exc:
+            logger.warning(
+                "warming the %s language model client failed: %s", profile, type(exc).__name__
+            )
 
 
 def check_llm_configuration(settings: Settings) -> None:
-    """Stops start-up when a provider is configured but its model has no price.
+    """Stops start-up when a provider is configured but a model it calls has no price.
 
-    A provider without its endpoint (`azure_foundry`) or key (`anthropic`) is not an error: the
-    model step answers `not_configured` and the grammar runs alone.
+    The Foundry providers price each profile's deployment; `anthropic` prices its model. A
+    provider without its endpoint (`azure_foundry`, `anthropic_foundry`) or key (`anthropic`)
+    is not an error: the model step answers `not_configured` and the grammar runs alone.
     """
-    price = settings.llm_price_table.get(settings.llm_model)
-    if _provider_configured(settings) and not isinstance(price, ModelPrice):
-        raise LlmConfigurationError(
-            f"ONTAIX_LLM_PRICE_TABLE has no token price for ONTAIX_LLM_MODEL {settings.llm_model!r}"
-        )
+    if not _provider_configured(settings):
+        return
+    for profile in LLM_PROFILES:
+        model = _priced_model(settings, profile)
+        if not isinstance(settings.llm_price_table.get(model), ModelPrice):
+            raise LlmConfigurationError(
+                f"ONTAIX_LLM_PRICE_TABLE has no token price for {model!r}, the {profile} "
+                "profile's model"
+            )
 
 
 def estimate_tokens(request: LlmRequest) -> int:
@@ -138,30 +175,36 @@ def cost_eur(price: ModelPrice, input_tokens: int, output_tokens: int) -> float:
 
 
 def elapsed_ms(started: float) -> int:
-    """Milliseconds since `started` (a `time.monotonic()` value), capped at one minute."""
-    return min(60_000, max(0, int((time.monotonic() - started) * 1000)))
+    """Milliseconds since `started` (a `time.monotonic()` value), capped at five minutes."""
+    return min(MAX_LATENCY_MS, max(0, int((time.monotonic() - started) * 1000)))
 
 
 def _provider_configured(settings: Settings) -> bool:
-    if settings.llm_provider == "azure_foundry":
+    if settings.llm_provider in FOUNDRY_PROVIDERS:
         return settings.foundry_endpoint is not None
     key = settings.anthropic_api_key
     return key is not None and bool(key.get_secret_value())
 
 
-def _configured(settings: Settings) -> LlmClient | None:
-    global _cached
-    price = settings.llm_price_table.get(settings.llm_model)
+def _priced_model(settings: Settings, profile: LlmProfile) -> str:
+    """The model `profile` records and prices: the Foundry deployment called, else the model."""
+    if settings.llm_provider in FOUNDRY_PROVIDERS:
+        return settings.llm_profile(profile).deployment
+    return settings.llm_model
+
+
+def _configured(settings: Settings, profile: LlmProfile) -> LlmClient | None:
+    price = settings.llm_price_table.get(_priced_model(settings, profile))
     if not _provider_configured(settings) or not isinstance(price, ModelPrice):
         return None
-    if settings.llm_provider == "azure_foundry":
+    chosen = settings.llm_profile(profile)
+    if settings.llm_provider in FOUNDRY_PROVIDERS:
         fingerprint: tuple[object, ...] = (
             settings.llm_provider,
-            settings.llm_model,
             price,
             settings.foundry_endpoint,
-            settings.foundry_deployment,
-            settings.foundry_reasoning_effort,
+            chosen.deployment,
+            chosen.reasoning_effort,
         )
     else:
         key = settings.anthropic_api_key.get_secret_value()  # type: ignore[union-attr]
@@ -171,21 +214,35 @@ def _configured(settings: Settings) -> LlmClient | None:
             price,
             hashlib.sha256(key.encode()).hexdigest(),
         )
-    if _cached is None or _cached[0] != fingerprint:
-        _cached = (fingerprint, _build(settings, price))
-    return _cached[1]
+    cached = _cached.get(profile)
+    if cached is None or cached[0] != fingerprint:
+        cached = (fingerprint, _build(settings, chosen, price))
+        _cached[profile] = cached
+    return cached[1]
 
 
-def _build(settings: Settings, price: ModelPrice) -> LlmClient:
+def _build(settings: Settings, chosen: LlmProfileSettings, price: ModelPrice) -> LlmClient:
     if settings.llm_provider == "azure_foundry":
         from app.clients.foundry_llm_client import FoundryLlmClient
 
         return FoundryLlmClient(
             endpoint=settings.foundry_endpoint or "",
-            deployment=settings.foundry_deployment,
-            model=settings.llm_model,
+            deployment=chosen.deployment,
+            model=chosen.deployment,
             price=price,
-            reasoning_effort=settings.foundry_reasoning_effort,
+            reasoning_effort=chosen.reasoning_effort,
+        )
+    if settings.llm_provider == "anthropic_foundry":
+        from app.clients.anthropic_foundry_llm_client import (
+            AnthropicFoundryLlmClient,
+            foundry_messages_url,
+        )
+
+        return AnthropicFoundryLlmClient(
+            base_url=foundry_messages_url(settings.foundry_endpoint or ""),
+            deployment=chosen.deployment,
+            price=price,
+            reasoning_effort=chosen.reasoning_effort,
         )
     from app.clients.anthropic_llm_client import AnthropicLlmClient
 

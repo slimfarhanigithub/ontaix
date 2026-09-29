@@ -17,6 +17,8 @@ class ImportResult(ApiModel):
     expires_at: datetime
     file_name: str
     sentences: list[str] = Field(max_length=2000)
+    # Pieces of extracted text left out of `sentences`, such as those under 13 characters.
+    skipped: int = Field(ge=0)
     origin: Literal["document"]
     origin_detail: ImportOriginDetail
     positions: list[DocumentPosition | None] = Field(max_length=2000)

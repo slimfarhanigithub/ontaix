@@ -39,3 +39,8 @@ output "foundry_endpoint" {
 output "foundry_deployment_name" {
   value = azurerm_cognitive_deployment.chat.name
 }
+
+output "foundry_claude_endpoint" {
+  description = "Endpoint of the Claude Foundry resource (ONTAIX_FOUNDRY_ENDPOINT with anthropic_foundry); callers authenticate with Entra ID."
+  value       = azurerm_cognitive_account.claude.endpoint
+}

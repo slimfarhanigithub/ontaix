@@ -46,6 +46,12 @@ def _lower_ascii(value: str) -> str:
 
 
 FreeText = Annotated[str, AfterValidator(_free_text)]
+AttributeName = Annotated[
+    str, Field(min_length=1, max_length=80), AfterValidator(_free_text), AfterValidator(_trimmed)
+]
+AttributeValue = Annotated[
+    str, Field(min_length=1, max_length=200), AfterValidator(_free_text), AfterValidator(_trimmed)
+]
 Label = Annotated[
     str, Field(min_length=1, max_length=120), AfterValidator(_free_text), AfterValidator(_trimmed)
 ]
@@ -101,10 +107,23 @@ class Segment(_Strict):
         return self
 
 
+# The fields a relation or specialisation intent may carry and an attribute intent never does.
+_NOT_FOR_ATTRIBUTES = (
+    "object",
+    "action",
+    "rule",
+    "members",
+    "member_action",
+    "stated_count",
+    "list_id",
+    "domain_key",
+)
+
+
 class AnswerIntent(_Strict):
-    kind: Literal["rel", "spec"]
+    kind: Literal["rel", "spec", "attr"]
     subject: ConceptRef
-    object: ConceptRef
+    object: ConceptRef | None = None
     action: Action | None = None
     rule: Annotated[FreeText, Field(max_length=200)] | None = None
     domain_key: DomainKey | None = Field(default=None, alias="domainKey")
@@ -117,9 +136,23 @@ class AnswerIntent(_Strict):
     member_action: Action | None = Field(default=None, alias="memberAction")
     stated_count: int | None = Field(default=None, ge=0, le=1000, alias="statedCount")
     list_id: Index | None = Field(default=None, alias="listId")
+    attribute_name: AttributeName | None = Field(default=None, alias="attributeName")
+    attribute_value: AttributeValue | None = Field(default=None, alias="attributeValue")
+    value_type: Literal["text", "number", "date"] | None = Field(default=None, alias="valueType")
 
     @model_validator(mode="after")
     def _kind_fields(self) -> AnswerIntent:
+        given = self.model_fields_set
+        if self.kind == "attr":
+            if self.attribute_name is None or self.attribute_value is None:
+                raise ValueError("an attr intent has attributeName and attributeValue")
+            if any(name in given for name in _NOT_FOR_ATTRIBUTES):
+                raise ValueError("an attr intent has no object, action, rule, list or domain")
+            return self
+        if self.object is None:
+            raise ValueError("a rel or spec intent has an object")
+        if {"attribute_name", "attribute_value", "value_type"} & given:
+            raise ValueError("only an attr intent has attributeName, attributeValue or valueType")
         if self.kind == "rel" and (self.action is None or self.rule is not None):
             raise ValueError("a rel intent has an action and no rule")
         if self.kind == "spec" and self.action is not None:
@@ -137,7 +170,13 @@ class AnswerIntent(_Strict):
 
 class AnswerUnresolved(_Strict):
     text: Annotated[FreeText, Field(min_length=1, max_length=400)]
-    reason: Literal["not_understood", "ambiguous_reference", "low_confidence", "not_a_statement"]
+    reason: Literal[
+        "not_understood",
+        "ambiguous_reference",
+        "low_confidence",
+        "not_a_statement",
+        "attribute_exists",
+    ]
     segment: Index | None = None
     source: Span | None = None
 

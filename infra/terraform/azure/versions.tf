@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.0"
+    }
   }
 
   # State lives in the storage account created by infra/scripts/bootstrap-azure.sh.
@@ -18,6 +22,11 @@ terraform {
   backend "azurerm" {
     use_azuread_auth = true
   }
+}
+
+# Claude deployments need `modelProviderData`, which azurerm_cognitive_deployment does not expose.
+provider "azapi" {
+  subscription_id = var.subscription_id
 }
 
 provider "azurerm" {

@@ -59,23 +59,15 @@ Deployment configuration (Helm values in the cluster, the ignored `.env` locally
 | `ONTAIX_LLM_TIMEOUT_SECONDS` | 15 | Typed and document sentences; maximum 15 |
 | `ONTAIX_LLM_SPEECH_TIMEOUT_SECONDS` | 45 | Speech transcripts; maximum 45 |
 
-Concept expansion (ADR 0009) and whole-document extraction (ADR 0010) use the same provider, endpoint, credentials and price table, with their own settings. Each defaults to the teach deployment and model; a different model name must have an entry in `ONTAIX_LLM_PRICE_TABLE`. None of these is a secret.
+Concept expansion (ADR 0009) and whole-document extraction (ADR 0010) use the same provider, endpoint, credentials and price table and run on the `deep` model profile (`ONTAIX_FOUNDRY_DEEP_*`, `ONTAIX_LLM_DEEP_REASONING_ALLOWANCE_TOKENS`); their own settings below bound size, budget and time. None of these is a secret.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `ONTAIX_EXPAND_DEPLOYMENT` | value of `ONTAIX_FOUNDRY_DEPLOYMENT` | Deployment for concept expansion |
-| `ONTAIX_EXPAND_MODEL` | value of `ONTAIX_LLM_MODEL` | Recorded in `llm_call.model`; key of the price table |
-| `ONTAIX_EXPAND_REASONING_EFFORT` | `medium` | |
-| `ONTAIX_EXPAND_REASONING_ALLOWANCE_TOKENS` | 8192 | |
 | `ONTAIX_EXPAND_MAX_NODES` | 200 | Drafts per run, 1 to 2,000; cost protection only, no depth limit |
 | `ONTAIX_EXPAND_MAX_OUTPUT_TOKENS` | 32768 | |
 | `ONTAIX_EXPAND_CONTEXT_LABELS` | 1000 | |
 | `ONTAIX_EXPAND_TIMEOUT_SECONDS` | 120 | Maximum 300 |
 | `ONTAIX_EXPAND_CALLS_PER_HOUR` | 30 | Per user |
-| `ONTAIX_DOCUMENT_EXTRACTION_DEPLOYMENT` | value of `ONTAIX_FOUNDRY_DEPLOYMENT` | Deployment for both passes of a job |
-| `ONTAIX_DOCUMENT_EXTRACTION_MODEL` | value of `ONTAIX_LLM_MODEL` | Recorded in `llm_call.model`; key of the price table |
-| `ONTAIX_DOCUMENT_EXTRACTION_REASONING_EFFORT` | `medium` | `medium` or higher; the model bake-off sets the final default |
-| `ONTAIX_DOCUMENT_EXTRACTION_REASONING_ALLOWANCE_TOKENS` | 16384 | |
 | `ONTAIX_DOCUMENT_EXTRACTION_CHUNK_CHARS` | 10000 | Overlap is 2 sentences |
 | `ONTAIX_DOCUMENT_EXTRACTION_OUTLINE_CONTEXT_NODES` | 600 | |
 | `ONTAIX_DOCUMENT_EXTRACTION_MAX_NODES` | 2000 | Drafts per job, 1 to 5,000; cost protection only, no depth limit |

@@ -98,7 +98,7 @@ async def import_sentences(
         except DocumentTooLargeError as exc:
             raise _too_large(str(exc)) from exc
     try:
-        sentences, extracted = sentences_of_document(document)
+        sentences, extracted, skipped = sentences_of_document(document)
     except DocumentTooLargeError as exc:
         raise _too_large(str(exc)) from exc
     await charge(
@@ -121,12 +121,19 @@ async def import_sentences(
         row.id,
         [(s.text, s.unit, s.index, s.row if s.unit == "sheet" else None) for s in sentences],
     )
-    logger.info("import %s: %d sentences of %s", row.id, len(sentences), media_type)
+    logger.info(
+        "import %s: %d sentences of %s, %d pieces skipped",
+        row.id,
+        len(sentences),
+        media_type,
+        skipped,
+    )
     return ImportResult(
         import_id=row.id,
         expires_at=row.expires_at,
         file_name=file_name,
         sentences=[s.text for s in sentences],
+        skipped=skipped,
         origin="document",
         origin_detail=ImportOriginDetail(file_name=file_name, media_type=media_type),
         positions=[_position(s.unit, s.index, s.row) for s in sentences],

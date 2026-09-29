@@ -15,6 +15,7 @@ caller's teach session.
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -22,6 +23,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
+from app.config import LlmProfile
 from app.models.api.origin import ImportRef
 from app.models.api.teach import (
     SourceSegment,
@@ -75,10 +77,14 @@ class _Source:
     origin_detail: dict[str, Any] | None
     draft_extras: dict[str, Any]
     reading: Reading = Reading()
+    # Typed text and speech run on the `live` model profile; document sentences on `deep`.
+    profile: LlmProfile = "live"
 
 
 async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> TeachResult:
+    started = time.perf_counter()
     view = await load_view(session, caller.tenant_id)
+    view_ms = int((time.perf_counter() - started) * 1000)
     company = view.companies.get(body.company_id)
     if company is None or not can_read(caller.grants, company.id):
         raise not_found("company")
@@ -103,10 +109,15 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
     whole = [(0, len(sentence))]
     grammar: GrammarPlan | None = None
     triggers: set = set()
+    # Every origin goes to the model first while the step is on; typed text keeps the grammar
+    # and its fallback triggers for when the step is off or does not answer.
+    model_first = source.reading.model_first or teach_extraction_service.enabled(
+        view, source.profile
+    )
     if not source.reading.model_first:
         grammar = plan_grammar(drafter, text)
         triggers = fallback_triggers(text, grammar.outcome)
-    if grammar is not None and not triggers:
+    if grammar is not None and not triggers and not model_first:
         kept = assemble(grammar.planned, sentence)
         caption = grammar.caption
         result = _result("rules", "not_triggered", kept, dom_key, caption, source, whole)
@@ -115,19 +126,33 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
         await session.commit()
         turns = await teach_session_service.recent_turns(key)
         step = await teach_extraction_service.run(
-            caller, drafter, sentence, text, turns, source.reading
+            caller, drafter, sentence, text, turns, source.reading, profile=source.profile
         )
         if step.outcome != "used":
             if speech:
                 grammar, segments = _grammar_by_segment(drafter, sentence)
             else:
                 grammar, segments = grammar or plan_grammar(drafter, text), whole
-            result, kept = _degraded(grammar, step, segments, sentence, dom_key, source)
+            if grammar is not None and not triggers and not source.reading.model_first:
+                # Typed text the grammar reads whole: its result stands as it would with the
+                # step off, and the outcome says why the model did not answer.
+                kept = assemble(grammar.planned, sentence)
+                caption = grammar.caption
+                result = _result("rules", step.outcome, kept, dom_key, caption, source, whole)
+            else:
+                result, kept = _degraded(grammar, step, segments, sentence, dom_key, source)
         else:
-            replace = source.reading.model_first or replaces_grammar(triggers)
+            replace = model_first or replaces_grammar(triggers)
             segments = step.segments or whole
             result, kept = _with_model(grammar, step, replace, sentence, dom_key, source, segments)
     await teach_session_service.store_turns(key, result.extractor, _turns(source, result, kept))
+    logger.debug(
+        "teach parse (%s, %s): view %d ms, total %d ms",
+        result.extractor,
+        result.llm_outcome,
+        view_ms,
+        int((time.perf_counter() - started) * 1000),
+    )
     return result
 
 
@@ -148,7 +173,7 @@ async def _source(
     units = max(1, -(-len(body.text) // PARSE_UNIT_CHARS))
     await charge(Budget.PARSE, caller.tenant_id, caller.actor_kind.value, caller.user_id, units)
     reading = Reading("speech") if origin == "speech" else Reading()
-    return _Source(body.text, origin, None, {"origin": origin}, reading)
+    return _Source(body.text, origin, None, {"origin": origin}, reading, "live")
 
 
 async def _cited_sentence(session: AsyncSession, caller: Caller, ref: ImportRef) -> _Source:
@@ -164,6 +189,7 @@ async def _cited_sentence(session: AsyncSession, caller: Caller, ref: ImportRef)
         import_service.origin_detail(row, ref.sentence_index, sentence),
         {"importRef": ref.model_dump(mode="json", by_alias=True)},
         Reading("document", before, after),
+        "deep",
     )
 
 

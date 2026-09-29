@@ -1,18 +1,18 @@
-"""Import formats, OCR, ontology import, concept expansion and whole-document extraction.
+"""Expansion, whole-document extraction, import formats, OCR and ontology import.
 
-Brings a database of revision 0003 to the current `contracts/schema.sql`: the origins
-`suggestion` and `ontology_import`; `tenant_settings.ocr_monthly_page_cap`; the new purposes,
-outcome, latency bound and `pages` column of `llm_call`; `llm_month_usage.ocr_pages`; the
-`expand`, `extraction` and `ocr` budgets; `document_import.ocr_pages` and the new media types;
-the `slide` and `sheet` positions and `document_import_sentence.position_row`; the
-`concept_expansion`, `document_extraction_job` and `ontology_import` tables; the redefined
-`proposal_origin_detail_shape`; and `outbox.recipient_user_id` with its two CHECKs; with the
-comments that describe them. Every statement is idempotent, so on a database revision 0001
-already created from the current contract this revision changes nothing. The DDL is the
-contract's text, so constraint names and definitions match a database loaded from it.
+Brings a database of revision 0004 to the current `contracts/schema.sql`: the origin values
+`suggestion` and `ontology_import`; `tenant_settings.ocr_monthly_page_cap`; the new `llm_call`
+purposes, outcome `refused`, the 300-second latency bound and `pages`; `llm_month_usage.ocr_pages`;
+the `expand`, `extraction` and `ocr` budgets; `document_import.ocr_pages` and the new media
+types; the `slide` and `sheet` positions with `position_row`; the `concept_expansion`,
+`document_extraction_job` and `ontology_import` tables with their indexes; the widened
+`proposal_origin_detail_shape`; and `outbox.recipient_user_id` with its two CHECKs. Every
+statement is idempotent, so on a database revision 0001 already created from the current
+contract this revision changes nothing. The DDL is the contract's text, so constraint names and
+definitions match a database loaded from it.
 
-Revision ID: 0004
-Revises: 0003
+Revision ID: 0005
+Revises: 0004
 Create Date: 2026-09-29
 """
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "0004"
-down_revision = "0003"
+revision = "0005"
+down_revision = "0004"
 branch_labels = None
 depends_on = None
 
@@ -34,27 +34,27 @@ ALTER TYPE proposal_origin ADD VALUE IF NOT EXISTS 'ontology_import';
 ALTER TABLE tenant_settings ADD COLUMN IF NOT EXISTS ocr_monthly_page_cap integer NOT NULL DEFAULT 1000 CHECK (ocr_monthly_page_cap BETWEEN 0 AND 1000000);
 COMMENT ON TABLE tenant_settings IS 'The 22 tenant settings plus appearance, the connector egress allowlist and the monthly token cap of Ontaix''s own language model calls (default 2,000,000, so the teach extraction model step is on; 0 turns it off and is how an administrator opts out) and the monthly OCR page cap (default 1,000 pages; 0 turns OCR of scanned pages off); the two locked settings are enforced by CHECK constraints.';
 
+ALTER TABLE llm_call ADD COLUMN IF NOT EXISTS pages integer CHECK (pages BETWEEN 0 AND 2000);
 ALTER TABLE llm_call DROP CONSTRAINT IF EXISTS llm_call_purpose_check;
 ALTER TABLE llm_call ADD CONSTRAINT llm_call_purpose_check CHECK (purpose IN ('teach_extraction', 'concept_expansion', 'document_extraction', 'document_ocr'));
 ALTER TABLE llm_call DROP CONSTRAINT IF EXISTS llm_call_latency_ms_check;
 ALTER TABLE llm_call ADD CONSTRAINT llm_call_latency_ms_check CHECK (latency_ms BETWEEN 0 AND 300000);
-ALTER TABLE llm_call ADD COLUMN IF NOT EXISTS pages integer CHECK (pages BETWEEN 0 AND 2000);
-ALTER TABLE llm_call DROP CONSTRAINT IF EXISTS llm_call_pages_only_for_ocr;
-ALTER TABLE llm_call ADD CONSTRAINT llm_call_pages_only_for_ocr CHECK ((purpose = 'document_ocr') = (pages IS NOT NULL));
 ALTER TABLE llm_call DROP CONSTRAINT IF EXISTS llm_call_outcome_check;
 ALTER TABLE llm_call ADD CONSTRAINT llm_call_outcome_check CHECK (outcome IN ('used', 'invalid_output', 'timeout', 'provider_error', 'refused'));
+ALTER TABLE llm_call DROP CONSTRAINT IF EXISTS llm_call_pages_only_for_ocr;
+ALTER TABLE llm_call ADD CONSTRAINT llm_call_pages_only_for_ocr CHECK ((purpose = 'document_ocr') = (pages IS NOT NULL));
 ALTER TABLE llm_call DROP CONSTRAINT IF EXISTS llm_call_refused_not_for_teach;
 ALTER TABLE llm_call ADD CONSTRAINT llm_call_refused_not_for_teach CHECK (outcome <> 'refused' OR purpose <> 'teach_extraction');
 COMMENT ON TABLE llm_call IS 'One cost record per call Ontaix makes to a language model provider, including failed and timed-out calls: who caused it (actor_id and company_id are plain uuids so the record survives the actor or company), why (purpose: teach_extraction, concept_expansion, document_extraction or document_ocr; an OCR call is priced per page, records pages, and its token counts are what the provider reports, often 0), which provider and model, token counts, the estimated euro cost from the deployment price table, latency and outcome. It never holds the sentence, the prompt, the answer or any credential. Cost management sums it per month; a purge deletes rows older than 400 days across all tenants through llm_call_by_occurred. It is inserted in its own short transaction after the call, never inside the request transaction.';
 
-ALTER TABLE llm_month_usage ADD COLUMN IF NOT EXISTS ocr_pages  integer NOT NULL DEFAULT 0 CHECK (ocr_pages >= 0);
+ALTER TABLE llm_month_usage ADD COLUMN IF NOT EXISTS ocr_pages integer NOT NULL DEFAULT 0 CHECK (ocr_pages >= 0);
 COMMENT ON TABLE llm_month_usage IS 'Tokens counted against tenant_settings.llm_monthly_token_cap per calendar month (UTC). Before a call the API reserves its upper bound (estimated input plus the maximum output tokens) with INSERT ... SELECT $reserve WHERE $reserve <= $cap ON CONFLICT (tenant_id, month) DO UPDATE SET tokens = llm_month_usage.tokens + EXCLUDED.tokens WHERE llm_month_usage.tokens + EXCLUDED.tokens <= $cap RETURNING tokens; zero rows returned means the cap is reached and the model step is skipped. The reservation commits in its own short transaction before the provider is called, never inside the request transaction, so no row lock is held during the call. After the call, in another short transaction, it settles with UPDATE ... SET tokens = greatest(tokens + $actual - $reserved, 0) WHERE tenant_id = $tenant AND month = $reserved_month, always the month the reservation was made in, even when the call ends in the next month. A call that times out or fails settles its actual count (0 when the provider reports none), which releases the rest of the reservation. A reservation whose process dies before settling stays counted until the month ends. ocr_pages counts OCR pages against tenant_settings.ocr_monthly_page_cap the same way: before an OCR call the API reserves the image-only page count with INSERT ... SELECT $pages WHERE $pages <= $page_cap ON CONFLICT (tenant_id, month) DO UPDATE SET ocr_pages = llm_month_usage.ocr_pages + EXCLUDED.ocr_pages WHERE llm_month_usage.ocr_pages + EXCLUDED.ocr_pages <= $page_cap RETURNING ocr_pages in its own short transaction, zero rows refusing the import with 503 unavailable, and settles to the pages the provider processed after the call. Users and agents draw on the same caps. Shared by every API replica.';
 
 ALTER TABLE rate_budget_window DROP CONSTRAINT IF EXISTS rate_budget_window_budget_check;
 ALTER TABLE rate_budget_window ADD CONSTRAINT rate_budget_window_budget_check CHECK (budget IN ('import', 'parse', 'proposal', 'llm', 'expand', 'extraction', 'ocr'));
 COMMENT ON TABLE rate_budget_window IS 'Units spent per user or agent, per budget, per clock hour (window_start is a whole UTC hour), shared by every API replica. A charge of $n against $limit is one statement: INSERT INTO rate_budget_window (tenant_id, actor_kind, actor_id, budget, window_start, spent) SELECT $tenant, $kind, $actor, $budget, $window, $n WHERE $n <= $limit ON CONFLICT (tenant_id, actor_kind, actor_id, budget, window_start) DO UPDATE SET spent = rate_budget_window.spent + EXCLUDED.spent WHERE rate_budget_window.spent + EXCLUDED.spent <= $limit RETURNING spent; zero rows returned means the budget is exhausted and the call is refused (429 rate_limited, or llmOutcome rate_limited for the llm budget). The expand budget counts POST /concepts/{conceptId}/expand calls and is charged before the llm budget. The extraction budget counts whole-document extraction jobs started (POST /import/{importId}/extraction); the model calls of a job are bounded by its own token ceiling and the tenant cap, not by the per-call llm budget. The ocr budget counts OCR pages, charged for every image-only page before the OCR call. actor_id is a plain uuid so a charge never waits on a foreign key lock. A purge every 15 minutes deletes windows that started more than 2 hours ago.';
 
-ALTER TABLE document_import ADD COLUMN IF NOT EXISTS ocr_pages        integer NOT NULL DEFAULT 0;
+ALTER TABLE document_import ADD COLUMN IF NOT EXISTS ocr_pages integer NOT NULL DEFAULT 0;
 ALTER TABLE document_import DROP CONSTRAINT IF EXISTS document_import_ocr_pages;
 ALTER TABLE document_import ADD CONSTRAINT document_import_ocr_pages CHECK (ocr_pages BETWEEN 0 AND 2000 AND (ocr_pages = 0 OR media_type = 'application/pdf'));
 ALTER TABLE document_import DROP CONSTRAINT IF EXISTS document_import_media_type;
@@ -67,7 +67,7 @@ COMMENT ON TABLE document_import IS 'One uploaded document after server-side ext
 
 ALTER TABLE document_import_sentence DROP CONSTRAINT IF EXISTS document_import_sentence_position_unit_check;
 ALTER TABLE document_import_sentence ADD CONSTRAINT document_import_sentence_position_unit_check CHECK (position_unit IN ('page', 'paragraph', 'slide', 'sheet'));
-ALTER TABLE document_import_sentence ADD COLUMN IF NOT EXISTS position_row    integer CHECK (position_row BETWEEN 1 AND 1048576);
+ALTER TABLE document_import_sentence ADD COLUMN IF NOT EXISTS position_row integer CHECK (position_row BETWEEN 1 AND 1048576);
 ALTER TABLE document_import_sentence DROP CONSTRAINT IF EXISTS document_import_sentence_row_only_for_sheet;
 ALTER TABLE document_import_sentence ADD CONSTRAINT document_import_sentence_row_only_for_sheet CHECK (position_row IS NULL OR position_unit IS NOT DISTINCT FROM 'sheet');
 
@@ -169,7 +169,7 @@ CREATE TABLE IF NOT EXISTS document_extraction_job (
 CREATE UNIQUE INDEX IF NOT EXISTS document_extraction_job_one_running_per_user ON document_extraction_job (tenant_id, actor_user_id) WHERE state IN ('queued', 'running');
 CREATE INDEX IF NOT EXISTS document_extraction_job_queue ON document_extraction_job (created_at) WHERE state IN ('queued', 'running');
 CREATE INDEX IF NOT EXISTS document_extraction_job_by_expiry ON document_extraction_job (expires_at) WHERE expires_at IS NOT NULL;
-COMMENT ON TABLE document_extraction_job IS 'One whole-document extraction job (POST /import/{importId}/extraction): two model passes over the chunked import, outline then sections, mapped by the server to one draft tree for company_id. At most one job per import (unique tenant_id, import_id) and one queued or running job per user (partial unique index). The runner in apps/api claims work with SELECT ... FROM document_extraction_job WHERE state IN (''queued'', ''running'') AND (lease_until IS NULL OR lease_until < now()) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1, then in the same transaction UPDATE ... SET lease_owner = $runner, lease_epoch = lease_epoch + 1, lease_until = now() + interval ''5 minutes'', attempts = attempts + 1 RETURNING lease_epoch; a job whose attempts would pass the configured limit (ONTAIX_DOCUMENT_EXTRACTION_MAX_ATTEMPTS, default 3) is instead set failed with failure_reason too_many_attempts. Fencing: every later write by that runner - lease renewal (after every chunk, during every model call''s wait at most every 60 seconds, and during mapping), progress, outline, token count, final state - is UPDATE ... WHERE id = $job AND lease_owner = $runner AND lease_epoch = $epoch AND lease_until > clock_timestamp() (the statement time, not the transaction start), in a short transaction; zero rows means the lease is lost, and the runner abandons the job at once without writing, settling only its own llm_month_usage reservation. The outbox row is written in the same fenced transaction. A job whose runner dies is picked up again and resumes at the next unfinished chunk. Progress, the outline and the settled token count are written after every chunk in a short transaction that also writes the extraction.changed outbox row; no transaction is open during a model call. Token reservation and settlement use llm_month_usage exactly as teach extraction; tokens_used stops the job at token_ceiling. drafts and notes hold the validated tree, each note carrying the grounding sentence index and the originDetail copied from the import, so proposals survive the import purge (import_id is set null by it). submitted_at marks the one successful POST /extractions/{extractionId}/proposals call, claimed with UPDATE ... WHERE submitted_at IS NULL AND state = ''succeeded'' AND expires_at > now() RETURNING id. It never holds a prompt, a raw model answer or a credential. A purge every 15 minutes deletes jobs whose expires_at is more than 24 hours old, and failed or cancelled jobs 48 hours after finished_at.';
+COMMENT ON TABLE document_extraction_job IS 'One whole-document extraction job (POST /import/{importId}/extraction): two model passes over the chunked import, outline then sections, mapped by the server to one draft tree for company_id. At most one job per import (unique tenant_id, import_id) and one queued or running job per user (partial unique index). The runner in apps/api claims work with SELECT ... FROM document_extraction_job WHERE state IN (''queued'', ''running'') AND (lease_until IS NULL OR lease_until < now()) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1, then in the same transaction UPDATE ... SET lease_owner = $runner, lease_epoch = lease_epoch + 1, lease_until = now() + interval ''5 minutes'', attempts = attempts + 1 RETURNING lease_epoch; a job whose attempts would pass the configured limit (ONTAIX_DOCUMENT_EXTRACTION_MAX_ATTEMPTS, default 3) is instead set failed with failure_reason too_many_attempts. Fencing: every later write by that runner - lease renewal (after every chunk, during every model call''s wait at most every 60 seconds, and during mapping), progress, outline, token count, final state - is UPDATE ... WHERE id = $job AND lease_owner = $runner AND lease_epoch = $epoch AND lease_until > clock_timestamp() (the statement time, not the transaction start), in a short transaction; zero rows means the lease is lost, and the runner abandons the job at once without writing, settling only its own llm_month_usage reservation. The outbox row is written in the same fenced transaction. A job whose runner dies is picked up again and resumes at the next unfinished chunk. Progress, the outline and the settled token count are written after every chunk in a short transaction that also writes the extraction.changed outbox row; no transaction is open during a model call. Token reservation and settlement use llm_month_usage exactly as teach extraction; tokens_used stops the job at token_ceiling. outline holds the outline nodes (kind node) in acceptance order and, after pass 2, the accepted section intents (kind intent) that mapping reads; only the nodes are ever returned. drafts and notes hold the validated tree, each note carrying the grounding sentence index and the originDetail copied from the import, so proposals survive the import purge (import_id is set null by it). submitted_at marks the one successful POST /extractions/{extractionId}/proposals call, claimed with UPDATE ... WHERE submitted_at IS NULL AND state = ''succeeded'' AND expires_at > now() RETURNING id. It never holds a prompt, a raw model answer or a credential. A purge every 15 minutes deletes jobs whose expires_at is more than 24 hours old, and failed or cancelled jobs 48 hours after finished_at.';
 
 CREATE TABLE IF NOT EXISTS ontology_import (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -277,4 +277,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise NotImplementedError("revision 0004 is one-way")
+    raise NotImplementedError("revision 0005 is one-way")

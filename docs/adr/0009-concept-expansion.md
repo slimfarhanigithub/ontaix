@@ -101,21 +101,17 @@ Expansion is exempt from grounding by owner decision (row 99). Its safety comes 
 
 - One unit of the caller's hourly `expand` budget (`rate_budget_window`, default 30 runs per user per hour, `ONTAIX_EXPAND_CALLS_PER_HOUR`) is charged before anything else; when it is empty the call is `429 rate_limited` with `Retry-After`.
 - Then the same budgets as teach extraction: one unit of the hourly `llm` budget and a reservation against the tenant's `llmMonthlyTokenCap` in `llm_month_usage`, with the ADR 0008 method (input estimate the larger of code points / 2 and UTF-8 bytes / 3 of the assembled request, plus the output bound, reserved in its own short transaction, settled after the call on the reserved month). Either being exhausted gives `200`, no drafts, `llmOutcome` `rate_limited` or `budget_exhausted`. Cap 0 turns expansion off with teach extraction.
-- Output bound: 128 tokens per allowed draft (25,600 at the default ceiling), at most `ONTAIX_EXPAND_MAX_OUTPUT_TOKENS` (default 32,768), plus `ONTAIX_EXPAND_REASONING_ALLOWANCE_TOKENS` (default 8,192, because the default effort is `medium`); the sum is set as the provider's maximum output tokens and reserved. A suggestion in compact JSON with a 120-character rationale takes about 80 tokens. At the defaults with 1,000 context labels a run reserves at most about 100,000 tokens; a typical run settles far less.
+- Output bound: 128 tokens per allowed draft (25,600 at the default ceiling), at most `ONTAIX_EXPAND_MAX_OUTPUT_TOKENS` (default 32,768), plus the `deep` profile's reasoning allowance; the sum is set as the provider's maximum output tokens and reserved. A suggestion in compact JSON with a 120-character rationale takes about 80 tokens. At the defaults with 1,000 context labels a run reserves at most about 100,000 tokens; a typical run settles far less.
 - Every provider call, failed ones included, writes one `llm_call` row with purpose `concept_expansion` and outcome `used`, `invalid_output`, `timeout`, `provider_error` or `refused`. `GET /cost` reports it in `LlmUsage.byPurpose`.
 - Submitting charges one proposal unit per created proposal.
 - No event is published for an expansion; the proposals it creates publish `proposal.created` as usual, with origin `suggestion`.
 
 ### Model, Effort And Timeout
 
-Expansion uses the teach adapter in `apps/api/app/clients/` and the configured provider (`ONTAIX_LLM_PROVIDER`), with its own settings:
+Expansion uses the teach adapter in `apps/api/app/clients/` and the configured provider (`ONTAIX_LLM_PROVIDER`) on the `deep` model profile (`ONTAIX_FOUNDRY_DEEP_DEPLOYMENT`, `ONTAIX_FOUNDRY_DEEP_REASONING_EFFORT` and `ONTAIX_LLM_DEEP_REASONING_ALLOWANCE_TOKENS`, each unset one taking its teach value), with its own settings for size, budget and time:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `ONTAIX_EXPAND_DEPLOYMENT` | the value of `ONTAIX_FOUNDRY_DEPLOYMENT` | `azure_foundry`: the model deployment expansion calls |
-| `ONTAIX_EXPAND_MODEL` | the value of `ONTAIX_LLM_MODEL` | The model name written to `llm_call.model` and looked up in `ONTAIX_LLM_PRICE_TABLE`; with `anthropic`, the model id sent. The API does not start when a configured provider's expansion model has no price |
-| `ONTAIX_EXPAND_REASONING_EFFORT` | `medium` | `azure_foundry`: the reasoning effort sent with each expansion call; any value `ONTAIX_FOUNDRY_REASONING_EFFORT` accepts |
-| `ONTAIX_EXPAND_REASONING_ALLOWANCE_TOKENS` | 8192 | Extra output tokens for reasoning, added to the maximum output tokens and to the reservation |
 | `ONTAIX_EXPAND_MAX_NODES` | 200 | Total drafts per run, concepts and relations together; 1 to 2,000, anything else stops the API at start-up |
 | `ONTAIX_EXPAND_MAX_OUTPUT_TOKENS` | 32768 | Upper bound of the answer's output tokens, before the reasoning allowance |
 | `ONTAIX_EXPAND_CONTEXT_LABELS` | 1000 | Most existing labels sent as context |

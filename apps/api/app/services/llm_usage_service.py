@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 TEACH_EXTRACTION = "teach_extraction"
 DOCUMENT_OCR = "document_ocr"
+CONCEPT_EXPANSION = "concept_expansion"
+DOCUMENT_EXTRACTION = "document_extraction"
 RETENTION = timedelta(days=400)
 
 

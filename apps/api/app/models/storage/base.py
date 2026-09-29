@@ -48,6 +48,7 @@ class ProposalOrigin(enum.StrEnum):
     TEXT = "text"
     SPEECH = "speech"
     DOCUMENT = "document"
+    SUGGESTION = "suggestion"
     ONTOLOGY_IMPORT = "ontology_import"
 
 

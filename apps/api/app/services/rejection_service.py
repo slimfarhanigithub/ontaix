@@ -17,7 +17,7 @@ from app.models.storage.base import ProposalState
 from app.models.storage.concept import Concept
 from app.models.storage.proposal import Proposal
 from app.repositories import concept_repository, proposal_repository, relation_repository
-from app.services import audit_service, outbox_service
+from app.services import attribute_proposal_service, audit_service, outbox_service
 from app.services.concept_removal_service import remove_concepts
 from app.services.decision_event_service import emit_proposal_event
 from app.services.ontology_view_service import OntologyView
@@ -67,7 +67,10 @@ async def reject_one(
                 and q.concept_id != concept.id
                 and view.descends(q.concept_id, concept.id)
             )
-            if descends or _touches_relation(view, q, concept.id):
+            touches = _touches_relation(view, q, concept.id) or _touches_attribute(
+                view, q, concept.id
+            )
+            if descends or touches:
                 cascaded = await reject_one(session, caller, view, q, open_proposals, None, bulk)
                 outcome.add_cascaded(
                     view.proposal_dto(q, cascaded.artefacts), proposal_company_ids(q)
@@ -76,6 +79,7 @@ async def reject_one(
         await concept_repository.clear_pending(session, concept)
         await remove_concepts(session, caller, view, proposal, [concept], outcome, bulk)
     else:
+        await attribute_proposal_service.remove(session, view, caller, proposal, bulk)
         for rid in own_relation_ids(proposal):
             relation = view.relations.get(rid)
             if relation is None or not relation.pending:
@@ -98,14 +102,22 @@ async def reject_one(
 
 
 def touches_any(view: OntologyView, proposal: Proposal, concepts: list[Concept]) -> bool:
-    """True when the proposal creates, targets or relates any of `concepts`."""
+    """True when the proposal creates, targets, relates or describes any of `concepts`."""
     ids = {c.id for c in concepts}
     if proposal.concept_id in ids:
         return True
     payload_concept = proposal.payload.get("conceptId") if proposal.payload else None
     if payload_concept and uuid.UUID(str(payload_concept)) in ids:
         return True
+    if any(_touches_attribute(view, proposal, cid) for cid in ids):
+        return True
     return any(_touches_relation(view, proposal, cid) for cid in ids)
+
+
+def _touches_attribute(view: OntologyView, proposal: Proposal, concept_id: uuid.UUID) -> bool:
+    """True when the proposal's attribute belongs to the concept."""
+    attribute = view.attribute(proposal.attribute_id)
+    return attribute is not None and attribute.concept_id == concept_id
 
 
 def _touches_relation(view: OntologyView, proposal: Proposal, concept_id: uuid.UUID) -> bool:

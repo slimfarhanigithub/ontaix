@@ -1,0 +1,1242 @@
+# Teach bake-off: short cases (typed turns and speech transcripts) with hand-checked gold.
+#
+# Format: `evals/teach_case.py` (TeachCase). Every case carries `expected`; `existing` concepts are
+# seeded and approved before the case runs. Gold rules (ADR 0008): every expected label occurs in
+# the input; a grouping noun that is a business concept ("3 offerings") is itself a concept with
+# the members under it (`includes`); a descriptive noun ("three areas", "two ways", "regions")
+# is not a concept and the members hang from the subject with the speaker's verb; drafts follow
+# the list, never the stated count; facts the existing concepts already hold expect nothing, so
+# re-drafting them counts as invented. A corrected item ("no wait", "sorry I meant") is never
+# expected. For French cases, `action` lists the French verb first, then English equivalents.
+#
+# All text is original, written for Ontaix on 2026-09-29; all companies are fictional except
+# `Insight`, which is the owner's own canonical example from ADR 0008. No third-party content.
+
+cases:
+  # ---------------------------------------------------------------- English, typed text
+  - id: en-text-adr-owner-sentences
+    kind: text
+    company: Insight
+    description: The owner's two ADR 0008 sentences; "these services" refers to the first turn.
+    tags: [en, text, back-reference, descriptive-list, multi-turn]
+    input:
+      - "Insight sells services"
+      - "these services are focused around three areas, app, data and AI"
+    expected:
+      concepts:
+        - {label: Services, parent: [Insight], action: [sells, offers, provides]}
+        - {label: App, parent: [Services], action: [focuses on, is focused around]}
+        - {label: Data, parent: [Services], action: [focuses on, is focused around]}
+        - {label: AI, parent: [Services], action: [focuses on, is focused around]}
+
+  - id: en-text-grouping-offerings
+    kind: text
+    company: Northbeam Consulting
+    description: The ADR's canonical grouping noun; Offerings is a concept, members under it.
+    tags: [en, text, grouping, reuse]
+    existing:
+      - {label: Services, parent: Northbeam Consulting, action: sells, domain: sales}
+    input:
+      - "Services has 3 offerings, Apps, Data and AI"
+    expected:
+      concepts:
+        - {label: Offerings, parent: [Services], action: [has]}
+        - {label: Apps, parent: [Offerings], action: [includes]}
+        - {label: Data, parent: [Offerings], action: [includes]}
+        - {label: AI, parent: [Offerings], action: [includes]}
+
+  - id: en-text-grouping-product-lines
+    kind: text
+    company: Aldwick Foods
+    description: Grouping noun under the company root with a matching count of four.
+    tags: [en, text, grouping]
+    input:
+      - "Aldwick Foods makes 4 product lines: breakfast cereals, snack bars, granola and oat drinks."
+    expected:
+      concepts:
+        - {label: Product lines, parent: [Aldwick Foods], action: [makes, has, produces]}
+        - {label: Breakfast cereals, parent: [Product lines], action: [includes]}
+        - {label: Snack bars, parent: [Product lines], action: [includes]}
+        - {label: Granola, parent: [Product lines], action: [includes]}
+        - {label: Oat drinks, parent: [Product lines], action: [includes]}
+
+  - id: en-text-descriptive-regions
+    kind: text
+    company: Kellbrook Logistics
+    description: Descriptive noun "regions" is not a concept; members hang from Warehouses.
+    tags: [en, text, descriptive-list, reuse]
+    existing:
+      - {label: Warehouses, parent: Kellbrook Logistics, action: operates, domain: logistics}
+    input:
+      - "Our warehouses are spread across three regions, the Midlands, Scotland and Wales."
+    expected:
+      concepts:
+        - {label: Midlands, parent: [Warehouses], action: [is spread across, is located in, operates in, covers]}
+        - {label: Scotland, parent: [Warehouses], action: [is spread across, is located in, operates in, covers]}
+        - {label: Wales, parent: [Warehouses], action: [is spread across, is located in, operates in, covers]}
+
+  - id: en-text-descriptive-count-mismatch
+    kind: text
+    company: Lumen Utilities
+    description: Descriptive "two ways" followed by three items; drafts follow the list.
+    tags: [en, text, descriptive-list, count-mismatch, reuse]
+    existing:
+      - {label: Customer, parent: Lumen Utilities, action: serves, domain: sales}
+    input:
+      - "Customers can pay in two ways: card, bank transfer and direct debit."
+    expected:
+      concepts:
+        - {label: Card, parent: [Customer], action: [pays by, can pay by, pays with, pays in, uses]}
+        - {label: Bank transfer, parent: [Customer], action: [pays by, can pay by, pays with, pays in, uses]}
+        - {label: Direct debit, parent: [Customer], action: [pays by, can pay by, pays with, pays in, uses]}
+
+  - id: en-text-reuse-production-line
+    kind: text
+    company: Ferrant Pumps
+    description: Plural and singular mention of an existing concept must be reused, not redrafted.
+    tags: [en, text, reuse]
+    existing:
+      - {label: Plant, parent: Ferrant Pumps, action: operates, domain: production}
+      - {label: Production line, parent: Plant, action: runs, domain: production}
+    input:
+      - "Each production line has a supervisor and a quality inspector."
+    expected:
+      concepts:
+        - {label: Supervisor, parent: [Production line], action: [has]}
+        - {label: Quality inspector, parent: [Production line], action: [has]}
+
+  - id: en-text-already-known-then-new
+    kind: text
+    company: Ferrant Pumps
+    description: First turn restates an existing fact (nothing to draft); second adds one concept.
+    tags: [en, text, already-known, reuse, multi-turn]
+    existing:
+      - {label: Customer, parent: Ferrant Pumps, action: serves, domain: sales}
+      - {label: Customer order, parent: Customer, action: places, domain: sales}
+    input:
+      - "Customers place customer orders."
+      - "Each customer order has order lines."
+    expected:
+      concepts:
+        - {label: Order lines, parent: [Customer order], action: [has]}
+
+  - id: en-text-already-known-only
+    kind: text
+    company: Northbeam Consulting
+    description: Everything stated already exists; any draft is invented.
+    tags: [en, text, already-known, reuse]
+    existing:
+      - {label: Services, parent: Northbeam Consulting, action: sells, domain: sales}
+      - {label: Apps, parent: Services, action: includes, domain: sales}
+      - {label: Data, parent: Services, action: includes, domain: sales}
+    input:
+      - "Northbeam sells services, and our services include apps and data."
+    expected:
+      concepts: []
+
+  - id: en-text-is-a-existing-parent
+    kind: text
+    company: Halden Engineering
+    description: Two specialisations of an existing concept, one elliptical ("too").
+    tags: [en, text, is-a, reuse]
+    existing:
+      - {label: Contract, parent: Halden Engineering, action: signs, domain: sales}
+    input:
+      - "A framework agreement is a kind of contract, and a call-off order is a type of contract too."
+    expected:
+      concepts:
+        - {label: Framework agreement, parent: [Contract], action: [is a]}
+        - {label: Call-off order, parent: [Contract], action: [is a]}
+
+  - id: en-text-is-a-new-parent
+    kind: text
+    company: Verdano Energy
+    description: Is-a with a new parent, then a second child in a later turn.
+    tags: [en, text, is-a, multi-turn]
+    input:
+      - "A heat pump is a type of heating system."
+      - "A gas boiler is also a heating system."
+    expected:
+      concepts:
+        - {label: Heating system, parent: [Verdano Energy], action: [has, sells, offers, installs]}
+        - {label: Heat pump, parent: [Heating system], action: [is a]}
+        - {label: Gas boiler, parent: [Heating system], action: [is a]}
+
+  - id: en-text-cross-domain-quality-finance
+    kind: text
+    company: Ferrant Pumps
+    description: Relations between existing concepts of quality, finance and supply; "it" refers back.
+    tags: [en, text, cross-domain, reuse, back-reference, multi-turn]
+    existing:
+      - {label: Supplier, parent: Ferrant Pumps, action: buys from, domain: supply}
+      - {label: Non-conformity, parent: Ferrant Pumps, action: records, domain: quality}
+      - {label: Payment, parent: Ferrant Pumps, action: makes, domain: finance}
+    input:
+      - "A non-conformity blocks the payment until it is closed."
+      - "Every non-conformity is raised against a supplier."
+    expected:
+      concepts: []
+      relations:
+        - {from: Non-conformity, to: Payment, action: [blocks, holds], inverse: [is blocked by]}
+        - {from: Non-conformity, to: Supplier, action: [is raised against, concerns], inverse: [receives, has]}
+
+  - id: en-text-cross-domain-order-flow
+    kind: text
+    company: Ferrant Pumps
+    description: Sales, production and logistics concepts linked; "that production order" reuses.
+    tags: [en, text, cross-domain, reuse]
+    existing:
+      - {label: Sales order, parent: Ferrant Pumps, action: receives, domain: sales}
+      - {label: Production order, parent: Ferrant Pumps, action: releases, domain: production}
+      - {label: Shipment, parent: Ferrant Pumps, action: sends, domain: logistics}
+    input:
+      - "A sales order triggers a production order, and the shipment waits for that production order."
+    expected:
+      concepts: []
+      relations:
+        - {from: Sales order, to: Production order, action: [triggers, creates], inverse: [is triggered by]}
+        - {from: Shipment, to: Production order, action: [waits for, depends on], inverse: [precedes, is needed by]}
+
+  - id: en-text-chain-five-levels
+    kind: text
+    company: Ferrant Pumps
+    description: One sentence nesting five levels through relative clauses.
+    tags: [en, text, deep-chain]
+    input:
+      - "Ferrant Pumps runs the Lyon plant, which has an assembly hall that holds line 4, where the torque station uses a calibrated wrench."
+    expected:
+      concepts:
+        - {label: Lyon plant, parent: [Ferrant Pumps], action: [runs, operates, has]}
+        - {label: Assembly hall, parent: [Lyon plant], action: [has]}
+        - {label: Line 4, parent: [Assembly hall], action: [holds, has, contains]}
+        - {label: Torque station, parent: [Line 4], action: [has, holds, contains, includes]}
+        - {label: Calibrated wrench, parent: [Torque station], action: [uses]}
+
+  - id: en-text-chain-six-levels
+    kind: text
+    company: Brevik Shipping
+    description: Six-level finance chain in one typed turn.
+    tags: [en, text, deep-chain]
+    input:
+      - "Our Finance division runs accounts payable, which consists of invoice processing; invoice processing starts with invoice capture, and invoice capture produces an invoice record containing line items."
+    expected:
+      concepts:
+        - {label: Finance division, parent: [Brevik Shipping], action: [runs, has]}
+        - {label: Accounts payable, parent: [Finance division], action: [runs]}
+        - {label: Invoice processing, parent: [Accounts payable], action: [consists of]}
+        - {label: Invoice capture, parent: [Invoice processing], action: [starts with, includes, begins with]}
+        - {label: Invoice record, parent: [Invoice capture], action: [produces, creates]}
+        - {label: Line items, parent: [Invoice record], action: [contains, has]}
+
+  - id: en-text-back-reference-they-it
+    kind: text
+    company: Brevik Shipping
+    description: '"They" means the terminals of turn one; "it" means the company, not the terminals.'
+    tags: [en, text, back-reference, multi-turn]
+    input:
+      - "Brevik Shipping operates container terminals."
+      - "They handle reefers and dry boxes."
+      - "It also runs a customs desk."
+    expected:
+      concepts:
+        - {label: Container terminals, parent: [Brevik Shipping], action: [operates, runs, has]}
+        - {label: Reefers, parent: [Container terminals], action: [handles]}
+        - {label: Dry boxes, parent: [Container terminals], action: [handles]}
+        - {label: Customs desk, parent: [Brevik Shipping], action: [runs, operates, has]}
+
+  - id: en-text-back-reference-those
+    kind: text
+    company: Northbeam Consulting
+    description: Already-known turn, then "those key accounts" must reuse the existing concept.
+    tags: [en, text, back-reference, already-known, reuse, multi-turn]
+    existing:
+      - {label: Clients, parent: Northbeam Consulting, action: serves, domain: sales}
+      - {label: Key accounts, parent: Clients, action: includes, domain: sales}
+    input:
+      - "Our clients include key accounts."
+      - "Those key accounts each get an account manager and a quarterly business review."
+    expected:
+      concepts:
+        - {label: Account manager, parent: [Key accounts], action: [gets, has, is assigned]}
+        - {label: Quarterly business review, parent: [Key accounts], action: [gets, has, holds]}
+
+  - id: en-text-verb-variety
+    kind: text
+    company: Kellbrook Logistics
+    description: Three different verbs from one existing subject in one sentence.
+    tags: [en, text, reuse]
+    existing:
+      - {label: Warehouse, parent: Kellbrook Logistics, action: operates, domain: logistics}
+    input:
+      - "The warehouse stores pallets, picks orders and ships parcels."
+    expected:
+      concepts:
+        - {label: Pallets, parent: [Warehouse], action: [stores, holds]}
+        - {label: Orders, parent: [Warehouse], action: [picks, fulfils]}
+        - {label: Parcels, parent: [Warehouse], action: [ships, sends, dispatches]}
+
+  - id: en-text-descriptive-topics
+    kind: text
+    company: Verdano Energy
+    description: Descriptive "two topics"; no Topics concept.
+    tags: [en, text, descriptive-list, reuse]
+    existing:
+      - {label: Research lab, parent: Verdano Energy, action: runs, domain: engineering}
+    input:
+      - "Our research lab focuses on two topics: battery chemistry and solid-state cells."
+    expected:
+      concepts:
+        - {label: Battery chemistry, parent: [Research lab], action: [focuses on, researches, studies]}
+        - {label: Solid-state cells, parent: [Research lab], action: [focuses on, researches, studies]}
+
+  - id: en-text-grouping-channels
+    kind: text
+    company: Aldwick Foods
+    description: Grouping noun "channels"; members also accepted directly under Sales.
+    tags: [en, text, grouping, reuse]
+    existing:
+      - {label: Sales, parent: Aldwick Foods, action: runs, domain: sales}
+    input:
+      - "Sales has three channels: retail stores, the web shop and marketplaces."
+    expected:
+      concepts:
+        - {label: Channels, parent: [Sales], action: [has]}
+        - {label: Retail stores, parent: [Channels, Sales], action: [includes, has, sells through]}
+        - {label: Web shop, parent: [Channels, Sales], action: [includes, has, sells through]}
+        - {label: Marketplaces, parent: [Channels, Sales], action: [includes, has, sells through]}
+
+  - id: en-text-grouping-then-descriptive
+    kind: text
+    company: Orbis IT
+    description: A grouping noun (teams) and a descriptive noun (locations) in consecutive sentences.
+    tags: [en, text, grouping, descriptive-list, back-reference]
+    existing:
+      - {label: IT department, parent: Orbis IT, action: has, domain: people}
+    input:
+      - "The IT department is organised in two teams: Platform and Workplace. The platform team works in three locations, Paris, Lisbon and Warsaw."
+    expected:
+      concepts:
+        - {label: Teams, parent: [IT department], action: [is organised in, has, consists of]}
+        - {label: Platform, parent: [Teams, IT department], action: [includes, has], aliases: [Platform team]}
+        - {label: Workplace, parent: [Teams, IT department], action: [includes, has]}
+        - {label: Paris, parent: [Platform], action: [works in, operates in, is located in]}
+        - {label: Lisbon, parent: [Platform], action: [works in, operates in, is located in]}
+        - {label: Warsaw, parent: [Platform], action: [works in, operates in, is located in]}
+
+  - id: en-text-reuse-and-cross-link
+    kind: text
+    company: Halden Engineering
+    description: New concepts under an existing one plus a link from another existing concept.
+    tags: [en, text, reuse, cross-domain]
+    existing:
+      - {label: Customer, parent: Halden Engineering, action: serves, domain: sales}
+      - {label: Contract, parent: Customer, action: signs, domain: sales}
+      - {label: Invoice, parent: Contract, action: generates, domain: finance}
+    input:
+      - "Each invoice has payment terms and a due date, and the contract sets the payment terms."
+    expected:
+      concepts:
+        - {label: Payment terms, parent: [Invoice, Contract], action: [has, sets, defines]}
+        - {label: Due date, parent: [Invoice], action: [has]}
+      relations:
+        - {from: Contract, to: Payment terms, action: [sets, defines], inverse: [is set by]}
+
+  - id: en-text-plural-reuse-passive
+    kind: text
+    company: Halden Engineering
+    description: Plural of an existing singular concept with a passive verb.
+    tags: [en, text, reuse]
+    existing:
+      - {label: Invoice, parent: Halden Engineering, action: issues, domain: finance}
+    input:
+      - "Invoices are approved by the controller before payment."
+    expected:
+      concepts:
+        - {label: Controller, parent: [Invoice], action: [is approved by, approved by, approves]}
+    optional: [Payment]
+
+  - id: en-text-descriptive-regions-minimal-pair
+    kind: text
+    company: Kellbrook Logistics
+    description: Minimal pair of the channels case; "regions" is descriptive, so no Regions concept.
+    tags: [en, text, descriptive-list, reuse]
+    existing:
+      - {label: Delivery network, parent: Kellbrook Logistics, action: operates, domain: logistics}
+    input:
+      - "Our delivery network operates in three regions: North, South and East."
+    expected:
+      concepts:
+        - {label: North, parent: [Delivery network], action: [operates in, covers, serves]}
+        - {label: South, parent: [Delivery network], action: [operates in, covers, serves]}
+        - {label: East, parent: [Delivery network], action: [operates in, covers, serves]}
+
+  - id: en-text-chain-across-turns
+    kind: text
+    company: Orbis IT
+    description: A five-level chain built over four turns with "it" and "which" references.
+    tags: [en, text, deep-chain, back-reference, multi-turn]
+    input:
+      - "Orbis IT runs a managed service."
+      - "It includes monitoring and patching."
+      - "Monitoring raises alerts."
+      - "Each alert opens a ticket, which has a priority."
+    expected:
+      concepts:
+        - {label: Managed service, parent: [Orbis IT], action: [runs, offers, provides]}
+        - {label: Monitoring, parent: [Managed service], action: [includes]}
+        - {label: Patching, parent: [Managed service], action: [includes]}
+        - {label: Alerts, parent: [Monitoring], action: [raises, generates]}
+        - {label: Ticket, parent: [Alerts], action: [opens, creates]}
+        - {label: Priority, parent: [Ticket], action: [has]}
+
+  - id: en-text-correction-typed
+    kind: text
+    company: Orbis IT
+    description: A typed self-correction; the network team must not be drafted.
+    tags: [en, text, correction, reuse]
+    existing:
+      - {label: Service desk, parent: Orbis IT, action: runs, domain: maintenance}
+    input:
+      - "The service desk escalates to the network team, sorry, I meant the platform team, and the platform team owns the monitoring tools."
+    expected:
+      concepts:
+        - {label: Platform team, parent: [Service desk], action: [escalates to]}
+        - {label: Monitoring tools, parent: [Platform team], action: [owns, manages, has]}
+
+  # ---------------------------------------------------------------- English, speech
+  - id: en-speech-adr-owner-spoken
+    kind: speech
+    company: Insight
+    description: The owner's example spoken, with fillers and a repeated word.
+    tags: [en, speech, fillers, back-reference, descriptive-list]
+    input: "so um insight sells services and uh these services are are focused around three areas you know apps data and AI"
+    expected:
+      concepts:
+        - {label: Services, parent: [Insight], action: [sells, offers, provides]}
+        - {label: Apps, parent: [Services], action: [focuses on, is focused around]}
+        - {label: Data, parent: [Services], action: [focuses on, is focused around]}
+        - {label: AI, parent: [Services], action: [focuses on, is focused around]}
+
+  - id: en-speech-correction-lines
+    kind: speech
+    company: Ferrant Pumps
+    description: A spoken correction removes line C and adds line D.
+    tags: [en, speech, correction, fillers]
+    input: "okay so um the lyon plant runs line A line B and line C no wait not line C line D and uh the plant also has a paint shop"
+    expected:
+      concepts:
+        - {label: Lyon plant, parent: [Ferrant Pumps], action: [has, runs, operates]}
+        - {label: Line A, parent: [Lyon plant], action: [runs]}
+        - {label: Line B, parent: [Lyon plant], action: [runs]}
+        - {label: Line D, parent: [Lyon plant], action: [runs]}
+        - {label: Paint shop, parent: [Lyon plant], action: [has]}
+
+  - id: en-speech-run-on-they
+    kind: speech
+    company: Kellbrook Logistics
+    description: Run-on with "they" and a contraction ("the yard's got").
+    tags: [en, speech, run-on, back-reference, fillers]
+    input: "right so we're a logistics company we've got warehouses and they're all bonded and um they each have a dock and a yard and the yard's got trailer slots"
+    expected:
+      concepts:
+        - {label: Warehouses, parent: [Kellbrook Logistics], action: [has, operates, has got]}
+        - {label: Dock, parent: [Warehouses], action: [has]}
+        - {label: Yard, parent: [Warehouses], action: [has]}
+        - {label: Trailer slots, parent: [Yard], action: [has, has got]}
+
+  - id: en-speech-grouping-offerings
+    kind: speech
+    company: Northbeam Consulting
+    description: Spoken grouping noun plus a fourth level under one member.
+    tags: [en, speech, grouping, reuse, fillers]
+    existing:
+      - {label: Services, parent: Northbeam Consulting, action: sells, domain: sales}
+    input: "um okay services has three offerings apps data and AI and uh apps covers custom development and uh modernisation"
+    expected:
+      concepts:
+        - {label: Offerings, parent: [Services], action: [has]}
+        - {label: Apps, parent: [Offerings], action: [includes]}
+        - {label: Data, parent: [Offerings], action: [includes]}
+        - {label: AI, parent: [Offerings], action: [includes]}
+        - {label: Custom development, parent: [Apps], action: [covers, includes]}
+        - {label: Modernisation, parent: [Apps], action: [covers, includes]}
+
+  - id: en-speech-chain-bank
+    kind: speech
+    company: Calder Savings
+    description: Five-level lending chain in one run-on.
+    tags: [en, speech, deep-chain, run-on]
+    input: "so the bank has a retail division and the retail division runs lending and lending is split into mortgages and personal loans and um mortgages go through underwriting and underwriting produces an offer letter"
+    expected:
+      concepts:
+        - {label: Retail division, parent: [Calder Savings], action: [has]}
+        - {label: Lending, parent: [Retail division], action: [runs]}
+        - {label: Mortgages, parent: [Lending], action: [is split into]}
+        - {label: Personal loans, parent: [Lending], action: [is split into]}
+        - {label: Underwriting, parent: [Mortgages], action: [goes through, includes, requires]}
+        - {label: Offer letter, parent: [Underwriting], action: [produces, creates]}
+
+  - id: en-speech-correction-i-meant
+    kind: speech
+    company: Orbis IT
+    description: '"sorry I meant" replaces changes by service requests; changes go elsewhere.'
+    tags: [en, speech, correction, reuse]
+    existing:
+      - {label: Helpdesk, parent: Orbis IT, action: runs, domain: maintenance}
+    input: "the helpdesk handles incidents and uh changes sorry I meant service requests not changes changes go to the change board"
+    expected:
+      concepts:
+        - {label: Incidents, parent: [Helpdesk], action: [handles]}
+        - {label: Service requests, parent: [Helpdesk], action: [handles]}
+        - {label: Changes, parent: [Orbis IT, Change board], action: [has, goes to, is handled by, handles]}
+        - {label: Change board, parent: [Orbis IT, Changes], action: [has, goes to, handles]}
+
+  - id: en-speech-question-aside
+    kind: speech
+    company: Aldwick Foods
+    description: A question and a hesitation that teach nothing, then two facts.
+    tags: [en, speech, fillers, not-a-statement]
+    input: "so returns um do we even have a returns process I'm not sure actually yes we do the returns process starts at the customer service desk and ends with a credit note"
+    expected:
+      concepts:
+        - {label: Returns process, parent: [Aldwick Foods], action: [has, runs]}
+        - {label: Customer service desk, parent: [Returns process, Aldwick Foods], action: [starts at, has, begins at]}
+        - {label: Credit note, parent: [Returns process], action: [ends with, produces, issues]}
+
+  - id: en-speech-grouping-count-corrected
+    kind: speech
+    company: Varde Foods
+    description: '"two brands" corrected in passing to three; drafts follow the list.'
+    tags: [en, speech, grouping, count-mismatch, correction]
+    input: "and um we've got two brands uh Nordlys and Solbær oh and Fjellmat that's three"
+    expected:
+      concepts:
+        - {label: Brands, parent: [Varde Foods], action: [has, has got, owns]}
+        - {label: Nordlys, parent: [Brands], action: [includes]}
+        - {label: Solbær, parent: [Brands], action: [includes]}
+        - {label: Fjellmat, parent: [Brands], action: [includes]}
+
+  - id: en-speech-is-a-elliptical
+    kind: speech
+    company: Skyreach Aviation Services
+    description: Is-a with an elliptical second child ("is too") and a part of the parent.
+    tags: [en, speech, is-a]
+    input: "a drone is a kind of aircraft and uh a helicopter is too and every aircraft needs a maintenance log"
+    expected:
+      concepts:
+        - {label: Aircraft, parent: [Skyreach Aviation Services], action: [has, operates, maintains]}
+        - {label: Drone, parent: [Aircraft], action: [is a]}
+        - {label: Helicopter, parent: [Aircraft], action: [is a]}
+        - {label: Maintenance log, parent: [Aircraft], action: [needs, has, requires]}
+
+  - id: en-speech-cross-domain-it
+    kind: speech
+    company: Ferrant Pumps
+    description: Two relations between existing concepts of three domains, "it" means the sales order.
+    tags: [en, speech, cross-domain, back-reference, reuse]
+    existing:
+      - {label: Sales order, parent: Ferrant Pumps, action: receives, domain: sales}
+      - {label: Warehouse, parent: Ferrant Pumps, action: operates, domain: logistics}
+      - {label: Credit limit, parent: Ferrant Pumps, action: sets, domain: finance}
+    input: "so when a sales order comes in um it's checked against the credit limit and then the warehouse picks it"
+    expected:
+      concepts: []
+      relations:
+        - {from: Sales order, to: Credit limit, action: [is checked against], inverse: [checks, applies to]}
+        - {from: Warehouse, to: Sales order, action: [picks, fulfils], inverse: [is picked by]}
+
+  - id: en-speech-chain-seven-levels
+    kind: speech
+    company: Tallis Digital
+    description: Seven levels in one breath, through a grouping noun and "the cloud practice".
+    tags: [en, speech, deep-chain, grouping, run-on]
+    input: "so tallis digital has a delivery unit and the delivery unit has three practices cloud data and security and uh the cloud practice runs migrations and migrations uh consist of assessment planning and cutover and cutover produces a runbook and the runbook lists rollback steps"
+    expected:
+      concepts:
+        - {label: Delivery unit, parent: [Tallis Digital], action: [has]}
+        - {label: Practices, parent: [Delivery unit], action: [has]}
+        - {label: Cloud, parent: [Practices], action: [includes], aliases: [Cloud practice]}
+        - {label: Data, parent: [Practices], action: [includes]}
+        - {label: Security, parent: [Practices], action: [includes]}
+        - {label: Migrations, parent: [Cloud], action: [runs]}
+        - {label: Assessment, parent: [Migrations], action: [consists of]}
+        - {label: Planning, parent: [Migrations], action: [consists of]}
+        - {label: Cutover, parent: [Migrations], action: [consists of]}
+        - {label: Runbook, parent: [Cutover], action: [produces, creates]}
+        - {label: Rollback steps, parent: [Runbook], action: [lists, contains, includes]}
+
+  - id: en-speech-it-relations
+    kind: speech
+    company: Kellbrook Logistics
+    description: '"it" twice for the same existing system; two relations, no new concept.'
+    tags: [en, speech, back-reference, cross-domain, reuse]
+    existing:
+      - {label: Warehouse management system, parent: Kellbrook Logistics, action: runs, domain: logistics}
+      - {label: Transport planner, parent: Kellbrook Logistics, action: runs, domain: logistics}
+      - {label: ERP, parent: Kellbrook Logistics, action: runs, domain: finance}
+    input: "the warehouse management system um it feeds the transport planner and it gets orders from the ERP"
+    expected:
+      concepts: []
+      relations:
+        - {from: Warehouse management system, to: Transport planner, action: [feeds, sends data to], inverse: [is fed by]}
+        - {from: Warehouse management system, to: ERP, action: [gets orders from, receives orders from], inverse: [sends orders to]}
+
+  - id: en-speech-false-starts
+    kind: speech
+    company: Eastbury General Hospital
+    description: Repeated words and a false article ("a a") around a three-level chain.
+    tags: [en, speech, fillers]
+    input: "our our hospital has has a a emergency department and the emergency department does triage and uh triage assigns a triage category"
+    expected:
+      concepts:
+        - {label: Emergency department, parent: [Eastbury General Hospital], action: [has]}
+        - {label: Triage, parent: [Emergency department], action: [does, performs, runs]}
+        - {label: Triage category, parent: [Triage], action: [assigns]}
+
+  - id: en-speech-these-policies
+    kind: speech
+    company: Merrow Insurance
+    description: '"these policies" points to Insurance; "three flavours" is descriptive.'
+    tags: [en, speech, back-reference, descriptive-list]
+    input: "we sell insurance and these policies come in three flavours home motor and travel"
+    expected:
+      concepts:
+        - {label: Insurance, parent: [Merrow Insurance], action: [sells, offers]}
+        - {label: Home, parent: [Insurance], action: [comes in, includes, covers]}
+        - {label: Motor, parent: [Insurance], action: [comes in, includes, covers]}
+        - {label: Travel, parent: [Insurance], action: [comes in, includes, covers]}
+
+  - id: en-speech-grouping-teams-corrected
+    kind: speech
+    company: Halden Engineering
+    description: '"two teams" then "actually make that three"; members also accepted under Procurement.'
+    tags: [en, speech, grouping, count-mismatch, correction, reuse]
+    existing:
+      - {label: Procurement, parent: Halden Engineering, action: runs, domain: supply}
+    input: "procurement has two teams strategic sourcing and uh operational buying actually make that three there's also supplier onboarding"
+    expected:
+      concepts:
+        - {label: Teams, parent: [Procurement], action: [has]}
+        - {label: Strategic sourcing, parent: [Teams, Procurement], action: [includes, has]}
+        - {label: Operational buying, parent: [Teams, Procurement], action: [includes, has]}
+        - {label: Supplier onboarding, parent: [Teams, Procurement], action: [includes, has]}
+
+  - id: en-speech-product-structure
+    kind: speech
+    company: Ferrant Pumps
+    description: Bill-of-materials style chain five levels deep under an existing product.
+    tags: [en, speech, deep-chain, reuse, run-on]
+    existing:
+      - {label: Pump, parent: Ferrant Pumps, action: produces, domain: production}
+    input: "so a pump is made of a casing an impeller and a motor and the motor has a stator and a rotor and the rotor carries the bearings and the bearings need grease"
+    expected:
+      concepts:
+        - {label: Casing, parent: [Pump], action: [is made of]}
+        - {label: Impeller, parent: [Pump], action: [is made of]}
+        - {label: Motor, parent: [Pump], action: [is made of]}
+        - {label: Stator, parent: [Motor], action: [has]}
+        - {label: Rotor, parent: [Motor], action: [has]}
+        - {label: Bearings, parent: [Rotor], action: [carries, has, holds]}
+        - {label: Grease, parent: [Bearings], action: [needs, requires, uses]}
+
+  - id: en-speech-cross-domain-payroll
+    kind: speech
+    company: Brevik Shipping
+    description: An already-known fact, two cross-domain relations and one new concept.
+    tags: [en, speech, cross-domain, already-known, reuse]
+    existing:
+      - {label: Employee, parent: Brevik Shipping, action: employs, domain: people}
+      - {label: Payroll, parent: Brevik Shipping, action: runs, domain: finance}
+      - {label: Timesheet, parent: Employee, action: submits, domain: people}
+    input: "every employee submits a timesheet and um payroll uses the timesheet to pay the employee and also the timesheet goes to the project manager for approval"
+    expected:
+      concepts:
+        - {label: Project manager, parent: [Timesheet], action: [goes to, is approved by, is sent to]}
+      relations:
+        - {from: Payroll, to: Timesheet, action: [uses, reads], inverse: [is used by]}
+        - {from: Payroll, to: Employee, action: [pays], inverse: [is paid by]}
+
+  - id: en-speech-hesitation-month-end
+    kind: speech
+    company: Merrow Insurance
+    description: Hesitations, a self-check question, and "that" referring to the month-end close.
+    tags: [en, speech, fillers, back-reference, not-a-statement, reuse]
+    existing:
+      - {label: Finance team, parent: Merrow Insurance, action: has, domain: finance}
+    input: "hmm let me think what else oh yes the finance team closes the books every month with a month-end close and that has an accruals step and a reconciliation step is that right yes"
+    expected:
+      concepts:
+        - {label: Month-end close, parent: [Finance team], action: [runs, performs, closes the books with, has]}
+        - {label: Accruals step, parent: [Month-end close], action: [has]}
+        - {label: Reconciliation step, parent: [Month-end close], action: [has]}
+    optional: [Books]
+
+  - id: en-speech-fibre-order
+    kind: speech
+    company: Pelion Fibre
+    description: Sequence ("then ... then") under an existing order, then two more levels.
+    tags: [en, speech, deep-chain, reuse]
+    existing:
+      - {label: Fibre order, parent: Pelion Fibre, action: receives, domain: sales}
+    input: "so a fibre order um goes through feasibility then uh installation then activation and installation needs a technician visit which uh books a slot"
+    expected:
+      concepts:
+        - {label: Feasibility, parent: [Fibre order], action: [goes through, includes]}
+        - {label: Installation, parent: [Fibre order], action: [goes through, includes]}
+        - {label: Activation, parent: [Fibre order], action: [goes through, includes]}
+        - {label: Technician visit, parent: [Installation], action: [needs, requires]}
+        - {label: Slot, parent: [Technician visit], action: [books, reserves]}
+
+  - id: en-speech-retail-monologue
+    kind: speech
+    company: Mirelle Stores
+    description: Long monologue; grouping, a corrected count, a correction of the subject, 5 levels.
+    tags: [en, speech, run-on, grouping, count-mismatch, correction, back-reference, deep-chain, large]
+    input: "okay so um let me walk you through how mirelle stores works uh we are a fashion retailer and we run stores and an online shop the stores are um grouped into three formats flagship stores high street stores and outlet stores and uh every store has a store manager and a stockroom and the stockroom receives deliveries from the distribution centre right so the distribution centre um it handles inbound and outbound and inbound consists of receiving put-away and quality sampling and uh outbound consists of picking packing and dispatch and dispatch hands parcels to the carrier oh and the online shop sorry the online shop not the stores the online shop has a returns portal and the returns portal creates a return label and um customers can join our loyalty programme which has two tiers silver and gold no wait three tiers silver gold and platinum and gold members get free delivery what else um buying and merchandising plans the collections and each collection is made of product ranges and a product range contains styles and a style comes in sizes and colours I think that's about it"
+    expected:
+      concepts:
+        - {label: Stores, parent: [Mirelle Stores], action: [runs, operates, has]}
+        - {label: Online shop, parent: [Mirelle Stores], action: [runs, operates, has]}
+        - {label: Formats, parent: [Stores], action: [is grouped into, has]}
+        - {label: Flagship stores, parent: [Formats, Stores], action: [includes, is grouped into]}
+        - {label: High street stores, parent: [Formats, Stores], action: [includes, is grouped into]}
+        - {label: Outlet stores, parent: [Formats, Stores], action: [includes, is grouped into]}
+        - {label: Store manager, parent: [Stores], action: [has]}
+        - {label: Stockroom, parent: [Stores], action: [has]}
+        - {label: Distribution centre, parent: [Stockroom, Mirelle Stores], action: [receives deliveries from, is supplied by, delivers to, has, runs]}
+        - {label: Inbound, parent: [Distribution centre], action: [handles]}
+        - {label: Outbound, parent: [Distribution centre], action: [handles]}
+        - {label: Receiving, parent: [Inbound], action: [consists of]}
+        - {label: Put-away, parent: [Inbound], action: [consists of]}
+        - {label: Quality sampling, parent: [Inbound], action: [consists of]}
+        - {label: Picking, parent: [Outbound], action: [consists of]}
+        - {label: Packing, parent: [Outbound], action: [consists of]}
+        - {label: Dispatch, parent: [Outbound], action: [consists of]}
+        - {label: Carrier, parent: [Dispatch], action: [hands parcels to, hands over to]}
+        - {label: Returns portal, parent: [Online shop], action: [has]}
+        - {label: Return label, parent: [Returns portal], action: [creates, generates]}
+        - {label: Loyalty programme, parent: [Mirelle Stores, Customers], action: [has, runs, offers, joins]}
+        - {label: Tiers, parent: [Loyalty programme], action: [has]}
+        - {label: Silver, parent: [Tiers, Loyalty programme], action: [includes, has]}
+        - {label: Gold, parent: [Tiers, Loyalty programme], action: [includes, has], aliases: [Gold members]}
+        - {label: Platinum, parent: [Tiers, Loyalty programme], action: [includes, has]}
+        - {label: Free delivery, parent: [Gold], action: [gets, receives]}
+        - {label: Buying and merchandising, parent: [Mirelle Stores], action: [has, runs]}
+        - {label: Collections, parent: [Buying and merchandising], action: [plans]}
+        - {label: Product ranges, parent: [Collections], action: [is made of, consists of]}
+        - {label: Styles, parent: [Product ranges], action: [contains, includes]}
+        - {label: Sizes, parent: [Styles], action: [comes in]}
+        - {label: Colours, parent: [Styles], action: [comes in]}
+        - {label: Customers, parent: [Mirelle Stores], action: [has, serves]}
+    optional: [Deliveries, Parcels, Fashion retailer]
+
+  # ---------------------------------------------------------------- French, typed text
+  - id: fr-text-adr-deux-phrases
+    kind: text
+    company: Lumeris Conseil
+    description: The owner's two sentences in French; "ces services" refers to turn one.
+    tags: [fr, text, back-reference, descriptive-list, multi-turn]
+    input:
+      - "Lumeris Conseil vend des services."
+      - "Ces services sont centrés sur trois domaines : les applications, la data et l'IA."
+    expected:
+      concepts:
+        - {label: Services, parent: [Lumeris Conseil], action: [vend, propose, sells, offers]}
+        - {label: Applications, parent: [Services], action: [sont centrés sur, est centré sur, se concentre sur, focuses on]}
+        - {label: Data, parent: [Services], action: [sont centrés sur, est centré sur, se concentre sur, focuses on]}
+        - {label: IA, parent: [Services], action: [sont centrés sur, est centré sur, se concentre sur, focuses on]}
+
+  - id: fr-text-regroupement-offres
+    kind: text
+    company: Lumeris Conseil
+    description: Canonical grouping noun in French ("3 offres").
+    tags: [fr, text, grouping, reuse]
+    existing:
+      - {label: Services, parent: Lumeris Conseil, action: vend, domain: sales}
+    input:
+      - "Les services ont 3 offres : Applications, Data et IA."
+    expected:
+      concepts:
+        - {label: Offres, parent: [Services], action: [ont, a, possède, has]}
+        - {label: Applications, parent: [Offres], action: [comprend, inclut, includes]}
+        - {label: Data, parent: [Offres], action: [comprend, inclut, includes]}
+        - {label: IA, parent: [Offres], action: [comprend, inclut, includes]}
+
+  - id: fr-text-regions-ecart-compte
+    kind: text
+    company: Transports Kerlann
+    description: Descriptive "deux régions" followed by three names.
+    tags: [fr, text, descriptive-list, count-mismatch, reuse]
+    existing:
+      - {label: Agences, parent: Transports Kerlann, action: exploite, domain: logistics}
+    input:
+      - "Nos agences sont réparties dans deux régions : Bretagne, Normandie et Pays de la Loire."
+    expected:
+      concepts:
+        - {label: Bretagne, parent: [Agences], action: [sont réparties dans, est réparti dans, se trouve en, is located in, operates in]}
+        - {label: Normandie, parent: [Agences], action: [sont réparties dans, est réparti dans, se trouve en, is located in, operates in]}
+        - {label: Pays de la Loire, parent: [Agences], action: [sont réparties dans, est réparti dans, se trouve en, is located in, operates in]}
+
+  - id: fr-text-est-un-type-de
+    kind: text
+    company: Groupe Vauclair
+    description: French is-a, the second one elliptical ("aussi").
+    tags: [fr, text, is-a, reuse]
+    existing:
+      - {label: Contrat, parent: Groupe Vauclair, action: signe, domain: sales}
+    input:
+      - "Un contrat-cadre est un type de contrat, et un bon de commande aussi."
+    expected:
+      concepts:
+        - {label: Contrat-cadre, parent: [Contrat], action: [is a, est un, est un type de]}
+        - {label: Bon de commande, parent: [Contrat], action: [is a, est un, est un type de]}
+
+  - id: fr-text-chaine-six-niveaux
+    kind: text
+    company: Groupe Vauclair
+    description: Six-level accounts payable chain in one French sentence.
+    tags: [fr, text, deep-chain]
+    input:
+      - "La direction financière pilote la comptabilité fournisseurs, qui comprend le traitement des factures ; le traitement des factures commence par la saisie, et la saisie produit une pièce comptable avec des lignes d'écriture."
+    expected:
+      concepts:
+        - {label: Direction financière, parent: [Groupe Vauclair], action: [a, has, pilote]}
+        - {label: Comptabilité fournisseurs, parent: [Direction financière], action: [pilote, gère, runs, manages]}
+        - {label: Traitement des factures, parent: [Comptabilité fournisseurs], action: [comprend, includes]}
+        - {label: Saisie, parent: [Traitement des factures], action: [commence par, starts with, comprend]}
+        - {label: Pièce comptable, parent: [Saisie], action: [produit, produces, crée]}
+        - {label: Lignes d'écriture, parent: [Pièce comptable], action: [a, contient, comporte, has, contains]}
+
+  - id: fr-text-reutilisation-ligne
+    kind: text
+    company: Fonderie Maubrac
+    description: French reuse of an existing multi-word concept.
+    tags: [fr, text, reuse]
+    existing:
+      - {label: Usine, parent: Fonderie Maubrac, action: exploite, domain: production}
+      - {label: Ligne de production, parent: Usine, action: fait tourner, domain: production}
+    input:
+      - "Chaque ligne de production a un chef d'équipe et un contrôleur qualité."
+    expected:
+      concepts:
+        - {label: Chef d'équipe, parent: [Ligne de production], action: [a, has]}
+        - {label: Contrôleur qualité, parent: [Ligne de production], action: [a, has]}
+
+  - id: fr-text-deja-connu
+    kind: text
+    company: Maison Terrell
+    description: French already-known turn, then two new concepts.
+    tags: [fr, text, already-known, reuse, multi-turn]
+    existing:
+      - {label: Client, parent: Maison Terrell, action: sert, domain: sales}
+      - {label: Commande client, parent: Client, action: passe, domain: sales}
+    input:
+      - "Les clients passent des commandes client."
+      - "Chaque commande client comporte des lignes de commande et une adresse de livraison."
+    expected:
+      concepts:
+        - {label: Lignes de commande, parent: [Commande client], action: [comporte, comprend, a, has]}
+        - {label: Adresse de livraison, parent: [Commande client], action: [comporte, comprend, a, has]}
+
+  - id: fr-text-inter-domaines
+    kind: text
+    company: Fonderie Maubrac
+    description: French relations across sales, production and logistics.
+    tags: [fr, text, cross-domain, reuse]
+    existing:
+      - {label: Commande client, parent: Fonderie Maubrac, action: reçoit, domain: sales}
+      - {label: Ordre de fabrication, parent: Fonderie Maubrac, action: lance, domain: production}
+      - {label: Expédition, parent: Fonderie Maubrac, action: organise, domain: logistics}
+    input:
+      - "Une commande client déclenche un ordre de fabrication, et l'expédition attend la fin de l'ordre de fabrication."
+    expected:
+      concepts: []
+      relations:
+        - {from: Commande client, to: Ordre de fabrication, action: [déclenche, triggers], inverse: [est déclenché par, is triggered by]}
+        - {from: Expédition, to: Ordre de fabrication, action: [attend, attend la fin de, waits for, depends on], inverse: [précède, precedes]}
+
+  - id: fr-text-marques-ecart-compte
+    kind: text
+    company: Maison Terrell
+    description: French grouping noun with a count of four and three names.
+    tags: [fr, text, grouping, count-mismatch]
+    input:
+      - "Maison Terrell possède quatre marques : Alvéa, Brisane et Corlune."
+    expected:
+      concepts:
+        - {label: Marques, parent: [Maison Terrell], action: [possède, a, has, owns]}
+        - {label: Alvéa, parent: [Marques], action: [comprend, inclut, includes]}
+        - {label: Brisane, parent: [Marques], action: [comprend, inclut, includes]}
+        - {label: Corlune, parent: [Marques], action: [comprend, inclut, includes]}
+
+  # ---------------------------------------------------------------- French, speech
+  - id: fr-speech-urgences-correction
+    kind: speech
+    company: Centre hospitalier de Morvelle
+    description: French fillers and a correction ("non attends") that puts reception before triage.
+    tags: [fr, speech, correction, fillers, back-reference]
+    input: "bon alors euh l'hôpital a un service des urgences et les urgences euh font d'abord le tri non attends d'abord l'accueil et ensuite le tri et le tri attribue un niveau de priorité"
+    expected:
+      concepts:
+        - {label: Service des urgences, parent: [Centre hospitalier de Morvelle], action: [a, has], aliases: [Urgences]}
+        - {label: Accueil, parent: [Service des urgences], action: [fait, font, réalise, comprend, performs, includes]}
+        - {label: Tri, parent: [Service des urgences], action: [fait, font, réalise, comprend, performs, includes]}
+        - {label: Niveau de priorité, parent: [Tri], action: [attribue, assigns]}
+
+  - id: fr-speech-offres-quatre-niveaux
+    kind: speech
+    company: Lumeris Conseil
+    description: Spoken French grouping noun plus a fourth level.
+    tags: [fr, speech, grouping, reuse, fillers]
+    existing:
+      - {label: Services, parent: Lumeris Conseil, action: vend, domain: sales}
+    input: "euh donc les services ont trois offres euh applications données et IA et euh les applications couvrent le développement sur mesure"
+    expected:
+      concepts:
+        - {label: Offres, parent: [Services], action: [ont, a, possède, has]}
+        - {label: Applications, parent: [Offres], action: [comprend, inclut, includes]}
+        - {label: Données, parent: [Offres], action: [comprend, inclut, includes]}
+        - {label: IA, parent: [Offres], action: [comprend, inclut, includes]}
+        - {label: Développement sur mesure, parent: [Applications], action: [couvrent, couvre, comprend, covers]}
+
+  - id: fr-speech-chaine-banque
+    kind: speech
+    company: Banque Solenne
+    description: Five-level French lending chain in one run-on.
+    tags: [fr, speech, deep-chain, run-on]
+    input: "alors la banque a une division retail et euh la division retail gère le crédit et le crédit se divise en crédit immobilier et prêt personnel et le crédit immobilier passe par l'analyse de risque qui produit une offre de prêt"
+    expected:
+      concepts:
+        - {label: Division retail, parent: [Banque Solenne], action: [a, has]}
+        - {label: Crédit, parent: [Division retail], action: [gère, manages, runs]}
+        - {label: Crédit immobilier, parent: [Crédit], action: [se divise en, is split into, comprend]}
+        - {label: Prêt personnel, parent: [Crédit], action: [se divise en, is split into, comprend]}
+        - {label: Analyse de risque, parent: [Crédit immobilier], action: [passe par, goes through, requires]}
+        - {label: Offre de prêt, parent: [Analyse de risque], action: [produit, produces]}
+
+  - id: fr-speech-ils-elle
+    kind: speech
+    company: Transports Kerlann
+    description: French pronouns ("ils", "elle") refer back to warehouses and the yard.
+    tags: [fr, speech, back-reference, run-on]
+    input: "alors on a des entrepôts euh ils ont tous un quai et une cour et la cour elle a des places de remorque"
+    expected:
+      concepts:
+        - {label: Entrepôts, parent: [Transports Kerlann], action: [a, exploite, has, operates]}
+        - {label: Quai, parent: [Entrepôts], action: [ont, a, has]}
+        - {label: Cour, parent: [Entrepôts], action: [ont, a, has]}
+        - {label: Places de remorque, parent: [Cour], action: [a, has]}
+
+  - id: fr-speech-est-un-type-de
+    kind: speech
+    company: Aéro Services Varenne
+    description: Spoken French is-a with an elliptical second child and a part of the parent.
+    tags: [fr, speech, is-a]
+    input: "un drone c'est un type d'aéronef euh un hélicoptère aussi et chaque aéronef a un carnet de route"
+    expected:
+      concepts:
+        - {label: Aéronef, parent: [Aéro Services Varenne], action: [a, exploite, has, operates]}
+        - {label: Drone, parent: [Aéronef], action: [is a, est un, est un type de]}
+        - {label: Hélicoptère, parent: [Aéronef], action: [is a, est un, est un type de]}
+        - {label: Carnet de route, parent: [Aéronef], action: [a, has]}
+
+  - id: fr-speech-inter-domaines-sla
+    kind: speech
+    company: Numéris Infogérance
+    description: French speech with an English acronym; one relation between existing concepts, two new levels.
+    tags: [fr, speech, cross-domain, reuse, back-reference, deep-chain]
+    existing:
+      - {label: Ticket d'incident, parent: Numéris Infogérance, action: gère, domain: maintenance}
+      - {label: Contrat de support, parent: Numéris Infogérance, action: signe, domain: sales}
+    input: "donc le ticket d'incident euh il est lié au contrat de support et le SLA du contrat fixe le délai de résolution"
+    expected:
+      concepts:
+        - {label: SLA, parent: [Contrat de support], action: [a, comprend, fixe, has]}
+        - {label: Délai de résolution, parent: [SLA], action: [fixe, définit, sets, defines]}
+      relations:
+        - {from: Ticket d'incident, to: Contrat de support, action: [est lié à, is linked to, relève de], inverse: [couvre, covers]}
+
+  # ---------------------------------------------------------------- Role patterns
+  # "X is a client (customer, partner, supplier, vendor) of Y" and "X is a subsidiary (division)
+  # of Y": Y has the role concept (Client, Partner, ...), the role concept includes X, and what the
+  # relative clause ("that", "which", "qui") says hangs from X, the subject, not from Y. The
+  # owner's ADNOC case fixes the shape; labels with inner punctuation (L&S, R&D, S.A., AT&T,
+  # e-commerce) stay whole.
+  - id: en-text-owner-adnoc-client
+    kind: text
+    company: Insight
+    description: The owner's real case; "that" refers to ADNOC, not Insight; L&S keeps its ampersand.
+    tags: [en, text, role-pattern, grouping, relative-clause, inner-punctuation, owner]
+    input:
+      - "ADNOC is a client of insight that has multiple subsidiaries including L&S, Gas, Sour Gas, Offshore, Onshore, XRG and Drilling"
+    expected:
+      concepts:
+        - {label: Client, parent: [Insight], action: [has, serves]}
+        - {label: ADNOC, parent: [Client], action: [includes, has]}
+        - {label: Subsidiaries, parent: [ADNOC], action: [has, owns]}
+        - {label: L&S, parent: [Subsidiaries], action: [includes]}
+        - {label: Gas, parent: [Subsidiaries], action: [includes]}
+        - {label: Sour Gas, parent: [Subsidiaries], action: [includes]}
+        - {label: Offshore, parent: [Subsidiaries], action: [includes]}
+        - {label: Onshore, parent: [Subsidiaries], action: [includes]}
+        - {label: XRG, parent: [Subsidiaries], action: [includes]}
+        - {label: Drilling, parent: [Subsidiaries], action: [includes]}
+
+  - id: en-speech-owner-adnoc-client
+    kind: speech
+    company: Insight
+    description: The owner's ADNOC case spoken, without punctuation, with fillers.
+    tags: [en, speech, role-pattern, grouping, relative-clause, inner-punctuation, fillers, owner]
+    input: "so um ADNOC is a client of insight uh that has multiple subsidiaries including L&S gas sour gas offshore onshore XRG and drilling"
+    expected:
+      concepts:
+        - {label: Client, parent: [Insight], action: [has, serves]}
+        - {label: ADNOC, parent: [Client], action: [includes, has]}
+        - {label: Subsidiaries, parent: [ADNOC], action: [has, owns]}
+        - {label: L&S, parent: [Subsidiaries], action: [includes]}
+        - {label: Gas, parent: [Subsidiaries], action: [includes]}
+        - {label: Sour Gas, parent: [Subsidiaries], action: [includes]}
+        - {label: Offshore, parent: [Subsidiaries], action: [includes]}
+        - {label: Onshore, parent: [Subsidiaries], action: [includes]}
+        - {label: XRG, parent: [Subsidiaries], action: [includes]}
+        - {label: Drilling, parent: [Subsidiaries], action: [includes]}
+
+  - id: en-text-role-customer-of
+    kind: text
+    company: Northbeam Consulting
+    description: The simplest role pattern with the company named as the object.
+    tags: [en, text, role-pattern]
+    input:
+      - "Brightline Retail is a customer of Northbeam Consulting."
+    expected:
+      concepts:
+        - {label: Customer, parent: [Northbeam Consulting], action: [has, serves]}
+        - {label: Brightline Retail, parent: [Customer], action: [includes, has]}
+
+  - id: en-text-role-partner-and-supplier
+    kind: text
+    company: Tallis Digital
+    description: Two different roles in one sentence, each its own role concept.
+    tags: [en, text, role-pattern]
+    input:
+      - "Azurite Cloud is a partner of Tallis Digital, and Koval Hardware is a supplier of Tallis Digital."
+    expected:
+      concepts:
+        - {label: Partner, parent: [Tallis Digital], action: [has, works with]}
+        - {label: Azurite Cloud, parent: [Partner], action: [includes, has]}
+        - {label: Supplier, parent: [Tallis Digital], action: [has, buys from]}
+        - {label: Koval Hardware, parent: [Supplier], action: [includes, has]}
+
+  - id: en-text-role-vendor-existing-that
+    kind: text
+    company: Orbis IT
+    description: The role concept exists already ("of ours" is the company); "that" refers to the vendor.
+    tags: [en, text, role-pattern, reuse, relative-clause]
+    existing:
+      - {label: Vendors, parent: Orbis IT, action: has, domain: supply}
+    input:
+      - "Pantera Software is a vendor of ours that sells licences and support."
+    expected:
+      concepts:
+        - {label: Pantera Software, parent: [Vendors], action: [includes, has]}
+        - {label: Licences, parent: [Pantera Software], action: [sells, provides]}
+        - {label: Support, parent: [Pantera Software], action: [sells, provides]}
+
+  - id: en-text-subsidiary-which-object
+    kind: text
+    company: Aldwick Foods
+    description: Here "which" refers to the object (the company), so the second subsidiary is owned by the root.
+    tags: [en, text, role-pattern, relative-clause]
+    input:
+      - "Aldwick Dairy is a subsidiary of Aldwick Foods, which also owns Aldwick Bakery."
+    expected:
+      concepts:
+        - {label: Subsidiary, parent: [Aldwick Foods], action: [has, owns]}
+        - {label: Aldwick Dairy, parent: [Subsidiary], action: [includes, has]}
+        - {label: Aldwick Bakery, parent: [Aldwick Foods, Subsidiary], action: [owns, includes, has]}
+
+  - id: en-text-division-rnd-that
+    kind: text
+    company: Verdano Energy
+    description: '"R&D" keeps its ampersand; "that" after the company name still refers to R&D.'
+    tags: [en, text, role-pattern, relative-clause, inner-punctuation]
+    input:
+      - "R&D is a division of Verdano Energy that runs battery research and hydrogen research."
+    expected:
+      concepts:
+        - {label: Division, parent: [Verdano Energy], action: [has]}
+        - {label: R&D, parent: [Division], action: [includes, has]}
+        - {label: Battery research, parent: [R&D], action: [runs]}
+        - {label: Hydrogen research, parent: [R&D], action: [runs]}
+
+  - id: en-speech-customer-divisions-correction
+    kind: speech
+    company: Halden Engineering
+    description: '"S.A." inside a label, "it" for the customer, and a correction that removes e-commerce.'
+    tags: [en, speech, role-pattern, grouping, correction, inner-punctuation, back-reference]
+    input: "right so um Castellane S.A. is a customer of halden engineering and it has three divisions uh rail marine and e-commerce no sorry not e-commerce energy"
+    expected:
+      concepts:
+        - {label: Customer, parent: [Halden Engineering], action: [has, serves]}
+        - {label: Castellane S.A., parent: [Customer], action: [includes, has]}
+        - {label: Divisions, parent: [Castellane S.A.], action: [has]}
+        - {label: Rail, parent: [Divisions], action: [includes]}
+        - {label: Marine, parent: [Divisions], action: [includes]}
+        - {label: Energy, parent: [Divisions], action: [includes]}
+
+  - id: en-text-partner-att-that
+    kind: text
+    company: Pelion Fibre
+    description: '"AT&T" as one label; "that" refers to the partner, not to Pelion Fibre.'
+    tags: [en, text, role-pattern, relative-clause, inner-punctuation]
+    input:
+      - "AT&T is a partner of Pelion Fibre that buys wholesale fibre and roaming."
+    expected:
+      concepts:
+        - {label: Partner, parent: [Pelion Fibre], action: [has, works with]}
+        - {label: AT&T, parent: [Partner], action: [includes, has]}
+        - {label: Wholesale fibre, parent: [AT&T], action: [buys, purchases]}
+        - {label: Roaming, parent: [AT&T], action: [buys, purchases]}
+
+  - id: en-text-supplier-e-commerce
+    kind: text
+    company: Mirelle Stores
+    description: A hyphenated label ("E-commerce hosting") provided by a supplier.
+    tags: [en, text, role-pattern, relative-clause, inner-punctuation]
+    input:
+      - "Pelion Fibre is a supplier of Mirelle Stores that provides the e-commerce hosting."
+    expected:
+      concepts:
+        - {label: Supplier, parent: [Mirelle Stores], action: [has, buys from]}
+        - {label: Pelion Fibre, parent: [Supplier], action: [includes, has]}
+        - {label: E-commerce hosting, parent: [Pelion Fibre], action: [provides, supplies]}
+
+  - id: en-speech-customer-also-supplier
+    kind: speech
+    company: Mirelle Stores
+    description: One organisation in two roles; "Kellbrook" must reuse Kellbrook Logistics, not duplicate it.
+    tags: [en, speech, role-pattern, relative-clause, back-reference, reuse]
+    input: "okay so our customers include Brevik Shipping and Kellbrook Logistics and uh Kellbrook is also a supplier of ours which provides warehousing"
+    expected:
+      concepts:
+        - {label: Customers, parent: [Mirelle Stores], action: [has, serves]}
+        - {label: Brevik Shipping, parent: [Customers], action: [includes]}
+        - {label: Kellbrook Logistics, parent: [Customers, Supplier], action: [includes, has], aliases: [Kellbrook]}
+        - {label: Supplier, parent: [Mirelle Stores, Kellbrook Logistics], action: [has, buys from, is]}
+        - {label: Warehousing, parent: [Kellbrook Logistics], action: [provides, supplies]}
+
+  - id: en-text-client-subsidiaries-existing
+    kind: text
+    company: Northbeam Consulting
+    description: Subsidiaries of an existing client; one subsidiary is itself a client.
+    tags: [en, text, role-pattern, grouping, reuse]
+    existing:
+      - {label: Client, parent: Northbeam Consulting, action: has, domain: sales}
+      - {label: Castor Energy, parent: Client, action: includes, domain: sales}
+    input:
+      - "Castor Energy has several subsidiaries including Castor Wind, Castor Grid and Castor Retail, and Castor Grid is itself a client of Northbeam."
+    expected:
+      concepts:
+        - {label: Subsidiaries, parent: [Castor Energy], action: [has, owns]}
+        - {label: Castor Wind, parent: [Subsidiaries], action: [includes]}
+        - {label: Castor Grid, parent: [Subsidiaries, Client], action: [includes]}
+        - {label: Castor Retail, parent: [Subsidiaries], action: [includes]}
+
+  - id: fr-text-client-filiales-qui
+    kind: text
+    company: Insight
+    description: The owner's pattern in French; "qui" refers to the client, not Insight.
+    tags: [fr, text, role-pattern, grouping, relative-clause]
+    input:
+      - "Solvane Énergies est un client d'Insight qui a plusieurs filiales dont Solvane Gaz, Solvane Réseaux et Solvane Solaire."
+    expected:
+      concepts:
+        - {label: Client, parent: [Insight], action: [a, has, sert]}
+        - {label: Solvane Énergies, parent: [Client], action: [comprend, inclut, includes, has]}
+        - {label: Filiales, parent: [Solvane Énergies], action: [a, possède, has, owns]}
+        - {label: Solvane Gaz, parent: [Filiales], action: [comprend, inclut, includes, dont]}
+        - {label: Solvane Réseaux, parent: [Filiales], action: [comprend, inclut, includes, dont]}
+        - {label: Solvane Solaire, parent: [Filiales], action: [comprend, inclut, includes, dont]}
+
+  - id: fr-speech-fournisseur-division
+    kind: speech
+    company: Fonderie Maubrac
+    description: French supplier and division patterns; "qui" refers to the supplier, "R&D" keeps its ampersand.
+    tags: [fr, speech, role-pattern, relative-clause, inner-punctuation, fillers]
+    input: "alors euh Maubrac Outillage est un fournisseur de la fonderie euh qui livre les moules et les noyaux et R&D est une division de la fonderie"
+    expected:
+      concepts:
+        - {label: Fournisseur, parent: [Fonderie Maubrac], action: [a, has]}
+        - {label: Maubrac Outillage, parent: [Fournisseur], action: [comprend, inclut, includes, has]}
+        - {label: Moules, parent: [Maubrac Outillage], action: [livre, fournit, delivers, supplies]}
+        - {label: Noyaux, parent: [Maubrac Outillage], action: [livre, fournit, delivers, supplies]}
+        - {label: Division, parent: [Fonderie Maubrac], action: [a, has]}
+        - {label: R&D, parent: [Division], action: [comprend, inclut, includes, has]}
+
+  - id: fr-text-partenaire-sa-e-commerce
+    kind: text
+    company: Maison Terrell
+    description: '"S.A." and "e-commerce" inside French labels; "qui" refers to the partner.'
+    tags: [fr, text, role-pattern, relative-clause, inner-punctuation]
+    input:
+      - "Brisane S.A. est un partenaire de Maison Terrell qui distribue la gamme e-commerce."
+    expected:
+      concepts:
+        - {label: Partenaire, parent: [Maison Terrell], action: [a, has]}
+        - {label: Brisane S.A., parent: [Partenaire], action: [comprend, inclut, includes, has]}
+        - {label: Gamme e-commerce, parent: [Brisane S.A.], action: [distribue, distributes, sells]}
+
+  # ---------------------------------------------------------------- Spoken recordings, sentence by sentence
+  - id: en-speech-recording-depot
+    kind: speech
+    company: Harlow Freight
+    description: A four-sentence recording; later sentences refer back with "it" and "they".
+    tags: [en, speech, recording, back-reference, deep-chain, fillers]
+    input:
+      - "so um Harlow Freight runs a depot in Leeds"
+      - "and uh the depot has a cross dock and a cold store"
+      - "the cold store is split into chilled bays and frozen bays"
+      - "and they each have temperature sensors"
+    expected:
+      concepts:
+        - {label: Depot, parent: [Harlow Freight], action: [runs, has, operates], aliases: [Depot in Leeds, Leeds depot]}
+        - {label: Cross dock, parent: [Depot], action: [has]}
+        - {label: Cold store, parent: [Depot], action: [has]}
+        - {label: Chilled bays, parent: [Cold store], action: [is split into]}
+        - {label: Frozen bays, parent: [Cold store], action: [is split into]}
+        - {label: Temperature sensors, parent: [Chilled bays, Frozen bays], action: [has]}
+    optional: [Leeds]
+
+  - id: en-speech-recording-correction
+    kind: speech
+    company: Brenmoor Insurance
+    description: A recording whose third sentence corrects the second.
+    tags: [en, speech, recording, correction, fillers]
+    input:
+      - "okay so Brenmoor Insurance has a claims department"
+      - "the claims department handles motor claims and uh travel claims"
+      - "no sorry not travel claims home claims"
+      - "and motor claims go through a fraud check"
+    expected:
+      concepts:
+        - {label: Claims department, parent: [Brenmoor Insurance], action: [has]}
+        - {label: Motor claims, parent: [Claims department], action: [handles]}
+        - {label: Home claims, parent: [Claims department], action: [handles]}
+        - {label: Fraud check, parent: [Motor claims], action: [goes through, requires, includes]}
+
+  - id: fr-speech-enregistrement-atelier
+    kind: speech
+    company: Ateliers Morvan
+    description: A French recording across three sentences with "elle" and "ils".
+    tags: [fr, speech, recording, back-reference, fillers]
+    input:
+      - "alors euh Ateliers Morvan a une usine à Dijon"
+      - "elle comprend un atelier de découpe et un atelier de soudure"
+      - "et l'atelier de soudure a deux robots"
+    expected:
+      concepts:
+        - {label: Usine, parent: [Ateliers Morvan], action: [a, has], aliases: [Usine à Dijon, Usine de Dijon]}
+        - {label: Atelier de découpe, parent: [Usine], action: [comprend, includes, has]}
+        - {label: Atelier de soudure, parent: [Usine], action: [comprend, includes, has]}
+        - {label: Robots, parent: [Atelier de soudure], action: [a, has]}
+    optional: [Dijon]

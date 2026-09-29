@@ -1,7 +1,8 @@
 """The Azure AI Foundry implementation of the OCR adapter: a Mistral document model.
 
 One call per import to the Foundry resource's Mistral OCR route
-(`<endpoint>/providers/mistral/azure/ocr`), addressed to the OCR deployment, with the PDF as a
+(`https://<resource>.services.ai.azure.com/providers/mistral/azure/ocr`, whichever of the
+resource's Azure host names the endpoint uses), addressed to the OCR deployment, with the PDF as a
 base64 data URL and the 0-based list of the pages to read; image data is not requested back.
 Authentication is keyless, an Entra ID bearer token for
 `https://cognitiveservices.azure.com/.default` from `DefaultAzureCredential`, as for the teach
@@ -18,6 +19,7 @@ import base64
 import logging
 import time
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -31,6 +33,11 @@ logger = logging.getLogger(__name__)
 PROVIDER = "azure_foundry"
 OCR_ROUTE = "/providers/mistral/azure/ocr"
 MAX_LATENCY_MS = 300_000
+FOUNDRY_HOST_SUFFIXES = (
+    ".cognitiveservices.azure.com",
+    ".services.ai.azure.com",
+    ".openai.azure.com",
+)
 
 _REDACTING_FILTER = protect_loggers(("azure", "msal", "httpx", "httpcore", "urllib3"))
 
@@ -41,7 +48,7 @@ class FoundryOcrClient:
     def __init__(self, endpoint: str, deployment: str, model: str, price: PagePrice) -> None:
         self.model = model
         self.price = price
-        self._url = endpoint.rstrip("/") + OCR_ROUTE
+        self._url = ocr_url(endpoint)
         self._deployment = deployment
         self._token = entra_token_provider()
 
@@ -87,6 +94,16 @@ class FoundryOcrClient:
         except (ValueError, TypeError, KeyError) as exc:
             logger.warning("OCR answer could not be read")
             raise OcrProviderError("invalid_output", latency_ms=latency) from exc
+
+
+def ocr_url(endpoint: str) -> str:
+    """The Mistral OCR URL of a Foundry resource: its `services.ai.azure.com` host when the
+    endpoint names the resource by one of its Azure host names, else the endpoint itself."""
+    host = urlsplit(endpoint.strip()).hostname or ""
+    for suffix in FOUNDRY_HOST_SUFFIXES:
+        if host.endswith(suffix) and len(host) > len(suffix):
+            return f"https://{host[: -len(suffix)]}.services.ai.azure.com{OCR_ROUTE}"
+    return endpoint.rstrip("/") + OCR_ROUTE
 
 
 def _result(answer: dict[str, Any], asked: list[int], latency_ms: int) -> OcrResult:

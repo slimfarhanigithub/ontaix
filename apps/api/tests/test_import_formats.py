@@ -269,10 +269,11 @@ async def test_scanned_pages_are_recognised_and_joined_in_page_order(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["sentences"] == [
-        "Scanned plant A scanned page lists every machine.",
+        "Scanned plant",
+        "A scanned page lists every machine.",
         "A warehouse holds finished stock.",
     ]
-    assert body["positions"] == [{"unit": "page", "index": 1}, {"unit": "page", "index": 2}]
+    assert body["positions"] == [{"unit": "page", "index": 1}] * 2 + [{"unit": "page", "index": 2}]
     assert [r.pages for r in fake.requests] == [[1]]
     assert fake.requests[0].pdf == data
     async with db_client.get_session_factory()() as s:

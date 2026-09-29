@@ -1,0 +1,1003 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rdf:RDF
+   xmlns:owl="http://www.w3.org/2002/07/owl#"
+   xmlns:oxe="https://example.org/ontaix/evals/vocab#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+   xmlns:skos="http://www.w3.org/2004/02/skos/core#"
+>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#DunningLetter">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Dunning letter</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Dunning"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#MasterProductionSchedule">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Master production schedule</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#MasterScheduling"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#MasterScheduling">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Master scheduling</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionPlanning"/>
+    <rdfs:subClassOf rdf:nodeID="Na72c698cfa774acba92e66cb7372d2f4"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ConfirmationRecord">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Confirmation record</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#OperationConfirmation"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Castings">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Castings</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#SpendCategories"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#BlanketPurchaseOrder">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Blanket purchase order</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#PurchaseOrder"/>
+    <oxe:birthAction>is a</oxe:birthAction>
+    <oxe:acceptedAction>is a kind of</oxe:acceptedAction>
+    <oxe:acceptedAction>is a type of</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PutAway">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Put-away</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Receiving"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Ontology"/>
+    <rdfs:label xml:lang="en">Aldermoor Valves gold tree</rdfs:label>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N29f32e585d88453c81ae16292c82168b">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#explodes"/>
+    <owl:someValuesFrom rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#BillOfMaterials"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Sourcing">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Sourcing</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProcureToPay"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Quotation">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Quotation</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#QuoteToOrder"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Purchasing">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Purchasing</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProcureToPay"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierQualification">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Supplier qualification</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierSelection"/>
+    <rdfs:subClassOf rdf:nodeID="Nfa001fcbc1654041847c146c6019e84b"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierSelection">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Supplier selection</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Sourcing"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#CorrectiveAction">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Corrective action</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#NonconformanceManagement"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#QuoteToOrder">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Quote-to-order</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#OrderToCash"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Dunning">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Dunning</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Collection"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PlanToProduce">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Plan-to-produce</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#AldermoorValves"/>
+    <oxe:birthAction>runs</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>operates</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#CustomerMaster">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Customer master</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#PartnerDataManagement"/>
+    <oxe:birthAction>maintains</oxe:birthAction>
+    <oxe:acceptedAction>manages</oxe:acceptedAction>
+    <oxe:acceptedAction>owns</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#SalesForecasting">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Sales forecasting</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#DemandPlanning"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionDataManagement">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Production data management</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#MasterDataManagement"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PurchaseOrderCreation">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Purchase order creation</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Purchasing"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#N8DReport">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">8D report</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#RootCauseAnalysis"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#StandardTime">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Standard time</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#RoutingOperation"/>
+    <oxe:birthAction>has</oxe:birthAction>
+    <oxe:acceptedAction>carries</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#RootCauseAnalysis">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Root cause analysis</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#NonconformanceManagement"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#attaches">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="en">attaches</rdfs:label>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+    <oxe:acceptedAction>ships with</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#InvoiceVerification">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Invoice verification</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierPayment"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#RequestForQuotation">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Request for quotation</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierSelection"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionCharacteristic">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Inspection characteristic</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionPlan"/>
+    <oxe:birthAction>lists</oxe:birthAction>
+    <oxe:acceptedAction>contains</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="Nfa001fcbc1654041847c146c6019e84b">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#updates"/>
+    <owl:someValuesFrom rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierMaster"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PaymentAdvice">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Payment advice</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#PaymentRun"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PressureTesting">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Pressure testing</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#FinalAssembly"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Picking">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Picking</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Fulfilment"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PurchaseOrder">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Purchase order</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#PurchaseOrderCreation"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#BOMItem">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">BOM item</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#BillOfMaterials"/>
+    <oxe:birthAction>has</oxe:birthAction>
+    <oxe:acceptedAction>contains</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#MaterialRequirementsPlanning">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Material requirements planning</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionPlanning"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#CapacityProfile">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Capacity profile</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#WorkCentre"/>
+    <oxe:birthAction>has</oxe:birthAction>
+    <oxe:acceptedAction>carries</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#CreditCheck">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Credit check</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#OrderCapture"/>
+    <rdfs:subClassOf rdf:nodeID="N48b9015c37434348820709d9ba8df44d"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Fulfilment">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Fulfilment</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#OrderToCash"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#FinalInspection">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Final inspection</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionTypes"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ThreeWayMatch">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Three-way match</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#InvoiceVerification"/>
+    <rdfs:subClassOf rdf:nodeID="N750eeaffebe346ef8f7733efd52f8cde"/>
+    <rdfs:subClassOf rdf:nodeID="N0676eb3cd7524617a89466898e7cf38b"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionPlan">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Inspection plan</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionPlanning"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ProcureToPay">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Procure-to-pay</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#AldermoorValves"/>
+    <oxe:birthAction>runs</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>operates</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ConsensusPlan">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Consensus plan</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ConsensusPlanning"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PriceCalculation">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Price calculation</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Quotation"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#FinalAssembly">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Final assembly</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionExecution"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ValveAssembly">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Valve assembly</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#FinalAssembly"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#CAPARecord">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">CAPA record</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#CorrectiveAction"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#OrderToCash">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Order-to-cash</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#AldermoorValves"/>
+    <oxe:birthAction>runs</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>operates</oxe:acceptedAction>
+    <skos:altLabel xml:lang="en">Order to cash</skos:altLabel>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#JobTraveller">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Job traveller</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#OrderRelease"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PaymentRun">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Payment run</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierPayment"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#DeliveryNote">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Delivery note</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Shipping"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ReworkOrder">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Rework order</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionOrder"/>
+    <oxe:birthAction>is a</oxe:birthAction>
+    <oxe:acceptedAction>is a kind of</oxe:acceptedAction>
+    <oxe:acceptedAction>is a type of</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Electronics">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Electronics</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#SpendCategories"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#QualityPlanning">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Quality planning</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#QualityManagement"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#OrderEntry">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Order entry</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#OrderCapture"/>
+    <rdfs:subClassOf rdf:nodeID="N1a57ce7ce21d46ddbc363d57f50e974d"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#GoodsReceipt">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Goods receipt</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Receiving"/>
+    <rdfs:subClassOf rdf:nodeID="N96f155f8e227401d8f089c43a0c9876d"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ConsensusPlanning">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Consensus planning</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#DemandPlanning"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#QualityManagement">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Quality management</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#AldermoorValves"/>
+    <oxe:birthAction>runs</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>operates</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductDataManagement">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Product data management</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#MasterDataManagement"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#RushOrder">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Rush order</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#SalesOrder"/>
+    <oxe:birthAction>is a</oxe:birthAction>
+    <oxe:acceptedAction>is a kind of</oxe:acceptedAction>
+    <oxe:acceptedAction>is a type of</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierBid">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Supplier bid</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#RequestForQuotation"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#MaterialMaster">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Material master</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductDataManagement"/>
+    <oxe:birthAction>maintains</oxe:birthAction>
+    <oxe:acceptedAction>manages</oxe:acceptedAction>
+    <oxe:acceptedAction>owns</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Requisitioning">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Requisitioning</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Purchasing"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#NonconformanceManagement">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Nonconformance management</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#QualityManagement"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Routing">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Routing</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionDataManagement"/>
+    <oxe:birthAction>maintains</oxe:birthAction>
+    <oxe:acceptedAction>manages</oxe:acceptedAction>
+    <oxe:acceptedAction>owns</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#CashApplication">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Cash application</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Collection"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#RoutingOperation">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Routing operation</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Routing"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PlannedOrder">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Planned order</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#NetRequirementsCalculation"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Sampling">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Sampling</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#QualityControl"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#UsageDecision">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Usage decision</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ResultsRecording"/>
+    <rdfs:subClassOf rdf:nodeID="N84afee163c44421daeb97ce3676c6171"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Billing">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Billing</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#OrderToCash"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionTypes">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Inspection types</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#QualityControl"/>
+    <oxe:birthAction>has</oxe:birthAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#SalesOrder">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Sales order</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#OrderEntry"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionPlanning">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Production planning</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#PlanToProduce"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#IncomingInspection">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Incoming inspection</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionTypes"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#OrderCapture">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Order capture</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#QuoteToOrder"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionOrder">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Production order</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#PlannedOrderConversion"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#explodes">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="en">explodes</rdfs:label>
+    <oxe:acceptedAction>reads</oxe:acceptedAction>
+    <oxe:acceptedAction>uses</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PurchaseRequisition">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Purchase requisition</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Requisitioning"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#triggers">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="en">triggers</rdfs:label>
+    <oxe:acceptedAction>starts</oxe:acceptedAction>
+    <oxe:inverseAction>is triggered by</oxe:inverseAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#OperationConfirmation">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Operation confirmation</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ShopFloorControl"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#NetRequirementsCalculation">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Net requirements calculation</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#MaterialRequirementsPlanning"/>
+    <rdfs:subClassOf rdf:nodeID="N29f32e585d88453c81ae16292c82168b"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ShopFloorControl">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Shop floor control</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionExecution"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PickList">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Pick list</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Picking"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N5ec68cb9573f4c509622a8b54104afe2">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#uses"/>
+    <owl:someValuesFrom rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Routing"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#DemandPlanning">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Demand planning</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#PlanToProduce"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#WorkCentre">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Work centre</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionDataManagement"/>
+    <oxe:birthAction>maintains</oxe:birthAction>
+    <oxe:acceptedAction>manages</oxe:acceptedAction>
+    <oxe:acceptedAction>owns</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N48b9015c37434348820709d9ba8df44d">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#reads"/>
+    <owl:someValuesFrom rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#CustomerMaster"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Shipping">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Shipping</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Fulfilment"/>
+    <rdfs:subClassOf rdf:nodeID="N68799c6774cd400cb34901463494909a"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PriceQuote">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Price quote</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#PriceCalculation"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#GoodsReceiptNote">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Goods receipt note</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#GoodsReceipt"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PlannedOrderConversion">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Planned order conversion</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#MaterialRequirementsPlanning"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierMaster">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Supplier master</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#PartnerDataManagement"/>
+    <oxe:birthAction>maintains</oxe:birthAction>
+    <oxe:acceptedAction>manages</oxe:acceptedAction>
+    <oxe:acceptedAction>owns</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#CustomerInvoice">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Customer invoice</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Invoicing"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N0676eb3cd7524617a89466898e7cf38b">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#compares"/>
+    <owl:someValuesFrom rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#PurchaseOrder"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#OrderRelease">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Order release</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ShopFloorControl"/>
+    <rdfs:subClassOf rdf:nodeID="N5ec68cb9573f4c509622a8b54104afe2"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#InProcessInspection">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">In-process inspection</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionTypes"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ResultsRecording">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Results recording</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#QualityControl"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#EngineeringBOM">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Engineering BOM</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#BillOfMaterials"/>
+    <oxe:birthAction>is a</oxe:birthAction>
+    <oxe:acceptedAction>is a kind of</oxe:acceptedAction>
+    <oxe:acceptedAction>is a type of</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ConfigurationCheck">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Configuration check</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Quotation"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#uses">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="en">uses</rdfs:label>
+    <oxe:acceptedAction>reads</oxe:acceptedAction>
+    <oxe:inverseAction>is used by</oxe:inverseAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Collection">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Collection</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Billing"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#checks">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="en">checks</rdfs:label>
+    <oxe:acceptedAction>reads</oxe:acceptedAction>
+    <oxe:acceptedAction>uses</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Receiving">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Receiving</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProcureToPay"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="Na72c698cfa774acba92e66cb7372d2f4">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#checks"/>
+    <owl:someValuesFrom rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#WorkCentre"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#QualityControl">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Quality control</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#QualityManagement"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N750eeaffebe346ef8f7733efd52f8cde">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#compares"/>
+    <owl:someValuesFrom rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#GoodsReceiptNote"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#reads">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="en">reads</rdfs:label>
+    <oxe:acceptedAction>uses</oxe:acceptedAction>
+    <oxe:inverseAction>is read by</oxe:inverseAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#CreditDecision">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Credit decision</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#CreditCheck"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#TestCertificate">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Test certificate</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#PressureTesting"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#InspectionPlanning">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Inspection planning</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#QualityPlanning"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>consists of</oxe:acceptedAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductionExecution">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Production execution</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#PlanToProduce"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N68799c6774cd400cb34901463494909a">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#attaches"/>
+    <owl:someValuesFrom rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#TestCertificate"/>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N1a57ce7ce21d46ddbc363d57f50e974d">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#reads"/>
+    <owl:someValuesFrom rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#MaterialMaster"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#DemandForecast">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Demand forecast</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#SalesForecasting"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#MatchException">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Match exception</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ThreeWayMatch"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N96f155f8e227401d8f089c43a0c9876d">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#triggers"/>
+    <owl:someValuesFrom rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#IncomingInspection"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierAuditReport">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Supplier audit report</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierQualification"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#PartnerDataManagement">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Partner data management</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#MasterDataManagement"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Invoicing">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Invoicing</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Billing"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#TechnicalDatasheet">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Technical datasheet</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ConfigurationCheck"/>
+    <oxe:birthAction>produces</oxe:birthAction>
+    <oxe:acceptedAction>creates</oxe:acceptedAction>
+    <oxe:acceptedAction>outputs</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N84afee163c44421daeb97ce3676c6171">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Restriction"/>
+    <owl:onProperty rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#triggers"/>
+    <owl:someValuesFrom rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#RootCauseAnalysis"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#SupplierPayment">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Supplier payment</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProcureToPay"/>
+    <oxe:birthAction>consists of</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#SpendCategories">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Spend categories</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#Sourcing"/>
+    <oxe:birthAction>has</oxe:birthAction>
+    <oxe:acceptedAction>includes</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#MasterDataManagement">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Master data management</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#AldermoorValves"/>
+    <oxe:birthAction>runs</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+    <oxe:acceptedAction>operates</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#AldermoorValves">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Aldermoor Valves</rdfs:label>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#Seals">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Seals</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#SpendCategories"/>
+    <oxe:birthAction>includes</oxe:birthAction>
+    <oxe:acceptedAction>has</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#BillOfMaterials">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
+    <rdfs:label xml:lang="en">Bill of materials</rdfs:label>
+    <rdfs:subClassOf rdf:resource="https://example.org/ontaix/evals/manufacturer_aldermoor#ProductDataManagement"/>
+    <oxe:birthAction>maintains</oxe:birthAction>
+    <oxe:acceptedAction>manages</oxe:acceptedAction>
+    <oxe:acceptedAction>owns</oxe:acceptedAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#updates">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="en">updates</rdfs:label>
+    <oxe:acceptedAction>maintains</oxe:acceptedAction>
+    <oxe:acceptedAction>writes to</oxe:acceptedAction>
+    <oxe:inverseAction>is updated by</oxe:inverseAction>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://example.org/ontaix/evals/manufacturer_aldermoor#compares">
+    <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+    <rdfs:label xml:lang="en">compares</rdfs:label>
+    <oxe:acceptedAction>checks</oxe:acceptedAction>
+    <oxe:acceptedAction>uses</oxe:acceptedAction>
+  </rdf:Description>
+</rdf:RDF>

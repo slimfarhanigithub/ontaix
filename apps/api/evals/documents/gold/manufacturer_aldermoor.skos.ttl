@@ -1,0 +1,948 @@
+@prefix gold: <https://example.org/ontaix/evals/manufacturer_aldermoor#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix oxe: <https://example.org/ontaix/evals/vocab#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+gold:BOMItem a skos:Concept ;
+    skos:broader gold:BillOfMaterials ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "BOM item"@en ;
+    oxe:acceptedAction "contains",
+        "includes" ;
+    oxe:birthAction "has" .
+
+gold:BlanketPurchaseOrder a skos:Concept ;
+    skos:broader gold:PurchaseOrder ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Blanket purchase order"@en ;
+    oxe:acceptedAction "is a kind of",
+        "is a type of" ;
+    oxe:birthAction "is a" .
+
+gold:CAPARecord a skos:Concept ;
+    skos:broader gold:CorrectiveAction ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "CAPA record"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:CapacityProfile a skos:Concept ;
+    skos:broader gold:WorkCentre ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Capacity profile"@en ;
+    oxe:acceptedAction "carries" ;
+    oxe:birthAction "has" .
+
+gold:CashApplication a skos:Concept ;
+    skos:broader gold:Collection ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Cash application"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Castings a skos:Concept ;
+    skos:broader gold:SpendCategories ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Castings"@en ;
+    oxe:acceptedAction "has" ;
+    oxe:birthAction "includes" .
+
+gold:ConfirmationRecord a skos:Concept ;
+    skos:broader gold:OperationConfirmation ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Confirmation record"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:ConsensusPlan a skos:Concept ;
+    skos:broader gold:ConsensusPlanning ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Consensus plan"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:CreditDecision a skos:Concept ;
+    skos:broader gold:CreditCheck ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Credit decision"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:CustomerInvoice a skos:Concept ;
+    skos:broader gold:Invoicing ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Customer invoice"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:DeliveryNote a skos:Concept ;
+    skos:broader gold:Shipping ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Delivery note"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:DemandForecast a skos:Concept ;
+    skos:broader gold:SalesForecasting ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Demand forecast"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:DunningLetter a skos:Concept ;
+    skos:broader gold:Dunning ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Dunning letter"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:Electronics a skos:Concept ;
+    skos:broader gold:SpendCategories ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Electronics"@en ;
+    oxe:acceptedAction "has" ;
+    oxe:birthAction "includes" .
+
+gold:EngineeringBOM a skos:Concept ;
+    skos:broader gold:BillOfMaterials ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Engineering BOM"@en ;
+    oxe:acceptedAction "is a kind of",
+        "is a type of" ;
+    oxe:birthAction "is a" .
+
+gold:FinalInspection a skos:Concept ;
+    skos:broader gold:InspectionTypes ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Final inspection"@en ;
+    oxe:acceptedAction "has" ;
+    oxe:birthAction "includes" .
+
+gold:InProcessInspection a skos:Concept ;
+    skos:broader gold:InspectionTypes ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "In-process inspection"@en ;
+    oxe:acceptedAction "has" ;
+    oxe:birthAction "includes" .
+
+gold:InspectionCharacteristic a skos:Concept ;
+    skos:broader gold:InspectionPlan ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Inspection characteristic"@en ;
+    oxe:acceptedAction "contains",
+        "has" ;
+    oxe:birthAction "lists" .
+
+gold:JobTraveller a skos:Concept ;
+    skos:broader gold:OrderRelease ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Job traveller"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:MasterProductionSchedule a skos:Concept ;
+    skos:broader gold:MasterScheduling ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Master production schedule"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:MatchException a skos:Concept ;
+    skos:broader gold:ThreeWayMatch ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Match exception"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:N8DReport a skos:Concept ;
+    skos:broader gold:RootCauseAnalysis ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "8D report"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PaymentAdvice a skos:Concept ;
+    skos:broader gold:PaymentRun ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Payment advice"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PickList a skos:Concept ;
+    skos:broader gold:Picking ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Pick list"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PlannedOrder a skos:Concept ;
+    skos:broader gold:NetRequirementsCalculation ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Planned order"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PriceQuote a skos:Concept ;
+    skos:broader gold:PriceCalculation ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Price quote"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PurchaseRequisition a skos:Concept ;
+    skos:broader gold:Requisitioning ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Purchase requisition"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PutAway a skos:Concept ;
+    skos:broader gold:Receiving ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Put-away"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ReworkOrder a skos:Concept ;
+    skos:broader gold:ProductionOrder ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Rework order"@en ;
+    oxe:acceptedAction "is a kind of",
+        "is a type of" ;
+    oxe:birthAction "is a" .
+
+gold:RushOrder a skos:Concept ;
+    skos:broader gold:SalesOrder ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Rush order"@en ;
+    oxe:acceptedAction "is a kind of",
+        "is a type of" ;
+    oxe:birthAction "is a" .
+
+gold:Sampling a skos:Concept ;
+    skos:broader gold:QualityControl ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Sampling"@en ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:Seals a skos:Concept ;
+    skos:broader gold:SpendCategories ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Seals"@en ;
+    oxe:acceptedAction "has" ;
+    oxe:birthAction "includes" .
+
+gold:StandardTime a skos:Concept ;
+    skos:broader gold:RoutingOperation ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Standard time"@en ;
+    oxe:acceptedAction "carries" ;
+    oxe:birthAction "has" .
+
+gold:SupplierAuditReport a skos:Concept ;
+    skos:broader gold:SupplierQualification ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Supplier audit report"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:SupplierBid a skos:Concept ;
+    skos:broader gold:RequestForQuotation ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Supplier bid"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:TechnicalDatasheet a skos:Concept ;
+    skos:broader gold:ConfigurationCheck ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Technical datasheet"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:UsageDecision a skos:Concept ;
+    skos:broader gold:ResultsRecording ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Usage decision"@en ;
+    skos:related gold:RootCauseAnalysis ;
+    gold:triggers gold:RootCauseAnalysis ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:ValveAssembly a skos:Concept ;
+    skos:broader gold:FinalAssembly ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Valve assembly"@en ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:attaches a owl:ObjectProperty ;
+    rdfs:label "attaches"@en ;
+    oxe:acceptedAction "includes",
+        "ships with" .
+
+gold:checks a owl:ObjectProperty ;
+    rdfs:label "checks"@en ;
+    oxe:acceptedAction "reads",
+        "uses" .
+
+gold:compares a owl:ObjectProperty ;
+    rdfs:label "compares"@en ;
+    oxe:acceptedAction "checks",
+        "uses" .
+
+gold:explodes a owl:ObjectProperty ;
+    rdfs:label "explodes"@en ;
+    oxe:acceptedAction "reads",
+        "uses" .
+
+gold:reads a owl:ObjectProperty ;
+    rdfs:label "reads"@en ;
+    oxe:acceptedAction "uses" ;
+    oxe:inverseAction "is read by" .
+
+gold:triggers a owl:ObjectProperty ;
+    rdfs:label "triggers"@en ;
+    oxe:acceptedAction "starts" ;
+    oxe:inverseAction "is triggered by" .
+
+gold:updates a owl:ObjectProperty ;
+    rdfs:label "updates"@en ;
+    oxe:acceptedAction "maintains",
+        "writes to" ;
+    oxe:inverseAction "is updated by" .
+
+gold:uses a owl:ObjectProperty ;
+    rdfs:label "uses"@en ;
+    oxe:acceptedAction "reads" ;
+    oxe:inverseAction "is used by" .
+
+gold:ConfigurationCheck a skos:Concept ;
+    skos:broader gold:Quotation ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Configuration check"@en ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:ConsensusPlanning a skos:Concept ;
+    skos:broader gold:DemandPlanning ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Consensus planning"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:CorrectiveAction a skos:Concept ;
+    skos:broader gold:NonconformanceManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Corrective action"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:CreditCheck a skos:Concept ;
+    skos:broader gold:OrderCapture ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Credit check"@en ;
+    skos:related gold:CustomerMaster ;
+    gold:reads gold:CustomerMaster ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Dunning a skos:Concept ;
+    skos:broader gold:Collection ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Dunning"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:GoodsReceipt a skos:Concept ;
+    skos:broader gold:Receiving ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Goods receipt"@en ;
+    skos:related gold:IncomingInspection ;
+    gold:triggers gold:IncomingInspection ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:InspectionPlan a skos:Concept ;
+    skos:broader gold:InspectionPlanning ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Inspection plan"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:InspectionPlanning a skos:Concept ;
+    skos:broader gold:QualityPlanning ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Inspection planning"@en ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:InvoiceVerification a skos:Concept ;
+    skos:broader gold:SupplierPayment ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Invoice verification"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Invoicing a skos:Concept ;
+    skos:broader gold:Billing ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Invoicing"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:MasterScheduling a skos:Concept ;
+    skos:broader gold:ProductionPlanning ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Master scheduling"@en ;
+    skos:related gold:WorkCentre ;
+    gold:checks gold:WorkCentre ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:NetRequirementsCalculation a skos:Concept ;
+    skos:broader gold:MaterialRequirementsPlanning ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Net requirements calculation"@en ;
+    skos:related gold:BillOfMaterials ;
+    gold:explodes gold:BillOfMaterials ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:OperationConfirmation a skos:Concept ;
+    skos:broader gold:ShopFloorControl ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Operation confirmation"@en ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:OrderEntry a skos:Concept ;
+    skos:broader gold:OrderCapture ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Order entry"@en ;
+    skos:related gold:MaterialMaster ;
+    gold:reads gold:MaterialMaster ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:OrderRelease a skos:Concept ;
+    skos:broader gold:ShopFloorControl ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Order release"@en ;
+    skos:related gold:Routing ;
+    gold:uses gold:Routing ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:PaymentRun a skos:Concept ;
+    skos:broader gold:SupplierPayment ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Payment run"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Picking a skos:Concept ;
+    skos:broader gold:Fulfilment ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Picking"@en ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:PlannedOrderConversion a skos:Concept ;
+    skos:broader gold:MaterialRequirementsPlanning ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Planned order conversion"@en ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:PressureTesting a skos:Concept ;
+    skos:broader gold:FinalAssembly ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Pressure testing"@en ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:PriceCalculation a skos:Concept ;
+    skos:broader gold:Quotation ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Price calculation"@en ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:ProductionOrder a skos:Concept ;
+    skos:broader gold:PlannedOrderConversion ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Production order"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:PurchaseOrderCreation a skos:Concept ;
+    skos:broader gold:Purchasing ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Purchase order creation"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:QualityPlanning a skos:Concept ;
+    skos:broader gold:QualityManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Quality planning"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:RequestForQuotation a skos:Concept ;
+    skos:broader gold:SupplierSelection ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Request for quotation"@en ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:Requisitioning a skos:Concept ;
+    skos:broader gold:Purchasing ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Requisitioning"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ResultsRecording a skos:Concept ;
+    skos:broader gold:QualityControl ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Results recording"@en ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:RoutingOperation a skos:Concept ;
+    skos:broader gold:Routing ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Routing operation"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:SalesForecasting a skos:Concept ;
+    skos:broader gold:DemandPlanning ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Sales forecasting"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:SalesOrder a skos:Concept ;
+    skos:broader gold:OrderEntry ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Sales order"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:Shipping a skos:Concept ;
+    skos:broader gold:Fulfilment ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Shipping"@en ;
+    skos:related gold:TestCertificate ;
+    gold:attaches gold:TestCertificate ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:SupplierQualification a skos:Concept ;
+    skos:broader gold:SupplierSelection ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Supplier qualification"@en ;
+    skos:related gold:SupplierMaster ;
+    gold:updates gold:SupplierMaster ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:ThreeWayMatch a skos:Concept ;
+    skos:broader gold:InvoiceVerification ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Three-way match"@en ;
+    skos:related gold:GoodsReceiptNote,
+        gold:PurchaseOrder ;
+    gold:compares gold:GoodsReceiptNote,
+        gold:PurchaseOrder ;
+    oxe:acceptedAction "consists of",
+        "has" ;
+    oxe:birthAction "includes" .
+
+gold:Billing a skos:Concept ;
+    skos:broader gold:OrderToCash ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Billing"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Collection a skos:Concept ;
+    skos:broader gold:Billing ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Collection"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:CustomerMaster a skos:Concept ;
+    skos:broader gold:PartnerDataManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Customer master"@en ;
+    oxe:acceptedAction "manages",
+        "owns" ;
+    oxe:birthAction "maintains" .
+
+gold:DemandPlanning a skos:Concept ;
+    skos:broader gold:PlanToProduce ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Demand planning"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:FinalAssembly a skos:Concept ;
+    skos:broader gold:ProductionExecution ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Final assembly"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Fulfilment a skos:Concept ;
+    skos:broader gold:OrderToCash ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Fulfilment"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:GoodsReceiptNote a skos:Concept ;
+    skos:broader gold:GoodsReceipt ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Goods receipt note"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:IncomingInspection a skos:Concept ;
+    skos:broader gold:InspectionTypes ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Incoming inspection"@en ;
+    oxe:acceptedAction "has" ;
+    oxe:birthAction "includes" .
+
+gold:MaterialMaster a skos:Concept ;
+    skos:broader gold:ProductDataManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Material master"@en ;
+    oxe:acceptedAction "manages",
+        "owns" ;
+    oxe:birthAction "maintains" .
+
+gold:MaterialRequirementsPlanning a skos:Concept ;
+    skos:broader gold:ProductionPlanning ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Material requirements planning"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:NonconformanceManagement a skos:Concept ;
+    skos:broader gold:QualityManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Nonconformance management"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:OrderCapture a skos:Concept ;
+    skos:broader gold:QuoteToOrder ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Order capture"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:PartnerDataManagement a skos:Concept ;
+    skos:broader gold:MasterDataManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Partner data management"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ProductDataManagement a skos:Concept ;
+    skos:broader gold:MasterDataManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Product data management"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ProductionDataManagement a skos:Concept ;
+    skos:broader gold:MasterDataManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Production data management"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ProductionExecution a skos:Concept ;
+    skos:broader gold:PlanToProduce ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Production execution"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ProductionPlanning a skos:Concept ;
+    skos:broader gold:PlanToProduce ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Production planning"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Purchasing a skos:Concept ;
+    skos:broader gold:ProcureToPay ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Purchasing"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Quotation a skos:Concept ;
+    skos:broader gold:QuoteToOrder ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Quotation"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:QuoteToOrder a skos:Concept ;
+    skos:broader gold:OrderToCash ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Quote-to-order"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Receiving a skos:Concept ;
+    skos:broader gold:ProcureToPay ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Receiving"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:ShopFloorControl a skos:Concept ;
+    skos:broader gold:ProductionExecution ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Shop floor control"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Sourcing a skos:Concept ;
+    skos:broader gold:ProcureToPay ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Sourcing"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:SupplierMaster a skos:Concept ;
+    skos:broader gold:PartnerDataManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Supplier master"@en ;
+    oxe:acceptedAction "manages",
+        "owns" ;
+    oxe:birthAction "maintains" .
+
+gold:SupplierPayment a skos:Concept ;
+    skos:broader gold:ProcureToPay ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Supplier payment"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:SupplierSelection a skos:Concept ;
+    skos:broader gold:Sourcing ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Supplier selection"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:TestCertificate a skos:Concept ;
+    skos:broader gold:PressureTesting ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Test certificate"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:InspectionTypes a skos:Concept ;
+    skos:broader gold:QualityControl ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Inspection types"@en ;
+    oxe:acceptedAction "includes" ;
+    oxe:birthAction "has" .
+
+gold:PurchaseOrder a skos:Concept ;
+    skos:broader gold:PurchaseOrderCreation ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Purchase order"@en ;
+    oxe:acceptedAction "creates",
+        "outputs" ;
+    oxe:birthAction "produces" .
+
+gold:QualityControl a skos:Concept ;
+    skos:broader gold:QualityManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Quality control"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:RootCauseAnalysis a skos:Concept ;
+    skos:broader gold:NonconformanceManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Root cause analysis"@en ;
+    oxe:acceptedAction "has",
+        "includes" ;
+    oxe:birthAction "consists of" .
+
+gold:Routing a skos:Concept ;
+    skos:broader gold:ProductionDataManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Routing"@en ;
+    oxe:acceptedAction "manages",
+        "owns" ;
+    oxe:birthAction "maintains" .
+
+gold:SpendCategories a skos:Concept ;
+    skos:broader gold:Sourcing ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Spend categories"@en ;
+    oxe:acceptedAction "includes" ;
+    oxe:birthAction "has" .
+
+gold:WorkCentre a skos:Concept ;
+    skos:broader gold:ProductionDataManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Work centre"@en ;
+    oxe:acceptedAction "manages",
+        "owns" ;
+    oxe:birthAction "maintains" .
+
+gold:BillOfMaterials a skos:Concept ;
+    skos:broader gold:ProductDataManagement ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Bill of materials"@en ;
+    oxe:acceptedAction "manages",
+        "owns" ;
+    oxe:birthAction "maintains" .
+
+gold:MasterDataManagement a skos:Concept ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Master data management"@en ;
+    skos:topConceptOf <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    oxe:acceptedAction "has",
+        "operates" ;
+    oxe:birthAction "runs" .
+
+gold:OrderToCash a skos:Concept ;
+    skos:altLabel "Order to cash"@en ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Order-to-cash"@en ;
+    skos:topConceptOf <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    oxe:acceptedAction "has",
+        "operates" ;
+    oxe:birthAction "runs" .
+
+gold:PlanToProduce a skos:Concept ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Plan-to-produce"@en ;
+    skos:topConceptOf <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    oxe:acceptedAction "has",
+        "operates" ;
+    oxe:birthAction "runs" .
+
+gold:QualityManagement a skos:Concept ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Quality management"@en ;
+    skos:topConceptOf <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    oxe:acceptedAction "has",
+        "operates" ;
+    oxe:birthAction "runs" .
+
+gold:ProcureToPay a skos:Concept ;
+    skos:inScheme <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    skos:prefLabel "Procure-to-pay"@en ;
+    skos:topConceptOf <https://example.org/ontaix/evals/manufacturer_aldermoor> ;
+    oxe:acceptedAction "has",
+        "operates" ;
+    oxe:birthAction "runs" .
+
+<https://example.org/ontaix/evals/manufacturer_aldermoor> a skos:ConceptScheme ;
+    skos:hasTopConcept gold:MasterDataManagement,
+        gold:OrderToCash,
+        gold:PlanToProduce,
+        gold:ProcureToPay,
+        gold:QualityManagement ;
+    skos:prefLabel "Aldermoor Valves"@en .
+

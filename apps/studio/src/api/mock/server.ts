@@ -46,8 +46,9 @@ interface MAttr {
   sourceId: string | null;
   name: string;
   type: T.AttributeType;
-  col: string;
-  fill: number;
+  col: string | null;
+  fill: number | null;
+  value: string | null;
   state: 'proposed' | 'approved';
 }
 
@@ -240,6 +241,8 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   let audit: T.AuditEntry[] = [];
   let imports: MImport[] = [];
   const ontologyImports = new Map<string, MOntologyImport>();
+  let expansions: MExpansion[] = [];
+  let extractions: MExtraction[] = [];
   let sequence = 0;
   let coverage = false;
   /** Provenance given to the proposals the current request creates. */
@@ -499,6 +502,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     createdAt: p.createdAt,
     decidedAt: p.decidedAt,
     artefacts: artefactsOf(p),
+    openBelow: branchOf(p).length,
   });
 
   const toAppearance = (): T.Appearance => ({
@@ -808,7 +812,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   }
 
   function pAttr(n: MConcept, a: AttrSpec, sourceId: string | null): MProposal {
-    const attr: MAttr = { id: uuid(), conceptId: n.id, sourceId, name: a[0], type: a[1] as T.AttributeType, col: a[2], fill: a[3], state: 'proposed' };
+    const attr: MAttr = { id: uuid(), conceptId: n.id, sourceId, name: a[0], type: a[1] as T.AttributeType, col: a[2], fill: a[3], value: null, state: 'proposed' };
     n.attributes.push(attr);
     return newProposal({
       type: 'attr',
@@ -826,6 +830,43 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       why: `${a[3]} percent filled · in the data, not yet in the model`,
       caption: `${n.label}.${a[0]} is now part of the model, read from ${a[2]}.`,
       conceptId: n.id,
+      relationId: null,
+      relationIds: [],
+      sourceId: null,
+      bindingIds: [],
+      attributeId: attr.id,
+      apply() {
+        attr.state = 'approved';
+      },
+      onReject() {
+        const i = n.attributes.indexOf(attr);
+        if (i >= 0) n.attributes.splice(i, 1);
+      },
+    });
+  }
+
+  /** A taught attribute: a stated value, no column or fill; it waits for a pending concept. */
+  function pTaught(n: MConcept, name: string, type: T.AttributeType, value: string): MProposal {
+    const key = name.toLowerCase();
+    if (n.attributes.some((x) => x.name.toLowerCase() === key)) throw new Refusal(409, 'duplicate_attribute', `${n.label} already has ${key}`);
+    const attr: MAttr = { id: uuid(), conceptId: n.id, sourceId: null, name: key, type, col: null, fill: null, value, state: 'proposed' };
+    n.attributes.push(attr);
+    return newProposal({
+      type: 'attr',
+      changeKind: null,
+      title: `${n.label}.${key}`,
+      heading: KIND_HEADING.attr,
+      color: toConcept(n).color ?? NEUTRAL,
+      companyId: n.companyId,
+      domainId: null,
+      parentLabel: null,
+      deps: n.pending ? [n.label] : [],
+      ready: () => !n.pending,
+      waitFor: n.pending ? n.label : null,
+      html: `<b>${e(n.label)}</b> has <b>${e(key)}</b> <i>· ${e(type)} · ${e(value)}</i>`,
+      why: 'taught · not yet in the model',
+      caption: `${n.label} ${key}: ${value} is now part of the model.`,
+      conceptId: null,
       relationId: null,
       relationIds: [],
       sourceId: null,
@@ -881,7 +922,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
           const spec = ATTR[n.label] || generic(n.label);
           n.attributes = spec
             .filter((a) => a[4] !== 'new')
-            .map((a) => ({ id: uuid(), conceptId: n.id, sourceId: src.id, name: a[0], type: a[1] as T.AttributeType, col: a[2], fill: a[3], state: 'approved' as const }));
+            .map((a) => ({ id: uuid(), conceptId: n.id, sourceId: src.id, name: a[0], type: a[1] as T.AttributeType, col: a[2], fill: a[3], value: null, state: 'approved' as const }));
           for (const a of spec.filter((a) => a[4] === 'new')) {
             const q = pAttr(n, a, src.id);
             cascade.push(q);
@@ -1261,9 +1302,10 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         return pBind(src, targets, draft.caption, cascade);
       }
       case 'attr': {
-        const n = conceptById(draft.conceptId);
+        const n = conceptById(draft.conceptId) || (draft.conceptLabel && draft.companyId ? findConcept(draft.conceptLabel, draft.companyId) : null);
         if (!n) throw new Refusal(404, 'concept_not_found', 'concept does not exist');
-        return pAttr(n, [draft.name, draft.attributeType, draft.col, draft.fill, 'new'], draft.sourceId ?? null);
+        if (draft.value !== undefined) return pTaught(n, draft.name, draft.attributeType, draft.value);
+        return pAttr(n, [draft.name, draft.attributeType, draft.col ?? '', draft.fill ?? 0, 'new'], draft.sourceId ?? null);
       }
       case 'change':
         return pChange(draft);
@@ -1368,6 +1410,13 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
           }
         }
       }
+      for (const q of open()) {
+        if (q.state !== 'pending' && q.state !== 'half_approved') continue;
+        if (q.type === 'attr' && c.attributes.some((a) => a.id === q.attributeId)) {
+          reject(q, cascaded);
+          cascaded.push(q);
+        }
+      }
     }
     const r = relationById(p.relationId);
     if (r && p.type !== 'change') r.dyingAt = t;
@@ -1417,6 +1466,8 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     proposals = [];
     audit = [];
     imports = [];
+    expansions = [];
+    extractions = [];
     coverage = false;
     appearance.theme = 'dark';
     appearance.colors = {};
@@ -1705,6 +1756,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         origin: 'document',
         originDetail: { fileName: imp.fileName, mediaType: imp.mediaType },
         sentences: imp.sentences,
+        skipped: extracted.skipped,
         positions: imp.positions,
       } satisfies T.ImportResult);
     } catch (e) {
@@ -1712,6 +1764,365 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       if (e instanceof ExtractRefusal) return problem(new Refusal(e.status, e.code, e.detail));
       throw e;
     }
+  }
+
+  // ------------------------------------------------------------ branch approval
+
+  function isOpen(p: MProposal): boolean {
+    return p.state === 'pending' || p.state === 'half_approved';
+  }
+
+  /**
+   * A proposal's open branch: the open concept and spec proposals born under it at any depth,
+   * then the open relation proposals whose ends are both in the branch or approved, at least one
+   * of them in the branch. Dependencies resolve inside the root's company only.
+   */
+  function branchOf(root: MProposal): MProposal[] {
+    if ((root.type !== 'concept' && root.type !== 'spec') || !root.conceptId || !isOpen(root) || !root.companyId) return [];
+    const companyId = root.companyId;
+    const inBranch = new Set<string>([root.conceptId]);
+    const members: MProposal[] = [];
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const q of open()) {
+        if (q === root || members.includes(q) || (q.type !== 'concept' && q.type !== 'spec') || !q.conceptId) continue;
+        if (q.companyId !== companyId || !q.parentLabel) continue;
+        const parent = findConcept(q.parentLabel, companyId);
+        if (parent && inBranch.has(parent.id)) {
+          members.push(q);
+          inBranch.add(q.conceptId);
+          grew = true;
+        }
+      }
+    }
+    for (const q of open()) {
+      if (q.type !== 'relation' || q.companyId !== companyId) continue;
+      const l = relationById(q.relationId);
+      const ends = l ? [conceptById(l.aId), conceptById(l.bId)] : [];
+      if (ends.length !== 2 || ends.some((c) => !c || c.companyId !== companyId)) continue;
+      const inside = ends.filter((c) => c && inBranch.has(c.id)).length;
+      if (inside && ends.every((c) => c && (inBranch.has(c.id) || !c.pending))) members.push(q);
+    }
+    return members;
+  }
+
+  function approveBranch(root: MProposal): T.BranchResult {
+    if (!isOpen(root)) throw new Refusal(409, 'proposal_decided', 'already decided');
+    if (root.type !== 'concept' && root.type !== 'spec')
+      throw new Refusal(409, 'branch_root_invalid', 'a branch starts at a concept or specialisation proposal');
+    let approved = 0,
+      batches = 0;
+    const members = [root, ...branchOf(root)];
+    while (batches < 50) {
+      const ready = members.filter((p) => isOpen(p) && p.ready());
+      if (!ready.length) break;
+      for (const p of ready) {
+        approve(p, true);
+        approved++;
+      }
+      batches++;
+    }
+    const remaining = members.filter(isOpen).length;
+    return { rootId: root.id, approved, skipped: 0, remaining, batches, complete: true };
+  }
+
+  // ------------------------------------------------------------ concept expansion
+
+  interface MExpansion {
+    id: string;
+    companyId: string;
+    drafts: T.ExpansionDraft[];
+    notes: T.ExpansionNote[];
+    expiresAt: number;
+    submitted: boolean;
+  }
+  const EXPANSION_LIFETIME_MS = 60 * 60 * 1000;
+  /** The mock model's suggestions: each child is the expanded label with one suffix, action and rationale. */
+  const SUGGESTED: [string, string, string][] = [
+    ['planning', 'includes', 'Planning decides what it needs next'],
+    ['records', 'keeps', 'Records hold what happened'],
+    ['team', 'is run by', 'A team is accountable for it'],
+  ];
+
+  function expand(conceptId: string, body: T.ExpansionRequest): T.ExpansionResult {
+    const c = conceptById(conceptId);
+    if (!c || c.dyingAt) throw new Refusal(404, 'not_found', 'concept not found in this tenant');
+    if (c.pending) throw new Refusal(409, 'concept_pending', `${c.label} is awaiting approval`);
+    const focus = body?.focus;
+    if (focus !== undefined && (typeof focus !== 'string' || !focus.length || focus.length > 200 || /[<>\u0000-\u001f]/.test(focus)))
+      throw new Refusal(422, 'validation_failed', 'focus holds 1 to 200 characters without markup or control characters');
+    for (const k of ['depth', 'maxChildren'] as const) {
+      const v = body?.[k];
+      if (v !== undefined && (!Number.isInteger(v) || v < 1)) throw new Refusal(422, 'validation_failed', `${k} is a whole number of at least 1`);
+    }
+    const empty = (llmOutcome: T.ExpansionOutcome, skipped: T.ExpansionSkip[] = []): T.ExpansionResult => ({
+      expansionId: null,
+      expiresAt: null,
+      conceptId,
+      llmOutcome,
+      degraded: llmOutcome !== 'used',
+      drafts: [],
+      notes: [],
+      skipped,
+    });
+    if (settings.llmMonthlyTokenCap === 0) return empty('budget_exhausted');
+    const domainKey = (c.domainKey || 'production') as T.DomainKey;
+    const deep = (body?.depth ?? 2) >= 2;
+    const drafts: T.ExpansionDraft[] = [];
+    const notes: T.ExpansionNote[] = [];
+    const skipped: T.ExpansionSkip[] = [];
+    const children: number[] = [];
+    SUGGESTED.slice(0, body?.maxChildren ?? SUGGESTED.length).forEach(([suffix, action, rationale], i) => {
+      const label = title(`${c.label} ${suffix}`);
+      const grandchild = title(`${c.label} schedule`);
+      if (findConcept(label, c.companyId)) {
+        skipped.push({ label, reason: 'existing_label' });
+        if (i === 0 && deep) skipped.push({ label: grandchild, reason: 'parent_skipped' });
+        return;
+      }
+      children.push(drafts.length);
+      drafts.push({ type: 'concept', companyId: c.companyId, parentId: c.id, label, domainKey, action, reverse: false });
+      notes.push({ confidence: 0.9 - i * 0.1, rationale, depth: 1, requires: [] });
+      if (i !== 0 || !deep) return;
+      if (findConcept(grandchild, c.companyId)) {
+        skipped.push({ label: grandchild, reason: 'existing_label' });
+        return;
+      }
+      drafts.push({ type: 'concept', companyId: c.companyId, parentLabel: label, label: grandchild, domainKey, action: 'produces', reverse: false });
+      notes.push({ confidence: 0.72, rationale: 'Planning produces a schedule', depth: 2, requires: [drafts.length - 2] });
+    });
+    if (children.length >= 3) {
+      const [a, b] = [children[1], children[2]];
+      const aLabel = (drafts[a] as T.ConceptDraft).label,
+        bLabel = (drafts[b] as T.ConceptDraft).label;
+      drafts.push({ type: 'relation', companyId: c.companyId, aLabel, bLabel, action: 'is kept by' });
+      notes.push({ confidence: 0.6, rationale: 'The team keeps the records', depth: null, requires: [a, b] });
+    }
+    if (!drafts.length) return empty('used', skipped);
+    const x: MExpansion = { id: uuid(), companyId: c.companyId, drafts, notes, expiresAt: nowDate().getTime() + EXPANSION_LIFETIME_MS, submitted: false };
+    expansions.push(x);
+    return { expansionId: x.id, expiresAt: new Date(x.expiresAt).toISOString(), conceptId, llmOutcome: 'used', degraded: false, drafts, notes, skipped };
+  }
+
+  /** The selected indexes in draft order, refused unless distinct, in range and closed under `requires`. */
+  function selection(indexes: unknown, notes: { requires: number[] }[]): number[] {
+    if (!Array.isArray(indexes) || !indexes.length) throw new Refusal(422, 'validation_failed', 'indexes needs at least one draft');
+    const chosen = new Set<number>();
+    for (const i of indexes) {
+      if (!Number.isInteger(i) || i < 0 || i >= notes.length || chosen.has(i))
+        throw new Refusal(422, 'validation_failed', 'indexes are distinct draft indexes');
+      chosen.add(i);
+    }
+    for (const i of chosen)
+      for (const r of notes[i].requires) if (!chosen.has(r)) throw new Refusal(422, 'validation_failed', `draft ${i} requires draft ${r}`);
+    return [...chosen].sort((a, b) => a - b);
+  }
+
+  /** Creates the chosen stored drafts in draft order, each under its provenance; a relation's label ends resolve in the company. */
+  function proposeStored(
+    drafts: (T.ProposalDraft | T.ExpansionDraft)[],
+    chosen: number[],
+    companyId: string,
+    origin: (i: number) => { origin: T.Origin; originDetail: T.OriginDetail | null },
+    each: (i: number, p: MProposal) => void = () => undefined,
+  ): T.Proposal[] {
+    for (const i of chosen) {
+      const d = drafts[i];
+      if ((d.type === 'concept' || d.type === 'spec') && findConcept(d.label, companyId))
+        throw new Refusal(409, 'duplicate_label', `${d.label} already exists in this company`);
+    }
+    const outs: T.Proposal[] = [];
+    try {
+      for (const i of chosen) {
+        const d = drafts[i];
+        provenance = origin(i);
+        let draft = d as T.ProposalDraft;
+        if (d.type === 'relation') {
+          const a = conceptById(d.aId) || (d.aLabel ? findConcept(d.aLabel, companyId) : null);
+          const b = conceptById(d.bId) || (d.bLabel ? findConcept(d.bLabel, companyId) : null);
+          draft = { ...d, aId: a?.id ?? '', bId: b?.id ?? '' };
+        }
+        const p = createFromDraft(draft, []);
+        each(i, p);
+        const out = toProposal(p);
+        emit('proposal.created', { proposal: out, artefacts: out.artefacts, cascaded: [] });
+        outs.push(out);
+      }
+    } finally {
+      provenance = { origin: 'text', originDetail: null };
+    }
+    return outs;
+  }
+
+  function proposeExpansion(id: string, body: { indexes?: unknown }): T.Proposal[] {
+    const x = expansions.find((y) => y.id === id);
+    if (!x) throw new Refusal(404, 'not_found', 'expansion not found in this tenant');
+    if (nowDate().getTime() >= x.expiresAt) throw new Refusal(410, 'expansion_expired', 'the expansion has expired; expand again');
+    if (x.submitted) throw new Refusal(409, 'expansion_submitted', 'the expansion was already proposed');
+    const chosen = selection(body?.indexes, x.notes);
+    const outs = proposeStored(
+      x.drafts,
+      chosen,
+      x.companyId,
+      () => ({ origin: 'suggestion', originDetail: null }),
+      (i, p) => {
+        const n = x.notes[i];
+        p.heading = `${p.heading} · suggested`;
+        p.why = `Suggested by the model · ${Math.round(n.confidence * 100)}% · ${n.rationale}`;
+      },
+    );
+    x.submitted = true;
+    return outs;
+  }
+
+  // ------------------------------------------------------------ whole-document extraction
+
+  interface MExtraction {
+    job: T.DocumentExtraction;
+    imp: MImport;
+    result: T.DocumentExtractionResult | null;
+  }
+  const RESULT_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
+  function startExtraction(importId: string, body: { companyId?: string }): T.DocumentExtraction {
+    if (!settings.importDocs) throw new Refusal(409, 'channel_disabled', 'document import is disabled in the admin portal');
+    const imp = imports.find((x) => x.id === importId);
+    if (!imp) throw new Refusal(404, 'not_found', 'import not found in this tenant');
+    if (nowDate().getTime() >= imp.expiresAt) throw new Refusal(410, 'import_expired', 'the import has expired; import the file again');
+    const co = companyOf(body?.companyId || '');
+    if (!co) throw new Refusal(404, 'not_found', 'company not found in this tenant');
+    if (extractions.some((x) => x.imp === imp)) throw new Refusal(409, 'extraction_exists', 'this import already has an extraction job');
+    if (extractions.some((x) => x.job.state === 'queued' || x.job.state === 'running'))
+      throw new Refusal(409, 'extraction_running', 'another extraction job of yours is still running');
+    const job: T.DocumentExtraction = {
+      id: uuid(),
+      importId,
+      companyId: co.id,
+      state: 'queued',
+      phase: null,
+      chunks: 1,
+      outlineChunksDone: 0,
+      sectionChunksDone: 0,
+      outlineNodes: 0,
+      tokensUsed: 0,
+      tokenCeiling: 1_000_000,
+      nodeCeiling: 2000,
+      draftCount: 0,
+      degraded: false,
+      failureReason: null,
+      cancelRequested: false,
+      createdAt: iso(),
+      startedAt: null,
+      finishedAt: null,
+      expiresAt: null,
+      submittedAt: null,
+    };
+    extractions.push({ job, imp, result: null });
+    emit('extraction.changed', { extraction: { ...job } });
+    return { ...job };
+  }
+
+  function extractionOf(id: string): MExtraction {
+    const x = extractions.find((y) => y.job.id === id);
+    if (!x) throw new Refusal(404, 'not_found', 'extraction not found in this tenant');
+    return x;
+  }
+
+  /** The mock job moves one step per read: from queued to running its sections, then to its end. */
+  function readExtraction(id: string): T.DocumentExtraction {
+    const x = extractionOf(id);
+    const job = x.job;
+    if (job.state === 'queued') {
+      Object.assign(job, { state: 'running', phase: 'sections', startedAt: iso(), outlineChunksDone: job.chunks, tokensUsed: 900 });
+      emit('extraction.changed', { extraction: { ...job } });
+    } else if (job.state === 'running') {
+      finishExtraction(x);
+      emit('extraction.changed', { extraction: { ...job } });
+    }
+    return { ...job };
+  }
+
+  function finishExtraction(x: MExtraction): void {
+    const job = x.job;
+    const done = { phase: null, finishedAt: iso(), sectionChunksDone: job.chunks };
+    if (settings.llmMonthlyTokenCap === 0) {
+      Object.assign(job, done, { state: 'failed', failureReason: 'budget_exhausted' });
+      return;
+    }
+    const result = mapDocument(x.imp, job);
+    if (!result.drafts.length) {
+      Object.assign(job, done, { state: 'failed', failureReason: 'no_drafts' });
+      return;
+    }
+    x.result = result;
+    Object.assign(job, done, {
+      state: 'succeeded',
+      draftCount: result.drafts.length,
+      outlineNodes: result.outline.length,
+      expiresAt: new Date(nowDate().getTime() + RESULT_LIFETIME_MS).toISOString(),
+    });
+  }
+
+  /** The mock's reading of a whole document: the intents of every sentence as one tree under the company root. */
+  function mapDocument(imp: MImport, job: T.DocumentExtraction): T.DocumentExtractionResult {
+    const co = companyOf(job.companyId) as MCompany;
+    const drafts: T.ProposalDraft[] = [];
+    const notes: T.DocumentDraftNote[] = [];
+    const outline: T.OutlineNode[] = [];
+    const drafted = new Map<string, number>();
+    imp.sentences.forEach((sentence, sentenceIndex) => {
+      for (const it of understand(sentence)) {
+        if (it.kind !== 'rel') continue;
+        const place = (label: string, parent: string | null, action: string): void => {
+          const key = label.toLowerCase();
+          if (drafted.has(key) || findConcept(label, co.id)) return;
+          const parentIndex = parent ? drafted.get(parent.toLowerCase()) : undefined;
+          const host = (parent && findConcept(parent, co.id)) || conceptById(co.rootId);
+          const depth = parentIndex !== undefined ? (notes[parentIndex].depth ?? 0) + 1 : 1;
+          const role: T.OutlineRole = depth === 1 ? 'process' : 'step';
+          const base = { type: 'concept' as const, companyId: co.id, label, domainKey: 'production' as T.DomainKey, action };
+          drafted.set(key, drafts.length);
+          drafts.push(
+            (parentIndex !== undefined ? { ...base, parentLabel: parent } : { ...base, parentId: host?.id ?? co.rootId }) as T.ProposalDraft,
+          );
+          notes.push({ pass: 'outline', confidence: 0.9, role, depth, requires: parentIndex !== undefined ? [parentIndex] : [], sentenceIndex });
+          outline.push({ index: outline.length, parentIndex: parentIndex ?? null, conceptId: null, label, role, depth, sentenceIndex });
+        };
+        place(title(it.subj), null, 'has');
+        place(title(it.obj), title(it.subj), it.pred || 'relates to');
+      }
+    });
+    return { extractionId: job.id, outline, drafts, notes, unresolved: [] };
+  }
+
+  function extractionResult(id: string): T.DocumentExtractionResult {
+    const x = extractionOf(id);
+    if (x.job.state !== 'succeeded' || !x.result) throw new Refusal(409, 'extraction_not_ready', 'the job has not succeeded');
+    if (x.job.expiresAt && nowDate().getTime() >= Date.parse(x.job.expiresAt)) throw new Refusal(410, 'extraction_expired', 'the result has expired');
+    return x.result;
+  }
+
+  function proposeExtraction(id: string, body: { indexes?: unknown }): T.Proposal[] {
+    const x = extractionOf(id);
+    const result = extractionResult(id);
+    if (x.job.submittedAt) throw new Refusal(409, 'extraction_submitted', 'the tree was already proposed');
+    const chosen = selection(body?.indexes, result.notes);
+    const outs = proposeStored(result.drafts, chosen, x.job.companyId, (i) => ({
+      origin: 'document',
+      originDetail: detailOf(x.imp, result.notes[i].sentenceIndex),
+    }));
+    x.job.submittedAt = iso();
+    return outs;
+  }
+
+  function cancelExtraction(id: string): T.DocumentExtraction {
+    const job = extractionOf(id).job;
+    if (job.state === 'queued' || job.state === 'running') {
+      Object.assign(job, { state: 'cancelled', phase: null, cancelRequested: true, finishedAt: iso() });
+      emit('extraction.changed', { extraction: { ...job } });
+    }
+    return { ...job };
   }
 
   /** Maps and stores an uploaded ontology or hierarchy file, as `POST /ontology-imports` does. */
@@ -2016,6 +2427,18 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       return json(202, createDrafts(batch.drafts || [], { origin: batch.origin, importRef: batch.importRef }));
     }
     if (is('POST', 'proposals', 'approve-all')) return json(200, approveAll());
+    if (is('POST', 'proposals', null, 'approve-branch')) {
+      const p = proposals.find((x) => x.id === seg[1]);
+      if (!p) throw new Refusal(404, 'proposal_not_found', 'proposal does not exist');
+      return json(200, approveBranch(p));
+    }
+    if (is('POST', 'concepts', null, 'expand')) return json(200, expand(seg[1], (body || {}) as T.ExpansionRequest));
+    if (is('POST', 'expansions', null, 'proposals')) return json(202, proposeExpansion(seg[1], (body || {}) as { indexes?: unknown }));
+    if (is('POST', 'import', null, 'extraction')) return json(202, startExtraction(seg[1], (body || {}) as { companyId?: string }));
+    if (is('GET', 'extractions', null)) return json(200, readExtraction(seg[1]));
+    if (is('DELETE', 'extractions', null)) return json(202, cancelExtraction(seg[1]));
+    if (is('GET', 'extractions', null, 'result')) return json(200, extractionResult(seg[1]));
+    if (is('POST', 'extractions', null, 'proposals')) return json(202, proposeExtraction(seg[1], (body || {}) as { indexes?: unknown }));
     if (is('POST', 'proposals', 'reject-all')) {
       let rejected = 0;
       for (const p of open()) {

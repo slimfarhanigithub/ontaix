@@ -303,7 +303,7 @@ async def test_real_adapter_never_leaks_key(client, tenant: TenantFixture, monke
     )
     import app.clients.llm_client as lc
 
-    monkeypatch.setattr(lc, "_cached", None)
+    monkeypatch.setattr(lc, "_cached", {})
     reset_llm_client()
     cap = _Capture()
     root = logging.getLogger()

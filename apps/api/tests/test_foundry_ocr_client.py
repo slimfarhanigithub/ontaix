@@ -80,6 +80,14 @@ async def test_one_call_sends_the_pdf_and_the_zero_based_pages(
     assert result.pages_processed == 2
 
 
+async def test_the_route_uses_the_resource_ai_services_host() -> None:
+    from app.clients.foundry_ocr_client import ocr_url
+
+    expected = "https://ontaix-dev.services.ai.azure.com/providers/mistral/azure/ocr"
+    assert ocr_url("https://ontaix-dev.cognitiveservices.azure.com/") == expected
+    assert ocr_url("https://ontaix-dev.services.ai.azure.com") == expected
+
+
 async def test_a_refused_or_unreadable_answer_is_a_provider_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
