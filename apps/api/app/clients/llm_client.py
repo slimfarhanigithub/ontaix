@@ -114,9 +114,10 @@ def check_llm_configuration(settings: Settings) -> None:
     A provider without its endpoint (`azure_foundry`) or key (`anthropic`) is not an error: the
     model step answers `not_configured` and the grammar runs alone.
     """
-    if _provider_configured(settings) and settings.llm_model not in settings.llm_price_table:
+    price = settings.llm_price_table.get(settings.llm_model)
+    if _provider_configured(settings) and not isinstance(price, ModelPrice):
         raise LlmConfigurationError(
-            f"ONTAIX_LLM_PRICE_TABLE has no price for ONTAIX_LLM_MODEL {settings.llm_model!r}"
+            f"ONTAIX_LLM_PRICE_TABLE has no token price for ONTAIX_LLM_MODEL {settings.llm_model!r}"
         )
 
 
@@ -151,7 +152,7 @@ def _provider_configured(settings: Settings) -> bool:
 def _configured(settings: Settings) -> LlmClient | None:
     global _cached
     price = settings.llm_price_table.get(settings.llm_model)
-    if not _provider_configured(settings) or price is None:
+    if not _provider_configured(settings) or not isinstance(price, ModelPrice):
         return None
     if settings.llm_provider == "azure_foundry":
         fingerprint: tuple[object, ...] = (

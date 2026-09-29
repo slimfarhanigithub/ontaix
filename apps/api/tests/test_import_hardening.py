@@ -173,7 +173,8 @@ async def test_a_chunked_upload_is_refused_while_it_streams(
     ("name", "data"),
     [
         ("notes.txt", b"%PDF-1.4\nBT (Machines have sensors today) Tj ET"),
-        ("notes.txt", b"\xff\xfe not UTF-8 at all, machines have sensors"),
+        # A UTF-16 byte order mark is read as UTF-16; these bytes are not UTF-8 and carry none.
+        ("notes.txt", b"\xc3\x28 not UTF-8 at all, machines have sensors"),
         ("report.pdf", TXT),
         ("report.docx", TXT),
     ],

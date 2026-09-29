@@ -1,0 +1,18 @@
+{
+  "@context": {
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "skos": "http://www.w3.org/2004/02/skos/core#"
+  },
+  "@graph": [
+    {"@id": "http://example.org/sales#Sales", "@type": "skos:Concept",
+     "skos:prefLabel": [{"@value": "Sales", "@language": "en"}, {"@value": "Ventes", "@language": "fr"}]},
+    {"@id": "http://example.org/sales#Quote", "@type": "skos:Concept",
+     "skos:prefLabel": {"@value": "Quote", "@language": "en"},
+     "skos:broader": {"@id": "http://example.org/sales#Sales"}},
+    {"@id": "http://example.org/sales#Order", "@type": "skos:Concept",
+     "skos:altLabel": {"@value": "Order", "@language": "en"},
+     "skos:exactMatch": {"@id": "http://other.example.org/Order"}},
+    {"@id": "http://example.org/sales#Sales", "skos:narrower": {"@id": "http://example.org/sales#Order"}}
+  ]
+}

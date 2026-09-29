@@ -1,0 +1,54 @@
+@prefix : <http://example.org/plant#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/plant> a owl:Ontology ;
+    owl:imports <http://example.org/remote/units> .
+
+:Equipment a owl:Class ;
+    rdfs:label "Equipment"@en , "Équipement"@fr .
+
+:Machine a owl:Class ;
+    rdfs:subClassOf :Equipment ;
+    rdfs:label "Machine"@en , "Machine outil"@fr-CA .
+
+:Pump a owl:Class ;
+    rdfs:subClassOf :Machine , :Asset ;
+    skos:prefLabel "Pump"@en .
+
+:Asset a owl:Class ;
+    rdfs:label "Asset" .
+
+:Sensor a owl:Class ;
+    rdfs:label "Sensor"@en ;
+    rdfs:subClassOf [ a owl:Restriction ;
+        owl:onProperty :monitors ;
+        owl:someValuesFrom :Machine ] .
+
+:SparePart a owl:Class ;
+    rdfs:subClassOf [ a owl:Restriction ;
+        owl:onProperty :fits ;
+        owl:minCardinality "1"^^xsd:nonNegativeInteger ] .
+
+:Device a owl:Class ;
+    owl:equivalentClass :Machine .
+
+:monitors a owl:ObjectProperty ;
+    rdfs:label "monitors"@en .
+
+:partOf a owl:ObjectProperty ;
+    rdfs:domain :SparePart ;
+    rdfs:range :Machine .
+
+:sameThing a owl:ObjectProperty ;
+    rdfs:label "is a"@en ;
+    rdfs:domain :Pump ;
+    rdfs:range :Sensor .
+
+:serialNumber a owl:DatatypeProperty ;
+    rdfs:domain :Machine .
+
+:P100 a owl:NamedIndividual , :Pump ;
+    rdfs:label "Pump P100"@en .

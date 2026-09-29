@@ -48,6 +48,7 @@ class ProposalOrigin(enum.StrEnum):
     TEXT = "text"
     SPEECH = "speech"
     DOCUMENT = "document"
+    ONTOLOGY_IMPORT = "ontology_import"
 
 
 class ChangeKind(enum.StrEnum):

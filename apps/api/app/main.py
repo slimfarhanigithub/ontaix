@@ -17,6 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.auth import DEV_USER_HEADER
 from app.clients.db_client import dispose_engine
 from app.clients.llm_client import check_llm_configuration
+from app.clients.ocr_client import check_ocr_configuration
 from app.config import get_settings
 
 # Every ontology table has a foreign key to `tenant`; its mapping must be registered before the
@@ -30,6 +31,7 @@ from app.routers import (
     domain_products,
     health,
     imports,
+    ontology_imports,
     proposals,
     relations,
     scene,
@@ -85,6 +87,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     logging.basicConfig(level=settings.log_level)
     check_llm_configuration(settings)
+    check_ocr_configuration(settings)
     if settings.is_dev:
         logger.warning(
             "environment is dev: the %s header is accepted without any other credential",
@@ -102,6 +105,7 @@ def create_app() -> FastAPI:
         proposals,
         teach,
         imports,
+        ontology_imports,
         audit,
         cost,
     ):

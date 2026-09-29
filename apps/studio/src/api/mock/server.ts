@@ -16,6 +16,7 @@ import { liveEvents, type EventBus, type EventType } from '../events';
 import type * as T from '../types';
 import { createDirectory, DirectoryRefusal, pageOf, parseListArgs } from './directory';
 import { extractDocument, ExtractRefusal } from './extract';
+import { mapOntologyFile } from './ontology';
 import { ATTR, CATALOG, DISCOVER, generic, HOME_COMPANY, RECORDS, SEED, type AttrSpec } from './seed';
 
 interface MCompany {
@@ -150,6 +151,14 @@ export interface MockResponse {
   body: unknown;
 }
 
+/** A stored ontology import: the mapped tree, kept for 24 hours for its actor. */
+interface MOntologyImport {
+  result: T.OntologyImportResult;
+  fileName: string;
+  expiresAt: number;
+  submitted: boolean;
+}
+
 /** A stored document import: its sentences, their positions and the per-sentence reuse counters. */
 interface MImport {
   id: string;
@@ -166,6 +175,8 @@ export interface MockServer {
   handle(method: string, path: string, body?: unknown): MockResponse;
   /** `POST /import/sentences`: reads and extracts the uploaded file, then stores the import. */
   importDocument(file: { name: string; type: string; bytes: Uint8Array }): Promise<MockResponse>;
+  /** `POST /ontology-imports`: maps the uploaded file into a stored draft tree. */
+  importOntology(file: { name: string; type: string; bytes: Uint8Array }, fields: Record<string, string>): Promise<MockResponse>;
 }
 
 /** Birth draws of a concept: angle noise, node seed and link bend. */
@@ -198,6 +209,8 @@ class Refusal extends Error {
 const TENANT_ID = '00000000-0000-4000-8000-00000000000a';
 /** An import serves parses and drafts for one hour. */
 const IMPORT_LIFETIME_MS = 60 * 60 * 1000;
+/** An ontology import serves its submission for 24 hours. */
+const ONTOLOGY_IMPORT_LIFETIME_MS = 24 * 60 * 60 * 1000;
 /** A cited sentence may be parsed this many times. */
 const IMPORT_PARSES_PER_SENTENCE = 3;
 const ACTOR: T.Actor = { kind: 'user', id: '00000000-0000-4000-8000-0000000000a1', name: 'Owner' };
@@ -226,10 +239,11 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   let proposals: MProposal[] = [];
   let audit: T.AuditEntry[] = [];
   let imports: MImport[] = [];
+  const ontologyImports = new Map<string, MOntologyImport>();
   let sequence = 0;
   let coverage = false;
   /** Provenance given to the proposals the current request creates. */
-  let provenance: { origin: T.Origin; originDetail: T.OriginDetail | null } = { origin: 'text', originDetail: null };
+  let provenance: { origin: T.Origin; originDetail: T.OriginDetail | null; why?: string } = { origin: 'text', originDetail: null };
   const settings: T.Settings = {
     voice: true,
     importDocs: true,
@@ -249,6 +263,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     agentAccess: true,
     costCap: true,
     llmMonthlyTokenCap: 2_000_000,
+    ocrMonthlyPageCap: 1000,
   };
   const appearance = { theme: 'dark' as 'dark' | 'light', colors: {} as Record<string, string>, accent: '#3fb8a9', source: DEFAULT_BRASS };
   const directory = createDirectory({
@@ -1699,6 +1714,94 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     }
   }
 
+  /** Maps and stores an uploaded ontology or hierarchy file, as `POST /ontology-imports` does. */
+  async function importOntology(
+    file: { name: string; type: string; bytes: Uint8Array },
+    fields: Record<string, string>,
+  ): Promise<MockResponse> {
+    try {
+      if (!settings.importDocs) throw new Refusal(409, 'channel_disabled', 'document import is disabled in the admin portal');
+      const company = companyOf(fields.companyId || '');
+      if (!company) throw new Refusal(404, 'not_found', 'company not found');
+      const root = concepts.find((c) => c.companyId === company.id && c.kind === 'root');
+      const parent = fields.parentConceptId ? conceptById(fields.parentConceptId) : root;
+      if (!parent || parent.companyId !== company.id || parent.dyingAt) throw new Refusal(404, 'not_found', 'parent concept not found');
+      if (parent.pending) throw new Refusal(409, 'concept_pending', `${parent.label} is waiting for approval`);
+      const languages = (fields.languages || 'en')
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const mapped = mapOntologyFile(
+        file.name,
+        file.bytes,
+        {
+          companyId: company.id,
+          parentId: parent.id,
+          parentDomainKey: parent.kind === 'root' ? null : parent.domainKey,
+          domainKeys: new Set(DOMAIN_TEMPLATES.map((t) => t.key)),
+          domainKey: (fields.domainKey as T.DomainKey) || null,
+          languages,
+        },
+        concepts
+          .filter((c) => c.companyId === company.id && !c.dyingAt)
+          .map((c) => ({ id: c.id, label: c.label, parentId: c.parentId, domainKey: c.domainKey })),
+      );
+      const expiresAt = nowDate().getTime() + ONTOLOGY_IMPORT_LIFETIME_MS;
+      const result: T.OntologyImportResult = {
+        ontologyImportId: uuid(),
+        expiresAt: new Date(expiresAt).toISOString(),
+        companyId: company.id,
+        parentConceptId: fields.parentConceptId || null,
+        format: mapped.format,
+        languages,
+        individuals: fields.individuals === 'as_concepts' ? 'as_concepts' : 'skip',
+        drafts: mapped.drafts,
+        notes: mapped.notes,
+        skipped: mapped.skipped,
+      };
+      ontologyImports.set(result.ontologyImportId, { result, fileName: mapped.fileName, expiresAt, submitted: false });
+      return json(200, result);
+    } catch (e) {
+      if (e instanceof Refusal) return problem(e);
+      if (e instanceof ExtractRefusal) return problem(new Refusal(e.status, e.code, e.detail));
+      throw e;
+    }
+  }
+
+  /** The stored ontology import: 404 when unknown, 410 past its expiry. */
+  function ontologyImportOf(id: string): MOntologyImport {
+    const found = ontologyImports.get(id);
+    if (!found) throw new Refusal(404, 'not_found', 'ontology import not found');
+    if (nowDate().getTime() >= found.expiresAt) throw new Refusal(410, 'ontology_import_expired', 'the ontology import has expired; import it again');
+    return found;
+  }
+
+  /** Creates the selected stored drafts in draft order with origin `ontology_import`, once. */
+  function proposeOntologyImport(id: string, indexes: number[]): T.Proposal[] {
+    const imp = ontologyImportOf(id);
+    if (imp.submitted) throw new Refusal(409, 'ontology_import_submitted', 'the ontology import was proposed already');
+    const { drafts, notes } = imp.result;
+    const chosen = new Set(indexes);
+    if (!indexes.length || chosen.size !== indexes.length || indexes.some((i) => !Number.isInteger(i) || i < 0 || i >= drafts.length))
+      throw new Refusal(422, 'validation_failed', 'indexes must name distinct drafts');
+    for (const i of indexes)
+      if (notes[i].requires.some((r) => !chosen.has(r)))
+        throw new Refusal(422, 'validation_failed', `draft ${i} requires a draft that is not selected`);
+    const outs: T.Proposal[] = [];
+    try {
+      for (const i of [...chosen].sort((a, b) => a - b)) {
+        provenance = { origin: 'ontology_import', originDetail: null, why: `Imported from ${imp.fileName} · ${notes[i].source.slice(0, 200)}` };
+        const out = toProposal(createFromDraft(drafts[i], []));
+        emit('proposal.created', { proposal: out, artefacts: out.artefacts, cascaded: [] });
+        outs.push(out);
+      }
+    } finally {
+      provenance = { origin: 'text', originDetail: null };
+    }
+    imp.submitted = true;
+    return outs;
+  }
+
   // ------------------------------------------------------------ routing
 
   const json = (status: number, body: unknown): MockResponse => ({ status, body });
@@ -1888,7 +1991,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     if (is('GET', 'cost'))
       return json(200, {
         ...directory.cost(`${iso().slice(0, 7)}-01`),
-        llm: { calls: 0, inputTokens: 0, outputTokens: 0, tokensUsed: 0, tokenCap: settings.llmMonthlyTokenCap, costEur: 0, byPurpose: [] },
+        llm: { calls: 0, inputTokens: 0, outputTokens: 0, tokensUsed: 0, tokenCap: settings.llmMonthlyTokenCap, ocrPagesUsed: 0, ocrPageCap: settings.ocrMonthlyPageCap, costEur: 0, byPurpose: [] },
       });
     return null;
   }
@@ -1979,6 +2082,14 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
           addAudit('setting', `llmMonthlyTokenCap set to ${cap}`, true);
           continue;
         }
+        if (k === 'ocrMonthlyPageCap') {
+          const cap = patch.ocrMonthlyPageCap;
+          if (typeof cap !== 'number' || !Number.isInteger(cap) || cap < 0 || cap > 1_000_000)
+            throw new Refusal(422, 'validation_failed', 'ocrMonthlyPageCap is a whole number from 0 to 1,000,000');
+          settings.ocrMonthlyPageCap = cap;
+          addAudit('setting', `ocrMonthlyPageCap set to ${cap}`, true);
+          continue;
+        }
         if (typeof patch[k] === 'boolean') (settings as unknown as Record<string, boolean>)[k] = patch[k] as boolean;
         addAudit('setting', `${k} ${patch[k] === true ? 'enabled' : patch[k] === false ? 'disabled' : String(patch[k])}`, true);
       }
@@ -2004,6 +2115,11 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       return json(200, { coverage } satisfies T.ViewState);
     }
     if (is('POST', 'teach', 'parse')) return json(200, teachParse(body as T.TeachRequest));
+    if (is('POST', 'ontology-imports'))
+      throw new Refusal(422, 'validation_failed', 'the file is sent as multipart form data in the field file');
+    if (is('GET', 'ontology-imports', null)) return json(200, ontologyImportOf(seg[1]).result);
+    if (is('POST', 'ontology-imports', null, 'proposals'))
+      return json(202, proposeOntologyImport(seg[1], ((body || {}) as { indexes?: number[] }).indexes || []));
     if (is('POST', 'import', 'sentences'))
       throw new Refusal(422, 'validation_failed', 'the document is sent as multipart form data in the field file');
     if (is('GET', 'healthz')) return json(200, { status: 'ok' });
@@ -2012,6 +2128,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
 
   return {
     importDocument,
+    importOntology,
     handle(method, path, body) {
       try {
         return route(method.toUpperCase(), path, body);

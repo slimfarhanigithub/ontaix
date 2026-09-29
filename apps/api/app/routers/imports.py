@@ -37,8 +37,8 @@ async def import_sentences(
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > MAX_BODY_BYTES:
         raise _too_large()
-    body = await _read_capped(request)
-    form = await Request(request.scope, receive=_replay(body)).form(max_files=1, max_fields=4)
+    body = await read_capped(request, MAX_BODY_BYTES, _too_large())
+    form = await Request(request.scope, receive=replay(body)).form(max_files=1, max_fields=4)
     try:
         upload = form.get("file")
         if not isinstance(upload, UploadFile):
@@ -51,19 +51,19 @@ async def import_sentences(
         await form.close()
 
 
-async def _read_capped(request: Request) -> bytes:
-    """The whole request body, refused with `413` the moment it passes `MAX_BODY_BYTES`."""
+async def read_capped(request: Request, limit: int, refusal: ProblemError) -> bytes:
+    """The whole request body, refused with `refusal` the moment it passes `limit` bytes."""
     chunks: list[bytes] = []
     size = 0
     async for chunk in request.stream():
         size += len(chunk)
-        if size > MAX_BODY_BYTES:
-            raise _too_large()
+        if size > limit:
+            raise refusal
         chunks.append(chunk)
     return b"".join(chunks)
 
 
-def _replay(body: bytes) -> Callable[[], Awaitable[dict[str, Any]]]:
+def replay(body: bytes) -> Callable[[], Awaitable[dict[str, Any]]]:
     """An ASGI receive callable that hands the already read body to the form parser."""
     sent = False
 

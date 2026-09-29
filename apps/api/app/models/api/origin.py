@@ -9,7 +9,7 @@ from pydantic import Field
 
 from app.models.api.base import ApiModel
 
-Origin = Literal["text", "speech", "document"]
+Origin = Literal["text", "speech", "document", "ontology_import"]
 InputOrigin = Literal["text", "speech"]
 ImportMediaType = Literal[
     "text/plain",
@@ -18,6 +18,9 @@ ImportMediaType = Literal[
     "application/json",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/pdf",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/html",
 ]
 
 
@@ -29,8 +32,11 @@ class ImportRef(ApiModel):
 
 
 class DocumentPosition(ApiModel):
-    unit: Literal["page", "paragraph"]
+    """A 1-based page, paragraph, slide or sheet; `row` only with `sheet`."""
+
+    unit: Literal["page", "paragraph", "slide", "sheet"]
     index: int = Field(ge=1, le=100000)
+    row: int | None = Field(default=None, ge=1, le=1048576, exclude_if=lambda v: v is None)
 
 
 class ImportOriginDetail(ApiModel):

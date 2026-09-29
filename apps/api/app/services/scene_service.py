@@ -11,6 +11,7 @@ from app.models.api.connector import ConnectorType as ConnectorTypeDto
 from app.models.api.scene import Scene
 from app.models.api.settings import (
     DEFAULT_LLM_MONTHLY_TOKEN_CAP,
+    DEFAULT_OCR_MONTHLY_PAGE_CAP,
     Appearance,
     AppearanceDefaults,
     Settings,
@@ -98,6 +99,7 @@ def settings_dto(settings: TenantSettings | None) -> Settings:
             agent_access=True,
             cost_cap=True,
             llm_monthly_token_cap=DEFAULT_LLM_MONTHLY_TOKEN_CAP,
+            ocr_monthly_page_cap=DEFAULT_OCR_MONTHLY_PAGE_CAP,
         )
     return Settings(
         voice=settings.voice,
@@ -118,6 +120,7 @@ def settings_dto(settings: TenantSettings | None) -> Settings:
         agent_access=settings.agent_access,
         cost_cap=settings.cost_cap,
         llm_monthly_token_cap=settings.llm_monthly_token_cap,
+        ocr_monthly_page_cap=settings.ocr_monthly_page_cap,
         egress_allowlist=list(settings.egress_allowlist or []),
     )
 

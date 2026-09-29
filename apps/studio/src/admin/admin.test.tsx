@@ -30,6 +30,7 @@ const settings = {
   agentAccess: true,
   costCap: true,
   llmMonthlyTokenCap: 2_000_000,
+  ocrMonthlyPageCap: 1000,
 };
 
 function hostileModel() {

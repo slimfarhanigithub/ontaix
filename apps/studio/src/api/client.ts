@@ -35,6 +35,8 @@ import {
   type DecisionResult,
   type DomainProduct,
   type ImportResult,
+  type OntologyImportRequest,
+  type OntologyImportResult,
   type Page,
   type Problem,
   type Proposal,
@@ -154,6 +156,15 @@ export const api = {
     form.append('file', file, file.name);
     return call<ImportResult>('POST', '/import/sentences', form);
   },
+  importOntology: (file: File, body: OntologyImportRequest) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    for (const [key, value] of Object.entries(body)) if (value !== undefined) form.append(key, value);
+    return call<OntologyImportResult>('POST', '/ontology-imports', form);
+  },
+  getOntologyImport: (id: string) => call<OntologyImportResult>('GET', `/ontology-imports/${id}`),
+  proposeOntologyImport: (id: string, indexes: number[]) =>
+    call<Proposal[]>('POST', `/ontology-imports/${id}/proposals`, { indexes }),
 
   listConnectors: () => call<ConnectorType[]>('GET', '/connectors'),
   discover: (code: string, body: DiscoveryRequest) =>

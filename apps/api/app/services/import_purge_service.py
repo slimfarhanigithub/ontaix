@@ -1,8 +1,10 @@
-"""The periodic purge of expired document imports, run by the API process for its lifetime.
+"""The periodic purge of expired document and ontology imports, run by the API process for its
+lifetime.
 
-Every interval it deletes, in its own transaction, each import more than 24 hours past its
-expiry (sentences cascade). The delete is idempotent, so several processes purging at once only
-repeat work. A failed round is logged and the next round runs on schedule.
+Every interval it deletes, in its own transaction, each document import and each ontology
+import more than 24 hours past its expiry (sentences cascade). The delete is idempotent, so
+several processes purging at once only repeat work. A failed round is logged and the next
+round runs on schedule.
 """
 
 from __future__ import annotations
@@ -11,7 +13,7 @@ import asyncio
 import logging
 
 from app.clients.db_client import get_session_factory
-from app.services import import_service
+from app.services import import_service, ontology_import_service
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +24,7 @@ async def purge_once() -> int:
     """One purge round in its own transaction; returns how many imports were deleted."""
     async with get_session_factory()() as session:
         deleted = await import_service.purge_expired(session)
+        deleted += await ontology_import_service.purge_expired(session)
         await session.commit()
     if deleted:
         logger.info("purged %d expired imports", deleted)

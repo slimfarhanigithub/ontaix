@@ -16,6 +16,8 @@ Environment = Literal["dev", "test", "staging", "production"]
 
 MAX_LLM_TIMEOUT_SECONDS = 15.0
 MAX_LLM_SPEECH_TIMEOUT_SECONDS = 45.0
+MAX_OCR_TIMEOUT_SECONDS = 300.0
+MAX_ONTOLOGY_IMPORT_NODES = 20_000
 
 LlmProvider = Literal["azure_foundry", "anthropic"]
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
@@ -31,6 +33,14 @@ class ModelPrice(BaseModel):
 
     input_eur_per_mtok: Decimal = Field(alias="inputEurPerMTok", ge=0)
     output_eur_per_mtok: Decimal = Field(alias="outputEurPerMTok", ge=0)
+
+
+class PagePrice(BaseModel):
+    """Estimated euros per page of a model priced by the page (OCR)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    eur_per_page: Decimal = Field(alias="eurPerPage", ge=0)
 
 
 class Settings(BaseSettings):
@@ -92,14 +102,42 @@ class Settings(BaseSettings):
     # Output tokens added to the answer bound for a model that reasons anyway; the reservation
     # and the provider's maximum output tokens both include it.
     llm_reasoning_allowance_tokens: int = Field(default=0, ge=0, le=16_384)
-    # JSON: {"<model>": {"inputEurPerMTok": <number>, "outputEurPerMTok": <number>}}.
-    llm_price_table: dict[str, ModelPrice] = Field(default_factory=dict)
+    # JSON: {"<model>": {"inputEurPerMTok": <number>, "outputEurPerMTok": <number>}}, or
+    # {"<model>": {"eurPerPage": <number>}} for a model priced by the page (OCR).
+    llm_price_table: dict[str, ModelPrice | PagePrice] = Field(default_factory=dict)
+    # OCR of image-only PDF pages. The endpoint defaults to `foundry_endpoint`; with neither, OCR
+    # is not configured and a PDF that needs it is refused with `503`.
+    ocr_endpoint: str | None = Field(default=None, pattern=r"^https://[^\s/?#]+/?$")
+    ocr_deployment: str = Field(
+        default="mistral-document-ai",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$",
+    )
+    # Recorded in `llm_call.model` and looked up in the price table; defaults to the deployment.
+    ocr_model: str | None = Field(
+        default=None, min_length=1, max_length=120, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:/@-]*$"
+    )
+    ocr_max_pages: int = Field(default=100, ge=1, le=2000)
+    ocr_timeout_seconds: float = Field(default=120.0, gt=0, le=MAX_OCR_TIMEOUT_SECONDS)
+    ocr_pages_per_hour: int = Field(default=600, ge=0)
+    ontology_import_max_bytes: int = Field(default=20 * 1024 * 1024, ge=1)
+    ontology_import_max_nodes: int = Field(default=5000, ge=1, le=MAX_ONTOLOGY_IMPORT_NODES)
+    ontology_import_parse_timeout_seconds: float = Field(default=60.0, gt=0)
     retention_purge_interval_seconds: float = Field(default=15 * 60, gt=0)
 
-    @field_validator("foundry_endpoint", mode="before")
+    @field_validator("foundry_endpoint", "ocr_endpoint", "ocr_model", mode="before")
     @classmethod
     def _empty_endpoint_is_unset(cls, value: object) -> object:
         return None if value == "" else value
+
+    def ocr_endpoint_or_default(self) -> str | None:
+        """The endpoint serving OCR: its own setting, else the Foundry endpoint."""
+        return self.ocr_endpoint or self.foundry_endpoint
+
+    def ocr_model_name(self) -> str:
+        """The OCR model recorded in cost rows: its own setting, else the deployment."""
+        return self.ocr_model or self.ocr_deployment
 
     def extraction_slots(self) -> int:
         """Extractions one process runs at once: configured, else half the CPUs, at least 2."""
