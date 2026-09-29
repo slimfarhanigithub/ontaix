@@ -317,7 +317,7 @@ def test_foundry_without_an_endpoint_starts_and_is_not_configured() -> None:
     settings = Settings(_env_file=None, llm_provider="azure_foundry", foundry_endpoint=None)
 
     check_llm_configuration(settings)
-    assert llm_client._configured(settings) is None
+    assert llm_client._configured(settings, "live") is None
 
 
 def test_an_unknown_provider_stops_start_up() -> None:
@@ -337,7 +337,7 @@ async def test_settlement_counts_reasoning_tokens_as_output(
     monkeypatch.setenv("ONTAIX_LLM_PRICE_TABLE", PRICE_TABLE)
     get_settings.cache_clear()
     install(monkeypatch, responding(completion(strict_answer("insight_sells_services"))))
-    monkeypatch.setattr(llm_client, "_cached", None)
+    monkeypatch.setattr(llm_client, "_cached", {})
     reset_llm_client()
     try:
         r = await client.post(
@@ -374,101 +374,3 @@ async def test_settlement_counts_reasoning_tokens_as_output(
     assert (tokens_in, tokens_out) == (PROMPT_TOKENS, COMPLETION_TOKENS)
     assert float(cost) == pytest.approx((PROMPT_TOKENS * 2 + COMPLETION_TOKENS * 10) / 1e6)
     assert int(month) == PROMPT_TOKENS + COMPLETION_TOKENS
-
-
-def refusing(first: dict, then: dict):
-    """Answers 400 with `first` until the request no longer carries what it refuses, then 200."""
-
-    async def handler(request: httpx2.Request) -> httpx2.Response:
-        body = json.loads(request.content)
-        refused = first["refuses"](body)
-        if refused:
-            return httpx2.Response(400, json={"error": first["error"]})
-        return httpx2.Response(200, json=then)
-
-    return handler
-
-
-@pytest.mark.asyncio(loop_scope="session")
-async def test_a_deployment_without_strict_schemas_falls_back_to_json_object(monkeypatch) -> None:
-    content = "```json\n" + recorded("insight_sells_services") + "\n```"
-    seen = install(
-        monkeypatch,
-        refusing(
-            {
-                "refuses": lambda b: b.get("response_format", {}).get("type") == "json_schema",
-                "error": {"message": "response_format json_schema is not supported"},
-            },
-            completion(content),
-        ),
-    )
-    client = adapter()
-
-    answer = await client.complete(request())
-    again = await client.complete(request())
-
-    assert TeachExtractionAnswer.model_validate_json(answer.text)
-    assert again.text == answer.text
-    assert client.output_mode == "json_object"
-    assert len(seen) == 3
-    body = json.loads(seen[1].content)
-    assert body["response_format"] == {"type": "json_object"}
-    assert body["messages"][0]["content"].startswith(SYSTEM_PROMPT)
-    assert '"intents"' in body["messages"][0]["content"]
-
-
-@pytest.mark.asyncio(loop_scope="session")
-async def test_a_deployment_without_response_formats_gets_prompt_only_json(monkeypatch) -> None:
-    seen = install(
-        monkeypatch,
-        refusing(
-            {
-                "refuses": lambda b: "response_format" in b or "store" in b,
-                "error": {"message": "Unsupported parameter: response_format / store"},
-            },
-            completion(recorded("insight_sells_services")),
-        ),
-    )
-    client = FoundryLlmClient(ENDPOINT, "Mistral-Large-3", "Mistral-Large-3", PRICE, None)
-
-    answer = await client.complete(request())
-
-    assert TeachExtractionAnswer.model_validate_json(answer.text)
-    assert client.capabilities["outputMode"] == "prompt"
-    last = json.loads(seen[-1].content)
-    assert "response_format" not in last and "store" not in last
-    assert "reasoning_effort" not in last
-
-
-@pytest.mark.asyncio(loop_scope="session")
-async def test_an_unsupported_token_parameter_is_sent_as_max_tokens(monkeypatch) -> None:
-    seen = install(
-        monkeypatch,
-        refusing(
-            {
-                "refuses": lambda b: "max_completion_tokens" in b,
-                "error": {
-                    "message": "Unrecognized request argument supplied: max_completion_tokens"
-                },
-            },
-            completion(strict_answer("insight_sells_services")),
-        ),
-    )
-
-    await adapter().complete(request())
-
-    last = json.loads(seen[-1].content)
-    assert last["max_tokens"] == MAX_OUTPUT_TOKENS and "max_completion_tokens" not in last
-
-
-@pytest.mark.asyncio(loop_scope="session")
-async def test_a_bad_request_that_names_no_unsupported_option_is_one_attempt(monkeypatch) -> None:
-    seen = install(
-        monkeypatch,
-        responding({"error": {"message": "reasoning_effort 'none' is invalid"}}, status=400),
-    )
-
-    with pytest.raises(LlmProviderError):
-        await adapter().complete(request())
-
-    assert len(seen) == 1

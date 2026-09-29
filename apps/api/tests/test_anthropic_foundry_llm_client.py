@@ -11,6 +11,7 @@ import httpx2
 import pytest
 
 import app.clients.anthropic_foundry_llm_client as claude
+import app.clients.llm_client as llm_client
 from app.ai.prompts.teach_extraction import MAX_OUTPUT_TOKENS, OUTPUT_SCHEMA, SYSTEM_PROMPT
 from app.clients.anthropic_foundry_llm_client import (
     AnthropicFoundryLlmClient,
@@ -18,7 +19,7 @@ from app.clients.anthropic_foundry_llm_client import (
     thinking_options,
 )
 from app.clients.llm_client import LlmProviderError, LlmRequest
-from app.config import ModelPrice
+from app.config import ModelPrice, Settings
 from tests.llm_fakes import recorded
 
 # A made-up value, not a credential.
@@ -126,3 +127,42 @@ async def test_a_refusal_and_a_failed_status_are_provider_errors(monkeypatch) ->
             request()
         )
     assert str(failed.value) == "status" and len(seen) == 1
+
+
+def test_the_factory_builds_claude_on_foundry_from_the_foundry_settings(monkeypatch) -> None:
+    async def fake_token() -> str:
+        return TOKEN
+
+    monkeypatch.setattr(claude, "entra_token_provider", lambda: fake_token)
+    monkeypatch.setattr(llm_client, "_cached", {})
+    settings = Settings(
+        _env_file=None,
+        llm_provider="anthropic_foundry",
+        foundry_endpoint="https://ais-ontaix-dev-sdc-abcde.cognitiveservices.azure.com/",
+        foundry_deployment="claude-fable-5-1",
+        foundry_reasoning_effort="low",
+        llm_model="claude-fable-5-1",
+        llm_price_table={"claude-fable-5-1": PRICE},
+    )
+
+    llm_client.check_llm_configuration(settings)
+    built = llm_client._configured(settings, "live")
+
+    assert isinstance(built, AnthropicFoundryLlmClient)
+    assert built.model == "claude-fable-5-1"
+    assert built.capabilities["output_config"] == {"effort": "low"}
+    assert str(built._client.base_url) == (
+        "https://ais-ontaix-dev-sdc-abcde.services.ai.azure.com/anthropic/"
+    )
+
+
+def test_claude_on_foundry_without_an_endpoint_is_not_configured() -> None:
+    settings = Settings(
+        _env_file=None,
+        llm_provider="anthropic_foundry",
+        foundry_endpoint=None,
+        llm_model="claude-fable-5-1",
+    )
+
+    llm_client.check_llm_configuration(settings)
+    assert llm_client._configured(settings, "live") is None

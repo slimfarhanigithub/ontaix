@@ -40,7 +40,7 @@ output "foundry_deployment_name" {
   value = azurerm_cognitive_deployment.chat.name
 }
 
-output "foundry_claude_eval_endpoint" {
-  description = "Endpoint of the eval-only Claude resource (ONTAIX_EVAL_CLAUDE_ENDPOINT for the bake-off), or null."
-  value       = local.claude_eval_enabled ? azurerm_cognitive_account.claude_eval[0].endpoint : null
+output "foundry_claude_endpoint" {
+  description = "Endpoint of the Claude Foundry resource (ONTAIX_FOUNDRY_ENDPOINT with anthropic_foundry); callers authenticate with Entra ID."
+  value       = azurerm_cognitive_account.claude.endpoint
 }

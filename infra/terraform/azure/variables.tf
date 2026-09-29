@@ -175,40 +175,38 @@ variable "foundry_deployment_capacity" {
   default     = 100
 }
 
-variable "foundry_eval_deployments" {
-  description = "Extra model deployments on the Foundry account for the teach extraction bake-off (chat candidates and the OCR model), keyed by deployment name. Always DataZoneStandard (EU data zone). model_format is the catalogue publisher (OpenAI, Mistral AI, DeepSeek); capacity is in the model's quota units (thousands of tokens per minute for chat models). Empty removes them."
-  type = map(object({
-    model_name    = string
-    model_version = string
-    model_format  = optional(string, "OpenAI")
-    capacity      = optional(number, 50)
-  }))
-  default = {}
-
-  validation {
-    condition     = alltrue([for d in values(var.foundry_eval_deployments) : d.capacity >= 1 && d.capacity <= 200])
-    error_message = "Each eval deployment capacity must be between 1 and 200 quota units."
-  }
-}
-
 variable "foundry_claude_location" {
-  description = "Region of the eval-only Foundry resource for Claude (not offered in France Central)."
+  description = "Region of the Foundry resource for Claude (not offered in France Central)."
   type        = string
   default     = "swedencentral"
 }
 
 variable "foundry_claude_location_short" {
-  description = "Short region token of the eval-only Claude resource, used in its name."
+  description = "Short region token of the Claude resource, used in its name."
   type        = string
   default     = "sdc"
 }
 
 variable "foundry_claude_deployments" {
-  description = "Claude deployments (GlobalStandard, format Anthropic) on the eval-only Foundry resource, keyed by deployment name. Empty removes the resource."
+  description = "Claude deployments on the Claude resource, keyed by model name (also the deployment name the API sends): catalogue version and GlobalStandard capacity."
   type = map(object({
-    model_name    = string
     model_version = string
-    capacity      = optional(number, 50)
+    capacity      = number
   }))
   default = {}
+}
+
+variable "foundry_claude_organization" {
+  description = "Organisation attested to Anthropic on each Claude deployment: legal name, ISO 3166-1 alpha-2 country code, and lowercase industry (technology, finance, healthcare, education, retail, manufacturing, government, media, other)."
+  type = object({
+    name         = string
+    country_code = string
+    industry     = string
+  })
+  default = null
+
+  validation {
+    condition     = length(var.foundry_claude_deployments) == 0 || var.foundry_claude_organization != null
+    error_message = "Claude deployments need foundry_claude_organization."
+  }
 }
