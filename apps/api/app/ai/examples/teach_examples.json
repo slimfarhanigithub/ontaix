@@ -3614,6 +3614,256 @@
     ],
     "unresolved": []
    }
+  },
+  {
+   "id": "en-speech-back-reference-properties",
+   "source": {
+    "set": "case",
+    "id": "en-speech-adr-owner-spoken"
+   },
+   "tags": [
+    "speech",
+    "back-reference",
+    "multi-turn",
+    "property",
+    "fillers"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Halvard Learning",
+    "sentence": "the coaching sessions are billed per hour and uh Brenmoor College books them both",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Halvard Learning",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Training",
+      "parent": "c0",
+      "pending": true
+     },
+     {
+      "handle": "c2",
+      "label": "Workshops",
+      "parent": "c1",
+      "pending": true
+     },
+     {
+      "handle": "c3",
+      "label": "Coaching",
+      "parent": "c1",
+      "pending": true
+     }
+    ],
+    "sessionTurns": [
+     {
+      "sentence": "Halvard Learning sells training to colleges",
+      "referenced": [
+       "c0"
+      ],
+      "introduced": [
+       "c1"
+      ]
+     },
+     {
+      "sentence": "the training is split in workshops and um coaching",
+      "referenced": [
+       "c1"
+      ],
+      "introduced": [
+       "c2",
+       "c3"
+      ]
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Brenmoor College"
+      },
+      "action": "books",
+      "object": {
+       "candidate": "c2"
+      },
+      "confidence": 0.85,
+      "explanation": "them both: Workshops and Coaching from the earlier turn",
+      "span": "Brenmoor College books them both",
+      "source": {
+       "start": 49,
+       "end": 81
+      },
+      "segment": 1
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Brenmoor College"
+      },
+      "action": "books",
+      "object": {
+       "candidate": "c3"
+      },
+      "confidence": 0.85,
+      "explanation": "them both: Workshops and Coaching from the earlier turn",
+      "span": "Brenmoor College books them both",
+      "source": {
+       "start": 49,
+       "end": 81
+      },
+      "segment": 1
+     }
+    ],
+    "unresolved": [
+     {
+      "text": "the coaching sessions are billed per hour",
+      "reason": "not_understood",
+      "segment": 0,
+      "source": {
+       "start": 0,
+       "end": 41
+      }
+     }
+    ],
+    "segments": [
+     {
+      "index": 0,
+      "start": 0,
+      "end": 41
+     },
+     {
+      "index": 1,
+      "start": 49,
+      "end": 81
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-possessive-subsidiaries",
+   "source": {
+    "set": "case",
+    "id": "en-speech-owner-adnoc-client"
+   },
+   "tags": [
+    "speech",
+    "back-reference",
+    "multi-turn",
+    "role-pattern",
+    "grouping",
+    "reuse"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Corvel Partners",
+    "sentence": "its subsidiaries Keldmoor Solar and Keldmoor Grid buy audits too",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Corvel Partners",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Audits",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Keldmoor Energy",
+      "parent": "c1",
+      "pending": true
+     }
+    ],
+    "sessionTurns": [
+     {
+      "sentence": "Keldmoor Energy buys audits",
+      "referenced": [
+       "c1"
+      ],
+      "introduced": [
+       "c2"
+      ]
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Subsidiaries"
+      },
+      "members": [
+       {
+        "newLabel": "Keldmoor Solar"
+       },
+       {
+        "newLabel": "Keldmoor Grid"
+       }
+      ],
+      "memberAction": "includes",
+      "confidence": 0.85,
+      "explanation": "its: Keldmoor Energy from the earlier turn",
+      "span": "its subsidiaries Keldmoor Solar and Keldmoor Grid",
+      "source": {
+       "start": 0,
+       "end": 49
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Keldmoor Solar"
+      },
+      "action": "buys",
+      "object": {
+       "candidate": "c1"
+      },
+      "confidence": 0.9,
+      "span": "Keldmoor Solar and Keldmoor Grid buy audits",
+      "source": {
+       "start": 17,
+       "end": 60
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Keldmoor Grid"
+      },
+      "action": "buys",
+      "object": {
+       "candidate": "c1"
+      },
+      "confidence": 0.9,
+      "span": "Keldmoor Grid buy audits",
+      "source": {
+       "start": 36,
+       "end": 60
+      },
+      "segment": 0
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 0,
+      "end": 64
+     }
+    ]
+   }
   }
  ]
 }
