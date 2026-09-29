@@ -14,9 +14,9 @@ import pytest
 
 from app.services import teach_extraction_service
 from tests.conftest import TenantFixture
-from tests.llm_fakes import FakeLlmClient
+from tests.llm_fakes import FakeLlmClient, recorded
 from tests.test_teach_extraction import add_company, configure, teach
-from tests.test_teach_speech import speak, submit
+from tests.test_teach_speech import births, speak, submit
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -215,3 +215,82 @@ async def test_a_degraded_transcript_keeps_forty_segments(
             "reason": "too_many_segments",
         }
     ]
+
+
+OFFERINGS = "Insight sells services. Services has 3 offerings, apps, data and AI."
+
+
+async def test_a_source_is_located_from_the_quoted_words_not_the_models_offsets(
+    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
+) -> None:
+    # A live answer: the model dropped the space after the full stop, so its offsets for the
+    # second sentence start one early and end one short, cutting AI to A.
+    company_id, root_id = await add_company(tenant, "Insight")
+    await configure(tenant)
+    fake_llm.answer(recorded("speech_offsets_off_by_one"))
+
+    result = await speak(client, tenant, company_id, OFFERINGS)
+
+    assert result["unresolved"] == []
+    assert births(result) == [
+        ("Services", str(root_id), "sells"),
+        ("Offerings", "Services", "has"),
+        ("Apps", "Offerings", "includes"),
+        ("Data", "Offerings", "includes"),
+        ("AI", "Offerings", "includes"),
+    ]
+    assert result["segments"] == [
+        {"index": 0, "span": {"start": 0, "end": 22}},
+        {"index": 1, "span": {"start": 24, "end": 67}},
+    ]
+    assert result["draftNotes"][1]["sourceSpan"] == {"start": 24, "end": 67}
+
+
+async def test_a_quote_that_cuts_a_word_is_still_refused(
+    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
+) -> None:
+    company_id, _ = await add_company(tenant, "Insight")
+    await configure(tenant)
+    sentence = "Services has 3 offerings, apps, data and AI"
+    fake_llm.answer(
+        rel(
+            new("Services"),
+            new("Offerings"),
+            sentence,
+            members=[new("AI")],
+            span="Services has 3 offerings, apps, data and A",
+            segment=0,
+        )
+    )
+
+    result = await speak(client, tenant, company_id, sentence)
+
+    assert result["drafts"] == []
+    assert result["unresolved"] == [
+        {"text": "Services has 3 offerings, apps, data and A", "reason": "ungrounded_label"}
+    ]
+
+
+async def test_offsets_counted_in_utf16_units_are_replaced_by_the_quote(
+    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
+) -> None:
+    company_id, root_id = await add_company(tenant, "Insight")
+    await configure(tenant)
+    sentence = "\U0001f680 Insight sells rockets"
+    # UTF-16 counts the emoji as two units, so the model's range is one code point late.
+    fake_llm.answer(
+        rel(
+            C0,
+            new("Rockets"),
+            sentence,
+            action="sells",
+            span="insight  SELLS rockets",
+            segment=0,
+            source={"start": 3, "end": len(sentence) + 1},
+        )
+    )
+
+    result = await speak(client, tenant, company_id, sentence)
+
+    assert births(result) == [("Rockets", str(root_id), "sells")]
+    assert result["draftNotes"][0]["sourceSpan"] == {"start": 2, "end": len(sentence)}

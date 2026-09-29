@@ -1,0 +1,66 @@
+{
+  "intents": [
+    {
+      "kind": "rel",
+      "subject": {
+        "candidate": "c0"
+      },
+      "object": {
+        "newLabel": "Services"
+      },
+      "action": "sells",
+      "domainKey": "sales",
+      "confidence": 0.99,
+      "span": "Insight sells services",
+      "segment": 0,
+      "source": {
+        "start": 0,
+        "end": 22
+      }
+    },
+    {
+      "kind": "rel",
+      "subject": {
+        "newLabel": "Services"
+      },
+      "object": {
+        "newLabel": "Offerings"
+      },
+      "action": "has",
+      "confidence": 0.99,
+      "explanation": "The named group lists three offerings.",
+      "span": "Services has 3 offerings, apps, data and AI",
+      "segment": 1,
+      "source": {
+        "start": 23,
+        "end": 65
+      },
+      "members": [
+        {
+          "newLabel": "Apps"
+        },
+        {
+          "newLabel": "Data"
+        },
+        {
+          "newLabel": "AI"
+        }
+      ],
+      "memberAction": "includes",
+      "statedCount": 3
+    }
+  ],
+  "segments": [
+    {
+      "index": 0,
+      "start": 0,
+      "end": 22
+    },
+    {
+      "index": 1,
+      "start": 23,
+      "end": 66
+    }
+  ],
+  "unresolved": []
+}

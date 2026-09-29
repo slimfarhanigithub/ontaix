@@ -345,11 +345,12 @@ def _interpret(
         len(answer.intents) > MAX_SENTENCE_INTENTS or len(answer.unresolved) > MAX_SENTENCE_PHRASES
     ):
         raise _InvalidAnswer("too many intents or phrases for one sentence")
-    segments = _segments(answer, text)
+    sources = [_locate(intent, text) for intent in answer.intents]
+    segments = _segments(answer, text, sources)
     sent = {c.id for c in handles}
     cross_company = bool(drafter.view.settings and drafter.view.settings.cross_company)
     checked: list[_Checked] = []
-    for intent in answer.intents:
+    for intent, source in zip(answer.intents, sources, strict=True):
         if reading.speech and intent.segment is None:
             raise _InvalidAnswer("a transcript intent names no segment")
         index = intent.segment if intent.segment is not None else 0
@@ -358,9 +359,8 @@ def _interpret(
         if reading.speech and intent.explanation and len(intent.explanation) > 120:
             raise _InvalidAnswer("a transcript explanation is longer than 120 characters")
         seg_start, seg_end = segments[index]
-        if not seg_start <= intent.source.start < intent.source.end <= seg_end:
+        if not seg_start <= source[0] < source[1] <= seg_end:
             raise _InvalidAnswer("an intent's source lies outside its segment")
-        source = (intent.source.start, intent.source.end)
         # Each new label is reused as a candidate sent in this call, or grounded in the
         # caller's words inside the source range; the self-join checks run after that.
         raw = [intent.subject, intent.object, *(intent.members or [])]
@@ -474,19 +474,99 @@ class _Checked:
     grounded: bool
 
 
-def _segments(answer: TeachExtractionAnswer, text: str) -> list[tuple[int, int]]:
-    """The answer's segments in order; one covering the text when it gives none."""
+def _segments(
+    answer: TeachExtractionAnswer, text: str, sources: list[tuple[int, int]]
+) -> list[tuple[int, int]]:
+    """The answer's segments in order; one covering the text when it gives none.
+
+    The model's segment offsets are approximate: each segment is trimmed of surrounding
+    whitespace, a boundary that cuts a word is moved out to the word's edge, and the segment is
+    widened to cover the located sources of its intents. The order, overlap and length checks
+    run on the result."""
     if not answer.segments:
         return [(0, len(text))]
+    words = _words(text)
     out: list[tuple[int, int]] = []
     last_end = 0
     for i, seg in enumerate(answer.segments):
         if seg.index != i or seg.end > len(text):
             raise _InvalidAnswer("a segment is out of order or outside the text")
-        if seg.start < last_end or seg.end - seg.start > MAX_SEGMENT_CHARS:
+        start, end = _snap(text, words, seg.start, seg.end)
+        for intent, (a, b) in zip(answer.intents, sources, strict=True):
+            if (intent.segment if intent.segment is not None else 0) == i:
+                start, end = min(start, a), max(end, b)
+        if start >= end or start < last_end or end - start > MAX_SEGMENT_CHARS:
             raise _InvalidAnswer("segments overlap, go backwards or are too long")
-        out.append((seg.start, seg.end))
-        last_end = seg.end
+        out.append((start, end))
+        last_end = end
+    return out
+
+
+def _snap(text: str, words: list[tuple[int, int]], start: int, end: int) -> tuple[int, int]:
+    """`[start, end)` without surrounding whitespace, with a boundary inside a word moved out
+    to that word's edge."""
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    for a, b in words:
+        if a < start < b:
+            start = a
+        if a < end < b:
+            end = b
+    return start, end
+
+
+def _locate(intent: AnswerIntent, text: str) -> tuple[int, int]:
+    """The intent's source range, found from its quoted words rather than the model's offsets.
+
+    A model counts characters unreliably (it drops a space, or counts UTF-16 units or bytes), so
+    when the intent quotes its words in `span` the range is where that quote occurs in `text`:
+    an exact occurrence first, else one matching after whitespace collapse and case folding,
+    the occurrence nearest the model's own start winning. The range is always a slice of the
+    caller's input, so grounding still judges it word by word. Without a quote, or when the
+    quote is not in the text, the model's offsets stand."""
+    claimed = (intent.source.start, intent.source.end)
+    quote = (intent.span or "").strip()
+    if not quote:
+        return claimed
+    found = _occurrences_exact(text, quote) or _occurrences_folded(text, quote)
+    if not found:
+        return claimed
+    return min(found, key=lambda r: (abs(r[0] - claimed[0]), r[0]))
+
+
+def _occurrences_exact(text: str, quote: str) -> list[tuple[int, int]]:
+    out: list[tuple[int, int]] = []
+    at = text.find(quote)
+    while at >= 0:
+        out.append((at, at + len(quote)))
+        at = text.find(quote, at + 1)
+    return out
+
+
+def _occurrences_folded(text: str, quote: str) -> list[tuple[int, int]]:
+    """Occurrences of `quote` in `text` with whitespace runs collapsed and case folded on both
+    sides, as ranges of the original `text`."""
+    folded: list[str] = []
+    origin: list[int] = []
+    for i, c in enumerate(text):
+        if c.isspace():
+            if folded and folded[-1] == " ":
+                continue
+            folded.append(" ")
+            origin.append(i)
+            continue
+        for f in c.casefold():
+            folded.append(f)
+            origin.append(i)
+    haystack = "".join(folded)
+    needle = " ".join(quote.split()).casefold()
+    out: list[tuple[int, int]] = []
+    at = haystack.find(needle) if needle else -1
+    while at >= 0:
+        out.append((origin[at], origin[at + len(needle) - 1] + 1))
+        at = haystack.find(needle, at + 1)
     return out
 
 
