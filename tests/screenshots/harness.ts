@@ -234,10 +234,14 @@ const blur = (page: Page) => page.evaluate(() => (document.activeElement as HTML
  */
 export async function teachText(page: Page, sentence: string): Promise<void> {
   const seq = await captionSeq(page);
+  const scene = () => page.evaluate(() => document.getElementById('sceneNum')?.textContent ?? null);
+  const sceneBefore = await scene();
   await page.fill('#say', sentence);
   await page.press('#say', 'Enter');
   await blur(page);
   await captioned(page, seq);
+  // The reference's scene counter stays put: the sentence was parsed, not played as a story scene.
+  expect(await scene(), `"${sentence}" was taken by the reference's story instead of the parser`).toBe(sceneBefore);
   await revealCaption(page);
 }
 

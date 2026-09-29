@@ -231,3 +231,24 @@ describe('mock API: text, speech and document origins', () => {
     }
   });
 });
+
+describe('mock API: import refusals mirror the API', () => {
+  const upload = (name: string, bytes: Uint8Array, type = 'application/octet-stream') => ({ name, type, bytes });
+  const enc = (t: string) => new TextEncoder().encode(t);
+
+  it.each(['\u2028', '\u2029', '\u200b', '\u200c', '\u200d'])('refuses the file-name character %j', async (ch) => {
+    const server = createMockServer(createEventBus());
+    expect((await server.importDocument(upload(`plan${ch}s.txt`, enc('Every plant runs production lines.')))).status).toBe(422);
+  });
+
+  it('refuses content that does not match its media type with 415', async () => {
+    const server = createMockServer(createEventBus());
+    for (const [name, bytes] of [
+      ['notes.txt', enc('%PDF-1.4 BT (Machines have sensors today) Tj ET')],
+      ['notes.txt', new Uint8Array([0xff, 0xfe, 0x41, 0x42])],
+      ['report.pdf', enc('Every plant runs production lines.')],
+      ['report.docx', enc('Every plant runs production lines.')],
+    ] as const)
+      expect((await server.importDocument(upload(name, bytes))).status).toBe(415);
+  });
+});

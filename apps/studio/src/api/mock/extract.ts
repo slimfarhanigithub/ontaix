@@ -27,7 +27,8 @@ const BY_EXTENSION: Record<string, ImportMediaType> = {
   pdf: 'application/pdf',
 };
 const MEDIA_TYPES = new Set<string>(Object.values(BY_EXTENSION));
-const REFUSED_NAME_CHARS = /[/\\:\u0000-\u001f\u007f-\u009f؜‎‏‪-‮⁦-⁩﻿]/;
+const REFUSED_NAME_CHARS =
+  /[/\\:\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/;
 
 export class ExtractRefusal extends Error {
   constructor(
@@ -81,6 +82,8 @@ export async function extractDocument(rawName: string, contentType: string, byte
   const fileName = checkedFileName(rawName);
   const mediaType = mediaTypeOf(fileName, contentType);
   if (bytes.length > IMPORT_MAX_BYTES) throw tooLarge('the document is larger than 10 MiB');
+  const mismatch = contentMismatch(bytes, mediaType);
+  if (mismatch) throw new ExtractRefusal(415, 'unsupported_media_type', mismatch);
   const units = await unitsOf(mediaType, bytes);
   let chars = 0;
   const sentences: ExtractedSentence[] = [];
@@ -91,6 +94,22 @@ export async function extractDocument(rawName: string, contentType: string, byte
     if (sentences.length > MAX_SENTENCES) throw tooLarge('the document holds more than 2,000 sentences');
   }
   return { fileName, mediaType, sentences };
+}
+
+/** Why the bytes are not a file of the media type: a Word document is a ZIP archive, a PDF
+ * carries its signature in its first kilobyte, and a text type is UTF-8 that is neither. */
+export function contentMismatch(bytes: Uint8Array, mediaType: ImportMediaType): string | null {
+  const zip = bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
+  const pdf = new TextDecoder('latin1').decode(bytes.subarray(0, 1024)).includes('%PDF-');
+  if (mediaType === DOCX) return zip ? null : 'the file is not a Word document';
+  if (mediaType === 'application/pdf') return pdf ? null : 'the file is not a PDF';
+  if (zip || pdf) return 'the file is a Word or PDF document, not text';
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return 'the file is not UTF-8 text';
+  }
+  return null;
 }
 
 const tooLarge = (detail: string) => new ExtractRefusal(413, 'payload_too_large', detail);

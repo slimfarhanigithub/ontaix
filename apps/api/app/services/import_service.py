@@ -13,7 +13,6 @@ import uuid
 from datetime import timedelta
 from typing import Any
 
-from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
@@ -26,6 +25,7 @@ from app.repositories import (
     tenant_settings_repository,
 )
 from app.repositories.document_import_sentence_repository import SentenceRow
+from app.services import extraction_service
 from app.services.rate_limit_service import Budget, charge
 from app.utilities.channels import ensure_import_allowed
 from app.utilities.clock import get_clock
@@ -34,7 +34,7 @@ from app.utilities.document_text import (
     DocumentTooLargeError,
     DocumentUnreadableError,
     base_name,
-    extract_sentences,
+    content_mismatch,
     file_name_problem,
     media_type_of,
 )
@@ -55,25 +55,28 @@ async def admit_import(session: AsyncSession, caller: Caller) -> None:
 
 
 async def import_sentences(
-    session: AsyncSession, caller: Caller, upload: UploadFile
+    session: AsyncSession, caller: Caller, raw_file_name: str, content_type: str | None, data: bytes
 ) -> ImportResult:
     """Extract, charge and store one upload admitted by `admit_import`; nothing is stored when
-    any step refuses. One parse unit per extracted sentence is spent before anything is stored.
+    any step refuses. Extraction runs in a child process with a time limit. One parse unit per
+    extracted sentence is spent before anything is stored.
     """
-    file_name = base_name(upload.filename or "")
+    file_name = base_name(raw_file_name)
     problem = file_name_problem(file_name)
     if problem:
         raise validation_failed("file", problem)
-    media_type = media_type_of(file_name, upload.content_type)
+    media_type = media_type_of(file_name, content_type)
     if media_type is None:
         raise ProblemError(
             415, "unsupported_media_type", "text, Markdown, CSV, JSON, Word and PDF are supported"
         )
-    data = await upload.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
         raise _too_large("the file is larger than 10 MiB")
+    mismatch = content_mismatch(data, media_type)
+    if mismatch:
+        raise ProblemError(415, "unsupported_media_type", mismatch)
     try:
-        sentences, extracted = extract_sentences(data, media_type)
+        sentences, extracted = await extraction_service.extract(data, media_type)
     except DocumentTooLargeError as exc:
         raise _too_large(str(exc)) from exc
     except DocumentUnreadableError as exc:

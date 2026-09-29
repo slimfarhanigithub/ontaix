@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     database_url: str | None = None
     test_seed: int | None = None
+    import_purge_interval_seconds: float = Field(default=15 * 60, gt=0)
 
     @property
     def is_dev(self) -> bool:

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 import defusedxml.ElementTree as DefusedET
 from defusedxml import DefusedXmlException
 from pypdf import PdfReader
-from pypdf.errors import PdfReadError
+from pypdf.errors import LimitReachedError, PyPdfError
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_EXTRACTED_CHARS = 2_000_000
@@ -24,6 +24,7 @@ MAX_SENTENCES = 2000
 MAX_DOCX_MEMBERS = 1000
 MAX_PDF_PAGES = 2000
 MAX_DOCX_XML_BYTES = 64 * 1024 * 1024
+MAX_DOCX_XML_ELEMENTS = 1_000_000
 MIN_SENTENCE_CHARS = 13
 MAX_SENTENCE_CHARS = 399
 
@@ -47,7 +48,9 @@ MEDIA_TYPE_BY_EXTENSION = {
 
 FILE_NAME_MAX_CHARS = 255
 FILE_NAME_MAX_BYTES = 1020
-REFUSED_FILE_NAME_CHARS = re.compile("[/\\\\:\x00-\x1f\x7f-\x9f‎‏‪-‮؜⁦-⁩﻿]")
+REFUSED_FILE_NAME_CHARS = re.compile(
+    "[/\\\\:\x00-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]"
+)
 
 WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 DOCX_BODY = "word/document.xml"
@@ -99,6 +102,27 @@ def media_type_of(file_name: str, declared: str | None) -> str | None:
     return declared_type if declared_type in MEDIA_TYPES else None
 
 
+ZIP_SIGNATURE = b"PK\x03\x04"
+PDF_SIGNATURE = b"%PDF-"
+PDF_SIGNATURE_WINDOW = 1024
+
+
+def content_mismatch(data: bytes, media_type: str) -> str | None:
+    """Why the bytes are not a file of `media_type`, or None: a Word document is a ZIP archive,
+    a PDF carries its signature in its first kilobyte, and a text type is UTF-8 that is neither."""
+    if media_type == DOCX:
+        return None if data.startswith(ZIP_SIGNATURE) else "the file is not a Word document"
+    if media_type == PDF:
+        return None if PDF_SIGNATURE in data[:PDF_SIGNATURE_WINDOW] else "the file is not a PDF"
+    if data.startswith(ZIP_SIGNATURE) or PDF_SIGNATURE in data[:PDF_SIGNATURE_WINDOW]:
+        return "the file is a Word or PDF document, not text"
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return "the file is not UTF-8 text"
+    return None
+
+
 def extract_sentences(data: bytes, media_type: str) -> tuple[list[Sentence], int]:
     """The sentences of a document in order, and the number of extracted characters."""
     if media_type == DOCX:
@@ -108,7 +132,7 @@ def extract_sentences(data: bytes, media_type: str) -> tuple[list[Sentence], int
         blocks = _pdf_pages(data)
         unit = "page"
     else:
-        text = data.decode("utf-8", errors="replace")
+        text = data.decode("utf-8-sig", errors="replace")
         if media_type == TEXT_CSV:
             text = _csv_text(text)
         _check_chars(len(text))
@@ -184,13 +208,22 @@ def _docx_paragraphs(data: bytes) -> list[str]:
                 events = DefusedET.iterparse(
                     stream, events=("start", "end"), forbid_dtd=True, forbid_entities=True
                 )
+                parents: list = []
+                elements = 0
                 for event, element in events:
-                    tag = element.tag
-                    if event == "start" and tag == f"{WORD_NS}p":
-                        current = []
-                    elif event != "end":
+                    if event == "start":
+                        elements += 1
+                        if elements > MAX_DOCX_XML_ELEMENTS:
+                            raise DocumentTooLargeError(
+                                f"more than {MAX_DOCX_XML_ELEMENTS} elements in the Word document"
+                            )
+                        if element.tag == f"{WORD_NS}p":
+                            current = []
+                        parents.append(element)
                         continue
-                    elif tag == f"{WORD_NS}t" and element.text:
+                    parents.pop()
+                    tag = element.tag
+                    if tag == f"{WORD_NS}t" and element.text:
                         current.append(element.text)
                         total += len(element.text)
                         _check_chars(total)
@@ -202,7 +235,7 @@ def _docx_paragraphs(data: bytes) -> list[str]:
                         text = "".join(current)
                         if text.strip():
                             paragraphs.append(text)
-                        element.clear()
+                    _release(element, parents)
         except DefusedXmlException as exc:
             raise DocumentUnreadableError(
                 "the Word document declares a DTD or entities, which are not read"
@@ -210,6 +243,13 @@ def _docx_paragraphs(data: bytes) -> list[str]:
         except (DefusedET.ParseError, zipfile.BadZipFile, EOFError, OSError) as exc:
             raise DocumentUnreadableError("the Word document could not be read") from exc
     return paragraphs
+
+
+def _release(element, parents: list) -> None:
+    """Drop a finished element and its children, so the parsed tree never grows."""
+    element.clear()
+    if parents:
+        parents[-1].remove(element)
 
 
 def _pdf_pages(data: bytes) -> list[str]:
@@ -226,6 +266,8 @@ def _pdf_pages(data: bytes) -> list[str]:
             total += len(text)
             _check_chars(total)
             pages.append(text)
-    except (PdfReadError, ValueError, KeyError, TypeError) as exc:
+    except LimitReachedError as exc:
+        raise DocumentTooLargeError("the PDF is too large once decompressed") from exc
+    except (PyPdfError, ValueError, KeyError, TypeError) as exc:
         raise DocumentUnreadableError("the PDF could not be read") from exc
     return pages

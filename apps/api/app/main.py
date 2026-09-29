@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -31,6 +33,7 @@ from app.routers import (
     scene,
     teach,
 )
+from app.services.import_purge_service import purge_periodically
 from app.utilities.contention import is_contention
 from app.utilities.problems import ProblemError, busy
 
@@ -51,8 +54,17 @@ HTTP_STATUS_CODES = {
 
 @asynccontextmanager
 async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
-    yield
-    await dispose_engine()
+    """Runs the expired-import purge for the life of the process and cancels it on shutdown."""
+    purge = asyncio.create_task(
+        purge_periodically(get_settings().import_purge_interval_seconds), name="import-purge"
+    )
+    try:
+        yield
+    finally:
+        purge.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await purge
+        await dispose_engine()
 
 
 def create_app() -> FastAPI:
