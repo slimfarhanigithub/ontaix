@@ -63,6 +63,15 @@ const ADD_IMPORT_MODE_PILL = `document.addEventListener('DOMContentLoaded', () =
 const OPENING_CAPTION_CSS = '.caption{visibility:hidden!important}';
 /** The teach placeholder, made transparent in one-company scenes with live teaching on, where the reference shows story text. */
 const PLACEHOLDER_CSS = '#say::placeholder{color:transparent!important}';
+/**
+ * The teach bar and the caption, hidden in both pages just before the screenshot: the Studio's
+ * compact teach bar holds the caption and has no counterpart in the reference, so its own
+ * baselines (teachbar.spec.ts) cover it. `visibility` keeps the Studio bar's height, which places
+ * the tools row exactly where the reference has it.
+ */
+const TEACH_BAR_CSS = '.caption,form.bar{visibility:hidden!important}';
+/** The localStorage key of the Studio's open teach bar; cleared so every run starts collapsed. */
+export const TEACH_BAR_EXPANDED_KEY = 'ontaix.teachBar.expanded';
 
 /** Adds the acceptance stylesheets to a page as soon as its document exists. */
 const ACCEPTANCE_STYLES = `(() => {
@@ -111,10 +120,19 @@ export async function revealCaption(page: Page): Promise<void> {
 /**
  * Brings both pages to the compared form just before the screenshot: the reference's import mode
  * pill checked equal to the Studio's and shown or hidden with its Import button, the hint without its story fragments
- * (asserted equal as text), and the teach placeholder made transparent in both pages when the
- * reference has one company and live teaching on, where it still shows story text.
+ * (asserted equal as text), the teach bar and caption hidden in both pages, and the teach
+ * placeholder made transparent in both pages when the reference has one company and live
+ * teaching on, where it still shows story text.
  */
 export async function beforeScreenshot(ref: Page, studio: Page): Promise<void> {
+  for (const page of [ref, studio])
+    await page.evaluate((css) => {
+      if (document.getElementById('ontaix-teach-bar')) return;
+      const style = document.createElement('style');
+      style.id = 'ontaix-teach-bar';
+      style.textContent = css;
+      document.head.appendChild(style);
+    }, TEACH_BAR_CSS);
   const pill = await studio.evaluate(() => {
     const copy = document.getElementById('imMode')?.cloneNode(true) as HTMLElement | undefined;
     copy?.removeAttribute('style');
@@ -202,6 +220,13 @@ export async function openReference(page: Page): Promise<void> {
 
 export async function openStudio(page: Page): Promise<void> {
   await prepare(page, { seedMathRandom: false });
+  await page.addInitScript((key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // No storage: the teach bar starts collapsed anyway.
+    }
+  }, TEACH_BAR_EXPANDED_KEY);
   await page.goto(`/?seed=${SEED}&api=mock`);
   await page.waitForFunction(() => document.documentElement.dataset.ontaixReady === 'ready');
   await alignClock(page);

@@ -9,11 +9,11 @@ import type { Company, Node } from '../canvas/types';
 import { store } from '../store/store';
 import { speechStream, teach } from '../teach/teach';
 import { BUSY_DELAY_MS, BusyButton, useBusyAction } from './busy';
-import { Caption } from './Caption';
 import { Dialog } from './Dialog';
 import { Drawer } from './Drawer';
 import { openExpandDialog } from './ExpandDialog';
 import { Panel } from './Panel';
+import { STATUS_MIN_MS, TeachStatus } from './TeachStatus';
 
 /** A promise with its resolve and reject in hand. */
 function deferred<T = void>() {
@@ -328,32 +328,35 @@ describe('teach bar Processing', () => {
     store.ui.processing = 0;
   });
 
-  const kicker = (c: HTMLElement) => c.querySelector('#captionKicker') as HTMLElement;
+  const status = (c: HTMLElement) => c.querySelector('#teachStatus') as HTMLElement;
 
-  it('shows Processing in the caption kicker while a typed sentence is parsed, after 250 ms', async () => {
+  it('shows Processing in the status slot while a typed sentence is parsed, after 250 ms, for at least 400 ms', async () => {
     const parsed = deferred<TeachResult>();
     vi.spyOn(api, 'teachParse').mockReturnValue(parsed.promise);
-    const { container } = render(<Caption />);
-    let done: Promise<void> = Promise.resolve();
+    const { container } = render(<TeachStatus />);
+    let done: Promise<boolean> = Promise.resolve(true);
     act(() => {
       done = teach('Insight sells services');
     });
     await advance(BUSY_DELAY_MS - 1);
-    expect(kicker(container).querySelector('.spin')).toBeNull();
+    expect(status(container).querySelector('.spin')).toBeNull();
+    expect(status(container).getAttribute('role')).toBe('status');
     await advance(1);
-    expect(kicker(container).firstElementChild?.className).toBe('spin');
-    expect(kicker(container).textContent).toBe('Processing');
+    expect(status(container).firstElementChild?.className).toBe('spin');
+    expect(status(container).textContent).toBe('Processing');
     parsed.resolve(understood);
     await act(() => done);
-    expect(kicker(container).querySelector('.spin')).toBeNull();
-    expect(kicker(container).textContent).toBe('Not understood');
+    expect(status(container).textContent).toBe('Processing');
+    await advance(STATUS_MIN_MS);
+    expect(status(container).querySelector('.spin')).toBeNull();
+    expect(status(container).textContent).toBe('');
   });
 
-  it('stays while two spoken sentences are queued and clears when the last is taught', async () => {
+  it('counts queued spoken sentences and clears when the last is taught', async () => {
     const first = deferred<TeachResult>(),
       second = deferred<TeachResult>();
     vi.spyOn(api, 'teachParse').mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-    const { container } = render(<Caption />);
+    const { container } = render(<TeachStatus />);
     const stream = speechStream();
     act(() => {
       stream.sentence('Insight sells services');
@@ -361,44 +364,46 @@ describe('teach bar Processing', () => {
     });
     expect(store.ui.processing).toBe(2);
     await advance(BUSY_DELAY_MS);
-    expect(kicker(container).textContent).toBe('Processing');
+    expect(status(container).textContent).toBe('Processing · 1 queued');
     first.resolve(understood);
     await settle();
     expect(store.ui.processing).toBe(1);
     await advance(BUSY_DELAY_MS);
-    expect(kicker(container).textContent).toBe('Processing');
+    expect(status(container).textContent).toBe('Processing');
     second.resolve(understood);
     await act(() => stream.settled());
     expect(store.ui.processing).toBe(0);
-    expect(kicker(container).querySelector('.spin')).toBeNull();
+    await advance(STATUS_MIN_MS);
+    expect(status(container).querySelector('.spin')).toBeNull();
   });
 
   it('clears on a refusal', async () => {
     const parsed = deferred<TeachResult>();
     vi.spyOn(api, 'teachParse').mockReturnValue(parsed.promise);
-    const { container } = render(<Caption />);
-    let done: Promise<void> = Promise.resolve();
+    const { container } = render(<TeachStatus />);
+    let done: Promise<boolean> = Promise.resolve(true);
     act(() => {
       done = teach('Insight sells services');
     });
     await advance(BUSY_DELAY_MS);
-    expect(kicker(container).textContent).toBe('Processing');
+    expect(status(container).textContent).toBe('Processing');
     parsed.reject(new ApiError(503, { title: 'busy', status: 503, code: 'busy', detail: 'Try later' }));
     await act(() => done);
-    expect(kicker(container).querySelector('.spin')).toBeNull();
+    await advance(STATUS_MIN_MS);
+    expect(status(container).querySelector('.spin')).toBeNull();
     expect(store.ui.processing).toBe(0);
   });
 
   it('never flashes for a parse that answers within 250 ms', async () => {
     vi.spyOn(api, 'teachParse').mockResolvedValue(understood);
-    const { container } = render(<Caption />);
-    let done: Promise<void> = Promise.resolve();
+    const { container } = render(<TeachStatus />);
+    let done: Promise<boolean> = Promise.resolve(true);
     act(() => {
       done = teach('Insight sells services');
     });
     await act(() => done);
     await advance(BUSY_DELAY_MS * 2);
-    expect(kicker(container).querySelector('.spin')).toBeNull();
-    expect(kicker(container).textContent).not.toBe('Processing');
+    expect(status(container).querySelector('.spin')).toBeNull();
+    expect(status(container).textContent).toBe('');
   });
 });

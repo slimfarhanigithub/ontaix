@@ -64,7 +64,7 @@ describe('the microphone', () => {
     const teachModule = await import('../teach/teach');
     const sentence = vi.fn();
     const stream = vi.spyOn(teachModule, 'speechStream').mockReturnValue({ sentence, settled: () => Promise.resolve() });
-    const teach = vi.spyOn(teachModule, 'teach').mockResolvedValue();
+    const teach = vi.spyOn(teachModule, 'teach').mockResolvedValue(true);
     const { TeachBar } = await import('./TeachBar');
     const { container } = render(<TeachBar />);
     fireEvent.click(container.querySelector('#mic') as Element);

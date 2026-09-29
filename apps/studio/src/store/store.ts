@@ -61,6 +61,18 @@ export interface Toast {
   text: string;
 }
 
+/** One entry of the teach bar history: a caption, or a refusal toast copied there to be re-read. */
+export interface CaptionEntry {
+  seq: number;
+  kicker: string;
+  text: string;
+  /** A refusal or a sentence the model did not understand; its kicker shows in the conflict colour. */
+  refused: boolean;
+}
+
+/** Captions the teach bar history keeps, newest last. */
+export const HISTORY_SIZE = 5;
+
 export interface NewBoxState {
   host: Node;
   left: number;
@@ -80,6 +92,8 @@ export interface UiState {
   status: 'loading' | 'ready' | 'error';
   proposals: Proposal[];
   caption: { kicker: string; text: string; seq: number };
+  /** The last captions and refusals, oldest first, at most HISTORY_SIZE; identical neighbours merge. */
+  history: CaptionEntry[];
   say: string;
   sayPlaceholder: string;
   panelOff: boolean;
@@ -124,6 +138,7 @@ class StudioStore {
   private listeners = new Set<Listener>();
   private toastSeq = 0;
   private dialogSeq = 0;
+  private historySeq = 0;
   private refreshQueued = false;
   private unsubscribeEvents: (() => void) | null = null;
   private loading: Promise<void> | null = null;
@@ -141,6 +156,7 @@ class StudioStore {
       status: 'loading',
       proposals: [],
       caption: { kicker: '', text: '', seq: 0 },
+      history: [],
       say: '',
       sayPlaceholder: '',
       panelOff: false,
@@ -771,7 +787,16 @@ class StudioStore {
 
   caption(kicker: string, text: string): void {
     this.ui.caption = { kicker, text, seq: this.ui.caption.seq + 1 };
+    this.remember(kicker, text, kicker === 'Not understood');
     this.bump();
+  }
+
+  /** Adds an entry to the teach bar history unless it repeats the newest one. */
+  private remember(kicker: string, text: string, refused: boolean): void {
+    const last = this.ui.history[this.ui.history.length - 1];
+    if (last && last.kicker === kicker && last.text === text) return;
+    const entry = { seq: ++this.historySeq, kicker, text, refused };
+    this.ui.history = [...this.ui.history, entry].slice(-HISTORY_SIZE);
   }
 
   toast2(strong: string, text: string): void {
@@ -889,7 +914,9 @@ class StudioStore {
    * retry, …) as the reference's toast; anything else is rethrown. */
   refused(err: unknown): void {
     if (!(err instanceof ApiError)) throw err;
-    this.toast2('Refused', err.problem.detail || err.problem.title);
+    const text = err.problem.detail || err.problem.title;
+    this.remember('Refused', text, true);
+    this.toast2('Refused', text);
   }
 
   // ------------------------------------------------------------ toggles

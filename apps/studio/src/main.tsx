@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { API_BASE } from './api/client';
 import { App } from './App';
 import './styles/reference.css';
+import './styles/studio.css';
 
 /**
  * Test hooks (seeded random source, in-browser mock API, `window.__ontaix`) exist only in dev
