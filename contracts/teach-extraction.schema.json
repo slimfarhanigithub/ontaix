@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:ontaix:contract:teach-extraction:1.0.0",
   "title": "Teach Extraction Output",
-  "description": "The only shape the language model step of POST /teach/parse may return (ADR 0008). Every free-text field refuses markup (< and >), C0 and C1 control characters, DEL, U+00A0, U+2028, U+2029 and every Unicode format character (category Cf) in the Basic Multilingual Plane: U+00AD, U+0600 to U+0605, U+061C, U+06DD, U+070F, U+0890, U+0891, U+08E2, U+180E, U+200B to U+200F, U+202A to U+202E, U+2060 to U+2064, U+2066 to U+206F, U+FEFF and U+FFF9 to U+FFFB. The API's normalisation step also refuses every Cf character outside that plane (U+110BD, U+110CD, U+13430 to U+1343F, U+1BCA0 to U+1BCA3, U+1D173 to U+1D17A, U+E0001, U+E0020 to U+E007F), which a JSON Schema pattern cannot list portably. The API validates every answer against this schema, normalises each action (NFKC, whitespace runs collapsed to one space, trimmed, lower-cased - the same normalisation the relation endpoints apply) and then checks that every cited candidate was in the list it sent, that no intent joins a concept to itself, that no normalised rel action is is a or equivalent to, and that every spec intent has a draftable form (ADR 0008). Any failure makes the whole answer invalid: no model draft is returned and the sentence is listed in unresolved. The API turns valid intents into drafts with the same mapping as the rule-based grammar; the model never writes and never produces a draft directly. Offsets are Unicode code points into the text the API sent (the typed sentence, the cited import sentence, or the whole speech transcript), as half-open ranges [start, end). The API also checks: segments ascend without overlapping, lie inside the text and span at most 400 code points each; every intent's segment exists and its source range lies inside that segment; for a speech transcript every intent names a segment. For text and document requests the API accepts at most 20 intents and 10 unresolved phrases and treats an answer without segments as one segment covering the whole sentence; the larger caps below are for speech transcripts only. A new label that repeats a newLabel introduced by an earlier intent of the same answer names that same new concept, and is drafted by parentLabel. Labels keep the speaker's casing under the existing label rule (the first character is capitalised, the rest is kept: Apps, Data, AI).",
+  "description": "The only shape the language model step of POST /teach/parse may return (ADR 0008). Every free-text field refuses markup (< and >), C0 and C1 control characters, DEL, U+00A0, U+2028, U+2029 and every Unicode format character (category Cf) in the Basic Multilingual Plane: U+00AD, U+0600 to U+0605, U+061C, U+06DD, U+070F, U+0890, U+0891, U+08E2, U+180E, U+200B to U+200F, U+202A to U+202E, U+2060 to U+2064, U+2066 to U+206F, U+FEFF and U+FFF9 to U+FFFB. The API's normalisation step also refuses every Cf character outside that plane (U+110BD, U+110CD, U+13430 to U+1343F, U+1BCA0 to U+1BCA3, U+1D173 to U+1D17A, U+E0001, U+E0020 to U+E007F), which a JSON Schema pattern cannot list portably. The API validates every answer against this schema, normalises each action (NFKC, whitespace runs collapsed to one space, trimmed, lower-cased - the same normalisation the relation endpoints apply) and then checks that every cited candidate was in the list it sent, that no intent joins a concept to itself, that no normalised rel action is is a or equivalent to, and that every spec intent has a draftable form (ADR 0008). Any failure makes the whole answer invalid: no model draft is returned and the sentence is listed in unresolved. The API turns valid intents into drafts with the same mapping as the rule-based grammar; the model never writes and never produces a draft directly. Offsets are Unicode code points into the text the API sent (the typed sentence, the cited import sentence, or the whole speech transcript), as half-open ranges [start, end). The API also checks: segments ascend without overlapping, lie inside the text and span at most 400 code points each; every intent's segment exists and its source range lies inside that segment; for a speech transcript every intent names a segment. For text and document requests the API accepts at most 20 intents and 10 unresolved phrases and treats an answer without segments as one segment covering the whole sentence; the larger caps below are for speech transcripts only. A new label that repeats a newLabel introduced by an earlier intent of the same answer names that same new concept, and is drafted by parentLabel. Labels keep the speaker's casing under the existing label rule (the first character is capitalised, the rest is kept: Apps, Data, AI). Further API checks: every range has start < end; segments[i].index equals i; for a document request every intent's source lies inside the cited sentence; the subject, object and members of a grouping intent and both ends of a spec intent are new labels or taught-company candidates; memberAction is normalised and checked like action; no member repeats the subject, the object or another member. Grounding: every newLabel must appear in the caller's own input inside the intent's source range (after NFKC, whitespace collapse and case folding, allowing singular or plural); an intent that fails is not drafted and its text becomes unresolved with reason ungrounded_label.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -40,7 +40,8 @@
         "kind",
         "subject",
         "object",
-        "confidence"
+        "confidence",
+        "source"
       ],
       "properties": {
         "kind": {
@@ -93,7 +94,7 @@
           "type": "string",
           "maxLength": 300,
           "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$",
-          "description": "Plain text, no markup: why this intent, for example which earlier concept a back-reference points to."
+          "description": "Plain text, no markup: why this intent, for example which earlier concept a back-reference points to. At most 120 characters in a speech transcript answer (an API check)."
         },
         "span": {
           "type": "string",
@@ -109,7 +110,7 @@
         },
         "source": {
           "$ref": "#/$defs/span",
-          "description": "The words inside the segment that produced the intent; reported to the reviewer in draftNotes.sourceSpan."
+          "description": "Required. The words inside the segment (for a transcript) or inside the cited sentence (for a document) that produced the intent; start < end (an API check). Every newLabel of the intent must appear in this range of the caller's own input (grounding)."
         },
         "members": {
           "type": "array",
@@ -125,7 +126,7 @@
           "minLength": 1,
           "maxLength": 60,
           "pattern": "^[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^A-Z<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
-          "description": "rel with members only: the action of each member's birth relation, read object to member. Defaults to includes."
+          "description": "rel with members only: the action of each member's birth relation, read object to member. Defaults to includes. Normalised and checked like action: never is a or equivalent to."
         },
         "statedCount": {
           "type": "integer",
@@ -211,6 +212,27 @@
                 "memberAction"
               ]
             }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "statedCount"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "members"
+                ]
+              },
+              {
+                "required": [
+                  "listId"
+                ]
+              }
+            ]
           }
         }
       ]
