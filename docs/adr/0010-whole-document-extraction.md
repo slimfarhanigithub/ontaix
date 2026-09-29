@@ -89,18 +89,16 @@ The document is untrusted input. Its sentences travel in delimited data fields w
 
 - Starting a job spends one unit of the hourly `extraction` budget (`ONTAIX_DOCUMENT_EXTRACTION_JOBS_PER_HOUR`, default 5). A job's model calls do not spend the per-call hourly `llm` budget (a job makes up to about 80 calls, more than a whole hour's default of 200 would allow alongside teaching); they are bounded instead by the job's token ceiling and the tenant's monthly cap, with the ADR 0008 reservation and settlement per call.
 - Every call writes one `llm_call` row with purpose `document_extraction`, outcome `used`, `invalid_output`, `timeout`, `provider_error` or `refused`. `GET /cost` reports it in `LlmUsage.byPurpose`.
-- Output bounds: 16,384 tokens for an outline answer and 24,576 for a section answer, plus `ONTAIX_DOCUMENT_EXTRACTION_REASONING_ALLOWANCE_TOKENS` (default 16,384), set as the provider's maximum output tokens and reserved per call.
+- Output bounds: 16,384 tokens for an outline answer and 24,576 for a section answer, plus the `deep` profile's reasoning allowance, set as the provider's maximum output tokens and reserved per call.
 - Timeouts: each call has `ONTAIX_DOCUMENT_EXTRACTION_TIMEOUT_SECONDS` (default 180, above 300 or at most 0 stops start-up), wall clock with DNS, connect, TLS and token acquisition, SDK retries 0; a timed-out call leaves its chunk unresolved (`timeout`) and the job continues. The whole job has `ONTAIX_DOCUMENT_EXTRACTION_JOB_TIMEOUT_MINUTES` (default 60): past it the job maps what it has, or fails with `job_timeout` when that is nothing.
 - Submitting the tree charges one proposal unit per proposal; 2,000 proposals fit the default proposal budget of 5,000 per hour.
 
 ### Model And Effort
 
+Both passes run on the `deep` model profile (`ONTAIX_FOUNDRY_DEEP_DEPLOYMENT`, `ONTAIX_FOUNDRY_DEEP_REASONING_EFFORT` and `ONTAIX_LLM_DEEP_REASONING_ALLOWANCE_TOKENS`, each unset one taking its teach value). The job's own settings bound its size, budget and time:
+
 | Variable | Default | Meaning |
 |---|---|---|
-| `ONTAIX_DOCUMENT_EXTRACTION_DEPLOYMENT` | the value of `ONTAIX_FOUNDRY_DEPLOYMENT` | `azure_foundry`: the deployment both passes call |
-| `ONTAIX_DOCUMENT_EXTRACTION_MODEL` | the value of `ONTAIX_LLM_MODEL` | Written to `llm_call.model` and looked up in the price table; with `anthropic`, the model id |
-| `ONTAIX_DOCUMENT_EXTRACTION_REASONING_EFFORT` | `medium` | Reasoning effort per call, `medium` or higher; the owner's model bake-off sets the final default |
-| `ONTAIX_DOCUMENT_EXTRACTION_REASONING_ALLOWANCE_TOKENS` | 16384 | Extra output tokens for reasoning |
 | `ONTAIX_DOCUMENT_EXTRACTION_CHUNK_CHARS` | 10000 | Chunk size in code points; overlap is 2 sentences |
 | `ONTAIX_DOCUMENT_EXTRACTION_OUTLINE_CONTEXT_NODES` | 600 | Most outline nodes sent with one chunk |
 | `ONTAIX_DOCUMENT_EXTRACTION_MAX_NODES` | 2000 | Total drafts per job, 1 to 5,000 |
