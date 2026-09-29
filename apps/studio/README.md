@@ -23,11 +23,12 @@ src/
     types.ts               shapes from contracts/openapi.yaml
     client.ts              typed fetch client (VITE_ONTAIX_API_URL, default /api/v1)
     events.ts              live-update bus in the envelope of contracts/events.yaml
-    real.ts                real-API wiring: responses replayed as live events, local fallbacks
-    local-teach.ts         in-browser sentence parsing while the API has no /teach/parse
-    mock/                  in-browser API over an in-memory store seeded from the reference constants
+    real.ts                real-API wiring: responses replayed as live events
+    mock/                  in-browser API over an in-memory store seeded from the reference constants;
+                           its teach parser and document extraction mirror the API's
   store/store.ts           scene state, shell state and actions; applies live events to the canvas
-  demo/                    scene list and the scripted story (proposals through the API)
+  teach/teach.ts           text, speech transcripts and document imports through /teach/parse
+  nl/parser.ts             rule-based teach grammar, used by the mock
   nl/suggest.ts            suggest-action tables
   shell/                   React components producing the reference DOM
 test-support/playwright.ts re-exports the screenshot suite's dependencies for tests/screenshots
@@ -55,6 +56,6 @@ Test hooks exist only in dev builds or when `VITE_ONTAIX_TEST_HOOKS=true` is set
 
 ## Real API
 
-With `VITE_ONTAIX_API_URL` set, the Studio talks to that API and `api/real.ts` wires it in. The API has no WebSocket hub yet, so each write's response is replayed on the live-event bus as the event the hub will send, and a bulk run (approve all, reject all, finalise all) is followed by `snapshot.required`, which reloads `GET /scene`. Routes the API does not serve yet fall back locally: `POST /teach/parse` is parsed in the browser (`api/local-teach.ts`), and `POST /demo/reset` reloads the scene. Theme, coverage and scene-index writes are not persisted. A refusal from the API (403, or 503 for a change kind it does not serve yet) shows as the reference's toast. Dev builds send `X-Ontaix-User` (`VITE_ONTAIX_DEV_USER`, `?user=<email>`, default the seed's Builder); production builds do not contain it.
+With `VITE_ONTAIX_API_URL` set, the Studio talks to that API and `api/real.ts` wires it in. The API has no WebSocket hub yet, so each write's response is replayed on the live-event bus as the event the hub will send, and a bulk run (approve all, reject all) is followed by `snapshot.required`, which reloads `GET /scene`. Content enters as text typed in the teach bar, as the microphone's final transcript (origin `speech`), or as a document uploaded to `POST /import/sentences`, whose stored sentences are taught one by one by `importRef`; the API parses every sentence. Theme and coverage writes are not persisted. A refusal from the API (403, 409 `channel_disabled`, or 503 for a change kind it does not serve yet) shows as the reference's toast. Dev builds send `X-Ontaix-User` (`VITE_ONTAIX_DEV_USER`, `?user=<email>`, default the seed's Builder); production builds do not contain it.
 
 Proposal text from the API (`html`) is passed through an allow-list sanitiser (`b`, `i`, `em`, `span.class`) before it is injected; every other string from the model is rendered as text.

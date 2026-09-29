@@ -10,7 +10,13 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.storage.base import ActorKind, ChangeKind, ProposalState, ProposalType
+from app.models.storage.base import (
+    ActorKind,
+    ChangeKind,
+    ProposalOrigin,
+    ProposalState,
+    ProposalType,
+)
 from app.models.storage.proposal import Proposal
 
 OPEN_STATES = (ProposalState.PENDING, ProposalState.HALF_APPROVED)
@@ -145,6 +151,8 @@ async def create(
     proposer_kind: ActorKind,
     proposer_user_id: uuid.UUID | None,
     bulk: bool,
+    origin: ProposalOrigin,
+    origin_detail: dict[str, Any] | None,
 ) -> Proposal:
     proposal = Proposal(
         tenant_id=tenant_id,
@@ -167,6 +175,8 @@ async def create(
         proposer_kind=proposer_kind,
         proposer_user_id=proposer_user_id,
         bulk=bulk,
+        origin=origin,
+        origin_detail=origin_detail,
     )
     session.add(proposal)
     await session.flush()

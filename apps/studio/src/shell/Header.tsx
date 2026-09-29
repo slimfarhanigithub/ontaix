@@ -1,14 +1,13 @@
 /**
- * Wordmark, listening status, scene counter, admin button and the "Show changes" button that
- * appears while the panel is hidden. Markup from reference/ontaix-studio-reference.html lines
- * 186-190.
+ * Wordmark, listening status, admin button and the "Show changes" button that appears while the
+ * panel is hidden. Markup from reference/ontaix-studio-reference.html lines 186-190, without the
+ * scene counter and scene name.
  */
-import { SCENES } from '../demo/scenes';
 import { refStyle, useStore } from './dom';
 
 export function Header() {
   const st = useStore();
-  const { sceneIdx, proposals, listening } = st.ui;
+  const { proposals, listening } = st.ui;
   return (
     <>
       <header>
@@ -22,8 +21,6 @@ export function Header() {
           </div>
         </div>
         <div className="scene">
-          <span id="sceneNum">{`Scene ${sceneIdx} of ${SCENES.length - 1}`}</span>
-          <b id="sceneName">{SCENES[sceneIdx]?.name}</b>
           <div ref={refStyle('margin-top:6px;text-align:right;pointer-events:auto')}>
             <button className="admin-open" id="adminOpen" title="Administration portal (G)" onClick={() => st.openAdmin()}>
               <svg viewBox="0 0 16 16">

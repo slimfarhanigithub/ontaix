@@ -81,6 +81,14 @@ def can_propose(grants: tuple[Grant, ...], scope: Scope, everyone_teaches: bool)
     return False
 
 
+def can_propose_anywhere(grants: tuple[Grant, ...], everyone_teaches: bool) -> bool:
+    """`proposal.create` in at least one scope."""
+    return any(
+        g.role in PROPOSING_ROLES or (everyone_teaches and g.role is RoleName.MEMBER)
+        for g in grants
+    )
+
+
 def can_approve(grants: tuple[Grant, ...], scope: Scope) -> bool:
     """Owner in scope or Governor in an enclosing scope; Builders never approve."""
     return any(g.role in APPROVING_ROLES and g.contains(scope) for g in grants)
@@ -89,11 +97,6 @@ def can_approve(grants: tuple[Grant, ...], scope: Scope) -> bool:
 def holds_approving_role(grants: tuple[Grant, ...]) -> bool:
     """Owner or Governor on any scope: the caller may decide at least some proposals."""
     return any(g.role in APPROVING_ROLES for g in grants)
-
-
-def can_finalise(grants: tuple[Grant, ...]) -> bool:
-    """Governor at tenant scope."""
-    return any(g.role is RoleName.GOVERNOR and g.scope_kind is ScopeKind.TENANT for g in grants)
 
 
 def can_manage(grants: tuple[Grant, ...]) -> bool:
@@ -131,15 +134,10 @@ def permission_names(grants: tuple[Grant, ...], everyone_teaches: bool) -> list[
     names: list[str] = []
     if can_read_tenant(grants):
         names.extend(["model.read", "view.write"])
-    if any(
-        g.role in PROPOSING_ROLES or (everyone_teaches and g.role is RoleName.MEMBER)
-        for g in grants
-    ):
+    if can_propose_anywhere(grants, everyone_teaches):
         names.append("proposal.create")
     if holds_approving_role(grants):
         names.extend(["proposal.approve", "proposal.second_approve", "proposal.reject"])
-    if can_finalise(grants):
-        names.append("proposal.finalise")
     if can_manage(grants):
         names.extend(
             [
@@ -149,7 +147,6 @@ def permission_names(grants: tuple[Grant, ...], everyone_teaches: bool) -> list[
                 "source.manage",
                 "group.manage",
                 "agent.manage",
-                "demo.run",
             ]
         )
     if can_read_audit(grants):

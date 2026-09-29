@@ -55,9 +55,6 @@ export const EQUIVALENCE_LINE = '#e6ebf7';
 /** Regions render at half resolution on one shared layer. */
 export const OFFS = 0.5;
 
-/** Pause between two proposals of a story scene, in milliseconds. */
-export const W_ = 880;
-
 export const REDUCED: boolean =
   typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)').matches : false;
 export const MOTION = REDUCED ? 0.35 : 1;

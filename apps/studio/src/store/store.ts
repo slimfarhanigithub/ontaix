@@ -36,14 +36,12 @@ import {
   bySid,
   createScene,
   domainOf,
-  find,
   layoutCompanies,
   linkBySid,
   type SceneState,
 } from '../canvas/state';
 import type { Company, Domain, Link, Node } from '../canvas/types';
 import { random } from '../runtime/rng';
-import { SCENES } from '../demo/scenes';
 import { now } from '../runtime/clock';
 import type { CustomDialog, DialogEntry, DialogSpec } from '../shell/Dialog';
 
@@ -75,7 +73,6 @@ export interface LinkBoxState {
 export interface UiState {
   status: 'loading' | 'ready' | 'error';
   proposals: Proposal[];
-  sceneIdx: number;
   caption: { kicker: string; text: string; seq: number };
   say: string;
   sayPlaceholder: string;
@@ -92,7 +89,6 @@ export interface UiState {
   newBox: NewBoxState | null;
   linkBox: LinkBoxState | null;
   toasts: Toast[];
-  finalising: boolean;
   importing: boolean;
   listening: boolean;
   /** Open dialogs, bottom first. */
@@ -106,11 +102,6 @@ export interface UiState {
 
 type Listener = () => void;
 
-const FRESH_CAPTION: [string, string] = [
-  'Say what your business does',
-  'Northwind Industries: industrial pumps, four plants, 2,300 people. Each part of the business will describe itself as a domain product: owned, versioned, and consumed by the others. Every concept is born by division.',
-];
-const DEFAULT_PLACEHOLDER = 'Teach the model something, or press Next to follow the story';
 
 class StudioStore {
   readonly s: SceneState;
@@ -136,10 +127,9 @@ class StudioStore {
     this.ui = {
       status: 'loading',
       proposals: [],
-      sceneIdx: 0,
-      caption: { kicker: 'Say what your business does', text: '', seq: 0 },
+      caption: { kicker: '', text: '', seq: 0 },
       say: '',
-      sayPlaceholder: DEFAULT_PLACEHOLDER,
+      sayPlaceholder: '',
       panelOff: false,
       legendOff: false,
       domainsOff: false,
@@ -153,7 +143,6 @@ class StudioStore {
       newBox: null,
       linkBox: null,
       toasts: [],
-      finalising: false,
       importing: false,
       listening: false,
       dialogs: [],
@@ -186,7 +175,8 @@ class StudioStore {
     r.applyTheme(this.ui.theme);
   }
 
-  /** Loads the scene and starts listening to live events; a second call joins the first. */
+  /** Loads the scene and starts listening to live events; a second call joins the first. The
+   * caption stays empty until the first teach, import or decision. */
   load(): Promise<void> {
     if (!this.loading) this.loading = this.loadOnce();
     return this.loading;
@@ -197,9 +187,6 @@ class StudioStore {
     try {
       const scene = await api.getScene();
       this.applyScene(scene);
-      const fresh = scene.nodes.every((n) => !isSource(n) && n.kind === 'root') && scene.viewState.sceneIdx === 0;
-      if (fresh) this.caption(...FRESH_CAPTION);
-      else this.caption('Restored', 'Back where you left off.');
       this.ui.status = 'ready';
     } catch (err) {
       console.error('scene load failed', err);
@@ -304,7 +291,6 @@ class StudioStore {
     this.setTheme(scene.appearance.theme, false);
     this.applyColors();
     this.applySettings();
-    this.setScene(Math.max(0, Math.min(scene.viewState.sceneIdx || 0, SCENES.length - 1)));
     if (scene.viewState.coverage !== s.COVERAGE) s.COVERAGE = scene.viewState.coverage;
     s.userZoomed = false;
     this.renderCompanies();
@@ -404,13 +390,11 @@ class StudioStore {
     }
   }
 
-  /** Brings the whole canvas back to the server snapshot, keeping the camera and the story position. */
+  /** Brings the whole canvas back to the server snapshot, keeping the camera. */
   async reloadScene(): Promise<void> {
     try {
       const scene = await api.getScene();
-      const sceneIdx = this.ui.sceneIdx;
       this.applyScene(scene);
-      this.setScene(sceneIdx);
     } catch (err) {
       this.refused(err);
     }
@@ -759,7 +743,7 @@ class StudioStore {
     this.bump();
   }
 
-  // ------------------------------------------------------------ captions, toasts, scenes
+  // ------------------------------------------------------------ captions, toasts
 
   caption(kicker: string, text: string): void {
     this.ui.caption = { kicker, text, seq: this.ui.caption.seq + 1 };
@@ -776,16 +760,10 @@ class StudioStore {
     }, 3000);
   }
 
-  setScene(i: number): void {
-    this.ui.sceneIdx = i;
-    this.bump();
-  }
-
-  /** Company selector and teach placeholder follow the active company. */
+  /** Company selector and teach placeholder follow the active company, whatever the number of companies. */
   renderCompanies(): void {
     const s = this.s;
-    this.ui.sayPlaceholder =
-      s.companies.length > 1 && s.activeCompany ? `Teach ${s.activeCompany.name}…` : DEFAULT_PLACEHOLDER;
+    this.ui.sayPlaceholder = s.activeCompany ? `Teach ${s.activeCompany.name}…` : '';
     this.bump();
   }
 
@@ -1131,32 +1109,6 @@ class StudioStore {
     this.hideLineage();
   }
 
-  /** Rebuilds the home company at scene 0, the reference's `reset`. */
-  async reset(): Promise<void> {
-    const s = this.s;
-    const scene = await api.demoReset();
-    s.lineageNode = null;
-    s.lineageSet = null;
-    s.cellFocus = null;
-    this.ui.drawerNode = null;
-    this.ui.lineageOn = false;
-    this.ui.newBox = null;
-    this.ui.linkBox = null;
-    if (s.COVERAGE) s.COVERAGE = false;
-    s.focusDomain = null;
-    s.stickyFocus = null;
-    s.domainFocus = null;
-    s.focusSet = null;
-    s.lastInteract = now();
-    s.userZoomed = false;
-    s.cam.ts = 1;
-    s.cam.s = 1;
-    s.cam.tx = s.cam.ty = s.cam.x = s.cam.y = 0;
-    s.hover = null;
-    this.applyScene(scene);
-    this.caption(...FRESH_CAPTION);
-  }
-
   /** Label of a lineage stamp, `dd MMM HH:mm` in en-GB. */
   when(x: Node): string {
     return x.bornAt
@@ -1180,11 +1132,6 @@ class StudioStore {
     const target = id ?? this.ui.dialogs[this.ui.dialogs.length - 1].id;
     this.ui.dialogs = this.ui.dialogs.filter((d) => d.id !== target);
     this.bump();
-  }
-
-  /** Company root lookup by label for the demo layer. */
-  findNode(label: string, company?: Company | null): Node | null {
-    return find(this.s, label, company);
   }
 }
 

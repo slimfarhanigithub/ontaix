@@ -27,7 +27,6 @@ class Settings(ApiModel):
     refresh: Literal["5 min", "15 min", "1 h", "daily"]
     agent_access: bool
     cost_cap: bool
-    demo_story: bool
     egress_allowlist: list[str] = Field(default_factory=list)
 
 

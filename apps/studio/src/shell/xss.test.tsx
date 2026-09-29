@@ -23,6 +23,8 @@ const proposal = (html: string): Proposal => ({
   relationIds: [],
   bindingIds: [],
   proposer: { kind: 'user' },
+  origin: 'text',
+  originDetail: null,
   approvals: [],
   createdAt: '2026-09-28T09:00:00Z',
 });

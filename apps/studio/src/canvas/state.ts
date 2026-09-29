@@ -44,7 +44,7 @@ export interface SceneState {
   panning: boolean;
   dropTarget: Node | null;
   lastInteract: number;
-  /** A story scene is playing. */
+  /** A run of proposals is playing; idle drift waits while it is set. */
   running: boolean;
   splitting: Map<Node, SplitInfo>;
   effects: SceneEffects;

@@ -4,38 +4,42 @@
  * confirmation. The reference file and the Studio run the same script under the same seed and
  * clock and are compared pixel for pixel at 0.1 percent tolerance.
  *
- * Every scene starts from the first company seeded (scene 1 played and approved). CSS animations
+ * Every scene starts from a first model taught through text and approved. CSS animations
  * (window and dialog entrances, spinners) do not follow the fake clock, so screenshots are taken
  * with animations finished on both pages.
  */
 import { test, expect, type Page } from '../../apps/studio/test-support/playwright';
 import {
+  addCompanyWithStarter,
   advance,
+  approveAll,
+  beforeScreenshot,
+  both,
   compare,
   drawDivergence,
-  fontsReady,
   openReference,
   openStudio,
+  relate,
   report,
   switchToLight,
+  teachFirstModel,
   TOLERANCE,
   VIEWPORTS,
+  type Pair,
   type Theme,
 } from './harness';
 
 interface SceneScript {
   name: string;
-  play: (page: Page) => Promise<void>;
+  /** Drives both pages through the same user actions. */
+  play: (pair: Pair) => Promise<void>;
 }
 
-/** Scene 1 played and approved: one company with its first concepts. */
+/** A first model taught through text and approved: one company with its first concepts. */
 async function seeded(page: Page) {
-  await fontsReady(page);
-  await advance(page, 500);
-  await page.click('#skip');
-  await page.keyboard.press('Space');
-  await advance(page, 1500);
-  await page.click('#approveAll');
+  await teachFirstModel(page);
+  await advance(page, 1100);
+  await approveAll(page);
   await advance(page, 4000);
 }
 
@@ -69,70 +73,82 @@ const scenes: SceneScript[] = [
   ...PAGES.map(
     ([id, name]): SceneScript => ({
       name: `admin-${name}`,
-      play: async (page) => {
-        await seeded(page);
-        await adminPage(page, id);
-      },
+      play: (pair) =>
+        both(pair, async (page) => {
+          await seeded(page);
+          await adminPage(page, id);
+        }),
     }),
   ),
   {
     name: 'wizard-step-1',
-    play: async (page) => {
-      await seeded(page);
-      await adminPage(page, 'sources');
-      await page.click('#adminMain [data-act="add"]');
-      await advance(page, 600);
-    },
+    play: (pair) =>
+      both(pair, async (page) => {
+        await seeded(page);
+        await adminPage(page, 'sources');
+        await page.click('#adminMain [data-act="add"]');
+        await advance(page, 600);
+      }),
   },
   {
     name: 'wizard-step-2',
-    play: async (page) => {
-      await seeded(page);
-      await adminPage(page, 'sources');
-      await page.click('#adminMain [data-act="add"]');
-      await advance(page, 300);
-      await page.click('#wzCat .c[data-k="SAP"]');
-      await advance(page, 100);
-      await page.click('.dlg .df .btn.primary');
-      await advance(page, 600);
-    },
+    play: (pair) =>
+      both(pair, async (page) => {
+        await seeded(page);
+        await adminPage(page, 'sources');
+        await page.click('#adminMain [data-act="add"]');
+        await advance(page, 300);
+        await page.click('#wzCat .c[data-k="SAP"]');
+        await advance(page, 100);
+        await page.click('.dlg .df .btn.primary');
+        await advance(page, 600);
+      }),
   },
   {
     name: 'wizard-step-3',
-    play: async (page) => {
-      await seeded(page);
-      await adminPage(page, 'sources');
-      await page.click('#adminMain [data-act="add"]');
-      await advance(page, 300);
-      await page.click('#wzCat .c[data-k="SAP"]');
-      await advance(page, 100);
-      await page.click('.dlg .df .btn.primary');
-      await advance(page, 300);
-      await page.click('.dlg .df .btn.primary');
-      await advance(page, 1600);
-    },
+    play: (pair) =>
+      both(pair, async (page) => {
+        await seeded(page);
+        await adminPage(page, 'sources');
+        await page.click('#adminMain [data-act="add"]');
+        await advance(page, 300);
+        await page.click('#wzCat .c[data-k="SAP"]');
+        await advance(page, 100);
+        await page.click('.dlg .df .btn.primary');
+        await advance(page, 300);
+        await page.click('.dlg .df .btn.primary');
+        await advance(page, 1600);
+      }),
   },
   {
     name: 'relationship-dialog',
-    play: async (page) => {
-      await seeded(page);
-      await adminPage(page, 'relations');
-      await page.click('#lstRelations tbody tr:first-child button[data-fn="edit"]');
-      await advance(page, 1500);
-    },
+    play: (pair) =>
+      both(pair, async (page) => {
+        await seeded(page);
+        await adminPage(page, 'relations');
+        await page.click('#lstRelations tbody tr:first-child button[data-fn="edit"]');
+        await advance(page, 1500);
+      }),
   },
   {
     name: 'disable-confirmation',
-    play: async (page) => {
-      await fontsReady(page);
-      await advance(page, 500);
-      await page.click('#finalise');
-      await advance(page, 8000);
-      await adminPage(page, 'settings');
-      await page.click('#adminMain .tg[data-set="crossCompany"]');
-      await advance(page, 300);
-      await page.keyboard.type('disable');
-      await advance(page, 300);
+    play: async (pair) => {
+      await both(pair, async (page) => {
+        await seeded(page);
+        await addCompanyWithStarter(page, 'Aurora Valves', 'industrial valves · 2 plants · 640 people');
+        await advance(page, 1500);
+        await approveAll(page);
+        await advance(page, 3000);
+      });
+      await relate(pair, ['Client', 'Aurora Valves'], ['Customer', 'Northwind Industries'], 'equivalent to');
+      await both(pair, async (page) => {
+        await advance(page, 1000);
+        await adminPage(page, 'settings');
+        await page.click('#adminMain .tg[data-set="crossCompany"]');
+        await advance(page, 300);
+        await page.keyboard.type('disable');
+        await advance(page, 300);
+      });
     },
   },
 ];
@@ -161,8 +177,8 @@ for (const vp of VIEWPORTS) {
             await switchToLight(ref);
             await switchToLight(studio);
           }
-          await scene.play(ref);
-          await scene.play(studio);
+          await scene.play({ ref, studio });
+          await beforeScreenshot(ref, studio);
           const shot = { type: 'png' as const, animations: 'disabled' as const, caret: 'hide' as const };
           const [a, b] = await Promise.all([ref.screenshot(shot), studio.screenshot(shot)]);
           const c = compare(scene.name, theme, vp, a, b);

@@ -1,5 +1,5 @@
 import { createEventBus, type Envelope } from '../events';
-import type { DecisionResult, Page, Proposal, Scene } from '../types';
+import type { AuditEntry, DecisionResult, ImportResult, Page, Proposal, Scene, TeachResult } from '../types';
 import { createMockServer } from './server';
 
 const body = <T>(res: { status: number; body: unknown }, status = 200): T => {
@@ -17,7 +17,8 @@ describe('mock API: propose, pending, approve, reject', () => {
     expect(scene.nodes).toHaveLength(1);
     expect(scene.proposals).toHaveLength(0);
     expect(scene.settings.approvalRequired).toBe(true);
-    expect(scene.demoStory.sceneIdx).toBe(0);
+    expect(scene.viewState).toEqual({ coverage: false });
+    expect(scene).not.toHaveProperty('demoStory');
   });
 
   it('a concept proposal creates a pending cell and birth relation, blocked until its parent is approved', () => {
@@ -126,15 +127,6 @@ describe('mock API: propose, pending, approve, reject', () => {
     expect(refused.status).toBe(409);
     expect((refused.body as { code: string }).code).toBe('cross_company_disabled');
   });
-
-  it('demo reset rebuilds the home company at scene 0', () => {
-    const server = createMockServer(createEventBus());
-    server.handle('POST', '/demo/next');
-    expect(body<{ sceneIdx: number }>(server.handle('GET', '/demo/scenes')).sceneIdx).toBe(1);
-    const scene = body<Scene>(server.handle('POST', '/demo/reset'));
-    expect(scene.viewState.sceneIdx).toBe(0);
-    expect(scene.nodes).toHaveLength(1);
-  });
 });
 
 describe('mock API: drafts in the contract shape', () => {
@@ -152,5 +144,90 @@ describe('mock API: drafts in the contract shape', () => {
       expect(res.body).toMatchObject({ code: 'validation_failed', detail: 'exactly one of aId or aLabel is required' });
     }
     expect(body<Scene>(server.handle('GET', '/scene')).proposals).toHaveLength(0);
+  });
+});
+
+describe('mock API: text, speech and document origins', () => {
+  const fresh = () => {
+    const server = createMockServer(createEventBus());
+    const co = body<Scene>(server.handle('GET', '/scene')).companies[0];
+    return { server, co };
+  };
+  const upload = (name: string, text: string, type = 'text/plain') => ({ name, type, bytes: new TextEncoder().encode(text) });
+  const code = (res: { body: unknown }) => (res.body as { code: string }).code;
+
+  it('a typed sentence and a speech transcript become proposals with their declared origin', () => {
+    const { server, co } = fresh();
+    const typed = body<TeachResult>(server.handle('POST', '/teach/parse', { companyId: co.id, text: 'A plant has production lines' }));
+    expect(typed).toMatchObject({ outcome: 'understood', origin: 'text', originDetail: null });
+    expect(typed.drafts.every((d) => d.origin === 'text')).toBe(true);
+    const made = body<Proposal[]>(server.handle('POST', '/proposals/batch', { drafts: typed.drafts }), 202);
+    expect(made.map((p) => [p.origin, p.originDetail])).toEqual([
+      ['text', null],
+      ['text', null],
+    ]);
+
+    const spoken = body<TeachResult>(server.handle('POST', '/teach/parse', { companyId: co.id, text: 'Invoices have due dates', origin: 'speech' }));
+    expect(spoken.origin).toBe('speech');
+    const said = body<Proposal[]>(server.handle('POST', '/proposals/batch', { drafts: spoken.drafts }), 202);
+    expect(said.every((p) => p.origin === 'speech')).toBe(true);
+
+    body(server.handle('POST', `/proposals/${made[0].id}/approve`));
+    const audit = body<Page & { items: AuditEntry[] }>(server.handle('GET', '/audit'));
+    expect(audit.items.find((e) => e.proposalId === made[0].id)?.origin).toBe('text');
+  });
+
+  it('the settings gate each channel with 409 channel_disabled', async () => {
+    const { server, co } = fresh();
+    server.handle('PATCH', '/settings', { voice: false });
+    expect(code(server.handle('POST', '/teach/parse', { companyId: co.id, text: 'A plant has lines', origin: 'speech' }))).toBe('channel_disabled');
+    const draft = { type: 'concept', companyId: co.id, parentId: co.rootId, label: 'Plant', domainKey: 'production', action: 'operates', origin: 'speech' };
+    expect(code(server.handle('POST', '/proposals', draft))).toBe('channel_disabled');
+    server.handle('PATCH', '/settings', { liveTeaching: false });
+    expect(code(server.handle('POST', '/teach/parse', { companyId: co.id, text: 'A plant has lines' }))).toBe('channel_disabled');
+    server.handle('PATCH', '/settings', { importDocs: false });
+    expect(code(await server.importDocument(upload('plants.txt', 'Every plant runs production lines.')))).toBe('channel_disabled');
+  });
+
+  it('a document import is stored; each cited sentence is parsed at most three times and drafted by one call', async () => {
+    const { server, co } = fresh();
+    const imported = body<ImportResult>(
+      await server.importDocument(upload('reports/2026/plants.txt','Every plant runs production lines. Short one. A machine has sensors!')),
+    );
+    expect(imported).toMatchObject({
+      fileName: 'plants.txt',
+      origin: 'document',
+      originDetail: { fileName: 'plants.txt', mediaType: 'text/plain' },
+      sentences: ['Every plant runs production lines.', 'A machine has sensors!'],
+    });
+    const importRef = { importId: imported.importId, sentenceIndex: 0 };
+    const parsed = body<TeachResult>(server.handle('POST', '/teach/parse', { companyId: co.id, importRef, origin: 'speech' }));
+    expect(parsed).toMatchObject({ outcome: 'understood', origin: 'document', originDetail: { fileName: 'plants.txt', sentenceIndex: 0 } });
+    expect(parsed.drafts.every((d) => d.importRef?.sentenceIndex === 0)).toBe(true);
+
+    const made = body<Proposal[]>(server.handle('POST', '/proposals/batch', { drafts: parsed.drafts }), 202);
+    expect(made.map((p) => p.origin)).toEqual(['document', 'document']);
+    expect(made[0].originDetail).toEqual({ fileName: 'plants.txt', mediaType: 'text/plain', sentenceIndex: 0 });
+    expect(code(server.handle('POST', '/proposals/batch', { drafts: parsed.drafts }))).toBe('import_sentence_used');
+
+    server.handle('POST', '/teach/parse', { companyId: co.id, importRef });
+    server.handle('POST', '/teach/parse', { companyId: co.id, importRef });
+    expect(code(server.handle('POST', '/teach/parse', { companyId: co.id, importRef }))).toBe('import_sentence_used');
+    expect(server.handle('POST', '/teach/parse', { companyId: co.id, importRef: { importId: 'nope', sentenceIndex: 0 } }).status).toBe(404);
+  });
+
+  it('refuses bad file names, unknown media types, and an expired import with 410', async () => {
+    const { server, co } = fresh();
+    expect((await server.importDocument(upload('a\u202Etxt.exe', 'Every plant runs lines.'))).status).toBe(422);
+    expect((await server.importDocument(upload('notes.bin', 'Every plant runs lines.', 'application/octet-stream'))).status).toBe(415);
+    const imported = body<ImportResult>(await server.importDocument(upload('plants.md', 'Every plant runs production lines.')));
+    vi.useFakeTimers({ now: Date.now() + 61 * 60 * 1000, toFake: ['Date'] });
+    try {
+      const res = server.handle('POST', '/teach/parse', { companyId: co.id, importRef: { importId: imported.importId, sentenceIndex: 0 } });
+      expect(res.status).toBe(410);
+      expect(code(res)).toBe('import_expired');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

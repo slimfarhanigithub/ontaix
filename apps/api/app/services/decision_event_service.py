@@ -1,4 +1,4 @@
-"""The outbox events of decisions: one per decided proposal and one per bulk run.
+"""The outbox events of decisions: one per decided proposal.
 
 A proposal event's audience is every company the proposal touches plus every company of the
 artefacts it carries. Its `cascaded` list keeps only the cascaded proposals whose companies are
@@ -13,9 +13,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
-from app.models.api.proposal import BulkResult
 from app.models.decisions.decision_outcome import DecisionOutcome
-from app.models.storage.base import NodeKind, RelationKind
 from app.models.storage.proposal import Proposal
 from app.services import outbox_service
 from app.services.ontology_view_service import OntologyView
@@ -54,27 +52,4 @@ async def emit_proposal_event(
         },
         company_ids=companies,
         bulk=bulk,
-    )
-
-
-async def emit_finalised(
-    session: AsyncSession, caller: Caller, view: OntologyView, result: BulkResult
-) -> None:
-    await outbox_service.emit(
-        session,
-        caller.tenant_id,
-        caller.actor,
-        "proposal.finalised",
-        {
-            "approved": result.approved,
-            "rejected": result.rejected,
-            "rounds": result.rounds,
-            "remaining": result.remaining,
-            "companies": len(view.companies),
-            "concepts": sum(1 for c in view.live_concepts() if c.kind is NodeKind.CONCEPT),
-            "bound": 0,
-            "equivalences": sum(1 for r in view.live_relations() if r.kind is RelationKind.SAME),
-            "caption": result.caption,
-        },
-        bulk=True,
     )

@@ -6,19 +6,14 @@
  * artefacts, a decision with its cascade). Bulk runs answer with counts only, so they are
  * followed by `snapshot.required`, which reloads `GET /scene`.
  *
- * Local fallbacks, clearly scoped to routes the API answers with 404 today:
- *   POST /teach/parse   parsed in the browser (./local-teach)
- *   POST /demo/reset    reloads the scene instead of rebuilding the home company
  * Settings, appearance and view-state writes already tolerate a refusal at their call sites.
  * Source state changes (enable, disable, refresh) answer with the source only, so they are
  * followed by `snapshot.required` for the freshness of what the source feeds.
  */
 import { nowDate } from '../runtime/clock';
-import { store } from '../store/store';
 import { api } from './client';
 import { liveEvents, type EventType } from './events';
-import { localTeachParse } from './local-teach';
-import { ApiError, type Actor, type DecisionResult, type Proposal } from './types';
+import type { Actor, DecisionResult, Proposal } from './types';
 
 const SYSTEM: Actor = { kind: 'system' };
 
@@ -46,7 +41,6 @@ export function connectRealApi(): void {
   };
   api.approveAll = async () => resync(await raw.approveAll());
   api.rejectAll = async () => resync(await raw.rejectAll());
-  api.finaliseAll = async () => resync(await raw.finaliseAll());
   api.createCompany = async (body) => {
     const res = await raw.createCompany(body);
     emit('company.created', SYSTEM, { company: res.company, root: res.root });
@@ -101,22 +95,6 @@ export function connectRealApi(): void {
     emit('appearance.changed', SYSTEM, { appearance });
     return appearance;
   };
-  api.teachParse = async (body) => {
-    try {
-      return await raw.teachParse(body);
-    } catch (err) {
-      if (!isMissingRoute(err)) throw err;
-      return localTeachParse(store.s, body);
-    }
-  };
-  api.demoReset = async () => {
-    try {
-      return await raw.demoReset();
-    } catch (err) {
-      if (!isMissingRoute(err)) throw err;
-      return await raw.getScene();
-    }
-  };
 }
 
 function created(p: Proposal): void {
@@ -146,9 +124,4 @@ function emit(type: EventType, actor: Actor, payload: Record<string, unknown>): 
     bulk: false,
     payload,
   });
-}
-
-/** A bare 404 `not_found` (no resource-specific code): the route does not exist on this API. */
-function isMissingRoute(err: unknown): boolean {
-  return err instanceof ApiError && err.status === 404 && err.problem.code === 'not_found';
 }

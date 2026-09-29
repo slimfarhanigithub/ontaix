@@ -1,12 +1,13 @@
 /**
- * The teach bar: company selector, sentence input, microphone, Teach and Next. Markup from
- * reference/ontaix-studio-reference.html lines 202-208; behaviours from lines 610-611, 836-838,
- * 885-886 and 1091-1095 (voice).
+ * The teach bar: company selector, sentence input, microphone and Teach. Markup from
+ * reference/ontaix-studio-reference.html lines 202-208 without the Next button; behaviours from
+ * lines 610-611, 885-886 and 1091-1095 (voice). Typed sentences are taught as `text`, the
+ * microphone's final transcript as `speech`.
  */
 import { useEffect, useRef, useState } from 'react';
 
-import { SCENES } from '../demo/scenes';
-import { next, teach } from '../demo/story';
+import type { InputOrigin } from '../api/types';
+import { teach } from '../teach/teach';
 import { useStore } from './dom';
 
 interface SpeechRecognitionLike {
@@ -29,9 +30,8 @@ const SR: SpeechRecognitionCtor | undefined =
 
 export function TeachBar() {
   const st = useStore();
-  const { sceneIdx, say, sayPlaceholder, settings, listening } = st.ui;
+  const { say, sayPlaceholder, settings, listening } = st.ui;
   const companies = st.s.companies;
-  const nx = SCENES[sceneIdx + 1];
   const rec = useRef<SpeechRecognitionLike | null>(null);
   const [errorPlaceholder, setErrorPlaceholder] = useState<string | null>(null);
   const mic = useRef<HTMLButtonElement>(null);
@@ -64,7 +64,7 @@ export function TeachBar() {
       for (let i = 0; i < ev.results.length; i++) s += ev.results[i][0].transcript;
       st.setSay(s);
       if (ev.results[ev.results.length - 1].isFinal) {
-        submit(s);
+        submit(s, 'speech');
         st.setSay('');
       }
     };
@@ -78,8 +78,8 @@ export function TeachBar() {
     r.start();
   };
 
-  const submit = (text: string) => {
-    void teach(text);
+  const submit = (text: string, origin: InputOrigin) => {
+    void teach(text, origin);
   };
 
   const liveTeaching = !settings || settings.liveTeaching;
@@ -92,7 +92,7 @@ export function TeachBar() {
       autoComplete="off"
       onSubmit={(e) => {
         e.preventDefault();
-        submit(say);
+        submit(say, 'text');
         st.setSay('');
       }}
     >
@@ -136,19 +136,6 @@ export function TeachBar() {
       </button>
       <button type="submit" id="teach">
         Teach
-      </button>
-      <button
-        type="button"
-        className="primary next"
-        id="next"
-        title={nx ? `Next: ${nx.name} (Space)` : 'End of the story'}
-        disabled={!nx}
-        onClick={() => next()}
-      >
-        <span id="nextLabel">{nx ? `Next · ${nx.name}` : 'End'}</span>
-        <svg viewBox="0 0 16 16">
-          <path d="M6 3l5 5-5 5" />
-        </svg>
       </button>
     </form>
   );

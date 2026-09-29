@@ -16,7 +16,7 @@ const OUTPUT_DIR = resolve(here, 'output');
 const BUILDER = 'sam.okafor@northwind.com';
 const GOVERNOR = 'hugo.brandt@northwind.com';
 const GREEN = '#4fc98f';
-/** Names an existing Northwind concept and nothing the next story scene listens for. */
+/** Names an existing Northwind concept and one new one. */
 const SENTENCE = 'Invoice has due date';
 const TAUGHT = 'Due date';
 /** The taught cell and the cell it divided off, joined by an action they do not hold yet. */
@@ -67,8 +67,7 @@ test('Studio shows Northwind and Aurora from the real API, a taught concept and 
   await openStudio(builder, BUILDER);
   await builder.locator('#say').fill(SENTENCE);
   await builder.locator('#teach').click();
-  await expect(builder.locator('#propList .prop')).toHaveCount(1);
-  await expect(builder.locator('#propList .prop .what')).toContainText(TAUGHT);
+  await expect(builder.locator('#propList .prop', { hasText: TAUGHT })).toHaveCount(1);
   await builder.close();
 
   // The Governor sees it after a reload and approves it. The fake clock runs until paused below.
@@ -86,7 +85,7 @@ test('Studio shows Northwind and Aurora from the real API, a taught concept and 
   await governor.clock.pauseAt(new Date(Date.now() + 1000));
   const row = governor.locator('#propList .prop', { hasText: TAUGHT });
   await row.locator('button.ok').click();
-  await expect(governor.locator('#propList .prop')).toHaveCount(0);
+  await expect(row).toHaveCount(0);
   const after = await governor.evaluate((label) => {
     const { store } = (window as unknown as { __ontaix: { store: { s: { nodes: { label: string; pending: boolean; flash: { color: string } | null; domain: { version: number } | null }[] } } } }).__ontaix;
     const n = store.s.nodes.find((x) => x.label === label);

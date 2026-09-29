@@ -8,12 +8,14 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
+from app.models.api.drafts import ProposalBatch
 from app.models.api.page import PageOf
 from app.models.api.proposal import Proposal as ProposalDto
 from app.models.storage.proposal import Proposal
 from app.repositories import proposal_repository
-from app.services import proposal_service
+from app.services import proposal_service, provenance_service
 from app.services.ontology_view_service import OntologyView, load_view
+from app.services.rate_limit_service import Budget, charge
 from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.listing import ListQuery, paginate
 from app.utilities.permissions import can_read_proposal, can_read_tenant
@@ -76,16 +78,24 @@ async def get_proposal(
 
 
 async def create_proposal(session: AsyncSession, caller: Caller, draft) -> ProposalDto:
+    charge(Budget.PROPOSAL, caller.tenant_id, caller.actor_kind.value, caller.user_id)
     view = await load_view(session, caller.tenant_id)
-    proposal = await proposal_service.create(session, caller, view, draft)
+    [provenance] = await provenance_service.resolve(session, caller, view, [draft])
+    proposal = await proposal_service.create(session, caller, view, draft, provenance=provenance)
     return readable_proposal(
         caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
     )
 
 
-async def create_batch(session: AsyncSession, caller: Caller, drafts: list) -> list[ProposalDto]:
+async def create_batch(
+    session: AsyncSession, caller: Caller, batch: ProposalBatch
+) -> list[ProposalDto]:
+    """One proposal unit per draft is charged for the whole call before anything is created."""
+    drafts = provenance_service.with_batch_defaults(batch)
+    charge(Budget.PROPOSAL, caller.tenant_id, caller.actor_kind.value, caller.user_id, len(drafts))
     view = await load_view(session, caller.tenant_id)
-    created = await proposal_service.create_batch(session, caller, view, drafts)
+    provenances = await provenance_service.resolve(session, caller, view, drafts)
+    created = await proposal_service.create_batch(session, caller, view, drafts, provenances)
     return [
         readable_proposal(caller.grants, view.proposal_dto(p, view.proposal_artefacts(p)))
         for p in created

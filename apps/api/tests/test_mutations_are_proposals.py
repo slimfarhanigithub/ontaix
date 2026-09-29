@@ -266,13 +266,10 @@ async def test_labels_are_html_escaped_in_panel_markup(
     assert proposal["artefacts"]["relations"][0]["seed"] == 0.25
 
 
-async def test_finalise_all_needs_governor_at_tenant_scope(
-    client: httpx.AsyncClient, tenant: TenantFixture
-) -> None:
-    response = await client.post("/proposals/finalise-all", headers=tenant.owner.headers)
+async def test_there_is_no_finalise_all(client: httpx.AsyncClient, tenant: TenantFixture) -> None:
+    response = await client.post("/proposals/finalise-all", headers=tenant.governor.headers)
 
-    assert response.status_code == 403
-    assert response.json()["code"] == "forbidden"
+    assert response.status_code in (404, 405)
 
 
 async def test_starter_vocabulary_is_proposed_by_system(

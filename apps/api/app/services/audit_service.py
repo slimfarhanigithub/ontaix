@@ -12,7 +12,7 @@ from app.models.api.actor import Actor
 from app.models.api.audit import AuditEntry as AuditEntryDto
 from app.models.storage.app_user import AppUser
 from app.models.storage.audit_entry import AuditEntry
-from app.models.storage.base import ActorKind
+from app.models.storage.base import ActorKind, ProposalOrigin
 from app.repositories import audit_repository
 from app.services import outbox_service
 from app.utilities.audience import audience
@@ -31,12 +31,14 @@ async def record(
     *,
     company_ids: Iterable[uuid.UUID],
     domain_key: str | None = None,
+    origin: ProposalOrigin | None = None,
 ) -> AuditEntryDto:
     """Append one entry and emit `audit.appended` in the same transaction.
 
     `company_ids` lists every company the entry names; empty is tenant-wide. `domain_key` is the
     template key of the domain product of the proposal the entry records, None for any other
-    entry. The event carries the same audience and key as the entry.
+    entry. `origin` is the origin of the proposal the entry records, None for any other entry.
+    The event carries the same audience and key as the entry.
     """
     entry = await audit_repository.create(
         session,
@@ -47,6 +49,7 @@ async def record(
         what=what,
         ok=ok,
         proposal_id=proposal_id,
+        origin=origin,
         company_ids=audience(company_ids),
         domain_key=domain_key,
     )
@@ -74,6 +77,7 @@ def to_dto(entry: AuditEntry, names: Mapping[uuid.UUID | None, str | None]) -> A
         what=entry.what,
         ok=entry.ok,
         proposal_id=entry.proposal_id,
+        origin=entry.origin.value if entry.origin else None,
         company_ids=list(entry.company_ids),
         domain_key=entry.domain_key,
     )

@@ -55,6 +55,7 @@ async def reject_one(
         proposal.id,
         company_ids=proposal_company_ids(proposal),
         domain_key=view.proposal_domain_key(proposal),
+        origin=proposal.origin,
     )
     concept = view.concepts.get(proposal.concept_id) if proposal.concept_id else None
     if concept is not None and concept.pending:

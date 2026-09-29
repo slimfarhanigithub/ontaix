@@ -392,6 +392,8 @@ class OntologyView:
                 id=proposal.proposer_user_id or proposal.proposer_agent_id,
                 name=proposer_user.name if proposer_user else None,
             ),
+            origin=proposal.origin.value,
+            origin_detail=proposal.origin_detail,
             approvals=[
                 Approval(
                     ordinal=a.ordinal,

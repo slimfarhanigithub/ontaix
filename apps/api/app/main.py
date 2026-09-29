@@ -25,9 +25,11 @@ from app.routers import (
     concepts,
     domain_products,
     health,
+    imports,
     proposals,
     relations,
     scene,
+    teach,
 )
 from app.utilities.contention import is_contention
 from app.utilities.problems import ProblemError, busy
@@ -37,7 +39,14 @@ logger = logging.getLogger(__name__)
 API_PREFIX = "/api/v1"
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 CONTENTION_DETAIL = "the request met concurrent work on the same data; try again"
-HTTP_STATUS_CODES = {400: "bad_request", 401: "unauthorized", 403: "forbidden", 404: "not_found"}
+HTTP_STATUS_CODES = {
+    400: "bad_request",
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not_found",
+    413: "payload_too_large",
+    415: "unsupported_media_type",
+}
 
 
 @asynccontextmanager
@@ -58,7 +67,17 @@ def create_app() -> FastAPI:
 
     application = FastAPI(title=settings.app_name, version="1.0.0", lifespan=_lifespan)
     application.include_router(health.router)
-    for module in (scene, companies, domain_products, concepts, relations, proposals, audit):
+    for module in (
+        scene,
+        companies,
+        domain_products,
+        concepts,
+        relations,
+        proposals,
+        teach,
+        imports,
+        audit,
+    ):
         application.include_router(module.router, prefix=API_PREFIX)
     application.include_router(health.router, prefix=API_PREFIX)
 

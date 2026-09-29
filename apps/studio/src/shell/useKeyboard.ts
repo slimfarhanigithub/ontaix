@@ -1,10 +1,9 @@
 /**
  * Keyboard shortcuts: the two `keydown` listeners of reference/ontaix-studio-reference.html
- * lines 887 and 1069.
+ * lines 887 and 1069, without the Space, ArrowRight and R shortcuts.
  */
 import { useEffect } from 'react';
 
-import { next } from '../demo/story';
 import { store } from '../store/store';
 
 export function useKeyboard(): void {
@@ -12,11 +11,6 @@ export function useKeyboard(): void {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' && e.key !== 'Escape') return;
-      if (e.code === 'Space' || e.key === 'ArrowRight') {
-        e.preventDefault();
-        next();
-      }
-      if (e.key === 'r' || e.key === 'R') void store.reset();
       if (e.key === 'a' || e.key === 'A') store.arrange();
       if (e.key === 'i' || e.key === 'I') (document.getElementById('importFile') as HTMLInputElement | null)?.click();
       if (e.key === 'l' || e.key === 'L') store.toggleLegend();

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import Caller
 from app.models.api.actor import Actor
 from app.models.api.drafts import RelationDraft
+from app.models.proposals.provenance import TYPED_TEXT, Provenance
 from app.models.storage.base import ProposalType, RelationKind
 from app.models.storage.concept import Concept
 from app.models.storage.proposal import Proposal
@@ -44,6 +45,7 @@ async def propose_relation(
     draft: RelationDraft,
     bulk: bool,
     enforce: bool,
+    provenance: Provenance = TYPED_TEXT,
 ) -> Proposal:
     a = _resolve_end(view, draft.a_id, draft.a_label, draft.company_id)
     b = _resolve_end(view, draft.b_id, draft.b_label, draft.company_id)
@@ -115,6 +117,7 @@ async def propose_relation(
         concept_id=None,
         relation_id=relation.id,
         bulk=bulk,
+        provenance=provenance,
     )
     await outbox_service.emit(
         session,

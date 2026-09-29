@@ -309,8 +309,6 @@ async def test_domain_auditor_reads_its_domain_in_every_company_and_tenant_wide_
     await _approved_in(client, tenant, home, "Home deal", "sales")
     await _approved_in(client, tenant, other, "Other deal", "sales")
     await _approved_in(client, tenant, home, "Home press", "production")
-    finalised = await client.post("/proposals/finalise-all", headers=tenant.governor.headers)
-    assert finalised.status_code == 200, finalised.text
     auditor = await _auditor(session, tenant, ScopeKind.DOMAIN, domain_key="sales")
 
     audit = await client.get("/audit?pageSize=200", headers=auditor)
@@ -321,7 +319,6 @@ async def test_domain_auditor_reads_its_domain_in_every_company_and_tenant_wide_
     assert {"Home deal", "Other deal"} <= whats
     assert "Home press" not in whats
     assert f"{other['name']} added" not in whats
-    assert "finalised all scenes" in whats
     assert all(e["domainKey"] in ("sales", None) for e in body["items"])
     assert all(e["domainKey"] == "sales" or e["companyIds"] == [] for e in body["items"])
     assert body["total"] == len(body["items"])

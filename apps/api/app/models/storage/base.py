@@ -44,6 +44,12 @@ class ProposalState(enum.StrEnum):
     REJECTED = "rejected"
 
 
+class ProposalOrigin(enum.StrEnum):
+    TEXT = "text"
+    SPEECH = "speech"
+    DOCUMENT = "document"
+
+
 class ChangeKind(enum.StrEnum):
     RENAME = "rename"
     DELETE_CONCEPT = "delete_concept"

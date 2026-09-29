@@ -24,8 +24,9 @@ from app.models.api.drafts import (
     SourceDraft,
     SpecDraft,
 )
+from app.models.proposals.provenance import Provenance
 from app.models.storage.proposal import Proposal
-from app.services import decision_lock_service
+from app.services import decision_lock_service, provenance_service
 from app.services.change_proposal_service import propose_change
 from app.services.concept_proposal_service import propose_concept, propose_spec
 from app.services.ontology_view_service import OntologyView
@@ -55,27 +56,28 @@ async def create(
     bulk: bool = False,
     enforce_permission: bool = True,
     proposer: Actor | None = None,
+    provenance: Provenance | None = None,
 ) -> Proposal:
     """Create one proposal with its pending artefacts; refusals are Problem+JSON errors.
 
     `proposer` defaults to the caller; the starter vocabulary passes the system actor. The
     tenant decision lock is taken first, so a proposal and a decision never interleave.
+    `provenance` is resolved by the generic endpoints, which accept import references; when it
+    is None the draft's declared origin is used and an import reference is refused.
     """
+    prov = provenance or provenance_service.declared(view, draft)
     await decision_lock_service.acquire(session, view.tenant_id)
     who = proposer or caller.actor
+    enforce = enforce_permission
     match draft:
         case ConceptDraft():
-            return await propose_concept(
-                session, caller, who, view, draft, bulk, enforce_permission
-            )
+            return await propose_concept(session, caller, who, view, draft, bulk, enforce, prov)
         case SpecDraft():
-            return await propose_spec(session, caller, who, view, draft, bulk, enforce_permission)
+            return await propose_spec(session, caller, who, view, draft, bulk, enforce, prov)
         case RelationDraft():
-            return await propose_relation(
-                session, caller, who, view, draft, bulk, enforce_permission
-            )
+            return await propose_relation(session, caller, who, view, draft, bulk, enforce, prov)
         case ChangeDraft():
-            return await propose_change(session, caller, who, view, draft, bulk, enforce_permission)
+            return await propose_change(session, caller, who, view, draft, bulk, enforce, prov)
         case _:
             raise ProblemError(
                 503, "unavailable", f"{draft.type} proposals are served by the bindings module"
@@ -83,10 +85,17 @@ async def create(
 
 
 async def create_batch(
-    session: AsyncSession, caller: Caller, view: OntologyView, drafts: list[Draft]
+    session: AsyncSession,
+    caller: Caller,
+    view: OntologyView,
+    drafts: list[Draft],
+    provenances: list[Provenance],
 ) -> list[Proposal]:
     """Create drafts in order so later ones may name labels introduced by earlier ones."""
-    return [await create(session, caller, view, draft) for draft in drafts]
+    return [
+        await create(session, caller, view, draft, provenance=provenance)
+        for draft, provenance in zip(drafts, provenances, strict=True)
+    ]
 
 
 async def propose_equivalence(

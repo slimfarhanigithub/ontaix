@@ -2,9 +2,21 @@
  * The "Add a company" dialog. Markup and behaviour from
  * reference/ontaix-studio-reference.html lines 614-615 (`openAddCompany`).
  */
-import { addCompany } from '../demo/story';
+import { api } from '../api/client';
+import type { Company } from '../canvas/types';
 import { store } from '../store/store';
 import { refStyle } from './dom';
+
+/** Adds a company to the view and makes it the one being taught; its starter vocabulary arrives as proposals through events. */
+async function addCompany(name: string, sub: string, seed: boolean): Promise<Company | null> {
+  const created = await api.createCompany({ name, sub, start: seed ? 'starter_vocabulary' : 'one_cell' });
+  const c = store.companyBySid(created.company.id);
+  if (c) {
+    store.s.activeCompany = c;
+    store.renderCompanies();
+  }
+  return c;
+}
 
 export function openAddCompany(): void {
   store.openDialog({

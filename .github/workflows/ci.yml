@@ -3,7 +3,7 @@ name: ci
 # Application checks for every pull request and every push to main.
 #   Python packages (api, gateway, connectors): uv sync, ruff, pytest
 #   Studio: pnpm install, vitest, vite build
-#   Screens: Playwright screenshot regression of the Studio against the reference
+#   Screens: Playwright screenshot regression of the Studio against the reference, in 10 shards
 #   E2E: the Studio against the real API on the local stack (postgres:16 service)
 # Infrastructure has its own workflow (infra.yml).
 
@@ -80,8 +80,14 @@ jobs:
         run: pnpm --filter studio build
 
   screens:
-    name: apps/studio screenshots
+    name: apps/studio screenshots (${{ matrix.shard }}/10)
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every test opens its own pages, so Playwright splits the suite test by test.
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
@@ -96,12 +102,13 @@ jobs:
         working-directory: apps/studio
         run: pnpm exec playwright install --with-deps chromium
       - name: test:screens
-        run: pnpm --filter studio test:screens
+        working-directory: apps/studio
+        run: pnpm exec playwright test -c ../../tests/screenshots/playwright.config.ts --shard=${{ matrix.shard }}/10
       - name: upload diffs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots
+          name: screenshots-${{ matrix.shard }}
           path: tests/screenshots/output/
           retention-days: 7
 

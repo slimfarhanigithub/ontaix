@@ -29,7 +29,6 @@ const settings = {
   refresh: '15 min' as const,
   agentAccess: true,
   costCap: true,
-  demoStory: true,
 };
 
 function hostileModel() {
@@ -67,7 +66,7 @@ function hostileModel() {
       effectiveRoles: [],
     },
   ];
-  directory.audit = [{ id: 1, at: '2026-09-28T09:00:00Z', actor: { kind: 'user' }, kind: PAYLOAD, what: PAYLOAD, ok: true, companyIds: [] }];
+  directory.audit = [{ id: 1, at: '2026-09-28T09:00:00Z', actor: { kind: 'user' }, kind: PAYLOAD, what: PAYLOAD, ok: true, origin: null, companyIds: [] }];
   directory.auditTotal = 1;
   directory.loaded = true;
   return { a, b, n, m, src };
