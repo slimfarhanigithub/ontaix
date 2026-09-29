@@ -20,9 +20,9 @@ DEFAULT_EFFORT = "default"
 Effort = Literal["default", "none", "minimal", "low", "medium", "high"]
 # Where a model processes prompts: inside the EU data zone, or anywhere (global deployments).
 Residency = Literal["eu_data_zone", "global"]
-# Which API serves the deployment: the Foundry OpenAI v1 endpoint, or Claude's Messages
-# endpoint on the eval-only Claude resource.
-Provider = Literal["foundry_openai", "foundry_anthropic"]
+# Which API serves the deployment, named as the API's ONTAIX_LLM_PROVIDER values: the Foundry
+# OpenAI v1 endpoint, or Claude's Messages endpoint on a Foundry resource.
+Provider = Literal["azure_foundry", "anthropic_foundry"]
 # Efforts from least to most reasoning; `default` sits in the middle for closest-effort lookups.
 EFFORT_ORDER: tuple[str, ...] = ("none", "minimal", "low", "default", "medium", "high")
 
@@ -35,9 +35,22 @@ class Candidate(_Model):
     deployment: str
     efforts: list[Effort] = Field(min_length=1)
     price: ModelPrice | None = None
-    provider: Provider = "foundry_openai"
+    provider: Provider = "azure_foundry"
+    # The Foundry resource; None is ONTAIX_FOUNDRY_ENDPOINT.
+    endpoint: str | None = None
     residency: Residency = "eu_data_zone"
     family: str = "other"
+
+    def at(self, effort: Effort) -> RunConfig:
+        return RunConfig(
+            self.deployment,
+            effort,
+            self.price,
+            self.provider,
+            self.residency,
+            self.family,
+            self.endpoint,
+        )
 
 
 class Baseline(_Model):
@@ -61,9 +74,10 @@ class RunConfig:
     deployment: str
     effort: Effort
     price: ModelPrice | None
-    provider: Provider = "foundry_openai"
+    provider: Provider = "azure_foundry"
     residency: Residency = "eu_data_zone"
     family: str = "other"
+    endpoint: str | None = None
 
     @property
     def key(self) -> str:
@@ -102,7 +116,7 @@ def run_configs(
         raise ValueError(f"not in candidates.yaml: {', '.join(unknown)}")
     chosen = [known[d] for d in deployments] if deployments else file.candidates
     return [
-        RunConfig(c.deployment, e, c.price, c.provider, c.residency, c.family)
+        c.at(e)
         for c in chosen
         for e in c.efforts
         if not efforts or e in efforts or e == DEFAULT_EFFORT
@@ -111,7 +125,7 @@ def run_configs(
 
 def baseline_config(file: CandidateFile) -> RunConfig:
     c = {c.deployment: c for c in file.candidates}[file.baseline.deployment]
-    return RunConfig(c.deployment, file.baseline.effort, c.price, c.provider, c.residency, c.family)
+    return c.at(file.baseline.effort)
 
 
 def at_effort(candidate: Candidate, wanted: str) -> RunConfig:
@@ -122,14 +136,7 @@ def at_effort(candidate: Candidate, wanted: str) -> RunConfig:
         candidate.efforts,
         key=lambda e: (abs(EFFORT_ORDER.index(e) - target), EFFORT_ORDER.index(e)),
     )
-    return RunConfig(
-        candidate.deployment,
-        effort,
-        candidate.price,
-        candidate.provider,
-        candidate.residency,
-        candidate.family,
-    )
+    return candidate.at(effort)
 
 
 def candidates_named(file: CandidateFile, deployments: list[str] | None) -> list[Candidate]:

@@ -28,8 +28,10 @@ class RunRecord:
 
 
 def write(record: RunRecord, json_path: Path, markdown_path: Path) -> None:
+    plain = _plain(record)
+    plain["speechComprehension"] = {s.name: speech_rows(s) for s in record.stages}
     json_path.write_text(
-        json.dumps(_plain(record), indent=2, ensure_ascii=False, default=str), encoding="utf-8"
+        json.dumps(plain, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
     )
     markdown_path.write_text(markdown(record), encoding="utf-8", newline="\n")
 
@@ -45,6 +47,7 @@ def markdown(record: RunRecord) -> str:
     ]
     for stage in record.stages:
         lines += _stage(stage)
+        lines += _speech(stage)
     lines += _cases(record)
     lines += _documents(record)
     if record.notes:
@@ -114,6 +117,82 @@ def _stage(stage: StageResult) -> list[str]:
             )
         lines.append("")
     return lines
+
+
+def speech_rows(stage: StageResult) -> list[dict[str, Any]]:
+    """Speech comprehension per scored speech case, configuration and repeat: the recording's
+    final drafts against the gold tree."""
+    rows: list[dict[str, Any]] = []
+    for run in stage.runs:
+        for r in run.results:
+            s = r.score
+            if r.kind != "speech" or s is None:
+                continue
+            rows.append(
+                {
+                    "case": r.case_id,
+                    "configuration": r.run_key,
+                    "repeat": r.repeat,
+                    "sentences": len(r.units),
+                    "expected": s.concepts_expected,
+                    "matched": s.concepts_matched,
+                    "parentAtDepth": s.parent_at_depth,
+                    "parentAtDepthRate": _ratio(s.parent_at_depth, s.concepts_expected),
+                    "verbCorrect": s.action_correct,
+                    "verbAccuracy": _ratio(s.action_correct, s.concepts_matched),
+                    "relationsExpected": s.relations_expected,
+                    "relationVerbCorrect": s.relation_action_correct,
+                    "relationAccuracy": _ratio(s.relation_action_correct, s.relations_expected),
+                    "depthReached": s.depth_achieved,
+                    "depthGold": s.depth_expected,
+                    "invented": list(s.invented),
+                    "missed": list(s.missed),
+                    "wrongParent": list(s.wrong_parent),
+                    "wrongDepth": list(s.wrong_depth),
+                    "wrongVerb": list(s.wrong_action),
+                    "failedSentences": sum(1 for u in r.units if u.status != 200),
+                }
+            )
+    return sorted(rows, key=lambda row: (row["case"], row["configuration"], row["repeat"]))
+
+
+def _speech(stage: StageResult) -> list[str]:
+    rows = speech_rows(stage)
+    if not rows:
+        return []
+    lines = [
+        f"### {stage.name.title()} Speech Comprehension",
+        "",
+        "Each recording is sent sentence by sentence as `speech` in one session; its final "
+        "drafts are scored against the gold tree. Parent at depth: expected concepts drafted "
+        "under an accepted parent at the expected level. Verb: matched concepts with an "
+        "accepted verb. Relation: expected relations drafted with an accepted verb.",
+        "",
+        "| Case | Configuration | Repeat | Sentences | Parent at depth | Verb | Relation | "
+        "Depth reached / gold | Invented | Missed |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for row in rows:
+        relation = (
+            f"{row['relationVerbCorrect']}/{row['relationsExpected']}"
+            if row["relationsExpected"]
+            else "-"
+        )
+        lines.append(
+            f"| {row['case']} | {row['configuration']} | {row['repeat']} | {row['sentences']} | "
+            f"{row['parentAtDepth']}/{row['expected']} | {row['verbCorrect']}/{row['matched']} "
+            f"| {relation} | {row['depthReached']} / {row['depthGold']} | "
+            f"{_labels(row['invented'])} | {_labels(row['missed'])} |"
+        )
+    return [*lines, ""]
+
+
+def _labels(labels: list[str]) -> str:
+    return ", ".join(labels) if labels else "-"
+
+
+def _ratio(num: int, den: int) -> float | None:
+    return None if den == 0 else round(num / den, 4)
 
 
 def _suites(stage: StageResult, ranked: list) -> list[str]:

@@ -269,18 +269,28 @@ def test_the_stratified_subset_is_stable_and_covers_every_stratum() -> None:
     assert sum(1 for c in first if c.kind == "speech") == 3
 
 
-def test_candidates_carry_residency_and_efforts_only_where_supported() -> None:
+def test_candidates_are_the_deployed_models_with_residency_and_accepted_efforts() -> None:
     file = load_candidates(EVALS / "candidates.yaml")
+    assert {c.deployment for c in file.candidates} == {
+        "gpt-6-sol",
+        "claude-sonnet-5",
+        "claude-sonnet-5-5",
+        "claude-fable-5-1",
+    }
     configs = run_configs(file, None, ["none"])
     keys = {c.key for c in configs}
 
-    assert "gpt-6-sol@none" in keys and "claude-haiku-4-5@default" in keys
-    assert {c.family for c in configs} == {"gpt", "claude"}
-    assert not any(k.startswith("o3@") for k in keys)
-    by_deployment = {c.deployment: c for c in configs}
+    assert keys == {"gpt-6-sol@none", "claude-sonnet-5@none"}
+    by_deployment = {c.deployment: c for c in run_configs(file, None, None)}
     assert by_deployment["gpt-6-sol"].residency == "eu_data_zone"
-    assert by_deployment["claude-haiku-4-5"].residency == "global"
-    assert by_deployment["claude-haiku-4-5"].reasoning_effort is None
+    assert by_deployment["gpt-6-sol"].provider == "azure_foundry"
+    assert by_deployment["gpt-6-sol"].endpoint is None
+    for claude in ("claude-sonnet-5", "claude-sonnet-5-5", "claude-fable-5-1"):
+        assert by_deployment[claude].residency == "global"
+        assert by_deployment[claude].provider == "anthropic_foundry"
+        assert by_deployment[claude].endpoint == (
+            "https://ais-ontaix-dev-sdc-02a13.cognitiveservices.azure.com/"
+        )
     with pytest.raises(ValueError):
         run_configs(file, ["no-such-model"], None)
 
@@ -290,18 +300,19 @@ def test_the_smart_plan_takes_the_closest_effort_each_model_accepts() -> None:
     by_name = {c.deployment: c for c in file.candidates}
 
     assert at_effort(by_name["gpt-6-sol"], "medium").key == "gpt-6-sol@medium"
-    assert at_effort(by_name["claude-haiku-4-5"], "medium").key == "claude-haiku-4-5@default"
-    assert at_effort(by_name["o3"], "none").key == "o3@low"
-    assert at_effort(by_name["claude-opus-5-5"], "high").key == "claude-opus-5-5@high"
+    assert at_effort(by_name["claude-sonnet-5"], "none").key == "claude-sonnet-5@none"
+    assert at_effort(by_name["claude-sonnet-5-5"], "none").key == "claude-sonnet-5-5@low"
+    assert at_effort(by_name["claude-fable-5-1"], "none").key == "claude-fable-5-1@low"
+    assert at_effort(by_name["claude-fable-5-1"], "high").key == "claude-fable-5-1@high"
 
 
 def test_a_candidate_without_a_price_is_refused(tmp_path: Path) -> None:
     text = (EVALS / "candidates.yaml").read_text(encoding="utf-8")
     unpriced = tmp_path / "candidates.yaml"
     unpriced.write_text(
-        text.replace("price: {inputEurPerMTok: 0.103, outputEurPerMTok: 0.5152}", "price: null"),
+        text.replace("price: {inputEurPerMTok: 8.6, outputEurPerMTok: 43.0}", "price: null"),
         encoding="utf-8",
     )
 
-    with pytest.raises(UnpricedCandidate, match="gpt-6-luna"):
+    with pytest.raises(UnpricedCandidate, match="claude-fable-5-1"):
         load_candidates(unpriced)

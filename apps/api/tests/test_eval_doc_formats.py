@@ -129,7 +129,7 @@ def write(tmp_path: Path, name: str, data: bytes) -> Path:
 
 def assert_importable(doc: LoadedDocument) -> None:
     media_type = MEDIA_TYPE_BY_EXTENSION[Path(doc.upload_name).suffix.lower()]
-    sentences, extracted = extract_sentences(doc.upload_bytes, media_type)
+    sentences, extracted, _ = extract_sentences(doc.upload_bytes, media_type)
     assert sentences, doc.upload_name
     assert extracted > 0
 

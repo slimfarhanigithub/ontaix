@@ -75,8 +75,10 @@ async def case_load(case: TeachCase, mode: str, docs: DocumentCache) -> CaseLoad
         input_tokens = calls * (fixed + SESSION_CONTEXT_TOKENS) + text_tokens
         return CaseLoad(case.id, mode, calls, int(input_tokens), calls * ANSWER_TOKENS["text"])
     if case.kind == "speech":
-        text_tokens = len(case.input[0]) / CHARS_PER_TOKEN
-        return CaseLoad(case.id, mode, 1, int(fixed + text_tokens), ANSWER_TOKENS["speech"])
+        calls = len(case.input)
+        text_tokens = sum(len(s) for s in case.input) / CHARS_PER_TOKEN
+        input_tokens = calls * (fixed + SESSION_CONTEXT_TOKENS) + text_tokens
+        return CaseLoad(case.id, mode, calls, int(input_tokens), calls * ANSWER_TOKENS["speech"])
     sentences, words, ocr_pages = await _document_size(case, docs)
     if mode == "whole":
         calls = max(1, math.ceil(words / WHOLE_DOCUMENT_WORDS_PER_CALL))
@@ -116,7 +118,7 @@ async def _document_size(case: TeachCase, docs: DocumentCache) -> tuple[int, int
     `docs` must have no OCR client: a scanned PDF is sized from its page count, unread."""
     if case.document is None:
         body = case.input[0].encode("utf-8")
-        sentences, _ = extract_sentences(body, TEXT_PLAIN)
+        sentences, _, _ = extract_sentences(body, TEXT_PLAIN)
         return len(sentences), len(case.input[0].split()), 0
     try:
         loaded = await docs.get(case.document)
@@ -127,5 +129,5 @@ async def _document_size(case: TeachCase, docs: DocumentCache) -> tuple[int, int
         sentences = pages * SCANNED_SENTENCES_PER_PAGE
         return sentences, sentences * 20, pages
     media = MEDIA_TYPE_BY_EXTENSION.get("." + loaded.upload_name.rsplit(".", 1)[-1].lower())
-    sentences, _ = extract_sentences(loaded.upload_bytes, media or TEXT_PLAIN)
+    sentences, _, _ = extract_sentences(loaded.upload_bytes, media or TEXT_PLAIN)
     return len(sentences), loaded.words, 0

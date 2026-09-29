@@ -10,10 +10,11 @@ action and its path are then checked. The parent is right when it is any of the 
 parents (an ontology class may have several). The path is right when every step from the
 concept up to the company root goes through a parent the case accepts for that step, so a
 concept placed under an invented or missing intermediate has a wrong path even when its label
-and verb are right. A drafted concept that matches nothing expected, optional or pre-existing is
-invented; one that repeats a pre-existing concept or an earlier draft is invented too and listed
-as a duplicate. A missing branch is a missed concept whose parent was found (or is the root):
-the top of a subtree the drafts never reached.
+and verb are right. The parent is right at the right depth when it is accepted and the concept
+sits at its expected level in the drafted tree. A drafted concept that matches nothing expected,
+optional or pre-existing is invented; one that repeats a pre-existing concept or an earlier
+draft is invented too and listed as a duplicate. A missing branch is a missed concept whose
+parent was found (or is the root): the top of a subtree the drafts never reached.
 
 Relations: a drafted relation matches an expected one when it joins the same two concepts, in
 either direction; the action is checked against `action` read forward or `inverse` read
@@ -119,6 +120,8 @@ class CaseScore:
     concept_recall_groundable: float = 1.0
     concept_f1_groundable: float = 1.0
     parent_correct: int = 0
+    # Matched concepts whose parent is accepted and whose drafted level is the expected level.
+    parent_at_depth: int = 0
     action_correct: int = 0
     path_correct: int = 0
     invented: list[str] = field(default_factory=list)
@@ -129,6 +132,7 @@ class CaseScore:
     wrong_parent: list[str] = field(default_factory=list)
     wrong_action: list[str] = field(default_factory=list)
     wrong_path: list[str] = field(default_factory=list)
+    wrong_depth: list[str] = field(default_factory=list)
     relations_expected: int = 0
     relations_predicted: int = 0
     relations_matched: int = 0
@@ -233,6 +237,8 @@ def score_case(
             counted.append(n)
 
     drafted = _drafted_parents(canon, case, concepts)
+    expected_level = _levels(canon, accepted)
+    drafted_level = _levels(canon, {k: {v} for k, v in drafted.items()})
     right_path: set[str] = set()
     for n, e in expected.items():
         p = matched.get(n)
@@ -241,6 +247,12 @@ def score_case(
             continue
         if canon.of(p.parent) in accepted[n]:
             score.parent_correct += 1
+            if drafted_level(n) == expected_level(n):
+                score.parent_at_depth += 1
+            else:
+                score.wrong_depth.append(
+                    f"{e.label}: level {drafted_level(n)}, want {expected_level(n)}"
+                )
         else:
             score.wrong_parent.append(f"{e.label}: got {p.parent}, want {' | '.join(e.parent)}")
         if action_matches(p.action, e.action):
@@ -264,14 +276,12 @@ def score_case(
     score.concept_recall_groundable = _ratio(score.matched_groundable, len(groundable))
     score.concept_f1_groundable = f1(score.concept_precision, score.concept_recall_groundable)
 
-    expected_level = _levels(canon, accepted)
     for n in expected:
         level = score.levels.setdefault(expected_level(n), LevelScore())
         level.expected += 1
         level.groundable += n in groundable
         level.correct += n in right_path
         level.correct_groundable += n in right_path and n in groundable
-    drafted_level = _levels(canon, {k: {v} for k, v in drafted.items()})
     for n in counted:
         score.levels.setdefault(drafted_level(n), LevelScore()).predicted += 1
     score.levels = dict(sorted(score.levels.items()))

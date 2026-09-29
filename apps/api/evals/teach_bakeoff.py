@@ -9,7 +9,8 @@ cost is estimated before anything runs, and the run stops cleanly when the budge
     uv run python -m evals.teach_bakeoff --budget-eur 150 --estimate-only
     uv run python -m evals.teach_bakeoff --budget-eur 1 --dry-run
 
-Run from apps/api; `.env` supplies ONTAIX_FOUNDRY_ENDPOINT (keyless: `az login`). Exit code 3
+Run from apps/api; `.env` supplies ONTAIX_FOUNDRY_ENDPOINT for candidates without their own
+endpoint in `candidates.yaml` (keyless: `az login`). Exit code 3
 means the budget stopped the run; the report covers what ran.
 """
 
@@ -135,10 +136,6 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--timeout-seconds", type=float, help="per call; default the API's")
     p.add_argument("--speech-timeout-seconds", type=float, help="default the API's")
     p.add_argument("--ocr-deployment", help="default from candidates.yaml")
-    p.add_argument(
-        "--claude-endpoint",
-        help="eval-only Claude Foundry resource; default ONTAIX_EVAL_CLAUDE_ENDPOINT",
-    )
     p.add_argument(
         "--allow-global-for-private",
         action="store_true",
@@ -297,35 +294,40 @@ def _installer(
     args: argparse.Namespace, budget: Budget
 ) -> Callable[[RunConfig], Callable[[], dict[str, object]]]:
     """Installs a configuration's model client; returns a probe of what the model accepted."""
-    endpoint = get_settings().foundry_endpoint
-    claude_endpoint = args.claude_endpoint or os.environ.get("ONTAIX_EVAL_CLAUDE_ENDPOINT")
+    default_endpoint = get_settings().foundry_endpoint
 
     def install(config: RunConfig) -> Callable[[], dict[str, object]]:
         get_settings().llm_reasoning_allowance_tokens = REASONING_ALLOWANCE[config.effort]
         price = config.price or ZERO_PRICE
+        endpoint = config.endpoint or default_endpoint
         inner: LlmClient
         if args.dry_run:
             inner = DryRunLlmClient(config.deployment, price)
-        elif config.provider == "foundry_anthropic":
-            if not claude_endpoint:
-                raise SystemExit("set ONTAIX_EVAL_CLAUDE_ENDPOINT or --claude-endpoint for Claude")
+        elif not endpoint:
+            raise SystemExit(
+                f"{config.deployment}: no endpoint in candidates.yaml and ONTAIX_FOUNDRY_ENDPOINT "
+                "is not set; use --dry-run"
+            )
+        elif config.provider == "anthropic_foundry":
             inner = AnthropicFoundryLlmClient(
-                foundry_messages_url(claude_endpoint),
+                foundry_messages_url(endpoint),
                 config.deployment,
                 price,
                 config.reasoning_effort,
             )
-        elif endpoint:
+        else:
             inner = FoundryLlmClient(
                 endpoint, config.deployment, config.deployment, price, config.reasoning_effort
             )
-        else:
-            raise SystemExit("ONTAIX_FOUNDRY_ENDPOINT is not set; use --dry-run")
         set_llm_client(RecordingLlmClient(inner, budget))
 
         def probe() -> dict[str, object]:
+            if args.dry_run:
+                return {"outputMode": "dry-run"}
             capabilities = getattr(inner, "capabilities", None)
-            return dict(capabilities) if capabilities else {"outputMode": "dry-run"}
+            if capabilities:
+                return dict(capabilities)
+            return {"outputMode": "json_schema", "reasoningEffort": config.reasoning_effort}
 
         return probe
 

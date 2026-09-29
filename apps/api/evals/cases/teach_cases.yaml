@@ -1185,3 +1185,58 @@ cases:
         - {label: Partenaire, parent: [Maison Terrell], action: [a, has]}
         - {label: Brisane S.A., parent: [Partenaire], action: [comprend, inclut, includes, has]}
         - {label: Gamme e-commerce, parent: [Brisane S.A.], action: [distribue, distributes, sells]}
+
+  # ---------------------------------------------------------------- Spoken recordings, sentence by sentence
+  - id: en-speech-recording-depot
+    kind: speech
+    company: Harlow Freight
+    description: A four-sentence recording; later sentences refer back with "it" and "they".
+    tags: [en, speech, recording, back-reference, deep-chain, fillers]
+    input:
+      - "so um Harlow Freight runs a depot in Leeds"
+      - "and uh the depot has a cross dock and a cold store"
+      - "the cold store is split into chilled bays and frozen bays"
+      - "and they each have temperature sensors"
+    expected:
+      concepts:
+        - {label: Depot, parent: [Harlow Freight], action: [runs, has, operates], aliases: [Depot in Leeds, Leeds depot]}
+        - {label: Cross dock, parent: [Depot], action: [has]}
+        - {label: Cold store, parent: [Depot], action: [has]}
+        - {label: Chilled bays, parent: [Cold store], action: [is split into]}
+        - {label: Frozen bays, parent: [Cold store], action: [is split into]}
+        - {label: Temperature sensors, parent: [Chilled bays, Frozen bays], action: [has]}
+    optional: [Leeds]
+
+  - id: en-speech-recording-correction
+    kind: speech
+    company: Brenmoor Insurance
+    description: A recording whose third sentence corrects the second.
+    tags: [en, speech, recording, correction, fillers]
+    input:
+      - "okay so Brenmoor Insurance has a claims department"
+      - "the claims department handles motor claims and uh travel claims"
+      - "no sorry not travel claims home claims"
+      - "and motor claims go through a fraud check"
+    expected:
+      concepts:
+        - {label: Claims department, parent: [Brenmoor Insurance], action: [has]}
+        - {label: Motor claims, parent: [Claims department], action: [handles]}
+        - {label: Home claims, parent: [Claims department], action: [handles]}
+        - {label: Fraud check, parent: [Motor claims], action: [goes through, requires, includes]}
+
+  - id: fr-speech-enregistrement-atelier
+    kind: speech
+    company: Ateliers Morvan
+    description: A French recording across three sentences with "elle" and "ils".
+    tags: [fr, speech, recording, back-reference, fillers]
+    input:
+      - "alors euh Ateliers Morvan a une usine à Dijon"
+      - "elle comprend un atelier de découpe et un atelier de soudure"
+      - "et l'atelier de soudure a deux robots"
+    expected:
+      concepts:
+        - {label: Usine, parent: [Ateliers Morvan], action: [a, has], aliases: [Usine à Dijon, Usine de Dijon]}
+        - {label: Atelier de découpe, parent: [Usine], action: [comprend, includes, has]}
+        - {label: Atelier de soudure, parent: [Usine], action: [comprend, includes, has]}
+        - {label: Robots, parent: [Atelier de soudure], action: [a, has]}
+    optional: [Dijon]

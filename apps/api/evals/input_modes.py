@@ -1,7 +1,9 @@
 """The ways a case reaches the teach pipeline, one pluggable mode per channel.
 
 - `typed`: each turn of a text case is one typed sentence.
-- `speech`: the transcript of a speech case is one spoken request.
+- `speech`: a spoken recording, sent as the Studio's microphone sends it: each finished
+  sentence is one `speech` request, in order, in the recording's one session, and its drafts
+  are proposed before the next sentence goes out, so back-references resolve.
 - `sentences`: a document is imported (`POST /import/sentences`) and each stored sentence is
   parsed with its neighbours, in order, as the Studio's import panel does.
 - `whole`: the whole document in one request. The endpoint is still being designed, so this
@@ -79,8 +81,11 @@ class SpeechMode:
     kind: CaseKind = "speech"
 
     async def run(self, ws: Workspace, case: TeachCase, docs: DocumentCache) -> ModeOutput:
-        unit = await ws.parse({"text": case.input[0], "origin": "speech"})
-        return ModeOutput([unit], case.input[0])
+        units = [
+            await ws.parse({"text": sentence.strip(), "origin": "speech"})
+            for sentence in case.input
+        ]
+        return ModeOutput(units, "\n".join(case.input))
 
 
 class SentencesMode:

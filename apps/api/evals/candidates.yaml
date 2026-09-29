@@ -1,74 +1,46 @@
-# Bake-off candidates, GPT and Claude only. The GPT models run on EU DataZoneStandard in France
-# Central (infra/terraform/azure env/dev.tfvars `foundry_eval_deployments`); Claude runs on the
-# eval-only Sweden Central resource (GlobalStandard, `residency: global`) and never receives cases
-# from tests/private unless --allow-global-for-private is passed. `efforts` lists the reasoning
-# efforts each model accepts (`default`: none is sent); `family` groups candidates for the smart
-# plan. Prices are euros per million tokens: Azure retail DataZoneStandard prices in France
-# Central on 2026-09-29 for GPT (o3's are rounded by Azure, so approximate), Anthropic's USD list
-# prices at 0.86 EUR per USD for Claude. Every candidate must have a price, or the run is
-# refused: an unpriced model would count as 0 EUR against the budget cap. The OCR model at the end reads scanned PDFs
-# before any candidate runs; it is not a candidate.
+# Bake-off candidates: the deployments that exist in the dev environment, nothing else.
+# `provider` is the API that serves the deployment: `azure_foundry` (the Foundry OpenAI v1
+# endpoint) or `anthropic_foundry` (Claude's Messages endpoint on the same kind of resource).
+# `endpoint` is the resource; a candidate without one uses ONTAIX_FOUNDRY_ENDPOINT.
+# `residency`: gpt-6-sol is DataZoneStandard in France Central (EU data zone); Claude is
+# GlobalStandard in Sweden Central (`global`) and never receives cases from tests/private unless
+# --allow-global-for-private is passed.
+# `efforts` lists the reasoning efforts each model accepts: claude-fable-5-1 and
+# claude-sonnet-5-5 refuse `none` (their fastest is `low`); claude-sonnet-5 accepts `none`.
+# Prices are euros per million tokens. Every candidate must have a price, or the run is refused:
+# an unpriced model would count as 0 EUR against the budget cap. Claude prices are Anthropic's
+# USD list prices at 0.86 EUR per USD.
 baseline:
   deployment: gpt-6-sol
   effort: none
 candidates:
   - deployment: gpt-6-sol
     family: gpt
+    provider: azure_foundry
     efforts: [none, low, medium, high]
-    price: {inputEurPerMTok: 2.0608, outputEurPerMTok: 10.304}
-  - deployment: gpt-6-luna
-    family: gpt
-    efforts: [none, low, medium, high]
-    price: {inputEurPerMTok: 0.103, outputEurPerMTok: 0.5152}
-  - deployment: gpt-5.6-sol
-    family: gpt
-    efforts: [none, low, medium, high]
-    price: {inputEurPerMTok: 3.7781, outputEurPerMTok: 18.8906}
-  - deployment: gpt-5.6-terra
-    family: gpt
-    efforts: [none, low, medium, high]
-    price: {inputEurPerMTok: 1.8891, outputEurPerMTok: 11.3344}
-  - deployment: gpt-5.6-luna
-    family: gpt
-    efforts: [none, low, medium, high]
-    price: {inputEurPerMTok: 0.1889, outputEurPerMTok: 1.1334}
-  - deployment: gpt-5.5
-    family: gpt
-    efforts: [none, low, medium, high]
-    price: {inputEurPerMTok: 4.7227, outputEurPerMTok: 28.3359}
-  - deployment: gpt-5.4
-    family: gpt
-    efforts: [none, low, medium, high]
-    price: {inputEurPerMTok: 2.3613, outputEurPerMTok: 14.168}
-  - deployment: o3
-    family: gpt
-    efforts: [low, medium, high]
-    price: {inputEurPerMTok: 1.9, outputEurPerMTok: 7.6}
-  - deployment: claude-fable-5-1
+    # PLACEHOLDER: the price of apps/api/.env.example until the Azure retail price of
+    # DataZoneStandard in France Central is set there.
+    price: {inputEurPerMTok: 1.00, outputEurPerMTok: 8.00}
+  - deployment: claude-sonnet-5
     family: claude
-    provider: foundry_anthropic
+    provider: anthropic_foundry
+    endpoint: https://ais-ontaix-dev-sdc-02a13.cognitiveservices.azure.com/
     residency: global
-    efforts: [low, medium, high]
-    price: {inputEurPerMTok: 8.6, outputEurPerMTok: 43.0}
-  - deployment: claude-opus-5-5
-    family: claude
-    provider: foundry_anthropic
-    residency: global
-    efforts: [low, medium, high]
+    efforts: [none, low, medium, high]
+    # ASSUMPTION: no list price found; priced conservatively until known.
     price: {inputEurPerMTok: 3.44, outputEurPerMTok: 17.2}
   - deployment: claude-sonnet-5-5
     family: claude
-    provider: foundry_anthropic
+    provider: anthropic_foundry
+    endpoint: https://ais-ontaix-dev-sdc-02a13.cognitiveservices.azure.com/
     residency: global
-    efforts: [none, low, medium, high]
-    # ASSUMPTION: no list price found; priced as claude-opus-5-5 (conservative) until known.
+    efforts: [low, medium, high]
+    # ASSUMPTION: no list price found; priced conservatively until known.
     price: {inputEurPerMTok: 3.44, outputEurPerMTok: 17.2}
-  - deployment: claude-haiku-4-5
+  - deployment: claude-fable-5-1
     family: claude
-    provider: foundry_anthropic
+    provider: anthropic_foundry
+    endpoint: https://ais-ontaix-dev-sdc-02a13.cognitiveservices.azure.com/
     residency: global
-    efforts: [default]
-    price: {inputEurPerMTok: 0.86, outputEurPerMTok: 4.3}
-ocr:
-  deployment: mistral-ocr-4-0
-  eurPer1000Pages: 3.7781
+    efforts: [low, medium, high]
+    price: {inputEurPerMTok: 8.6, outputEurPerMTok: 43.0}

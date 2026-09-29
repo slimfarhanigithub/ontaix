@@ -231,8 +231,7 @@ def structure_problems(text: str, collapsed_parts: list[str]) -> list[str]:
     wrapped = [
         block
         for block in re.split(r"\n\s*\n", text)
-        if len(block.splitlines()) > 1
-        and not re.match(r"\s*([-*|#]|\d+[.)])", block)
+        if len(block.splitlines()) > 1 and not re.match(r"\s*([-*|#]|\d+[.)])", block)
     ]
     wanted = {
         "headings without a full stop": (len(headings), 3),

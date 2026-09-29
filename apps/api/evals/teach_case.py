@@ -1,6 +1,6 @@
 """One case of the teach bake-off and the loader of the inline dataset `teach_cases.yaml`.
 
-A case is what a person teaches (typed turns, one spoken transcript, or one document) about one
+A case is what a person teaches (typed turns, one spoken recording, or one document) about one
 company, the concepts that already exist before it runs, and the concepts and relations a
 careful reviewer expects the teach pipeline to draft from it. A case without expectations runs
 in report-only mode: what it drafted and what it cost are recorded, nothing is scored.
@@ -20,7 +20,8 @@ CaseKind = Literal["text", "speech", "document"]
 CaseOrigin = Literal["dataset", "documents", "benchmarks", "private"]
 
 MAX_TYPED_CHARS = 400
-MAX_TRANSCRIPT_CHARS = 4000
+# The longest spoken sentence one `speech` request carries, as the API allows.
+MAX_SPOKEN_SENTENCE_CHARS = 4000
 
 
 def _as_list(value: object) -> object:
@@ -86,8 +87,9 @@ class TeachCase(_Model):
     description: str = ""
     tags: list[str] = Field(default_factory=list)
     existing: list[ExistingConcept] = Field(default_factory=list)
-    # Typed text: one string per turn. Speech: the whole transcript. Document: either one
-    # inline text uploaded as a text file, or `document`, a file on disk.
+    # Typed text: one string per turn. Speech: one string per finished spoken sentence of the
+    # recording, in the order spoken. Document: either one inline text uploaded as a text
+    # file, or `document`, a file on disk.
     input: list[str] = Field(default_factory=list)
     document: Path | None = None
     expected: Expected | None = None
@@ -111,10 +113,12 @@ class TeachCase(_Model):
             raise ValueError(f"{self.id}: input is empty")
         if self.kind == "text" and any(len(t) > MAX_TYPED_CHARS for t in self.input):
             raise ValueError(f"{self.id}: a typed turn holds at most {MAX_TYPED_CHARS} characters")
-        if self.kind != "text" and len(self.input) != 1:
-            raise ValueError(f"{self.id}: speech and inline document cases have one input")
-        if self.kind == "speech" and len(self.input[0]) > MAX_TRANSCRIPT_CHARS:
-            raise ValueError(f"{self.id}: a transcript holds at most {MAX_TRANSCRIPT_CHARS} chars")
+        if self.kind == "document" and len(self.input) != 1:
+            raise ValueError(f"{self.id}: an inline document case has one input")
+        if self.kind == "speech" and any(len(s) > MAX_SPOKEN_SENTENCE_CHARS for s in self.input):
+            raise ValueError(
+                f"{self.id}: a spoken sentence holds at most {MAX_SPOKEN_SENTENCE_CHARS} chars"
+            )
         return self
 
     @property

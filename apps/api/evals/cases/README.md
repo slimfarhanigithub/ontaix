@@ -1,8 +1,8 @@
 # Teach Bake-Off Cases
 
-This folder and `evals/documents/` hold the hand-checked test data of the teach bake-off: what a person teaches (typed turns, a spoken transcript, or a business document), the concepts that exist before it runs, and the gold ontology a careful reviewer expects. The goal is to find the model that turns speech, text and documents into the most detailed ontology (concept, parent path, verb, label, at any depth) with the fewest mistakes.
+This folder and `evals/documents/` hold the hand-checked test data of the teach bake-off: what a person teaches (typed turns, a spoken recording, or a business document), the concepts that exist before it runs, and the gold ontology a careful reviewer expects. The goal is to find the model that turns speech, text and documents into the most detailed ontology (concept, parent path, verb, label, at any depth) with the fewest mistakes.
 
-Contents: 75 short cases in `teach_cases.yaml` (45 typed, 30 spoken; 57 English, 18 French) with 309 expected concepts and 14 expected relations, and 11 full documents in `evals/documents/`: 6 business documents of 2,300 to 5,100 words (gold trees of 97 to 129 concepts, 5 to 6 levels deep), 3 document-structure regression documents (63 to 74 concepts, depth 5, one of them French) and 2 adversarial documents. Together they make 19 document files.
+Contents: 78 short cases in `teach_cases.yaml` (45 typed, 33 spoken; 59 English, 19 French) with 323 expected concepts and 14 expected relations, and 11 full documents in `evals/documents/`: 6 business documents of 2,300 to 5,100 words (gold trees of 97 to 129 concepts, 5 to 6 levels deep), 3 document-structure regression documents (63 to 74 concepts, depth 5, one of them French) and 2 adversarial documents. Together they make 19 document files.
 
 ```mermaid
 flowchart LR
@@ -20,7 +20,7 @@ flowchart LR
 
 ## Case Format
 
-Short cases follow `evals/teach_case.py` (`TeachCase`): `id`, `kind` (`text` or `speech`), `company` (the root), `description`, `tags`, `existing` (concepts seeded and approved before the case runs, parent first), `input` (one string per typed turn of at most 400 characters, or one transcript of at most 4,000 characters), `expected.concepts` (label, every acceptable parent, the verb first then acceptable synonyms, aliases), `expected.relations` (between concepts that both exist when drafted, `from`, `to`, `action`, `inverse`) and `optional` (labels that are neither invented nor missed).
+Short cases follow `evals/teach_case.py` (`TeachCase`): `id`, `kind` (`text` or `speech`), `company` (the root), `description`, `tags`, `existing` (concepts seeded and approved before the case runs, parent first), `input` (one string per typed turn of at most 400 characters, or one string per finished spoken sentence of at most 4,000 characters, sent in order in one session as the Studio microphone sends them), `expected.concepts` (label, every acceptable parent, the verb first then acceptable synonyms, aliases), `expected.relations` (between concepts that both exist when drafted, `from`, `to`, `action`, `inverse`) and `optional` (labels that are neither invented nor missed).
 
 A full document is a paired set in `evals/documents/`: `NAME.md` and its rendered variants share `NAME.expected.yaml`, which holds `company`, `description`, `tags`, `expected` and `optional`, as `evals/case_sources.py` reads them. The harness runs each document file as its own case. The adversarial companions also list the injected labels under `source_report.injected`; the harness ignores that key and `check_documents.py` uses it.
 
@@ -101,6 +101,9 @@ A full document is a paired set in `evals/documents/`: `NAME.md` and its rendere
 | `fr-speech-ils-elle` | Logistics | French | speech | 102 chars | 3 | 4 (+0 rel) | back-reference, run-on |
 | `fr-speech-est-un-type-de` | Aviation | French | speech | 96 chars | 2 | 4 (+0 rel) | is-a |
 | `fr-speech-inter-domaines-sla` | IT operations | French | speech | 111 chars | 3 | 2 (+1 rel) | cross-domain, reuse, back-reference, deep-chain |
+| `en-speech-recording-depot` | Logistics | English | speech, 4 sentences | 187 chars | 4 | 6 (+0 rel) | recording, back-reference, deep-chain, fillers |
+| `en-speech-recording-correction` | Insurance | English | speech, 4 sentences | 192 chars | 3 | 4 (+0 rel) | recording, correction, fillers |
+| `fr-speech-enregistrement-atelier` | Manufacturing | French | speech, 3 sentences | 142 chars | 3 | 4 (+0 rel) | recording, back-reference, fillers |
 | `en-text-owner-adnoc-client` | IT services | English | text | 125 chars | 4 | 10 (+0 rel) | role-pattern, grouping, relative-clause, inner-punctuation |
 | `en-speech-owner-adnoc-client` | IT services | English | speech | 129 chars | 4 | 10 (+0 rel) | role-pattern, grouping, relative-clause, inner-punctuation, fillers |
 | `en-text-role-customer-of` | IT services | English | text | 56 chars | 2 | 2 (+0 rel) | role-pattern |
