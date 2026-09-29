@@ -92,7 +92,8 @@ Return one intent per fact:
 - domainKey is the domain template of a new concept, or null to inherit from its parent.
 - confidence is between 0 and 1. explanation is one short plain-text reason, for example which
   earlier concept a back-reference points to. source is the range of the words the intent comes
-  from, inside its segment; span repeats those words.
+  from, inside its segment. span is always given: an exact copy of those words from sentence,
+  character for character, with the same spelling, casing and punctuation, never paraphrased.
 - Put phrases you cannot place in unresolved, with reason not_understood, ambiguous_reference,
   low_confidence or not_a_statement, and their source range when you can. Never invent facts
   the text does not state.
