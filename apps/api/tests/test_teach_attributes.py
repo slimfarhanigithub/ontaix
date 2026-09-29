@@ -24,6 +24,8 @@ from app.models.llm.teach_extraction_answer import TeachExtractionAnswer
 from app.services.teach_extraction_service import _ground_name, _ground_value
 from tests.conftest import TenantFixture
 from tests.llm_fakes import FakeLlmClient
+from tests.test_cross_company_scope import _foreign_concept
+from tests.test_proposals import add_company as add_company_via_api
 from tests.test_teach_extraction import add_company, configure, rows
 from tests.test_teach_speech import speak, submit
 
@@ -172,6 +174,13 @@ def test_the_name_is_grounded_on_the_same_stem_and_the_value_word_for_word() -> 
     assert _ground_name("pricing", "it is priced per day", (0, 20)) == "pricing"
     assert _ground_name("base", "the shop is based in Leeds", (0, 26)) == "base"
     assert _ground_name("headcount", "a headcount of 40", (0, 17)) == "headcount"
+    assert _ground_name("base", "the bass is based in Leeds", (0, 26)) == "base"
+    # A name inflects the caller's word, or shares a stem of four or more letters with it.
+    assert _ground_name("rats", "the day is rated", (0, 16)) is None
+    assert _ground_name("rated", "it counts rats", (0, 14)) is None
+    assert _ground_name("bass", "the shop is based in Leeds", (0, 26)) is None
+    assert _ground_name("based", "the bass player", (0, 15)) is None
+    assert _ground_name("rate", "the day is rated", (0, 16)) == "rate"
     # No other word can be invented, and the name is words alone.
     assert _ground_name("invoicing", MONTHLY, whole) is None
     assert _ground_name("billing frequency", MONTHLY, whole) is None
@@ -467,3 +476,64 @@ async def test_the_database_holds_an_attribute_read_or_taught_never_both(
             {**base, "name": "g", "type": "id", "col": "x.y", "fill": 80, "value": None},
         )
         await s.rollback()
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_a_taught_attribute_needs_propose_rights_on_the_concepts_company(
+    client: httpx.AsyncClient, tenant: TenantFixture
+) -> None:
+    other = await add_company_via_api(client, tenant, "Elsewhere")
+    foreign = await _foreign_concept(client, tenant, other)
+    draft = {
+        "type": "attr",
+        "name": "billing",
+        "attributeType": "text",
+        "value": "monthly",
+    }
+
+    forbidden = await client.post(
+        "/proposals/batch",
+        json={"drafts": [{**draft, "conceptId": foreign["id"]}]},
+        headers=tenant.owner.headers,
+    )
+    missing = await client.post(
+        "/proposals/batch",
+        json={
+            "drafts": [
+                {**draft, "conceptLabel": foreign["label"], "companyId": str(tenant.company_id)}
+            ]
+        },
+        headers=tenant.builder.headers,
+    )
+
+    assert forbidden.status_code == 403, forbidden.text
+    assert missing.status_code == 404, missing.text
+    left = await rows(
+        "SELECT id FROM ontaix.attribute WHERE tenant_id = :tenant", tenant=tenant.tenant_id
+    )
+    assert left == []
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_a_proposal_whose_attribute_is_gone_is_not_ready(
+    client: httpx.AsyncClient, tenant: TenantFixture
+) -> None:
+    draft = {
+        "type": "attr",
+        "conceptId": str(tenant.root_id),
+        "name": "billing",
+        "attributeType": "text",
+        "value": "monthly",
+    }
+    [created] = await submit(client, tenant, [draft])
+    async with db_client.get_session_factory()() as s:
+        await s.execute(
+            text("DELETE FROM ontaix.attribute WHERE id = :id"), {"id": created["attributeId"]}
+        )
+        await s.commit()
+
+    response = await client.post(
+        f"/proposals/{created['id']}/approve", headers=tenant.governor.headers
+    )
+
+    assert response.status_code == 409 and "proposal_not_ready" in response.text

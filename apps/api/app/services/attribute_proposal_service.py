@@ -96,10 +96,11 @@ async def propose_attribute(
 async def approve(
     session: AsyncSession, view: OntologyView, caller: Caller, proposal: Proposal, bulk: bool
 ) -> None:
-    """The proposal's attribute becomes approved."""
+    """The proposal's attribute becomes approved; a proposal whose attribute is gone is not
+    ready."""
     attribute = view.attribute(proposal.attribute_id)
     if attribute is None:
-        return
+        raise conflict("proposal_not_ready", "the attribute no longer exists")
     await attribute_repository.approve(session, attribute)
     await emit_changed(session, view, caller.actor, attribute, proposal, removed=False, bulk=bulk)
 

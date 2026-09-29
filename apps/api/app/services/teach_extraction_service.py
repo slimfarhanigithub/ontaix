@@ -82,9 +82,11 @@ MAX_EXPLANATION = 300
 MAX_LABEL_CHARS = 120
 MAX_ATTRIBUTE_NAME = 80
 MAX_ATTRIBUTE_VALUE = 200
-# The inflections an attribute name may differ by from the caller's word, and the shortest stem.
+# The inflections an attribute name may differ by from the caller's word; the shortest word an
+# inflection is added to, and the shortest stem two inflected words may share.
 _INFLECTIONS = ("ing", "es", "ed", "s", "d")
 _MIN_STEM = 3
+_MIN_SHARED_STEM = 4
 DEFAULT_MEMBER_ACTION = "includes"
 # `X is a <role> of Y` is drafted as Y has <Role>, <Role> includes X.
 ROLE_NOUNS = frozenset(
@@ -1125,32 +1127,45 @@ def _ground_value(value: str, text: str, source: tuple[int, int]) -> str | None:
 
 def _ground_name(name: str, text: str, source: tuple[int, int]) -> str | None:
     """`name` lower-cased when each of its words is a word of `text[source]` or an inflection
-    of one on the same stem (`-s`, `-es`, `-ed`, `-d`, `-ing`: `billing` for `billed`), else
-    None. The name is words separated by single spaces, nothing else."""
+    of one (see `_inflects`: `billing` for `billed`, `base` for `based`), else None. The name is
+    words separated by single spaces, nothing else."""
     start, end = source
     words = _words(text)
     if any(a < start < b or a < end < b for a, b in words):
         return None
-    spoken = [_stems(_fold_exact(text[a:b])) for a, b in words if a >= start and b <= end]
+    spoken = [_fold_exact(text[a:b]) for a, b in words if a >= start and b <= end]
     normalised = unicodedata.normalize("NFKC", name).casefold()
     name_words = [normalised[a:b] for a, b in _words(normalised)]
     if not name_words or " ".join(name_words) != normalised:
         return None
     if len(normalised) > MAX_ATTRIBUTE_NAME or has_refused_character(normalised):
         return None
-    if any(not any(_stems(w) & stems for stems in spoken) for w in name_words):
+    if any(not any(_inflects(w, said) for said in spoken) for w in name_words):
         return None
     return normalised
 
 
+def _inflects(a: str, b: str) -> bool:
+    """True when `a` and `b` are the same word, when one is the other plus an allowed suffix
+    (`base` and `based`), or when both are one stem of at least four characters plus an
+    allowed suffix each (`billed` and `billing`). A shorter shared stem is not enough, so
+    `rats` and `rated` or `bass` and `based` differ."""
+    if a == b:
+        return True
+    short, long = sorted((a, b), key=len)
+    if len(short) >= _MIN_STEM and any(long == short + suffix for suffix in _INFLECTIONS):
+        return True
+    return bool(_stems(a) & _stems(b))
+
+
 def _stems(word: str) -> set[str]:
-    """The word and the stems it gives with one inflection removed, each at least three
-    characters long."""
-    stems = {word}
-    for suffix in _INFLECTIONS:
-        if word.endswith(suffix) and len(word) - len(suffix) >= _MIN_STEM:
-            stems.add(word[: -len(suffix)])
-    return stems
+    """The stems `word` gives with one allowed suffix removed, each at least
+    `_MIN_SHARED_STEM` characters long."""
+    return {
+        word[: -len(suffix)]
+        for suffix in _INFLECTIONS
+        if word.endswith(suffix) and len(word) - len(suffix) >= _MIN_SHARED_STEM
+    }
 
 
 def _fold_exact(word: str) -> str:

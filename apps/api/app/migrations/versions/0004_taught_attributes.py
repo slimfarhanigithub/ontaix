@@ -8,7 +8,7 @@ date). Every statement is idempotent, so on a database already created from the 
 this revision changes nothing. The DDL is the contract's text, so constraint names and
 definitions match a database loaded from it.
 
-Revision ID: 0006
+Revision ID: 0004
 Revises: 0003
 Create Date: 2026-09-29
 """
@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "0006"
+revision = "0004"
 down_revision = "0003"
 branch_labels = None
 depends_on = None
@@ -45,4 +45,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise NotImplementedError("revision 0006 is one-way")
+    raise NotImplementedError("revision 0004 is one-way")

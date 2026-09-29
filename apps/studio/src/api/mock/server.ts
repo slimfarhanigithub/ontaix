@@ -838,7 +838,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       changeKind: null,
       title: `${n.label}.${key}`,
       heading: KIND_HEADING.attr,
-      color: appearance.source,
+      color: toConcept(n).color ?? NEUTRAL,
       companyId: n.companyId,
       domainId: null,
       parentLabel: null,
