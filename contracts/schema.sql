@@ -80,12 +80,12 @@ CREATE TABLE tenant_settings (
   refresh              refresh_interval NOT NULL DEFAULT '15 min',
   agent_access         boolean NOT NULL DEFAULT true,
   cost_cap             boolean NOT NULL DEFAULT true,
-  llm_monthly_token_cap bigint NOT NULL DEFAULT 2000000 CHECK (llm_monthly_token_cap BETWEEN 0 AND 1000000000),
+  llm_monthly_token_cap bigint NOT NULL DEFAULT 0 CHECK (llm_monthly_token_cap BETWEEN 0 AND 1000000000),
   egress_allowlist     text[] NOT NULL DEFAULT '{}',
   updated_at           timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT tenant_settings_colors_is_object CHECK (jsonb_typeof(colors) = 'object')
 );
-COMMENT ON TABLE tenant_settings IS 'The 22 tenant settings plus appearance, the connector egress allowlist and the monthly token cap of Ontaix''s own language model calls (0 turns the teach extraction model step off); the two locked settings are enforced by CHECK constraints.';
+COMMENT ON TABLE tenant_settings IS 'The 22 tenant settings plus appearance, the connector egress allowlist and the monthly token cap of Ontaix''s own language model calls (0, the default, turns the teach extraction model step off, so nothing is sent to a provider until an administrator sets a cap); the two locked settings are enforced by CHECK constraints.';
 
 CREATE TABLE tenant_view_state (
   tenant_id   uuid PRIMARY KEY REFERENCES tenant(id) ON DELETE CASCADE,

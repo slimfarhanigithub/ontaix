@@ -1,6 +1,6 @@
 # ADR 0008: Teach Extraction
 
-Status: Proposed. The owner's decisions (rows 70 to 74) are final; the derived choices (rows 75 to 79 and 83) wait for the owner to confirm.
+Status: Accepted. The owner's decisions (rows 70 to 74) are final; the derived choices (rows 75 to 79 and 83 to 85) are approved under owner delegation (2026-09-29).
 
 ## Context
 
@@ -98,7 +98,7 @@ For the owner's two sentences, with `Insight` as `c0`:
 - Every call to the provider, including failed and timed-out ones, writes one `llm_call` row: tenant, caller, company, purpose `teach_extraction`, provider, model, input and output tokens, estimated euro cost from the deployment's price table, latency and outcome. It never holds the sentence, prompt, answer or key. Rows are kept 400 days.
 - `GET /cost` returns the month's totals as `CostSummary.llm` (`LlmUsage`), separate from the agent figures (`measuredEur`, `byPlatform`), which stay agent reads through the gateway. The Cost management page shows no new element until `docs/ui-contract.md` records one.
 - Per caller: each model call spends one unit of the hourly `llm` budget in `rate_budget_window` (default 200 calls per user or agent per hour, from configuration like the other budgets). When it is spent the step is skipped with `llmOutcome` `rate_limited`.
-- Per tenant: the setting `llmMonthlyTokenCap` (default 2,000,000 tokens, `0` turns the step off) bounds input plus output tokens per calendar month in UTC, whatever `costCap` says (`costCap` stops agents at their euro allocation). Before a call the API reserves the call's upper bound (estimated input tokens plus the maximum of 1,024 output tokens) in `llm_month_usage` with one conditional upsert; zero rows returned means the cap is reached and the step is skipped with `llmOutcome` `budget_exhausted`. The reservation commits in its own short transaction before the provider is called; no transaction, and so no row lock on the tenant's month row, stays open during the call, and the request's own transaction never includes the reservation. After the call, in another short transaction, the reservation is settled to the actual count on the month it was made in (a call that starts on the last second of a month settles into that month), and the `llm_call` row is inserted. A timed-out, failed or invalid call settles its actual count, 0 when the provider reports none, which releases the rest of the reservation. A reservation whose process dies before settling stays counted until the month ends.
+- Per tenant: the setting `llmMonthlyTokenCap` (default 0, which turns the step off; the Northwind Industries fixture tenant sets 2,000,000) bounds input plus output tokens per calendar month in UTC, whatever `costCap` says (`costCap` stops agents at their euro allocation). Before a call the API reserves the call's upper bound (estimated input tokens plus the maximum of 1,024 output tokens) in `llm_month_usage` with one conditional upsert; zero rows returned means the cap is reached and the step is skipped with `llmOutcome` `budget_exhausted`. The reservation commits in its own short transaction before the provider is called; no transaction, and so no row lock on the tenant's month row, stays open during the call, and the request's own transaction never includes the reservation. After the call, in another short transaction, the reservation is settled to the actual count on the month it was made in (a call that starts on the last second of a month settles into that month), and the `llm_call` row is inserted. A timed-out, failed or invalid call settles its actual count, 0 when the provider reports none, which releases the rest of the reservation. A reservation whose process dies before settling stays counted until the month ends.
 - An exhausted budget never fails the request: the response is `200` with the grammar's result, `degraded` true and the reason in `llmOutcome`. The existing `429 rate_limited` stays for the parse budget, which is charged before the grammar runs, as today.
 - No event is published for cost records. They change no state another client draws; Cost management reads `GET /cost` when it opens.
 
@@ -136,12 +136,12 @@ The rest of Ontaix runs in Azure France Central. The model step is the one place
 
 With the default configuration it goes to Anthropic's API (`ONTAIX_LLM_PROVIDER` `anthropic`), a service operated by Anthropic outside Azure. This configuration gives no guarantee that the data stays in France or in the EU; where Anthropic processes it is set by Anthropic's API terms, not by Ontaix. Retention of prompts and answers by the provider follows the provider's API terms in force for the account that owns the key; Ontaix itself stores neither. The adapter's provider setting is the lever for a different residency, for example a provider endpoint in an EU region, and needs no contract change.
 
-The default `llmMonthlyTokenCap` of 2,000,000 means the step is on for every tenant once a key is configured. That default stands until the owner answers whether egress is opt-out (current) or opt-in (default `0`); decision row 78 records the question.
+Egress is opt-in. `llmMonthlyTokenCap` defaults to 0, so no tenant content leaves Azure until a tenant administrator sets a cap; the development and test fixture tenant (Northwind Industries) sets 2,000,000 (decision row 85).
 
 ## Consequences
 
 - The owner's natural sentences produce drafts; the grammar stays the verbatim port and the screenshot suite is unaffected, because the Studio renders the same drafts and captions.
 - A sentence that triggers the step waits up to 15 seconds longer; sentences the grammar fully understands pay nothing.
-- Sentences that trigger the step, recent session sentences and candidate labels leave Azure France Central for the configured provider (see Data Residency). A tenant that forbids this sets `llmMonthlyTokenCap` to `0`.
+- Sentences that trigger the step, recent session sentences and candidate labels leave Azure France Central for the configured provider (see Data Residency). Nothing leaves until a tenant administrator sets `llmMonthlyTokenCap` above 0.
 - Model spend is measured per call, capped per caller per hour and per tenant per month, and visible in `GET /cost`.
 - `confidence` and `explanation` reach the API client only; showing them in the Studio needs a UI contract decision first.

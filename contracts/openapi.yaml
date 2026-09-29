@@ -2511,7 +2511,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Forbidden:
-      description: The caller's roles do not allow this action in this scope (code `forbidden`).
+      description: The caller's roles do not allow this action in this scope (code `forbidden`). `detail` names what is missing in human-readable words, for example `Only a Governor or Owner can approve`.
       content:
         application/problem+json:
           schema:
@@ -2567,7 +2567,7 @@ components:
   schemas:
     Problem:
       type: object
-      description: RFC 9457 problem details with a stable machine-readable `code`.
+      description: RFC 9457 problem details with a stable machine-readable `code`. Every refusal (`401`, `403`, `404`, `409`, `410`, `413`, `415`, `422`, `429`, `503`) carries `detail`, one human-readable English sentence saying why, safe to show to the caller as text - for example `Only a Governor or Owner can approve` or `The same person cannot give both approvals`. It never holds markup, secrets or anything the caller may not read. The Studio shows it in the refusal toast, `title` when `detail` is absent.
       required: [type, title, status, code]
       properties:
         type:
@@ -4350,8 +4350,8 @@ components:
       type: integer
       minimum: 0
       maximum: 1000000000
-      default: 2000000
-      description: Tokens (input plus output) Ontaix's own language model calls may use for the tenant per calendar month (UTC), enforced whatever `costCap` says. `0` turns the model step off. When the cap is reached the teach parse still answers `200` with the grammar's result and `llmOutcome` `budget_exhausted`. A change writes the audit entry `llmMonthlyTokenCap set to <n>`.
+      default: 0
+      description: Tokens (input plus output) Ontaix's own language model calls may use for the tenant per calendar month (UTC), enforced whatever `costCap` says. `0`, the default, turns the model step off, so no tenant content reaches a model provider until a tenant administrator sets a cap. When the cap is reached the teach parse still answers `200` with the grammar's result and `llmOutcome` `budget_exhausted`. A change writes the audit entry `llmMonthlyTokenCap set to <n>`.
 
     Appearance:
       type: object
