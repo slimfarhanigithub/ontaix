@@ -8,6 +8,8 @@
 import { api } from '../api/client';
 import { ApiError, type ImportRef, type InputOrigin, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
 import { drawBirth } from '../canvas/division';
+import { bySid } from '../canvas/state';
+import type { Node } from '../canvas/types';
 import { random } from '../runtime/rng';
 import { store } from '../store/store';
 
@@ -89,12 +91,33 @@ async function parseAndPropose(request: TeachRequest): Promise<void> {
   store.caption('Not understood', result.caption);
 }
 
+/** The refusals of a batch that name a fact the model already holds. */
+const DUPLICATE_CODES = new Set(['duplicate_label', 'duplicate_relation']);
+
 /** Submits one parse's drafts; a batch refused for the proposal budget is retried whole once
- * after its `Retry-After` when that is short, never split. */
+ * after its `Retry-After` when that is short, never split. A batch refused because a draft
+ * restates a fact already in the model is sent once more without the drafts the canvas shows
+ * as already there, so the new facts of the parse are still proposed; a toast names what was
+ * left out. */
 async function submitBatch(drafts: ProposalDraft[]): Promise<void> {
   try {
     await api.createProposalBatch(drafts);
   } catch (err) {
+    if (err instanceof ApiError && err.status === 409 && DUPLICATE_CODES.has(err.problem.code)) {
+      const plan = withoutKnown(drafts);
+      if (!plan.fresh.length || !plan.known.length) {
+        store.refused(err);
+        return;
+      }
+      try {
+        await api.createProposalBatch(plan.fresh);
+      } catch (e) {
+        store.refused(e);
+        return;
+      }
+      store.toast2('Already there', leftOutText(plan));
+      return;
+    }
     const wait = err instanceof ApiError && err.status === 429 ? err.retryAfter : null;
     if (wait === null || wait > BATCH_RETRY_MAX_S) {
       store.refused(err);
@@ -103,6 +126,113 @@ async function submitBatch(drafts: ProposalDraft[]): Promise<void> {
     await new Promise((r) => setTimeout(r, wait * 1000));
     await api.createProposalBatch(drafts).catch((e) => store.refused(e));
   }
+}
+
+/** A refused batch split for its one resubmission. */
+export interface DuplicatePlan {
+  /** The drafts sent again, children re-pointed to the existing concept where it stands under the same parent. */
+  fresh: ProposalDraft[];
+  /** Names of the drafts left out because the model already holds them. */
+  known: string[];
+  /** Labels of the drafts left out because they named a left-out concept that stands under another parent. */
+  orphaned: string[];
+}
+
+/** Relation actions compared as the API compares them: NFKC, whitespace collapsed, trimmed, lower case. */
+const normaliseAction = (action: string): string => action.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+
+/** A concept of the company carrying the label, ignoring case; cells being deleted do not count, as in the API. */
+function liveConcept(companyId: string, label: string): Node | null {
+  const company = store.companyBySid(companyId);
+  if (!company) return null;
+  const wanted = label.toLowerCase();
+  return (
+    store.s.nodes.find((n) => n.company === company && n.kind !== 'source' && !n.dying && n.label.toLowerCase() === wanted) ||
+    null
+  );
+}
+
+/** True when the canvas already holds what the draft proposes: a live concept of that label in its
+ * company, or a live relation with the same ends and action. */
+export function alreadyInModel(draft: ProposalDraft): boolean {
+  const s = store.s;
+  if (draft.type === 'concept' || draft.type === 'spec') return !!liveConcept(draft.companyId, draft.label);
+  if (draft.type === 'relation') {
+    const a = bySid(s, draft.aId),
+      b = bySid(s, draft.bId);
+    if (!a || !b || a.dying || b.dying) return false;
+    const action = normaliseAction(draft.action);
+    return s.links.some((l) => !l.dying && l.a === a && l.b === b && normaliseAction(l.label) === action);
+  }
+  return false;
+}
+
+/**
+ * Leaves out the drafts the canvas already holds. A later draft that names a left-out concept by
+ * label is re-pointed to the existing concept when that concept stands under the same parent the
+ * draft taught; otherwise it is left out too, and so are the drafts that name it in turn.
+ */
+export function withoutKnown(drafts: ProposalDraft[]): DuplicatePlan {
+  const plan: DuplicatePlan = { fresh: [], known: [], orphaned: [] };
+  // Label (lower case) of a left-out concept draft: the existing node it maps to, or null when its children are left out.
+  const replaced = new Map<string, Node | null>();
+  const key = (label: string | undefined): string | undefined => label?.toLowerCase();
+  for (const d of drafts) {
+    const via = d.type === 'concept' || d.type === 'spec' ? key(d.parentLabel) : undefined;
+    const ends = d.type === 'relation' ? [key(d.aLabel), key(d.bLabel)] : [];
+    if ((via && replaced.get(via) === null) || ends.some((e) => e && replaced.get(e) === null)) {
+      plan.orphaned.push(draftName(d));
+      if (d.type === 'concept' || d.type === 'spec') replaced.set(d.label.toLowerCase(), null);
+      continue;
+    }
+    let draft = d;
+    if ((draft.type === 'concept' || draft.type === 'spec') && via && replaced.get(via)?.sid) {
+      const { parentLabel: _, ...rest } = draft;
+      draft = { ...rest, parentId: replaced.get(via)!.sid! } as ProposalDraft;
+    }
+    if (draft.type === 'relation') {
+      const a = key(draft.aLabel),
+        b = key(draft.bLabel);
+      const { aLabel, bLabel, ...rest } = draft;
+      const aNode = a ? replaced.get(a) : undefined,
+        bNode = b ? replaced.get(b) : undefined;
+      draft = {
+        ...rest,
+        ...(aNode?.sid ? { aId: aNode.sid } : aLabel !== undefined ? { aLabel } : {}),
+        ...(bNode?.sid ? { bId: bNode.sid } : bLabel !== undefined ? { bLabel } : {}),
+      } as ProposalDraft;
+    }
+    if (!alreadyInModel(draft)) {
+      plan.fresh.push(draft);
+      continue;
+    }
+    plan.known.push(draftName(draft));
+    if (draft.type === 'concept' || draft.type === 'spec') {
+      const existing = liveConcept(draft.companyId, draft.label);
+      const taught = draft.parentLabel ? liveConcept(draft.companyId, draft.parentLabel) : bySid(store.s, draft.parentId);
+      replaced.set(draft.label.toLowerCase(), existing && taught && existing.parent === taught ? existing : null);
+    }
+  }
+  return plan;
+}
+
+/** A draft's name for the toast: a concept's label, or a relation's words. */
+function draftName(d: ProposalDraft): string {
+  if (d.type === 'concept' || d.type === 'spec') return d.label;
+  if (d.type === 'relation') {
+    const a = bySid(store.s, d.aId)?.label ?? d.aLabel ?? '',
+      b = bySid(store.s, d.bId)?.label ?? d.bLabel ?? '';
+    return `${a} ${normaliseAction(d.action)} ${b}`.trim();
+  }
+  return d.type;
+}
+
+/** The toast text naming what a resubmission left out. */
+export function leftOutText(plan: DuplicatePlan): string {
+  const known = `Left out, already in the model: ${plan.known.join(', ')}.`;
+  return plan.orphaned.length
+    ? `${known} Also left out, as the existing concept stands under another parent: ${plan.orphaned.join(', ')}.`
+    : known;
 }
 
 /** Uploads a document to the API, which extracts and stores its sentences; each is then taught like a spoken one. */
