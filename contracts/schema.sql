@@ -20,7 +20,7 @@ CREATE TYPE node_kind AS ENUM ('root', 'concept');
 CREATE TYPE relation_kind AS ENUM ('rel', 'isa', 'same', 'clash');
 CREATE TYPE proposal_type AS ENUM ('concept', 'spec', 'relation', 'source', 'bind', 'attr', 'change');
 CREATE TYPE proposal_state AS ENUM ('pending', 'half_approved', 'approved', 'rejected');
-CREATE TYPE proposal_origin AS ENUM ('text', 'speech', 'document');
+CREATE TYPE proposal_origin AS ENUM ('text', 'speech', 'document', 'suggestion', 'ontology_import');
 CREATE TYPE change_kind AS ENUM (
   'rename', 'delete_concept', 'edit_relation', 'remove_relation', 'unbind',
   'rename_source', 'remove_source', 'remove_company', 'resolve_conflict', 'remove_cross_company_links'
@@ -406,19 +406,22 @@ CREATE TABLE llm_call (
   actor_kind     actor_kind NOT NULL CHECK (actor_kind IN ('user', 'agent')),
   actor_id       uuid NOT NULL,
   company_id     uuid,
-  purpose        text NOT NULL CHECK (purpose IN ('teach_extraction')),
+  purpose        text NOT NULL CHECK (purpose IN ('teach_extraction', 'concept_expansion', 'document_extraction', 'document_ocr')),
   provider       text NOT NULL CHECK (provider ~ '^[a-z0-9][a-z0-9_.-]{0,59}$'),
   model          text NOT NULL CHECK (char_length(model) BETWEEN 1 AND 120 AND model ~ '^[A-Za-z0-9][A-Za-z0-9_.:/@-]*$'),
   input_tokens   integer NOT NULL CHECK (input_tokens >= 0),
   output_tokens  integer NOT NULL CHECK (output_tokens >= 0),
   cost_eur       numeric(12,6) NOT NULL CHECK (cost_eur >= 0),
-  latency_ms     integer NOT NULL CHECK (latency_ms BETWEEN 0 AND 60000),
-  outcome        text NOT NULL CHECK (outcome IN ('used', 'invalid_output', 'timeout', 'provider_error')),
+  latency_ms     integer NOT NULL CHECK (latency_ms BETWEEN 0 AND 300000),
+  pages          integer CHECK (pages BETWEEN 0 AND 2000),
+  CONSTRAINT llm_call_pages_only_for_ocr CHECK ((purpose = 'document_ocr') = (pages IS NOT NULL)),
+  outcome        text NOT NULL CHECK (outcome IN ('used', 'invalid_output', 'timeout', 'provider_error', 'refused')),
+  CONSTRAINT llm_call_refused_not_for_teach CHECK (outcome <> 'refused' OR purpose <> 'teach_extraction'),
   UNIQUE (tenant_id, id)
 );
 CREATE INDEX llm_call_by_month ON llm_call (tenant_id, occurred_at);
 CREATE INDEX llm_call_by_occurred ON llm_call (occurred_at);
-COMMENT ON TABLE llm_call IS 'One cost record per call Ontaix makes to a language model provider, including failed and timed-out calls: who caused it (actor_id and company_id are plain uuids so the record survives the actor or company), why (purpose), which provider and model, token counts, the estimated euro cost from the deployment price table, latency and outcome. It never holds the sentence, the prompt, the answer or any credential. Cost management sums it per month; a purge deletes rows older than 400 days across all tenants through llm_call_by_occurred. It is inserted in its own short transaction after the call, never inside the request transaction.';
+COMMENT ON TABLE llm_call IS 'One cost record per call Ontaix makes to a language model provider, including failed and timed-out calls: who caused it (actor_id and company_id are plain uuids so the record survives the actor or company), why (purpose: teach_extraction, concept_expansion, document_extraction or document_ocr; an OCR call is priced per page, records pages, and its token counts are what the provider reports, often 0), which provider and model, token counts, the estimated euro cost from the deployment price table, latency and outcome. It never holds the sentence, the prompt, the answer or any credential. Cost management sums it per month; a purge deletes rows older than 400 days across all tenants through llm_call_by_occurred. It is inserted in its own short transaction after the call, never inside the request transaction.';
 
 CREATE TABLE llm_month_usage (
   tenant_id  uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
@@ -432,13 +435,13 @@ CREATE TABLE rate_budget_window (
   tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
   actor_kind    actor_kind NOT NULL CHECK (actor_kind IN ('user', 'agent')),
   actor_id      uuid NOT NULL,
-  budget        text NOT NULL CHECK (budget IN ('import', 'parse', 'proposal', 'llm')),
+  budget        text NOT NULL CHECK (budget IN ('import', 'parse', 'proposal', 'llm', 'expand', 'extraction', 'ocr')),
   window_start  timestamptz NOT NULL CHECK (extract(epoch FROM window_start) = floor(extract(epoch FROM window_start) / 3600) * 3600),
   spent         integer NOT NULL CHECK (spent >= 0),
   PRIMARY KEY (tenant_id, actor_kind, actor_id, budget, window_start)
 );
 CREATE INDEX rate_budget_window_by_start ON rate_budget_window (window_start);
-COMMENT ON TABLE rate_budget_window IS 'Units spent per user or agent, per budget, per clock hour (window_start is a whole UTC hour), shared by every API replica. A charge of $n against $limit is one statement: INSERT INTO rate_budget_window (tenant_id, actor_kind, actor_id, budget, window_start, spent) SELECT $tenant, $kind, $actor, $budget, $window, $n WHERE $n <= $limit ON CONFLICT (tenant_id, actor_kind, actor_id, budget, window_start) DO UPDATE SET spent = rate_budget_window.spent + EXCLUDED.spent WHERE rate_budget_window.spent + EXCLUDED.spent <= $limit RETURNING spent; zero rows returned means the budget is exhausted and the call is refused (429 rate_limited, or llmOutcome rate_limited for the llm budget). actor_id is a plain uuid so a charge never waits on a foreign key lock. A purge every 15 minutes deletes windows that started more than 2 hours ago.';
+COMMENT ON TABLE rate_budget_window IS 'Units spent per user or agent, per budget, per clock hour (window_start is a whole UTC hour), shared by every API replica. A charge of $n against $limit is one statement: INSERT INTO rate_budget_window (tenant_id, actor_kind, actor_id, budget, window_start, spent) SELECT $tenant, $kind, $actor, $budget, $window, $n WHERE $n <= $limit ON CONFLICT (tenant_id, actor_kind, actor_id, budget, window_start) DO UPDATE SET spent = rate_budget_window.spent + EXCLUDED.spent WHERE rate_budget_window.spent + EXCLUDED.spent <= $limit RETURNING spent; zero rows returned means the budget is exhausted and the call is refused (429 rate_limited, or llmOutcome rate_limited for the llm budget). The expand budget counts POST /concepts/{conceptId}/expand calls and is charged before the llm budget. The extraction budget counts whole-document extraction jobs started (POST /import/{importId}/extraction); the model calls of a job are bounded by its own token ceiling and the tenant cap, not by the per-call llm budget. The ocr budget counts OCR pages, charged for every image-only page before the OCR call. actor_id is a plain uuid so a charge never waits on a foreign key lock. A purge every 15 minutes deletes windows that started more than 2 hours ago.';
 
 -- ---------------------------------------------------------------------------
 -- Proposals and approvals
@@ -455,11 +458,13 @@ CREATE TABLE document_import (
   sha256           bytea NOT NULL,
   sentence_count   integer NOT NULL,
   extracted_chars  integer NOT NULL,
+  ocr_pages        integer NOT NULL DEFAULT 0,
   created_at       timestamptz NOT NULL DEFAULT now(),
   expires_at       timestamptz NOT NULL DEFAULT now() + interval '1 hour',
   UNIQUE (tenant_id, id),
   FOREIGN KEY (tenant_id, actor_user_id) REFERENCES app_user(tenant_id, id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, actor_agent_id) REFERENCES agent(tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT document_import_ocr_pages CHECK (ocr_pages BETWEEN 0 AND 2000 AND (ocr_pages = 0 OR media_type = 'application/pdf')),
   CONSTRAINT document_import_actor_matches_kind CHECK (
     (actor_kind = 'user'  AND actor_user_id IS NOT NULL AND actor_agent_id IS NULL) OR
     (actor_kind = 'agent' AND actor_agent_id IS NOT NULL AND actor_user_id IS NULL)
@@ -471,12 +476,14 @@ CREATE TABLE document_import (
   ),
   CONSTRAINT document_import_media_type CHECK (media_type IN (
     'text/plain', 'text/markdown', 'text/csv', 'application/json',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/pdf')),
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/pdf',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/html')),
   CONSTRAINT document_import_sha256 CHECK (octet_length(sha256) = 32),
   CONSTRAINT document_import_limits CHECK (sentence_count BETWEEN 0 AND 2000 AND extracted_chars BETWEEN 0 AND 2000000),
   CONSTRAINT document_import_one_hour CHECK (expires_at = created_at + interval '1 hour')
 );
-COMMENT ON TABLE document_import IS 'One uploaded document after server-side extraction: usable for one hour by the actor that created it, in its tenant. A purge every 15 minutes deletes imports whose expires_at is more than 24 hours old (their sentences cascade). Proposals copy the file name, media type, sentence index and position into proposal.origin_detail, so they survive the purge.';
+COMMENT ON TABLE document_import IS 'One uploaded document after server-side extraction: usable for one hour by the actor that created it, in its tenant. media_type is the type the server sniffed from the bytes (ADR 0011), never the client header alone; ocr_pages counts the image-only PDF pages whose text came from OCR. A purge every 15 minutes deletes imports whose expires_at is more than 24 hours old (their sentences cascade). Proposals copy the file name, media type, sentence index and position into proposal.origin_detail, so they survive the purge.';
 CREATE INDEX document_import_by_expiry ON document_import (expires_at);
 
 CREATE TABLE document_import_sentence (
@@ -484,13 +491,15 @@ CREATE TABLE document_import_sentence (
   import_id       uuid NOT NULL,
   sentence_index  integer NOT NULL CHECK (sentence_index BETWEEN 0 AND 1999),
   text            text NOT NULL CHECK (char_length(text) BETWEEN 13 AND 399),
-  position_unit   text CHECK (position_unit IN ('page', 'paragraph')),
+  position_unit   text CHECK (position_unit IN ('page', 'paragraph', 'slide', 'sheet')),
   position_index  integer CHECK (position_index BETWEEN 1 AND 100000),
+  position_row    integer CHECK (position_row BETWEEN 1 AND 1048576),
   parse_count     smallint NOT NULL DEFAULT 0 CHECK (parse_count BETWEEN 0 AND 3),
   drafted_at      timestamptz,
   PRIMARY KEY (tenant_id, import_id, sentence_index),
   FOREIGN KEY (tenant_id, import_id) REFERENCES document_import(tenant_id, id) ON DELETE CASCADE,
-  CONSTRAINT document_import_sentence_position_pair CHECK ((position_unit IS NULL) = (position_index IS NULL))
+  CONSTRAINT document_import_sentence_position_pair CHECK ((position_unit IS NULL) = (position_index IS NULL)),
+  CONSTRAINT document_import_sentence_row_only_for_sheet CHECK (position_row IS NULL OR position_unit = 'sheet')
 );
 COMMENT ON TABLE document_import_sentence IS 'Extracted sentences of an import in document order. parse_count caps teach parses per sentence at 3 and drafted_at marks the one proposal call allowed to cite the sentence; both are claimed with a conditional UPDATE ... RETURNING inside the calling transaction, and zero rows returned means the claim failed.';
 
@@ -521,6 +530,149 @@ CREATE TABLE teach_session_turn (
 );
 CREATE INDEX teach_session_turn_by_expiry ON teach_session_turn (expires_at);
 COMMENT ON TABLE teach_session_turn IS 'The recent sentences of one teach bar session, so the teach extraction model step can resolve back-references. Keyed by tenant, caller (actor_kind, actor_id), company and the client-generated session_id; only that caller reads it. concept_ids are the existing concepts the sentence referenced (re-checked at read time: a stored id is used only if the concept still exists and would be a valid candidate now - taught company, or another company only while crossCompany is on and the caller may read it), new_labels the labels it introduced (resolved to ids at the next sentence when a proposal has created them). Turns are stored in one short transaction after the parse result is built: SELECT pg_advisory_xact_lock(hashtextextended(tenant_id || '':'' || actor_kind || '':'' || actor_id || '':'' || company_id || '':'' || session_id, 0)); INSERT ... SELECT coalesce(max(turn_index) + 1, 0) FROM teach_session_turn WHERE <session key>; DELETE the same session''s turns with turn_index <= n - 8. The advisory lock serialises concurrent sentences of one session, so turn numbers never collide and at most 8 turns are kept. If storing the turn fails anyway, the turn is not kept and the parse still answers 200; it is never an error. Reads ignore rows past expires_at (2 hours after each sentence); a purge every 15 minutes deletes them.';
+
+CREATE TABLE concept_expansion (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  actor_user_id   uuid NOT NULL,
+  company_id      uuid NOT NULL,
+  concept_id      uuid NOT NULL,
+  session_id      uuid,
+  depth           integer CHECK (depth >= 1),
+  max_children    integer CHECK (max_children >= 1),
+  draft_count     integer NOT NULL CHECK (draft_count BETWEEN 1 AND 2000),
+  drafts          jsonb NOT NULL,
+  notes           jsonb NOT NULL,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  expires_at      timestamptz NOT NULL DEFAULT now() + interval '1 hour',
+  submitted_at    timestamptz,
+  UNIQUE (tenant_id, id),
+  FOREIGN KEY (tenant_id, actor_user_id) REFERENCES app_user(tenant_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, concept_id) REFERENCES concept(tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT concept_expansion_drafts_shape CHECK (
+    jsonb_typeof(drafts) = 'array'
+    AND jsonb_array_length(drafts) = draft_count
+    AND jsonb_typeof(notes) = 'array'
+    AND jsonb_array_length(notes) = draft_count
+    AND octet_length(drafts::text) + octet_length(notes::text) <= 4194304
+  ),
+  CONSTRAINT concept_expansion_one_hour CHECK (expires_at = created_at + interval '1 hour'),
+  CONSTRAINT concept_expansion_submitted_in_time CHECK (submitted_at IS NULL OR submitted_at <= expires_at)
+);
+CREATE INDEX concept_expansion_by_expiry ON concept_expansion (expires_at);
+COMMENT ON TABLE concept_expansion IS 'One set of model suggestions returned by POST /concepts/{conceptId}/expand, kept so that the proposals created from it are attested by the server as origin suggestion and hold exactly what the model suggested and the API validated. Written only when at least one draft survived validation; it is not an ontology row and holds no prompt, no answer text beyond the validated drafts and notes (labels, actions, confidence, one-line rationale), and no credential. Usable for one hour by the user that created it, in its tenant (users only: agents cannot expand). submitted_at marks the one successful POST /expansions/{expansionId}/proposals call, claimed with UPDATE concept_expansion SET submitted_at = now() WHERE <key> AND submitted_at IS NULL AND expires_at > now() RETURNING id inside the calling transaction; zero rows returned means the claim failed (409 expansion_submitted or 410 expansion_expired). A purge every 15 minutes deletes expansions whose expires_at is more than 24 hours old.';
+
+CREATE TABLE document_extraction_job (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id            uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  actor_user_id        uuid NOT NULL,
+  import_id            uuid,
+  company_id           uuid NOT NULL,
+  state                text NOT NULL DEFAULT 'queued' CHECK (state IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+  phase                text CHECK (phase IN ('outline', 'sections', 'mapping')),
+  chunks               integer NOT NULL DEFAULT 0 CHECK (chunks >= 0),
+  outline_chunks_done  integer NOT NULL DEFAULT 0 CHECK (outline_chunks_done BETWEEN 0 AND chunks),
+  section_chunks_done  integer NOT NULL DEFAULT 0 CHECK (section_chunks_done BETWEEN 0 AND chunks),
+  token_ceiling        integer NOT NULL CHECK (token_ceiling >= 1),
+  node_ceiling         integer NOT NULL CHECK (node_ceiling BETWEEN 1 AND 5000),
+  tokens_used          bigint NOT NULL DEFAULT 0 CHECK (tokens_used >= 0),
+  outline              jsonb NOT NULL DEFAULT '[]'::jsonb,
+  drafts               jsonb,
+  notes                jsonb,
+  unresolved           jsonb NOT NULL DEFAULT '[]'::jsonb,
+  draft_count          integer NOT NULL DEFAULT 0 CHECK (draft_count BETWEEN 0 AND node_ceiling),
+  degraded             boolean NOT NULL DEFAULT false,
+  failure_reason       text CHECK (failure_reason IN ('not_configured', 'budget_exhausted', 'rate_limited', 'job_timeout', 'no_drafts', 'import_expired', 'internal')),
+  cancel_requested     boolean NOT NULL DEFAULT false,
+  lease_until          timestamptz,
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  started_at           timestamptz,
+  finished_at          timestamptz,
+  expires_at           timestamptz,
+  submitted_at         timestamptz,
+  UNIQUE (tenant_id, id),
+  UNIQUE (tenant_id, import_id),
+  FOREIGN KEY (tenant_id, actor_user_id) REFERENCES app_user(tenant_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, import_id) REFERENCES document_import(tenant_id, id) ON DELETE SET NULL (import_id),
+  FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT document_extraction_job_phase_when_running CHECK ((state = 'running') = (phase IS NOT NULL)),
+  CONSTRAINT document_extraction_job_failure_iff_failed CHECK ((state = 'failed') = (failure_reason IS NOT NULL)),
+  CONSTRAINT document_extraction_job_finished_when_final CHECK ((state IN ('succeeded', 'failed', 'cancelled')) = (finished_at IS NOT NULL)),
+  CONSTRAINT document_extraction_job_result_iff_succeeded CHECK (
+    (state = 'succeeded') = (drafts IS NOT NULL AND notes IS NOT NULL AND expires_at IS NOT NULL)
+  ),
+  CONSTRAINT document_extraction_job_result_shape CHECK (
+    drafts IS NULL OR COALESCE((
+      jsonb_typeof(drafts) = 'array'
+      AND jsonb_typeof(notes) = 'array'
+      AND jsonb_array_length(drafts) = draft_count
+      AND jsonb_array_length(notes) = draft_count
+      AND draft_count >= 1
+    ), false)
+  ),
+  CONSTRAINT document_extraction_job_arrays CHECK (jsonb_typeof(outline) = 'array' AND jsonb_typeof(unresolved) = 'array'),
+  CONSTRAINT document_extraction_job_size CHECK (
+    octet_length(outline::text) + octet_length(unresolved::text)
+      + coalesce(octet_length(drafts::text), 0) + coalesce(octet_length(notes::text), 0) <= 16777216
+  ),
+  CONSTRAINT document_extraction_job_expiry CHECK (expires_at IS NULL OR expires_at = finished_at + interval '24 hours'),
+  CONSTRAINT document_extraction_job_submitted_after_success CHECK (submitted_at IS NULL OR (state = 'succeeded' AND submitted_at <= expires_at))
+);
+CREATE UNIQUE INDEX document_extraction_job_one_running_per_user ON document_extraction_job (tenant_id, actor_user_id) WHERE state IN ('queued', 'running');
+CREATE INDEX document_extraction_job_queue ON document_extraction_job (created_at) WHERE state IN ('queued', 'running');
+CREATE INDEX document_extraction_job_by_expiry ON document_extraction_job (expires_at) WHERE expires_at IS NOT NULL;
+COMMENT ON TABLE document_extraction_job IS 'One whole-document extraction job (POST /import/{importId}/extraction): two model passes over the chunked import, outline then sections, mapped by the server to one draft tree for company_id. At most one job per import (unique tenant_id, import_id) and one queued or running job per user (partial unique index). The runner in apps/api claims work with SELECT ... FROM document_extraction_job WHERE state IN (''queued'', ''running'') AND (lease_until IS NULL OR lease_until < now()) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1, sets lease_until = now() + 5 minutes and renews it after every chunk, so a job whose runner dies is picked up again and resumes at the next unfinished chunk. Progress, the outline and the settled token count are written after every chunk in a short transaction that also writes the extraction.changed outbox row; no transaction is open during a model call. Token reservation and settlement use llm_month_usage exactly as teach extraction; tokens_used stops the job at token_ceiling. drafts and notes hold the validated tree, each note carrying the grounding sentence index and the originDetail copied from the import, so proposals survive the import purge (import_id is set null by it). submitted_at marks the one successful POST /extractions/{extractionId}/proposals call, claimed with UPDATE ... WHERE submitted_at IS NULL AND state = ''succeeded'' AND expires_at > now() RETURNING id. It never holds a prompt, a raw model answer or a credential. A purge every 15 minutes deletes jobs whose expires_at is more than 24 hours old, and failed or cancelled jobs 48 hours after finished_at.';
+
+CREATE TABLE ontology_import (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id          uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  actor_kind         actor_kind NOT NULL,
+  actor_user_id      uuid,
+  actor_agent_id     uuid,
+  company_id         uuid NOT NULL,
+  parent_concept_id  uuid,
+  file_name          text NOT NULL,
+  format             text NOT NULL CHECK (format IN ('rdf_xml', 'turtle', 'owl_xml', 'json_ld', 'n_triples', 'obo', 'csv', 'xlsx')),
+  sha256             bytea NOT NULL CHECK (octet_length(sha256) = 32),
+  languages          text[] NOT NULL DEFAULT '{}',
+  individuals        text NOT NULL DEFAULT 'skip' CHECK (individuals IN ('skip', 'as_concepts')),
+  draft_count        integer NOT NULL CHECK (draft_count BETWEEN 0 AND 20000),
+  drafts             jsonb NOT NULL,
+  notes              jsonb NOT NULL,
+  skipped            jsonb NOT NULL,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  expires_at         timestamptz NOT NULL DEFAULT now() + interval '24 hours',
+  submitted_at       timestamptz,
+  UNIQUE (tenant_id, id),
+  FOREIGN KEY (tenant_id, actor_user_id) REFERENCES app_user(tenant_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, actor_agent_id) REFERENCES agent(tenant_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, parent_concept_id) REFERENCES concept(tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT ontology_import_actor_matches_kind CHECK (
+    (actor_kind = 'user'  AND actor_user_id IS NOT NULL AND actor_agent_id IS NULL) OR
+    (actor_kind = 'agent' AND actor_agent_id IS NOT NULL AND actor_user_id IS NULL)
+  ),
+  CONSTRAINT ontology_import_file_name CHECK (
+    char_length(file_name) BETWEEN 1 AND 255
+    AND octet_length(file_name) <= 1020
+    AND file_name !~ '[/\\:\x01-\x1f\x7f-\x9f​-‏  ‪-‮؜⁦-⁩﻿]'
+  ),
+  CONSTRAINT ontology_import_languages CHECK (
+    cardinality(languages) <= 10 AND array_position(languages, NULL) IS NULL
+    AND array_to_string(languages, ',') ~ '^([A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*(,[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*)*)?$'
+  ),
+  CONSTRAINT ontology_import_result_shape CHECK (
+    jsonb_typeof(drafts) = 'array' AND jsonb_array_length(drafts) = draft_count
+    AND jsonb_typeof(notes) = 'array' AND jsonb_array_length(notes) = draft_count
+    AND jsonb_typeof(skipped) = 'array'
+    AND octet_length(drafts::text) + octet_length(notes::text) + octet_length(skipped::text) <= 67108864
+  ),
+  CONSTRAINT ontology_import_one_day CHECK (expires_at = created_at + interval '24 hours'),
+  CONSTRAINT ontology_import_submitted_in_time CHECK (submitted_at IS NULL OR (draft_count >= 1 AND submitted_at <= expires_at))
+);
+CREATE INDEX ontology_import_by_expiry ON ontology_import (expires_at);
+COMMENT ON TABLE ontology_import IS 'One uploaded ontology or hierarchy file (POST /ontology-imports) after deterministic mapping (ADR 0012): the draft tree for company_id under parent_concept_id (the company root when null), one note per draft (source IRI or row, chosen label and language, depth, requires) and the skipped items with their reasons. No language model is involved. The file itself is not kept, only its name, detected format and SHA-256. Usable for 24 hours by the actor that created it, in its tenant; submitted_at marks the one successful POST /ontology-imports/{ontologyImportId}/proposals call, claimed with UPDATE ... WHERE submitted_at IS NULL AND expires_at > now() RETURNING id inside the calling transaction. A purge every 15 minutes deletes rows whose expires_at is more than 24 hours old.';
 
 CREATE TABLE proposal (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -580,17 +732,25 @@ CREATE TABLE proposal (
       AND jsonb_typeof(origin_detail -> 'mediaType') = 'string'
       AND (origin_detail ->> 'mediaType') IN (
         'text/plain', 'text/markdown', 'text/csv', 'application/json',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/pdf')
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/pdf',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/html')
       AND jsonb_typeof(origin_detail -> 'sentenceIndex') = 'number'
       AND (origin_detail ->> 'sentenceIndex') ~ '^[0-9]{1,4}$'
       AND (origin_detail ->> 'sentenceIndex')::integer <= 1999
       AND (NOT (origin_detail ? 'position') OR (
         jsonb_typeof(origin_detail -> 'position') = 'object'
-        AND ((origin_detail -> 'position') - 'unit' - 'index') = '{}'::jsonb
-        AND (origin_detail -> 'position' ->> 'unit') IN ('page', 'paragraph')
+        AND ((origin_detail -> 'position') - 'unit' - 'index' - 'row') = '{}'::jsonb
+        AND (origin_detail -> 'position' ->> 'unit') IN ('page', 'paragraph', 'slide', 'sheet')
         AND jsonb_typeof(origin_detail -> 'position' -> 'index') = 'number'
         AND (origin_detail -> 'position' ->> 'index') ~ '^[0-9]{1,6}$'
         AND (origin_detail -> 'position' ->> 'index')::integer BETWEEN 1 AND 100000
+        AND (NOT ((origin_detail -> 'position') ? 'row') OR (
+          (origin_detail -> 'position' ->> 'unit') = 'sheet'
+          AND jsonb_typeof(origin_detail -> 'position' -> 'row') = 'number'
+          AND (origin_detail -> 'position' ->> 'row') ~ '^[0-9]{1,7}$'
+          AND (origin_detail -> 'position' ->> 'row')::integer BETWEEN 1 AND 1048576
+        ))
       ))
     ), false)
   ),

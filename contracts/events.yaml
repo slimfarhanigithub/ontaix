@@ -252,6 +252,17 @@ channels:
     messages:
       companyRemoved:
         $ref: '#/components/messages/CompanyRemoved'
+  extractionChanged:
+    address: ontaix.{tenantId}.extraction.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    description: Progress and end of a whole-document extraction job (ADR 0010). The payload carries counts and states, never labels or document text; `companyIds` is the job's company. The Studio of the user who started the job follows it; everyone else ignores it.
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      extractionChanged:
+        $ref: '#/components/messages/ExtractionChanged'
   settingsChanged:
     address: ontaix.{tenantId}.settings.changed
     x-ontaix-visibility: model.read
@@ -433,6 +444,10 @@ operations:
     action: send
     channel:
       $ref: '#/channels/companyRemoved'
+  publishExtractionChanged:
+    action: send
+    channel:
+      $ref: '#/channels/extractionChanged'
   publishSettingsChanged:
     action: send
     channel:
@@ -863,6 +878,53 @@ components:
           proposalId:
             type: string
             format: uuid
+    ExtractionChanged:
+      name: ExtractionChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: extraction.changed
+      summary: A whole-document extraction job was queued, progressed by one chunk, or ended.
+      payload:
+        type: object
+        required: [extraction]
+        properties:
+          extraction:
+            description: Same shape as `DocumentExtraction` in contracts/openapi.yaml - ids, state, phase, chunk counts, outline node count, tokens used, ceilings, draft count, degraded, failure reason and timestamps; no label and no document text.
+            type: object
+            required: [id, companyId, state, phase, chunks, outlineChunksDone, sectionChunksDone, degraded, failureReason]
+            properties:
+              id:
+                type: string
+                format: uuid
+              importId:
+                type: [string, 'null']
+                format: uuid
+              companyId:
+                type: string
+                format: uuid
+              state:
+                type: string
+                enum: [queued, running, succeeded, failed, cancelled]
+              phase:
+                type: [string, 'null']
+                enum: [outline, sections, mapping, null]
+              chunks:
+                type: integer
+              outlineChunksDone:
+                type: integer
+              sectionChunksDone:
+                type: integer
+              outlineNodes:
+                type: integer
+              tokensUsed:
+                type: integer
+              draftCount:
+                type: integer
+              degraded:
+                type: boolean
+              failureReason:
+                type: [string, 'null']
+                enum: [not_configured, budget_exhausted, rate_limited, job_timeout, no_drafts, import_expired, internal, null]
     SettingsChanged:
       name: SettingsChanged
       traits:
@@ -1054,6 +1116,7 @@ components:
             - domain_product.changed
             - company.created
             - company.removed
+            - extraction.changed
             - settings.changed
             - appearance.changed
             - settings.cross_company_disabled
@@ -1147,7 +1210,12 @@ components:
       properties:
         origin:
           type: string
-          enum: [text, speech, document]
+          enum: [text, speech, document, suggestion, ontology_import]
+          description: Same meaning as `Origin` in contracts/openapi.yaml. `document`, `suggestion` and `ontology_import` are set by the server only; `suggestion` marks a concept or relation a language model suggested through concept expansion (ADR 0009) and a user selected; `ontology_import` marks one mapped from an uploaded ontology or hierarchy file (ADR 0012).
+        openBelow:
+          type: integer
+          minimum: 0
+          description: Open proposals in this proposal's branch other than itself (ADR 0010), as in contracts/openapi.yaml.
         originDetail:
           description: Set exactly when `origin` is `document`; same shape as `OriginDetail` in contracts/openapi.yaml.
           oneOf:
@@ -1168,7 +1236,7 @@ components:
                   description: Basename only, at most 1020 bytes in UTF-8, no bidirectional controls, zero-width characters (U+200B to U+200D) or line and paragraph separators (U+2028, U+2029); HTML-escaped wherever interpolated, rendered as text.
                 mediaType:
                   type: string
-                  enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf]
+                  enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/html]
                 position:
                   type: object
                   additionalProperties: false
@@ -1176,11 +1244,16 @@ components:
                   properties:
                     unit:
                       type: string
-                      enum: [page, paragraph]
+                      enum: [page, paragraph, slide, sheet]
                     index:
                       type: integer
                       minimum: 1
                       maximum: 100000
+                    row:
+                      type: integer
+                      minimum: 1
+                      maximum: 1048576
+                      description: Only with `unit` `sheet`.
         id:
           type: string
           format: uuid
@@ -1514,7 +1587,7 @@ components:
       properties:
         origin:
           type: [string, 'null']
-          enum: [text, speech, document, null]
+          enum: [text, speech, document, suggestion, ontology_import, null]
           description: The origin of the proposal the entry records; null for every entry without a proposal.
         id:
           type: integer
