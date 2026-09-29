@@ -127,8 +127,7 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
             replace = source.reading.model_first or replaces_grammar(triggers)
             segments = step.segments or whole
             result, kept = _with_model(grammar, step, replace, sentence, dom_key, source, segments)
-    for segment, ids, labels in _turns(sentence, result, kept):
-        await teach_session_service.store_turn(key, segment, result.extractor, ids, labels)
+    await teach_session_service.store_turns(key, result.extractor, _turns(source, result, kept))
     return result
 
 
@@ -278,6 +277,21 @@ def _result(
         outcome = "partly_understood"
     else:
         outcome = "understood"
+    # Offsets are computed on the trimmed input and returned relative to the caller's original
+    # input, leading whitespace included.
+    lead = len(source.text) - len(source.text.lstrip())
+    notes = [
+        n.model_copy(
+            update={
+                "source_span": SourceSpan(
+                    start=n.source_span.start + lead, end=n.source_span.end + lead
+                )
+            }
+        )
+        if n.source_span is not None
+        else n
+        for n in assembled.notes
+    ]
     return TeachResult(
         outcome=outcome,
         domain_key=dom_key,
@@ -290,23 +304,24 @@ def _result(
         extractor=extractor,
         degraded=degraded,
         llm_outcome=llm_outcome,
-        draft_notes=assembled.notes,
+        draft_notes=notes,
         unresolved=assembled.unresolved,
         segments=[
-            SourceSegment(index=i, span=SourceSpan(start=start, end=end))
+            SourceSegment(index=i, span=SourceSpan(start=start + lead, end=end + lead))
             for i, (start, end) in enumerate(segments)
         ],
     )
 
 
 def _turns(
-    sentence: str, result: TeachResult, assembled: Assembled
+    source: _Source, result: TeachResult, assembled: Assembled
 ) -> list[tuple[str, list[uuid.UUID], list[str]]]:
     """The session turns a parse stores: one per segment, in order, each with the concepts it
     referenced and the labels it introduced."""
+    original = source.text
     turns: list[tuple[str, list[uuid.UUID], list[str]]] = [
-        (sentence[s.span.start : s.span.end], [], []) for s in result.segments
-    ] or [(sentence, [], [])]
+        (original[s.span.start : s.span.end], [], []) for s in result.segments
+    ] or [(original.strip(), [], [])]
     for planned in assembled.kept:
         _, ids, labels = turns[min(planned.segment, len(turns) - 1)]
         ids.extend(i for i in planned.concept_ids if i not in ids)

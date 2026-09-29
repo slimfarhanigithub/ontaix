@@ -49,7 +49,7 @@ from app.repositories.teach_session_turn_repository import StoredTurn
 from app.services import llm_usage_service
 from app.services.rate_limit_service import Budget, try_charge
 from app.services.teach_draft_service import Drafter, End, PlannedIntent, phrase_in
-from app.utilities.action_text import normalise_action
+from app.utilities.action_text import has_refused_character, normalise_action
 from app.utilities.permissions import can_read
 from app.utilities.teach_parser import singular, title
 
@@ -62,6 +62,7 @@ MAX_SENTENCE_INTENTS = 20
 MAX_SENTENCE_PHRASES = 10
 MAX_SEGMENT_CHARS = 400
 MAX_EXPLANATION = 300
+MAX_LABEL_CHARS = 120
 DEFAULT_MEMBER_ACTION = "includes"
 REFUSED_ACTIONS = frozenset({"is a", "equivalent to"})
 
@@ -167,28 +168,33 @@ async def _run(
             outcome=outcome,
         )
 
+    # Whatever happens from here on, the reservation is settled and one cost row is written:
+    # an unexpected error while reading the answer settles as invalid output.
+    outcome, usage = "invalid_output", (0, 0, 0.0, 0)
     try:
-        answer = await client.complete(request)
-    except LlmCallError as exc:
-        outcome = "timeout" if isinstance(exc, LlmTimeout) else "provider_error"
-        await _settle(
-            reservation,
-            record(outcome, exc.input_tokens, exc.output_tokens, exc.cost_eur, exc.latency_ms),
-        )
-        return ModelStep(outcome)
-    except Exception:
-        logger.exception("the language model adapter failed unexpectedly")
-        await _settle(reservation, record("provider_error", 0, 0, 0.0, 0))
-        return ModelStep("provider_error")
-    usage = (answer.input_tokens, answer.output_tokens, answer.cost_eur, answer.latency_ms)
-    try:
-        step = _interpret(answer.text, handles, drafter, sentence, text, reading)
-    except _InvalidAnswer as exc:
-        logger.info("the teach extraction answer was refused: %s", exc)
-        await _settle(reservation, record("invalid_output", *usage))
-        return ModelStep("invalid_output")
-    await _settle(reservation, record("used", *usage))
-    return step
+        try:
+            answer = await client.complete(request)
+        except LlmCallError as exc:
+            outcome = "timeout" if isinstance(exc, LlmTimeout) else "provider_error"
+            usage = (exc.input_tokens, exc.output_tokens, exc.cost_eur, exc.latency_ms)
+            return ModelStep(outcome)
+        except Exception:
+            logger.exception("the language model adapter failed unexpectedly")
+            outcome = "provider_error"
+            return ModelStep(outcome)
+        usage = (answer.input_tokens, answer.output_tokens, answer.cost_eur, answer.latency_ms)
+        try:
+            step = _interpret(answer.text, handles, drafter, sentence, text, reading)
+        except _InvalidAnswer as exc:
+            logger.info("the teach extraction answer was refused: %s", exc)
+            return ModelStep("invalid_output")
+        except Exception:
+            logger.exception("reading the teach extraction answer failed unexpectedly")
+            return ModelStep("invalid_output")
+        outcome = "used"
+        return step
+    finally:
+        await _settle(reservation, record(outcome, *usage))
 
 
 async def _settle(reservation: llm_usage_service.Reservation, record: CallRecord) -> None:
@@ -331,6 +337,7 @@ def _interpret(
         raise _InvalidAnswer("too many intents or phrases for one sentence")
     segments = _segments(answer, text)
     sent = {c.id for c in handles}
+    cross_company = bool(drafter.view.settings and drafter.view.settings.cross_company)
     checked: list[_Checked] = []
     for intent in answer.intents:
         if reading.speech and intent.segment is None:
@@ -350,12 +357,20 @@ def _interpret(
         placed = [_end(ref, handles, sent, drafter, text, source) for ref in raw]
         grounded = all(end is not None for end in placed)
         ends = [end for end in placed if end is not None]
-        if grounded and any(_same(a, b) for i, a in enumerate(ends) for b in ends[i + 1 :]):
+        if any(_same(a, b) for i, a in enumerate(ends) for b in ends[i + 1 :]):
             raise _InvalidAnswer("an intent joins a concept to itself or repeats a member")
-        if intent.kind == "spec" or intent.members:
-            for end in ends:
-                if end.concept is not None and end.concept.company_id != drafter.company_id:
-                    raise _InvalidAnswer("a spec or grouping intent leaves the taught company")
+        foreign = [
+            e for e in ends if e.concept is not None and e.concept.company_id != drafter.company_id
+        ]
+        if foreign:
+            both_sent = all(
+                end is not None and end.concept is not None and end.concept.id in sent
+                for end in placed[:2]
+            )
+            if intent.kind != "rel" or intent.members or not both_sent or not cross_company:
+                raise _InvalidAnswer(
+                    "only a relation between two sent candidates crosses companies"
+                )
         action = member_action = None
         if intent.kind == "rel":
             assert intent.action is not None
@@ -368,7 +383,13 @@ def _interpret(
         )
 
     offset = len(sentence) - len(text)
-    step = ModelStep("used", segments=[(start + offset, end + offset) for start, end in segments])
+    # A sentence the model did not split is one segment covering it, domain prefix included.
+    step = ModelStep(
+        "used",
+        segments=[(start + offset, end + offset) for start, end in segments]
+        if answer.segments
+        else [(0, len(sentence))],
+    )
     lists: dict[int, list[PlannedIntent]] = {}
     list_sizes: dict[int, int] = {}
     stated: dict[int, int] = {}
@@ -462,20 +483,38 @@ def _segments(answer: TeachExtractionAnswer, text: str) -> list[tuple[int, int]]
 def _ground(label: str, text: str, source: tuple[int, int]) -> str | None:
     """The caller's own words in `text[source]` that `label` names, as a label, or None.
 
-    Whole words only, each input word normalised on its own (NFKC, case folded, singular), so
-    the matched run maps back to the original words; the label is sliced from the original
-    input and put through the casing rule, never taken from the model's string."""
+    Words are found over the whole input, so a source range that cuts into a word grounds
+    nothing; only words lying wholly inside the range count. Each word is normalised on its own
+    (NFKC, case folded, singular), so the matched run maps back to the original words, and only
+    whitespace may separate them. The label is sliced from the original input and put through
+    the casing rule and the label rules, never taken from the model's string."""
+    start, end = source
+    words = list(_ANY_WORD.finditer(text))
+    if any(m.start() < start < m.end() or m.start() < end < m.end() for m in words):
+        return None
+    inside = [m for m in words if m.start() >= start and m.end() <= end]
     wanted = [_fold(w) for w in _ANY_WORD.findall(label)]
-    words = [
-        (_fold(m.group(0)), m.start() + source[0], m.end() + source[0])
-        for m in _ANY_WORD.finditer(text[source[0] : source[1]])
-    ]
     n = len(wanted)
-    for i in range(len(words) - n + 1):
-        run = words[i : i + n]
-        if n and [w for w, _, _ in run] == wanted:
-            return title(unicodedata.normalize("NFKC", text[run[0][1] : run[-1][2]]))
+    for i in range(len(inside) - n + 1):
+        run = inside[i : i + n]
+        if not n or [_fold(m.group(0)) for m in run] != wanted:
+            continue
+        if any(not text[x.end() : y.start()].isspace() for x, y in zip(run, run[1:], strict=False)):
+            continue
+        candidate = title(unicodedata.normalize("NFKC", text[run[0].start() : run[-1].end()]))
+        if _valid_label(candidate):
+            return candidate
     return None
+
+
+def _valid_label(label: str) -> bool:
+    """The label rules every model label meets: 1 to 120 characters, no surrounding space, no
+    markup, control, line separator or format character."""
+    return (
+        0 < len(label) <= MAX_LABEL_CHARS
+        and label == label.strip()
+        and not has_refused_character(label)
+    )
 
 
 def _fold(word: str) -> str:

@@ -50,19 +50,31 @@ class _RedactingFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         if record.levelno < logging.INFO:
             return False
-        record.msg = _SECRET_PATTERN.sub(r"\1\2[redacted]", str(record.msg))
-        if record.args:
-            record.args = tuple(
-                _SECRET_PATTERN.sub(r"\1\2[redacted]", a) if isinstance(a, str) else a
-                for a in (record.args if isinstance(record.args, tuple) else (record.args,))
-            )
+        try:
+            message = record.getMessage()
+        except Exception:
+            message = str(record.msg)
+        # The message is formatted before it is masked, so a header value passed as an argument
+        # is masked too.
+        record.msg = _SECRET_PATTERN.sub(r"\1\2[redacted]", message)
+        record.args = None
         return True
 
 
-for _name in ("anthropic", "httpx2", "httpx", "httpcore"):
-    _sdk_logger = logging.getLogger(_name)
-    _sdk_logger.setLevel(logging.WARNING)
-    _sdk_logger.addFilter(_RedactingFilter())
+# A logger's filters do not apply to records of its child loggers, so the filter is attached
+# to the SDK and HTTP loggers and to every child logger they have registered.
+_SDK_LOGGERS = ("anthropic", "httpx2", "httpx", "httpcore")
+_REDACTING_FILTER = _RedactingFilter()
+for _name in _SDK_LOGGERS:
+    logging.getLogger(_name).setLevel(logging.WARNING)
+for _name in [
+    n
+    for n in (*_SDK_LOGGERS, *list(logging.root.manager.loggerDict))
+    if n.split(".")[0] in _SDK_LOGGERS
+]:
+    _logger = logging.getLogger(_name)
+    if _REDACTING_FILTER not in _logger.filters:
+        _logger.addFilter(_REDACTING_FILTER)
 
 
 class AnthropicLlmClient:

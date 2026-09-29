@@ -53,22 +53,35 @@ async def store_turn(
     new_labels: list[str],
 ) -> None:
     """Append one turn; a failure skips the turn and never fails the parse."""
-    text = sentence.strip()[:MAX_SENTENCE_CHARS]
-    if key is None or not text:
+    await store_turns(key, extractor, [(sentence, concept_ids, new_labels)])
+
+
+async def store_turns(
+    key: SessionKey | None,
+    extractor: str,
+    turns: list[tuple[str, list[uuid.UUID], list[str]]],
+) -> None:
+    """Append a parse's turns in order, in one transaction under the session's advisory lock,
+    so no concurrent parse of the session interleaves with them. A failure skips them all and
+    never fails the parse."""
+    kept = [(t.strip()[:MAX_SENTENCE_CHARS], ids, labels) for t, ids, labels in turns]
+    kept = [turn for turn in kept if turn[0]]
+    if key is None or not kept:
         return
     try:
         async with get_session_factory()() as session:
-            await teach_session_turn_repository.store(
-                session,
-                key,
-                sentence=text,
-                extractor=extractor,
-                concept_ids=list(dict.fromkeys(concept_ids))[:MAX_IDS],
-                new_labels=[label[:120] for label in dict.fromkeys(new_labels)][:MAX_LABELS],
-            )
+            for text, concept_ids, new_labels in kept:
+                await teach_session_turn_repository.store(
+                    session,
+                    key,
+                    sentence=text,
+                    extractor=extractor,
+                    concept_ids=list(dict.fromkeys(concept_ids))[:MAX_IDS],
+                    new_labels=[label[:120] for label in dict.fromkeys(new_labels)][:MAX_LABELS],
+                )
             await session.commit()
     except Exception:
-        logger.warning("storing a teach session turn failed; the turn is skipped")
+        logger.warning("storing teach session turns failed; the turns are skipped")
 
 
 async def purge_expired() -> int:

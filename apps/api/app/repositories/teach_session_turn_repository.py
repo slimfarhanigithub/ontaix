@@ -88,7 +88,8 @@ async def store(
     new_labels: list[str],
 ) -> int:
     """Append one turn under the session's advisory lock and keep the newest 8; the caller
-    commits, which releases the lock. Returns the turn's index."""
+    commits, which releases the lock. The lock is re-entrant within one transaction, so several
+    turns stored in one transaction stay together. Returns the turn's index."""
     params = key.params()
     await session.execute(_LOCK, params)
     inserted = await session.execute(

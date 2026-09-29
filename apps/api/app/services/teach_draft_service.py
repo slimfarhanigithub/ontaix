@@ -225,8 +225,6 @@ class Drafter:
             subject_resolved=a.id if a else None,
             object_resolved=b.id if b else None,
         )
-        foreign_a = a is not None and a.company_id != self.company_id
-        foreign_b = b is not None and b.company_id != self.company_id
         if a and b:
             if a.id != b.id:
                 drafts.append(
@@ -242,33 +240,6 @@ class Drafter:
                     )
                 )
                 made.append(f"{a.label} {pred} {b.label}")
-        elif (a and foreign_a) or (b and foreign_b):
-            # A new concept is always born in the taught company: from its root, then linked to
-            # the other company's concept by label.
-            known = a or b
-            assert known is not None
-            new = b_end if a else a_end
-            drafts.append(
-                self.draft(
-                    type="concept",
-                    companyId=company,
-                    parentId=str(self.root.id),
-                    label=new.label,
-                    domainKey=self.key(domain_hint),
-                    action="has",
-                )
-            )
-            ends = (
-                {"aId": str(known.id), "bLabel": new.label}
-                if a
-                else {"aLabel": new.label, "bId": str(known.id)}
-            )
-            drafts.append(self.draft(type="relation", companyId=company, action=pred, **ends))
-            made.append(
-                f"{known.label} {pred} {new.label} (new)"
-                if a
-                else f"{new.label} (new) {pred} {known.label}"
-            )
         elif a:
             drafts.append(
                 self.draft(
