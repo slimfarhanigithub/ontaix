@@ -84,10 +84,12 @@ sessionTurns. Split it into sentences and return them as segments (index from 0,
 order, not overlapping, at most 400 code points each, at most 40); leave fillers, false starts,
 repeated words and corrections you applied ("so", "uh", "um", "you know") outside every
 segment. Read later sentences in the light of earlier ones and of the session: "these services"
-after "Insight sells services" means that Services. Every intent names its segment. List talk
-that teaches nothing (a question, an aside) in unresolved with reason not_a_statement. At most
-60 intents and 30 unresolved phrases. In sentence and document mode, segments may be omitted;
-return at most 20 intents and 10 unresolved phrases.
+after "Insight sells services" means that Services. Every intent names its segment, and its
+source and span lie inside that one segment: when the words of one fact run across two
+sentences, make them one segment. A transcript intent's explanation is at most 120 characters.
+List talk that teaches nothing (a question, an aside) in unresolved with reason
+not_a_statement. At most 60 intents and 30 unresolved phrases. In sentence and document mode,
+segments may be omitted; return at most 20 intents and 10 unresolved phrases.
 
 Return one intent per fact:
 - kind "rel": subject, action, object - the subject does the action to the object. A new
@@ -95,14 +97,14 @@ Return one intent per fact:
 - kind "spec": the subject is a kind of the object (the subject is the specialised child, the
   object the parent), with an optional rule that defines the child.
 - subject and object are each {{"candidate": "<handle>"}} for an existing concept, or
-  {{"newLabel": "<Label>"}} for a new concept. Whenever the text names an existing concept -
-  by its label, singular or plural, or by a back-reference - cite its candidate handle, never a
-  newLabel: "Insight has services, they are split into AI, Data and Apps", with c0 Insight and
-  c1 Services, gives c0 has c1, then c1 is split into AI, Data and Apps as new labels, so the
-  new concepts are born from the existing Services. The company's name means c0. Still return
-  an intent for a fact the candidates already hold; the API recognises it. New labels are short
-  noun phrases keeping the speaker's casing, with the first letter capitalised (Apps, Data, AI)
-  and no surrounding spaces.
+  {{"newLabel": "<Label>"}} for a new concept. Whenever the text names an existing concept of
+  the company being taught - by its label, singular or plural, or by a back-reference - cite
+  its candidate handle, never a newLabel: "Insight has services, they are split into AI, Data
+  and Apps", with c0 Insight and c1 Services, gives c0 has c1, then c1 is split into AI, Data
+  and Apps as new labels, so the new concepts are born from the existing Services. The
+  company's name means c0. Still return an intent for a fact the candidates already hold; the
+  API recognises it. New labels are short noun phrases keeping the speaker's casing, with the
+  first letter capitalised (Apps, Data, AI) and no surrounding spaces.
 - Cite a new concept by the same newLabel in every intent that uses it: it is born once, from
   the first intent that mentions it, and later intents build on it.
 - Back-references. A phrase that points back ("these services", "the managed ones", "they",
@@ -128,11 +130,24 @@ Return one intent per fact:
   ("Services has 3 offerings, Apps, Data and AI"; also after "is made of", "offers"), return
   one rel intent: subject Services, action has, object newLabel Offerings, members the listed
   items, memberAction the relation from the group to each member (default "includes"), and
-  statedCount 3. When the noun only describes the list ("these services are focused around
-  three areas, app, data and AI", "in three regions"), there is no grouping concept: return
-  one rel intent per item from the subject with the speaker's verb as the action ("focuses
-  on"), all with the same listId and the statedCount. Drafts always follow the list, never the
-  stated number.
+  statedCount 3. The object is the group itself, never one of its members. When the text names
+  no group ("split in advisory and managed services"), there are no members: return one rel
+  intent per item instead. When the noun only describes the list ("these services are focused
+  around three areas, app, data and AI", "in three regions"), there is no grouping concept:
+  return one rel intent per item from the subject with the speaker's verb as the action
+  ("focuses on"), all with the same listId and the statedCount. Drafts always follow the list,
+  never the stated number. statedCount is only the number of items the speaker announces for
+  that list, from 0 to 1000, and only with members or a listId; a number that counts anything
+  else ("four thousand employees") is never a statedCount.
+- A rel intent has an action and no rule. A spec intent has no action, members, memberAction or
+  listId. memberAction comes only with members, and members hold at least one concept.
+- Candidates with a company field belong to another company. Cite one only in a rel intent
+  without members whose subject and object are both candidates, for example c0 works with an
+  other company's c5. In every other intent - a spec, a grouping with members, or a rel whose
+  other end is a newLabel - never cite it: name the concept with a newLabel in the speaker's
+  words instead, so it is proposed for the company being taught. "ADNOC buys advisory", with
+  c5 ADNOC of another company and no Advisory candidate, gives newLabel ADNOC buys newLabel
+  Advisory, never c5 buys newLabel Advisory.
 - Roles. "X is a <role> of Y", where the role is a relationship noun such as client, customer,
   partner, supplier, vendor, subsidiary, division or member, means Y has a role concept that
   includes X: return one rel intent with subject Y, action has, object the role (its candidate
@@ -281,4 +296,24 @@ OUTPUT_SCHEMA: dict[str, Any] = {
         },
     },
     "$defs": {"conceptRef": _CONCEPT_REF, "span": _SPAN},
+}
+
+# The output format of a speech transcript: the answer's segments and every intent's segment
+# are required, since the API refuses a transcript answer without them.
+SPEECH_OUTPUT_SCHEMA: dict[str, Any] = {
+    **OUTPUT_SCHEMA,
+    "required": [*OUTPUT_SCHEMA["required"], "segments"],
+    "properties": {
+        **OUTPUT_SCHEMA["properties"],
+        "intents": {
+            "type": "array",
+            "items": {
+                **OUTPUT_SCHEMA["properties"]["intents"]["items"],
+                "required": [
+                    *OUTPUT_SCHEMA["properties"]["intents"]["items"]["required"],
+                    "segment",
+                ],
+            },
+        },
+    },
 }

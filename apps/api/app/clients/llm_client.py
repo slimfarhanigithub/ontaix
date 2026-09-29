@@ -118,6 +118,21 @@ def reset_llm_client() -> None:
     _overrides.clear()
 
 
+async def warm_llm_clients() -> None:
+    """Prepares every configured profile's client for its first call - for Claude on Foundry,
+    the Entra ID token and an open TLS connection, with no model call. A client without a
+    `warm` method needs none. Never raises: a failed warm-up leaves the work to the first call."""
+    for profile in LLM_PROFILES:
+        try:
+            warm = getattr(get_llm_client(profile), "warm", None)
+            if warm is not None:
+                await warm()
+        except Exception as exc:
+            logger.warning(
+                "warming the %s language model client failed: %s", profile, type(exc).__name__
+            )
+
+
 def check_llm_configuration(settings: Settings) -> None:
     """Stops start-up when a provider is configured but a model it calls has no price.
 
