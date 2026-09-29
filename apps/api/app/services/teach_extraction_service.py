@@ -18,6 +18,7 @@ import functools
 import json
 import logging
 import re
+import time
 import unicodedata
 import uuid
 from dataclasses import dataclass, field
@@ -32,6 +33,7 @@ from app.ai.prompts.teach_extraction import (
     MAX_RETRIEVED_EXAMPLES,
     OUTPUT_SCHEMA,
     SPEECH_MAX_OUTPUT_TOKENS,
+    SPEECH_OUTPUT_SCHEMA,
     SYSTEM_PROMPT,
     render_example,
 )
@@ -129,6 +131,22 @@ class _InvalidAnswer(Exception):
     """The answer failed the schema or a check the schema cannot express."""
 
 
+class _Stages:
+    """Milliseconds spent in each named stage of one step, for the debug log."""
+
+    def __init__(self) -> None:
+        self._last = time.perf_counter()
+        self._spent: list[tuple[str, int]] = []
+
+    def mark(self, stage: str) -> None:
+        now = time.perf_counter()
+        self._spent.append((stage, int((now - self._last) * 1000)))
+        self._last = now
+
+    def __str__(self) -> str:
+        return " ".join(f"{stage}={ms}ms" for stage, ms in self._spent)
+
+
 @dataclass(frozen=True)
 class Reading:
     """How the model reads the input: one typed sentence, a whole speech transcript, or one
@@ -194,15 +212,17 @@ async def _run(
     if cap <= 0:
         return ModelStep("budget_exhausted")
     actor_kind = caller.actor_kind.value
+    stages = _Stages()
     if not await try_charge(Budget.LLM, caller.tenant_id, actor_kind, caller.user_id):
         return ModelStep("rate_limited")
+    stages.mark("budget")
     handles = _candidates(caller, drafter, text, turns)
     config = get_settings()
     allowance = config.llm_profile(profile).reasoning_allowance_tokens
     request = LlmRequest(
         system=SYSTEM_PROMPT,
         user=_context(drafter, text, turns, handles, reading),
-        output_schema=OUTPUT_SCHEMA,
+        output_schema=SPEECH_OUTPUT_SCHEMA if reading.speech else OUTPUT_SCHEMA,
         # The answer bound plus the reasoning allowance: a provider's output bound counts
         # reasoning tokens too. The answer's own size is bounded by its validation.
         max_output_tokens=(SPEECH_MAX_OUTPUT_TOKENS if reading.speech else MAX_OUTPUT_TOKENS)
@@ -211,10 +231,12 @@ async def _run(
             config.llm_speech_timeout_seconds if reading.speech else config.llm_timeout_seconds
         ),
     )
+    stages.mark("context")
     upper_bound = client.estimate_input_tokens(request) + request.max_output_tokens
     reservation = await llm_usage_service.reserve(caller.tenant_id, upper_bound, cap)
     if reservation is None:
         return ModelStep("budget_exhausted")
+    stages.mark("reserve")
 
     def record(outcome: str, tokens_in: int, tokens_out: int, cost: float, ms: int) -> CallRecord:
         return CallRecord(
@@ -247,6 +269,7 @@ async def _run(
             outcome = "provider_error"
             return ModelStep(outcome)
         usage = (answer.input_tokens, answer.output_tokens, answer.cost_eur, answer.latency_ms)
+        stages.mark("model")
         try:
             step = _interpret(answer.text, handles, drafter, sentence, text, reading)
         except _InvalidAnswer as exc:
@@ -258,7 +281,16 @@ async def _run(
         outcome = "used"
         return step
     finally:
+        stages.mark("interpret")
         await _settle(reservation, record(outcome, *usage))
+        stages.mark("settle")
+        logger.debug(
+            "teach extraction on %s (%s, %d input tokens estimated): %s",
+            profile,
+            outcome,
+            upper_bound - request.max_output_tokens,
+            stages,
+        )
 
 
 async def _settle(reservation: llm_usage_service.Reservation, record: CallRecord) -> None:
@@ -605,8 +637,8 @@ def _ranges(
     """The answer's segments in order (one covering the text when it gives none), and each
     intent's source range.
 
-    The model's segment offsets are approximate: each segment is trimmed of surrounding
-    whitespace and a boundary that cuts a word is moved out to the word's edge. Each intent's
+    The model's segment offsets are approximate: a boundary that cuts a word is moved to the
+    word's nearer edge and each segment is trimmed of surrounding whitespace. Each intent's
     source is then located from its quote, and a segment is widened to cover the sources of its
     intents; a source is never chosen where that widening would reach into another segment. The
     order, overlap and length checks run on the result."""
@@ -618,6 +650,8 @@ def _ranges(
     for i, seg in enumerate(answer.segments):
         if seg.index != i:
             raise _InvalidAnswer("a segment is out of order")
+        if i and seg.start < answer.segments[i - 1].end:
+            raise _InvalidAnswer("segments overlap, go backwards or are too long")
         snapped.append(_snap(text, words, *_clamp(seg.start, seg.end, text)))
     owners = [intent.segment if intent.segment is not None else 0 for intent in answer.intents]
     sources = [
@@ -647,17 +681,33 @@ def _clamp(start: int, end: int, text: str) -> tuple[int, int]:
 
 
 def _snap(text: str, words: list[tuple[int, int]], start: int, end: int) -> tuple[int, int]:
-    """`[start, end)` without surrounding whitespace, with a boundary inside a word moved out
-    to that word's edge."""
+    """`[start, end)` with a boundary inside a word moved to that word's nearer edge, out of the
+    range on a tie, and without surrounding whitespace.
+
+    A model's offsets drift by a few code points along a transcript, so a boundary that cuts a
+    word mostly lies next to the gap the model meant; moving it to the nearer edge keeps two
+    neighbouring segments from both claiming the cut word. When that leaves the range without a
+    word, both boundaries move out instead."""
+    near_start, near_end = start, end
+    out_start, out_end = start, end
+    for a, b in words:
+        if a < start < b:
+            near_start = a if start - a <= b - start else b
+            out_start = a
+        if a < end < b:
+            near_end = b if b - end <= end - a else a
+            out_end = b
+    start, end = _trim(text, near_start, near_end)
+    if start >= end:
+        start, end = _trim(text, out_start, out_end)
+    return start, end
+
+
+def _trim(text: str, start: int, end: int) -> tuple[int, int]:
     while start < end and text[start].isspace():
         start += 1
     while end > start and text[end - 1].isspace():
         end -= 1
-    for a, b in words:
-        if a < start < b:
-            start = a
-        if a < end < b:
-            end = b
     return start, end
 
 
