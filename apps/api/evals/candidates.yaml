@@ -17,6 +17,7 @@ candidates:
   - deployment: gpt-6-sol
     family: gpt
     provider: azure_foundry
+    residency: eu_data_zone
     efforts: [none, low, medium, high]
     # PLACEHOLDER: the price of apps/api/.env.example until the Azure retail price of
     # DataZoneStandard in France Central is set there.

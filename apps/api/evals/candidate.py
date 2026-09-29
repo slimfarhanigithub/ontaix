@@ -38,7 +38,8 @@ class Candidate(_Model):
     provider: Provider = "azure_foundry"
     # The Foundry resource; None is ONTAIX_FOUNDRY_ENDPOINT.
     endpoint: str | None = None
-    residency: Residency = "eu_data_zone"
+    # Required: a candidate without a stated residency never reaches private cases by default.
+    residency: Residency
     family: str = "other"
 
     def at(self, effort: Effort) -> RunConfig:
@@ -75,7 +76,7 @@ class RunConfig:
     effort: Effort
     price: ModelPrice | None
     provider: Provider = "azure_foundry"
-    residency: Residency = "eu_data_zone"
+    residency: Residency = "global"
     family: str = "other"
     endpoint: str | None = None
 
