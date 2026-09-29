@@ -684,8 +684,11 @@ def _ranges(
     """The answer's segments in order (one covering the text when it gives none), and each
     intent's source range.
 
-    The model's segment offsets are approximate: a boundary that cuts a word is moved to the
-    word's nearer edge and each segment is trimmed of surrounding whitespace. Each intent's
+    The model's segment offsets are approximate: a segment that starts before the previous one
+    ends starts where it ends instead, a boundary that cuts a word is moved to the word's
+    nearer edge and each segment is trimmed of surrounding whitespace. When an intent's source
+    still reaches back into the previous segment, that segment ends where the source starts,
+    unless one of its own sources lies past that point. Each intent's
     source is then located from its quote, and a segment is widened to cover the sources of its
     intents; a source is never chosen where that widening would reach into another segment. The
     order, overlap and length checks run on the result."""
@@ -697,9 +700,10 @@ def _ranges(
     for i, seg in enumerate(answer.segments):
         if seg.index != i:
             raise _InvalidAnswer("a segment is out of order")
-        if i and seg.start < answer.segments[i - 1].end:
+        start = max(seg.start, answer.segments[i - 1].end) if i else seg.start
+        if start >= seg.end:
             raise _InvalidAnswer("segments overlap, go backwards or are too long")
-        snapped.append(_snap(text, words, *_clamp(seg.start, seg.end, text)))
+        snapped.append(_snap(text, words, *_clamp(start, seg.end, text)))
     owners = [intent.segment if intent.segment is not None else 0 for intent in answer.intents]
     sources = [
         _locate(intent, text, words, snapped, own)
@@ -711,6 +715,20 @@ def _ranges(
         for own, (a, b) in zip(owners, sources, strict=True):
             if own == i:
                 start, end = min(start, a), max(end, b)
+        if out and start < last_end:
+            # A source reaches back into the previous segment: that segment ends where this
+            # one starts, when none of its own sources lies past that point.
+            before, _ = out[-1]
+            needed = max(
+                (b for own, (_, b) in zip(owners, sources, strict=True) if own == i - 1),
+                default=before + 1,
+            )
+            cut = start
+            while cut > before and text[cut - 1].isspace():
+                cut -= 1
+            if needed <= cut and before < cut:
+                out[-1] = (before, cut)
+                last_end = cut
         if start >= end or start < last_end or end - start > MAX_SEGMENT_CHARS:
             raise _InvalidAnswer("segments overlap, go backwards or are too long")
         out.append((start, end))

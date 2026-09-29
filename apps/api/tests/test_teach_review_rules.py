@@ -312,7 +312,8 @@ async def test_ranges_and_caps(client, tenant: TenantFixture):
     t = "we sell services. services have data. um data matters"
     seg = [{"index": 0, "start": 0, "end": 17}, {"index": 1, "start": 18, "end": 38}]
     speech_cases = {
-        "overlap": [{"index": 0, "start": 0, "end": 20}, {"index": 1, "start": 18, "end": 38}],
+        # A segment inside the previous one; one that only starts before it ends is repaired.
+        "inside": [{"index": 0, "start": 0, "end": 38}, {"index": 1, "start": 18, "end": 30}],
         "bad index": [{"index": 0, "start": 0, "end": 17}, {"index": 2, "start": 18, "end": 38}],
         "too long": None,
     }
@@ -326,6 +327,12 @@ async def test_ranges_and_caps(client, tenant: TenantFixture):
         )
         r = await post(client, tenant, company_id, t, "speech")
         assert r["llmOutcome"] == "invalid_output", name
+    overlap = [{"index": 0, "start": 0, "end": 20}, {"index": 1, "start": 18, "end": 38}]
+    install(
+        lambda ctx: answer(intent(C0, new("Services"), 3, 16, "sells", segment=0), segments=overlap)
+    )
+    r = await post(client, tenant, company_id, t, "speech")
+    assert r["llmOutcome"] == "used"
     install(lambda ctx: answer(intent(C0, new("Data"), 3, 30, "has", segment=0), segments=seg))
     r = await post(client, tenant, company_id, t, "speech")
     assert r["llmOutcome"] == "invalid_output"

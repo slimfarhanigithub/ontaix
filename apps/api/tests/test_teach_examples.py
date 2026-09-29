@@ -161,9 +161,13 @@ def test_no_example_comes_from_test_material() -> None:
 def test_no_example_shares_a_phrase_with_test_material() -> None:
     import yaml
 
-    cases = yaml.safe_load((EVALS / "cases" / "teach_cases.yaml").read_text(encoding="utf-8"))
+    cases = [
+        case
+        for path in sorted((EVALS / "cases").glob("*.yaml"))
+        for case in yaml.safe_load(path.read_text(encoding="utf-8"))["cases"]
+    ]
     held_out: list[str] = []
-    for case in cases["cases"]:
+    for case in cases:
         if case["id"] in SPLIT["test"]["cases"]:
             given = case["input"]
             held_out.extend([given] if isinstance(given, str) else given)

@@ -33,8 +33,12 @@ async def test_a_transcript_is_asked_for_segments_and_typed_text_is_not(
     spoken, typed = (r.output_schema for r in fake_llm.requests)
     assert spoken is SPEECH_OUTPUT_SCHEMA and typed is OUTPUT_SCHEMA
     assert "segments" in spoken["required"]
-    assert "segment" in spoken["properties"]["intents"]["items"]["required"]
-    assert "segment" not in typed["properties"]["intents"]["items"]["required"]
+    assert all(
+        "segment" in k["required"] for k in spoken["properties"]["intents"]["items"]["anyOf"]
+    )
+    assert all(
+        "segment" not in k["required"] for k in typed["properties"]["intents"]["items"]["anyOf"]
+    )
 
 
 def test_the_speech_format_refuses_a_transcript_answer_without_segments() -> None:
@@ -103,6 +107,46 @@ async def test_segment_offsets_drifted_into_words_move_to_the_nearer_edge(
         {"index": 0, "span": {"start": 8, "end": 28}},
         {"index": 1, "span": {"start": 29, "end": 79}},
     ]
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_a_segment_starting_inside_the_previous_one_starts_where_it_ends(
+    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
+) -> None:
+    company_id, root_id = await add_company(tenant, "Acme")
+    await configure(tenant)
+    transcript = "acme has two plants and the plants have paint shops"
+    # A live long-transcript shape: segment 1 starts eight code points before segment 0 ends.
+    fake_llm.answer(
+        speech_answer(
+            [
+                {
+                    "subject": C0,
+                    "object": new("Plants"),
+                    "action": "has",
+                    "span": "acme has two plants",
+                    "segment": 0,
+                    "source": {"start": 0, "end": 19},
+                },
+                {
+                    "subject": new("Plants"),
+                    "object": new("Paint shops"),
+                    "action": "has",
+                    "span": "the plants have paint shops",
+                    "segment": 1,
+                    "source": {"start": 24, "end": 51},
+                },
+            ],
+            [(0, 27), (19, 51)],
+        )
+    )
+
+    result = await speak(client, tenant, company_id, transcript)
+
+    assert result["llmOutcome"] == "used"
+    assert births(result) == [("Plants", str(root_id), "has"), ("Paint shops", "Plants", "has")]
+    (first, second) = result["segments"]
+    assert first["span"]["end"] <= second["span"]["start"]
 
 
 def test_the_instructions_state_the_rules_the_api_checks() -> None:

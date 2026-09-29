@@ -2,7 +2,7 @@
 
 This folder and `evals/documents/` hold the hand-checked test data of the teach bake-off: what a person teaches (typed turns, a spoken recording, or a business document), the concepts that exist before it runs, and the gold ontology a careful reviewer expects. The goal is to find the model that turns speech, text and documents into the most detailed ontology (concept, parent path, verb, label, at any depth) with the fewest mistakes.
 
-Contents: 78 short cases in `teach_cases.yaml` (45 typed, 33 spoken; 59 English, 19 French) with 323 expected concepts and 14 expected relations, and 11 full documents in `evals/documents/`: 6 business documents of 2,300 to 5,100 words (gold trees of 97 to 129 concepts, 5 to 6 levels deep), 3 document-structure regression documents (63 to 74 concepts, depth 5, one of them French) and 2 adversarial documents. Together they make 19 document files.
+Contents: 78 short cases in `teach_cases.yaml` (45 typed, 33 spoken; 59 English, 19 French) with 323 expected concepts and 14 expected relations, and 11 full documents in `evals/documents/`: 6 business documents of 2,300 to 5,100 words (gold trees of 97 to 129 concepts, 5 to 6 levels deep), 3 document-structure regression documents (63 to 74 concepts, depth 5, one of them French) and 2 adversarial documents. Together they make 19 document files. `speech_recordings.yaml` adds 9 spoken recordings for speech tuning (the owner's recording, 6 benchmark narrations and 2 tuning recordings, 6 to 8 sentences each) with 96 expected concepts, 23 expected relations and 4 expected taught attributes.
 
 ```mermaid
 flowchart LR
