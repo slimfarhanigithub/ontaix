@@ -2,12 +2,12 @@
 
 Parsing an upload is CPU-bound and its cost depends on the uploaded bytes, so it never runs on
 the event loop: each job starts a fresh process, the request waits for it in a thread, and a
-job still running at the limit is terminated and answered as too large. In the child the
-address space is capped on Linux and every socket call fails, so a parser can neither exhaust
-the host's memory nor reach the network. A crash of the child is answered as an unreadable
-file. At most `extraction_concurrency` children run at once in a process, shared by document
-extraction and ontology parsing; a job arriving while every slot is taken is refused at once
-with `503 busy`.
+job still running at the limit is terminated and answered as too large. The child starts in
+`child_process_entry`, which blocks the network and caps the address space (on Linux) before
+the job is unpickled, so a parser can neither exhaust the host's memory nor reach the network.
+A crash of the child is answered as an unreadable file. At most `extraction_concurrency`
+children run at once in a process, shared by document extraction and ontology parsing; a job
+arriving while every slot is taken is refused at once with `503 busy`.
 """
 
 from __future__ import annotations
@@ -15,26 +15,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import multiprocessing
-import sys
+import pickle
 from collections.abc import Callable
-from multiprocessing.connection import Connection
 from typing import Any
 
 from app.config import get_settings
-from app.utilities.document_errors import (
-    DocumentTooLargeError,
-    DocumentUnreadableError,
-    UnsupportedDocumentError,
-)
+from app.services import child_process_entry
+from app.utilities.document_errors import DocumentTooLargeError, DocumentUnreadableError
 from app.utilities.problems import ProblemError
 
 logger = logging.getLogger(__name__)
 
 BUSY_RETRY_AFTER_SECONDS = 5
 
-_OK = "ok"
-_REFUSED = "refused"
-_KNOWN_REFUSALS = (DocumentTooLargeError, DocumentUnreadableError, UnsupportedDocumentError)
 
 _slots: tuple[int, asyncio.Semaphore] | None = None
 
@@ -79,7 +72,12 @@ def _run(
 ) -> Any:
     context = multiprocessing.get_context("spawn")
     receiver, sender = context.Pipe(duplex=False)
-    process = context.Process(target=_child, args=(sender, target, args, memory_limit), daemon=True)
+    # The job travels pickled, so the child unpickles it - and imports the parser - only after
+    # its network is blocked.
+    job = pickle.dumps((target, args))
+    process = context.Process(
+        target=child_process_entry.child_main, args=(sender, job, memory_limit), daemon=True
+    )
     process.start()
     sender.close()
     try:
@@ -99,49 +97,6 @@ def _run(
             process.kill()
             process.join()
         process.close()
-    if status == _REFUSED:
+    if status == child_process_entry.REFUSED:
         raise payload
     return payload
-
-
-def _child(
-    sender: Connection, target: Callable[..., Any], args: tuple[Any, ...], memory_limit: int
-) -> None:
-    """Child process entry: cap memory, cut the network, run, and send one result back."""
-    _limit_memory(memory_limit)
-    _refuse_network()
-    try:
-        sender.send((_OK, target(*args)))
-    except _KNOWN_REFUSALS as exc:
-        sender.send((_REFUSED, type(exc)(str(exc))))
-    except MemoryError:
-        sender.send((_REFUSED, DocumentTooLargeError("the file needs more memory than allowed")))
-    except RecursionError:
-        sender.send((_REFUSED, DocumentTooLargeError("the file nests too deeply")))
-    except Exception:
-        sender.send((_REFUSED, DocumentUnreadableError("the file could not be read")))
-    finally:
-        sender.close()
-
-
-def _limit_memory(limit: int) -> None:
-    """Cap the child's address space so one file cannot exhaust the host's memory; past it an
-    allocation fails. Windows has no `RLIMIT_AS`, so there the cap is skipped and only the time
-    limit and slot count apply."""
-    if sys.platform == "win32" or limit <= 0:
-        return
-    import resource
-
-    resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
-
-
-def _refuse_network() -> None:
-    """Every socket, connection and name lookup fails in the child: no parser fetches anything."""
-    import socket
-
-    def refuse(*_: object, **__: object) -> Any:
-        raise OSError("network access is disabled while a file is read")
-
-    socket.socket = refuse  # type: ignore[assignment,misc]
-    socket.create_connection = refuse  # type: ignore[assignment]
-    socket.getaddrinfo = refuse  # type: ignore[assignment]

@@ -37,6 +37,7 @@ from app.routers import (
     proposals,
     relations,
     scene,
+    speech,
     teach,
 )
 from app.services import document_extraction_runner_service, retention_purge_service
@@ -115,6 +116,7 @@ def create_app() -> FastAPI:
         proposals,
         expansions,
         teach,
+        speech,
         imports,
         ontology_imports,
         extractions,

@@ -8,6 +8,7 @@ import zipfile
 
 import httpx
 import pytest
+from pypdf import PdfReader
 from sqlalchemy import text
 
 from app.clients import db_client
@@ -275,7 +276,7 @@ async def test_scanned_pages_are_recognised_and_joined_in_page_order(
     ]
     assert body["positions"] == [{"unit": "page", "index": 1}] * 2 + [{"unit": "page", "index": 2}]
     assert [r.pages for r in fake.requests] == [[1]]
-    assert fake.requests[0].pdf == data
+    assert len(PdfReader(io.BytesIO(fake.requests[0].pdf)).pages) == 1
     async with db_client.get_session_factory()() as s:
         row = await s.get(DocumentImport, uuid.UUID(body["importId"]))
         assert row is not None and row.ocr_pages == 1

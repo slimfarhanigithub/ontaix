@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 from collections.abc import Iterable
 from typing import Any
 
@@ -36,6 +37,9 @@ from app.utilities.document_errors import DocumentTooLargeError, DocumentUnreada
 from app.utilities.document_text import decode_text
 
 MAX_TRIPLES = 1_000_000
+# JSON-LD nests a few levels in practice; the bound keeps every parser's recursion shallow.
+MAX_JSON_DEPTH = 100
+_JSON_TOKENS = re.compile(r'"(?:[^"\\]|\\.)*"|[\[\]{}]')
 
 RDFLIB_FORMATS: dict[str, str] = {
     "rdf_xml": "xml",
@@ -65,14 +69,18 @@ RESTRICTION_FILLERS = (OWL.someValuesFrom, OWL.allValuesFrom)
 
 def read_rdf(data: bytes, fmt: OntologyFormat) -> ParsedOntology:
     """The classes, properties and statements of an RDF file."""
-    text = decode_text(data)
+    # The parser reads exactly what was checked: the bytes for RDF/XML, the text otherwise.
+    source: bytes | str
     if fmt == "rdf_xml":
         _check_xml(data)
-    if fmt == "json_ld":
-        _check_json_ld(text)
+        source = data
+    else:
+        source = decode_text(data)
+        if fmt == "json_ld":
+            _check_json_ld(source)
     graph = Graph()
     try:
-        graph.parse(data=text, format=RDFLIB_FORMATS[fmt])
+        graph.parse(data=source, format=RDFLIB_FORMATS[fmt])
     except (DocumentTooLargeError, DocumentUnreadableError):
         raise
     except Exception as exc:
@@ -276,10 +284,11 @@ def _check_xml(data: bytes) -> None:
 
 def _check_json_ld(text: str) -> None:
     """Refuse a JSON-LD document whose context would be fetched: a context given by URL, or a
-    context holding `@import`."""
+    context holding `@import`. Nesting is bounded before the JSON is parsed."""
+    _check_json_depth(text)
     try:
         value = json.loads(text)
-    except ValueError as exc:
+    except (ValueError, RecursionError) as exc:
         raise DocumentUnreadableError("the file is not JSON") from exc
     stack: list[Any] = [value]
     while stack:
@@ -291,6 +300,20 @@ def _check_json_ld(text: str) -> None:
                 if key == "@context":
                     _check_context(child)
                 stack.append(child)
+
+
+def _check_json_depth(text: str) -> None:
+    """Refuse JSON nesting arrays and objects more than `MAX_JSON_DEPTH` deep; strings are
+    skipped, so brackets inside them do not count."""
+    depth = 0
+    for token in _JSON_TOKENS.finditer(text):
+        mark = token.group()
+        if mark in "[{":
+            depth += 1
+            if depth > MAX_JSON_DEPTH:
+                raise DocumentUnreadableError(f"the JSON nests more than {MAX_JSON_DEPTH} levels")
+        elif mark in "]}":
+            depth -= 1
 
 
 def _check_context(context: Any) -> None:

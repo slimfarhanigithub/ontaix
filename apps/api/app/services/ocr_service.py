@@ -31,9 +31,11 @@ UNAVAILABLE_DETAIL = "scanned pages cannot be read right now; the document was n
 
 
 async def recognise(
-    caller: Caller, settings: TenantSettings | None, pdf: bytes, pages: list[int]
+    caller: Caller, settings: TenantSettings | None, image_pdf: bytes, pages: list[int]
 ) -> dict[int, str]:
-    """The recognised Markdown of each image-only page, or a refusal of the whole import."""
+    """The recognised Markdown of each image-only page, by its page number in the uploaded
+    document, or a refusal of the whole import. `image_pdf` holds those pages alone, in the
+    order of `pages`; it is the only part of the document sent to the provider."""
     config = get_settings()
     if len(pages) > config.ocr_max_pages:
         raise ProblemError(
@@ -50,7 +52,9 @@ async def recognise(
     reservation = await llm_usage_service.reserve_pages(caller.tenant_id, len(pages), page_cap)
     if reservation is None:
         raise _unavailable("the monthly OCR page cap is reached")
-    request = OcrRequest(pdf=pdf, pages=pages, timeout_seconds=config.ocr_timeout_seconds)
+    # Page i of the image-only PDF is page pages[i - 1] of the uploaded document.
+    subset = list(range(1, len(pages) + 1))
+    request = OcrRequest(pdf=image_pdf, pages=subset, timeout_seconds=config.ocr_timeout_seconds)
     try:
         result = await client.recognise(request)
     except OcrCallError as exc:
@@ -59,7 +63,7 @@ async def recognise(
             reservation, _record(caller, client, exc.pages_processed, 0, 0, exc.latency_ms, outcome)
         )
         raise _unavailable(f"the OCR call ended with {outcome}") from exc
-    missing = [p for p in pages if p not in result.pages]
+    missing = [p for p in subset if p not in result.pages]
     outcome = "invalid_output" if missing else "used"
     await llm_usage_service.settle_pages(
         reservation,
@@ -75,7 +79,7 @@ async def recognise(
     )
     if missing:
         raise _unavailable(f"the OCR result lacks {len(missing)} of the asked pages")
-    return {p: result.pages[p] for p in pages}
+    return {original: result.pages[i] for i, original in enumerate(pages, start=1)}
 
 
 def _record(

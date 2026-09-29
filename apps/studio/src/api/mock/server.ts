@@ -2543,6 +2543,8 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     if (is('GET', 'ontology-imports', null)) return json(200, ontologyImportOf(seg[1]).result);
     if (is('POST', 'ontology-imports', null, 'proposals'))
       return json(202, proposeOntologyImport(seg[1], ((body || {}) as { indexes?: number[] }).indexes || []));
+    // No Speech resource behind the mock: the microphone uses the browser's recogniser.
+    if (is('POST', 'speech', 'token')) throw new Refusal(503, 'unavailable', 'speech recognition is not configured');
     if (is('POST', 'import', 'sentences'))
       throw new Refusal(422, 'validation_failed', 'the document is sent as multipart form data in the field file');
     if (is('GET', 'healthz')) return json(200, { status: 'ok' });

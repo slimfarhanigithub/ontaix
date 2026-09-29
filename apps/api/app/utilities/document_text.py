@@ -16,8 +16,9 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
 from pypdf.errors import LimitReachedError, PyPdfError
+from pypdf.generic import NameObject
 
 from app.utilities.document_errors import (
     DocumentTooLargeError,
@@ -123,6 +124,8 @@ class ExtractedDocument:
 
     blocks: list[TextBlock]
     image_pages: list[int] = field(default_factory=list)
+    # A PDF of the image-only pages alone, in the order of `image_pages`: all that OCR receives.
+    image_pdf: bytes | None = None
 
 
 def file_name_problem(file_name: str) -> str | None:
@@ -452,8 +455,27 @@ def _pdf_pages(data: bytes, count_chars: Callable[[int], None]) -> ExtractedDocu
                 text = ""
             count_chars(len(text))
             blocks.append(TextBlock(text, "page", number))
+        image_pdf = _pages_only(reader, image_pages) if image_pages else None
     except LimitReachedError as exc:
         raise DocumentTooLargeError("the PDF is too large once decompressed") from exc
     except (PyPdfError, ValueError, KeyError, TypeError) as exc:
         raise DocumentUnreadableError("the PDF could not be read") from exc
-    return ExtractedDocument(blocks, image_pages)
+    return ExtractedDocument(blocks, image_pages, image_pdf)
+
+
+# Page entries that can carry actions, links, attachments or form fields; none is copied.
+_PAGE_KEYS_DROPPED = ("/Annots", "/AA")
+
+
+def _pages_only(reader: PdfReader, numbers: list[int]) -> bytes:
+    """A new PDF holding only the given 1-based pages, their content and resources, without
+    annotations, actions, attachments, outlines or document-level scripts."""
+    writer = PdfWriter()
+    for number in numbers:
+        page = writer.add_page(reader.pages[number - 1])
+        for key in _PAGE_KEYS_DROPPED:
+            if key in page:
+                del page[NameObject(key)]
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()

@@ -92,7 +92,9 @@ async def import_sentences(
     ocr_pages = len(document.image_pages)
     if document.image_pages:
         settings = await tenant_settings_repository.get(session, caller.tenant_id)
-        recognised = await ocr_service.recognise(caller, settings, data, document.image_pages)
+        recognised = await ocr_service.recognise(
+            caller, settings, document.image_pdf or b"", document.image_pages
+        )
         try:
             document = with_recognised_pages(document, recognised)
         except DocumentTooLargeError as exc:

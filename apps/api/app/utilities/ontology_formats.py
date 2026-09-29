@@ -1,16 +1,15 @@
 """Which ontology format an upload is: detected from the bytes, checked against the declared type.
 
 RDF/XML and OWL/XML are told apart by their root element, read with no DTD; JSON-LD is JSON
-with `@context` or `@graph`; OBO has a `format-version:` header and `[Term]` stanzas; N-Triples
-is one full triple per line and anything else textual is Turtle; an XLSX hierarchy is sniffed
-like an Excel document import; CSV is taken as declared. The detected format must agree with
-the file extension, else with the declared media type.
+naming an `@context` or `@graph` key; OBO has a `format-version:` header and `[Term]` stanzas;
+N-Triples is one full triple per line and anything else textual is Turtle; an XLSX hierarchy
+is sniffed like an Excel document import; CSV is taken as declared. The detected format must
+agree with the file extension, else with the declared media type.
 """
 
 from __future__ import annotations
 
 import io
-import json
 import re
 
 import defusedxml.ElementTree as DefusedET
@@ -48,6 +47,7 @@ FORMATS_BY_MEDIA_TYPE: dict[str, tuple[OntologyFormat, ...]] = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ("xlsx",),
 }
 
+_JSON_LD_KEY = re.compile(r'"@(?:context|graph)"\s*:')
 _NTRIPLE = re.compile(
     r'^(<[^>\s]*>|_:\S+)\s+<[^>\s]*>\s+(<[^>\s]*>|_:\S+|"(?:[^"\\]|\\.)*"(\^\^<[^>\s]*>|@[A-Za-z0-9-]+)?)\s*\.\s*(#.*)?$'
 )
@@ -132,12 +132,9 @@ def _xml_format(data: bytes) -> OntologyFormat:
 
 
 def _json_ld(text: str) -> OntologyFormat:
-    try:
-        value = json.loads(text)
-    except ValueError as exc:
-        raise UnsupportedDocumentError("the file is not JSON") from exc
-    nodes = value if isinstance(value, list) else [value]
-    if any(isinstance(n, dict) and ("@context" in n or "@graph" in n) for n in nodes):
+    """JSON-LD when the text names an `@context` or `@graph` key. Nothing is parsed here: the
+    JSON is parsed, depth-bounded, in the child process that reads it."""
+    if _JSON_LD_KEY.search(text):
         return "json_ld"
     raise UnsupportedDocumentError("the JSON has no @context or @graph")
 

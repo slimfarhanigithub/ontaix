@@ -594,6 +594,16 @@ export interface TeachResult {
   segments: SourceSegment[];
 }
 
+/** `POST /speech/token`: a short-lived Azure AI Speech token for the microphone. */
+export interface SpeechToken {
+  /** `aad#<resource id>#<access token>` for the Speech SDK; held in memory only. */
+  token: string;
+  region: string;
+  /** ISO date-time the access token expires. */
+  expiresAt: string;
+  language: 'en-GB' | 'en-US';
+}
+
 /** `POST /teach/parse`: typed text or a speech transcript, or a cited import sentence. */
 export interface TeachRequest {
   companyId: string;

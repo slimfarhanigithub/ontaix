@@ -1,7 +1,8 @@
 """Provider-neutral OCR adapter: PDF bytes and a page list in, recognised text per page out.
 
-The rest of the API sees only this module. A request carries the whole PDF, the 1-based pages
-to recognise and the wall clock of the call; the result carries Markdown text per page, the
+The rest of the API sees only this module. A request carries a PDF of the pages to recognise
+and nothing else of the document, their 1-based numbers in that PDF, and the wall clock of the
+call; the result carries Markdown text per page, the
 pages the provider processed, the token counts it reported (often 0) and the latency. A timeout
 or a provider failure raises `OcrTimeout` or `OcrProviderError`. No provider type, SDK class or
 credential leaves the implementation modules.
@@ -20,8 +21,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class OcrRequest:
+    # The image-only pages alone, never the uploaded document.
     pdf: bytes
-    # 1-based page numbers, ascending.
+    # 1-based page numbers in `pdf`, ascending.
     pages: list[int]
     timeout_seconds: float
 

@@ -2,8 +2,9 @@
 
 One call per import to the Foundry resource's Mistral OCR route
 (`https://<resource>.services.ai.azure.com/providers/mistral/azure/ocr`, whichever of the
-resource's Azure host names the endpoint uses), addressed to the OCR deployment, with the PDF as a
-base64 data URL and the 0-based list of the pages to read; image data is not requested back.
+resource's Azure host names the endpoint uses), addressed to the OCR deployment, with the
+request's PDF - the image-only pages alone, never the uploaded document - as a base64 data URL
+and the 0-based list of its pages; image data is not requested back.
 Authentication is keyless, an Entra ID bearer token for
 `https://cognitiveservices.azure.com/.default` from `DefaultAzureCredential`, as for the teach
 deployment. The wall clock of the call - token acquisition, DNS, connect, TLS, sending and
