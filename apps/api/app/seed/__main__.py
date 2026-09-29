@@ -1,7 +1,8 @@
 """`python -m app.seed`: migrate the database, then load the demo tenant if it is not there yet.
 
-`ONTAIX_SEED` chooses what the tenant holds: `fixture` (the default) the Northwind and Aurora
-example, `empty` only its settings and directory. An existing tenant is never changed.
+Runs only when `ONTAIX_ENVIRONMENT` is `dev` or `test`. `ONTAIX_SEED` chooses what the tenant
+holds: `fixture` (the default) the Northwind and Aurora example, `empty` only its settings and
+directory. An existing tenant is never changed.
 """
 
 from __future__ import annotations
@@ -37,6 +38,10 @@ async def _run(database_url: str, mode: SeedMode) -> int:
 def main() -> int:
     settings = get_settings()
     logging.basicConfig(level=settings.log_level)
+    if settings.environment not in ("dev", "test"):
+        # The seed holds a full-access demo user and example data; it never loads elsewhere.
+        logger.error("the seed runs only when ONTAIX_ENVIRONMENT is dev or test")
+        return 2
     if not settings.database_url:
         logger.error("ONTAIX_DATABASE_URL is not set")
         return 2
