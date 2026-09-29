@@ -444,6 +444,10 @@ def _interpret(
             # `X is a <role> of Y`: Y has the role, and the role includes X.
             subject, obj, members = obj, role, [subject]
             action, member_action = ROLE_ACTION, ROLE_MEMBER_ACTION
+            # `Partner is a partner of Acme` would make the role include itself.
+            flipped = [subject, obj, *members]
+            if any(_same(a, b) for i, a in enumerate(flipped) for b in flipped[i + 1 :]):
+                raise _InvalidAnswer("an intent joins a concept to itself or repeats a member")
         checked.append(
             _Checked(
                 intent,
@@ -486,6 +490,9 @@ def _interpret(
             continue
         if c.dropped:
             step.unresolved.append(UnresolvedPhrase(text=where, reason="ungrounded_label"))
+            if not c.members:
+                # A group whose every member is ungrounded is not drafted empty.
+                continue
         note = DraftNote(
             extractor="llm",
             confidence=intent.confidence,

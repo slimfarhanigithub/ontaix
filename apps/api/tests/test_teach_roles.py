@@ -259,3 +259,55 @@ async def test_a_speech_range_empty_once_clamped_makes_the_answer_invalid(
     result = await speak(client, tenant, company_id, SENTENCE)
 
     assert result["llmOutcome"] == "invalid_output"
+
+
+async def test_a_role_that_would_include_itself_makes_the_answer_invalid(
+    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
+) -> None:
+    company_id, root_id = await add_company(tenant, "Insight")
+    await configure(tenant)
+    sentence = "Partner is a partner of Insight"
+    fake_llm.answer(
+        answer(
+            {
+                "kind": "rel",
+                "subject": {"newLabel": "Partner"},
+                "object": {"candidate": "c0"},
+                "action": "is a partner of",
+                "confidence": 0.9,
+                "span": sentence,
+                "source": {"start": 0, "end": len(sentence)},
+            }
+        )
+    )
+
+    result = await teach(client, tenant, company_id, sentence)
+
+    assert result["llmOutcome"] == "invalid_output"
+    assert ("Partner", "includes", "Partner") not in tree(result, root_id)
+
+
+async def test_a_group_whose_every_member_is_ungrounded_is_not_drafted(
+    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
+) -> None:
+    company_id, root_id = await add_company(tenant, "Insight")
+    await configure(tenant)
+    span = "subsidiaries including L&S, Gas"
+    members = [{"newLabel": "Backdoor"}, {"newLabel": "Rival"}]
+    fake_llm.answer(
+        answer(
+            rel(
+                {"candidate": "c0"},
+                {"newLabel": "Subsidiaries"},
+                "has",
+                span,
+                members=members,
+                memberAction="includes",
+            )
+        )
+    )
+
+    result = await teach(client, tenant, company_id, SENTENCE)
+
+    assert result["drafts"] == []
+    assert result["unresolved"] == [{"text": span, "reason": "ungrounded_label"}]

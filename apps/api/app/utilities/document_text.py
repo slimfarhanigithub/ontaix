@@ -222,25 +222,29 @@ def _fit(sentence: str) -> list[str]:
     """`sentence` in pieces of at most 399 characters, each cut at the best boundary before the
     limit; only the whitespace at a cut is dropped."""
     pieces: list[str] = []
-    rest = sentence
-    while len(rest) > MAX_SENTENCE_CHARS:
-        # Both sides of a cut keep at least 13 characters, so neither is left out.
-        limit = min(MAX_SENTENCE_CHARS, len(rest) - MIN_SENTENCE_CHARS)
-        window = rest[: limit + 1]
+    start, end = 0, len(sentence)
+    # The cuts walk an index through `sentence`, so a long text is never copied once per cut.
+    while end - start > MAX_SENTENCE_CHARS:
+        # Both sides of a cut keep at least 13 characters once the space at the cut is dropped,
+        # so neither is left out.
+        limit = min(MAX_SENTENCE_CHARS, end - start - MIN_SENTENCE_CHARS - 1)
+        window_end = start + limit + 1
         cut = 0
         for pattern in _CLAUSE_ENDS:
-            ends = [m.start() + 1 for m in pattern.finditer(window)]
-            ends = [e for e in ends if MIN_SENTENCE_CHARS <= e <= limit]
+            ends = [m.start() + 1 for m in pattern.finditer(sentence, start, window_end)]
+            ends = [e for e in ends if start + MIN_SENTENCE_CHARS <= e <= start + limit]
             if ends:
                 cut = ends[-1]
                 break
         if not cut:
-            space = window.rfind(" ", MIN_SENTENCE_CHARS)
-            cut = space if space > 0 else limit
-        pieces.append(rest[:cut].strip())
-        rest = rest[cut:].strip()
-    if rest:
-        pieces.append(rest)
+            space = sentence.rfind(" ", start + MIN_SENTENCE_CHARS, window_end)
+            cut = space if space > 0 else start + limit
+        pieces.append(sentence[start:cut].strip())
+        start = cut
+        while start < end and sentence[start].isspace():
+            start += 1
+    if start < end:
+        pieces.append(sentence[start:end])
     return pieces
 
 

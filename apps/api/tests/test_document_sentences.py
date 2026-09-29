@@ -4,6 +4,7 @@ break, wrapped lines join, and a long sentence is cut at a clause boundary, neve
 from __future__ import annotations
 
 import re
+import time
 
 from app.utilities.document_text import (
     MAX_SENTENCE_CHARS,
@@ -46,6 +47,11 @@ grouped into three practices.
 
 def words(text: str) -> list[str]:
     return re.findall(r"\w+", text)
+
+
+def nonblank(pieces: list[str]) -> str:
+    """The pieces' characters without whitespace, which a cut may drop or a join may add."""
+    return re.sub(r"\s", "", "".join(pieces))
 
 
 def test_every_word_of_a_structured_document_is_kept_in_order() -> None:
@@ -98,3 +104,34 @@ def test_short_pieces_are_counted_as_skipped() -> None:
 
     assert kept == ["- TotalEnergies SE Group"]
     assert skipped == 2
+
+
+def test_a_cut_never_leaves_a_tail_too_short_to_keep() -> None:
+    sentence = "a" * 396 + "; " + "b" * 12
+
+    kept, skipped = split_sentences(sentence)
+
+    assert skipped == 0
+    assert nonblank(kept) == nonblank([sentence])
+    assert all(MIN_SENTENCE_CHARS <= len(p) <= MAX_SENTENCE_CHARS for p in kept)
+
+
+def test_a_cut_at_every_length_near_the_limit_loses_no_text() -> None:
+    for tail in range(1, 40):
+        for sentence in ("a" * 396 + "; " + "b" * tail, "a" * 396 + " " + "b" * tail):
+            kept, skipped = split_sentences(sentence)
+
+            assert skipped == 0, sentence
+            assert nonblank(kept) == nonblank([sentence])
+
+
+def test_a_two_million_character_block_without_line_breaks_splits_quickly() -> None:
+    block = ("word " * 400_000).strip()
+
+    started = time.perf_counter()
+    kept, skipped = split_sentences(block)
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 1.0
+    assert skipped == 0
+    assert " ".join(kept) == block
