@@ -31,6 +31,8 @@ VALID = (
     "services_offerings",
     "services_offerings_count_mismatch",
     "speech_services_offerings",
+    "insight_has_services_split",
+    "speech_insight_has_services_split",
 )
 
 

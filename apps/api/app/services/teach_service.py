@@ -45,6 +45,7 @@ from app.services.teach_draft_service import (
     PlannedIntent,
     add_unresolved,
     assemble,
+    caption_for,
     new_labels,
     phrase_in,
     plan_grammar,
@@ -63,7 +64,6 @@ from app.utilities.transcript import MAX_SEGMENTS, split_transcript
 
 logger = logging.getLogger(__name__)
 
-WAITING = ". Waiting for your approval on the right."
 PARSE_UNIT_CHARS = 400
 DOCUMENT_CONTEXT_SENTENCES = 2
 
@@ -222,7 +222,7 @@ def _with_model(
     if extractor == "rules" and grammar is not None:
         caption = grammar.caption
     elif merged.statements:
-        caption = " · ".join(merged.statements) + WAITING
+        caption = caption_for(merged.kept)
     else:
         caption = NOT_UNDERSTOOD
     return _result(extractor, "used", merged, dom_key, caption, source, segments), merged
@@ -248,8 +248,7 @@ def _grammar_by_segment(
     statements = [line for p in planned for line in p.statements]
     beyond = sentence[rest[0][0] :][:400] if rest else None
     if statements:
-        caption = " · ".join(statements) + WAITING
-        return GrammarPlan(planned, "understood", caption, beyond), segments
+        return GrammarPlan(planned, "understood", caption_for(planned), beyond), segments
     return GrammarPlan(planned, "not_understood", NOT_UNDERSTOOD, beyond), segments
 
 
