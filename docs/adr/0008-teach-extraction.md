@@ -1,6 +1,6 @@
 # ADR 0008: Teach Extraction
 
-Status: Accepted. The owner's decisions (rows 70 to 74) are final; the derived choices (rows 75 to 79, 83 and 84) are approved under owner delegation (2026-09-29); row 87 (owner decision, final) sets the model step on by default; row 88 (owner decision, final) makes the model the first extractor for speech and documents; row 89 records the derived choices for it.
+Status: Accepted. The owner's decisions (rows 70 to 74) are final; the derived choices (rows 75 to 79, 83 and 84) are approved under owner delegation (2026-09-29); row 87 (owner decision, final) sets the model step on by default; row 88 (owner decision, final) makes the model the first extractor for speech and documents; row 89 records the derived choices for it; row 93 (owner decision, final) makes Azure AI Foundry the default provider.
 
 ## Context
 
@@ -11,7 +11,7 @@ The teach bar parses sentences with the rule-based grammar ported verbatim from 
 
 The owner then found speech imprecise: a spoken transcript has no punctuation, fillers and false starts, and several statements that refer to each other, which a sentence grammar cannot handle. Row 88 makes the model the first extractor for `speech` and `document`, and keeps the grammar first for typed `text`.
 
-The owner decided (rows 70 to 74) to add a language model extraction step as a fallback behind the grammar, with Claude Sonnet 5 as the default model behind a provider-neutral adapter, and to keep every model result a draft that a human approves.
+The owner decided (rows 70 to 74) to add a language model extraction step as a fallback behind the grammar, running a configurable model through a provider-neutral adapter, and to keep every model result a draft that a human approves. Row 93 (owner decision, final) sets the default: the model deployment `gpt-6-sol` (version 2026-09-22) on Azure AI Foundry, deployment type DataZoneStandard (EU) in France Central, billed to the Insight Azure subscription (Microsoft Azure Sponsorship). Claude on Foundry was not chosen because it runs on Anthropic-hosted infrastructure. Anthropic's API stays an optional provider.
 
 ## Decision
 
@@ -136,7 +136,7 @@ For the owner's two sentences, with `Insight` as `c0`:
 
 ### Costs And Budgets
 
-- Every call to the provider, including failed and timed-out ones, writes one `llm_call` row: tenant, caller, company, purpose `teach_extraction`, provider, model, input and output tokens, estimated euro cost from the deployment's price table, latency and outcome. It never holds the sentence, prompt, answer or key. Rows are kept 400 days.
+- Every call to the provider, including failed and timed-out ones, writes one `llm_call` row: tenant, caller, company, purpose `teach_extraction`, provider, model, input and output tokens, estimated euro cost from the deployment's price table (`ONTAIX_LLM_PRICE_TABLE`, see Adapter, Configuration And Credentials), latency and outcome. It never holds the sentence, prompt, answer or key. Rows are kept 400 days.
 - `GET /cost` returns the month's totals as `CostSummary.llm` (`LlmUsage`), separate from the agent figures (`measuredEur`, `byPlatform`), which stay agent reads through the gateway. The Cost management page shows no new element until `docs/ui-contract.md` records one.
 - Per caller: each model call spends one unit of the hourly `llm` budget in `rate_budget_window` (default 200 calls per user or agent per hour, from configuration like the other budgets). When it is spent the step is skipped with `llmOutcome` `rate_limited`. The per-caller limit is hourly only, by decision (row 92): there is no per-caller monthly share, so one caller can use the whole tenant cap (at the default, about 70 full transcripts at the reservation below). The parse budget (default 2,000 units per caller per hour, 10 per transcript) and this call budget bound the rate; a tenant administrator sees spend per caller in `llm_call` and can lower `llmMonthlyTokenCap`.
 - Submitting: the Studio submits all drafts of one parse as one `POST /proposals/batch`, which is all-or-nothing and spends one proposal unit per draft. The default proposal budget, 5,000 units per caller per hour, is far above the 150-draft maximum of one transcript; a batch refused with `429` is retried whole after `Retry-After`, never split.
@@ -149,7 +149,7 @@ For the owner's two sentences, with `Insight` as `c0`:
 | Situation | `llmOutcome` | Response |
 |---|---|---|
 | No trigger | `not_triggered` | `200`, grammar result, `extractor` `rules`, `degraded` false |
-| No provider or key configured, or cap `0` | `not_configured` or `budget_exhausted` | `200`, grammar result, `degraded` true, sentence in `unresolved` (`model_unavailable`) |
+| No provider configured (no endpoint, or for `anthropic` no key), or cap `0` | `not_configured` or `budget_exhausted` | `200`, grammar result, `degraded` true, sentence in `unresolved` (`model_unavailable`) |
 | Caller's hourly `llm` budget spent | `rate_limited` | same |
 | Tenant's monthly cap reached | `budget_exhausted` | same |
 | No answer within 15 seconds (`text`, `document`) or 45 seconds (`speech` transcript) | `timeout` | same; the call is abandoned, not retried |
@@ -160,12 +160,33 @@ For the owner's two sentences, with `Insight` as `c0`:
 
 The model step never produces a `5xx`. The timeout is 15 seconds for `text` and `document` and 45 seconds for a `speech` transcript (decision row 91), wall clock from the start of the adapter call to the last byte read, DNS, connect and TLS included; the provider SDK's own retries are set to 0, so no retry adds time. The storing of the session turn and the cost row are short writes outside that window, and none of them holds a lock another request waits on across the call.
 
-### Adapter, Configuration And Secrets
+### Adapter, Configuration And Credentials
 
-- The adapter lives in `apps/api/app/clients/` behind one provider-neutral interface: it takes the request above and returns JSON text plus token counts, or a timeout or error. No provider type, SDK class or model name appears outside it, in any contract or in any response.
-- Deployment configuration: `ONTAIX_LLM_PROVIDER` (default `anthropic`), `ONTAIX_LLM_MODEL` (default `claude-sonnet-5`), `ONTAIX_LLM_TIMEOUT_SECONDS` (text and document, default 15; a value above 15 or at most 0 stops the API at start-up), `ONTAIX_LLM_SPEECH_TIMEOUT_SECONDS` (speech transcript, default 45; a value above 45 or at most 0 stops the API at start-up). Changing provider or model needs no contract change.
-- The Anthropic API key lives only in Azure Key Vault as the secret `anthropic-api-key`, read at start-up by the API's workload identity, and locally in the ignored `.env` as `ONTAIX_ANTHROPIC_API_KEY`. It is never in settings, responses, events, audit entries, logs, tests, fixtures or documentation. The adapter's HTTP client redacts authentication headers from every log line; prompts and answers are not logged.
-- With no key configured the step reports `not_configured`, so local development and tests run without a key.
+- The adapter lives in `apps/api/app/clients/` behind one provider-neutral interface: it takes the request above and returns JSON text plus token counts, or a timeout or error. No provider type, SDK class, deployment or model name appears outside it, in any contract or in any response. `llm_call.provider` and `llm_call.model` are free text checked for shape only, so changing provider or model needs no contract change.
+- Providers: `azure_foundry` (default) and `anthropic` (optional). Any other value of `ONTAIX_LLM_PROVIDER` stops the API at start-up.
+- Deployment configuration:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `ONTAIX_LLM_PROVIDER` | `azure_foundry` | `azure_foundry` or `anthropic` |
+| `ONTAIX_FOUNDRY_ENDPOINT` | none | The Foundry resource's `https` endpoint (Terraform output). Unset with `azure_foundry` gives `not_configured` |
+| `ONTAIX_FOUNDRY_DEPLOYMENT` | `gpt-6-sol` | The model deployment the adapter calls |
+| `ONTAIX_LLM_MODEL` | `gpt-6-sol` | The model name written to `llm_call.model` and looked up in the price table; with `anthropic`, also the model id sent to the API |
+| `ONTAIX_LLM_PRICE_TABLE` | none | JSON object from model name to `{"inputEurPerMTok": <number>, "outputEurPerMTok": <number>}`, euros per million tokens, each at least 0 |
+| `ONTAIX_LLM_TIMEOUT_SECONDS` | 15 | `text` and `document`; above 15 or at most 0 stops the API at start-up |
+| `ONTAIX_LLM_SPEECH_TIMEOUT_SECONDS` | 45 | `speech` transcript; above 45 or at most 0 stops the API at start-up |
+| `ONTAIX_ANTHROPIC_API_KEY` | none | `anthropic` only; unset with `anthropic` gives `not_configured` |
+| `ONTAIX_FOUNDRY_REASONING_EFFORT` | `none` | `azure_foundry` only; the reasoning effort sent with each call. `none` is the lowest value the SDK accepts; the setting exists because the live deployment may refuse `none`. Approved under owner delegation (2026-09-29) |
+| `ONTAIX_LLM_REASONING_ALLOWANCE_TOKENS` | 0 | Extra output tokens for reasoning, added both to the provider's maximum output tokens and to the token reservation. The answer bounds stay 1,024 for `text` and `document` and 12,288 for `speech`. Approved under owner delegation (2026-09-29) |
+
+- Price table: when a provider is configured and `ONTAIX_LLM_MODEL` has no entry in `ONTAIX_LLM_PRICE_TABLE`, or the table is not valid JSON of that shape, the API stops at start-up, so no call is recorded at an invented price. No price is written in any contract. Prices sit in the deployment's configuration (Helm values), taken from the provider's published price for that model and deployment type - for the default, the Azure retail price of `gpt-6-sol` DataZoneStandard in France Central, in euros. `llm_call.cost_eur` is input tokens times `inputEurPerMTok` plus output tokens times `outputEurPerMTok`, divided by 1,000,000. It is an estimate, not the invoice; a price change is a configuration change and applies to new rows only.
+- Token accounting: input and output tokens are the counts the provider reports for the call (for `azure_foundry` the response's `usage.prompt_tokens` and `usage.completion_tokens`; for `anthropic` `usage.input_tokens` and `usage.output_tokens`). Cached input tokens are counted and priced as input, so the estimate does not fall below the invoice. Reasoning tokens, where the model reports them, are part of the output count: they are priced as output and count against the output bound and the monthly cap. When the provider reports no usage (timeout, transport error) both counts are 0, as above.
+- Output bound: every call sets the provider's maximum output tokens (`max_completion_tokens` for `azure_foundry`) to the answer bound plus `ONTAIX_LLM_REASONING_ALLOWANCE_TOKENS`, and reserves that same sum. The answer bound is 1,024, or 12,288 for a `speech` transcript. An answer cut off at the bound fails validation and gives `invalid_output`.
+- Structured output: the provider must enforce a JSON schema on the answer; a provider that cannot is not a valid provider. With `azure_foundry` the adapter sends `response_format` of type `json_schema` with `strict` true; with `anthropic` it uses that provider's equivalent structured-output or forced tool-call mode. Strict mode accepts a subset of JSON Schema only (every property required, `additionalProperties` false, no `if`/`then`, `not` or `oneOf`), so the adapter sends a strict-compatible form derived in `apps/api` from `contracts/teach-extraction.schema.json`, with optional fields made nullable. The derived form is a transport detail, not a contract: the API always validates the answer against the full contract schema and the checks above.
+- Default provider credentials are keyless. The API authenticates to Azure AI Foundry with Microsoft Entra ID through `DefaultAzureCredential`, token scope `https://cognitiveservices.azure.com/.default`. In the cluster this resolves to the workload identity `id-ontaix-dev-frc` of `ontaix/ontaix-api`; locally, to the owner's `az login` session. Each holds the built-in role Cognitive Services OpenAI User on the Foundry resource only: inference on its deployments, no management and no key listing. The Foundry resource has local (key) authentication disabled, so no API key for it exists anywhere. Token acquisition runs inside the call's timeout; a credential failure gives `provider_error`. Entra ID here authenticates Ontaix's own workload to Azure; it never decides what a user may do.
+- Optional Anthropic provider: its API key lives only in Azure Key Vault as the secret `anthropic-api-key`, read at start-up by the API's workload identity, and locally in the ignored `.env` as `ONTAIX_ANTHROPIC_API_KEY`. It is needed only when `ONTAIX_LLM_PROVIDER` is `anthropic`.
+- No credential, key or token is ever in settings, responses, events, audit entries, logs, tests, fixtures or documentation. The adapter's HTTP client redacts authentication headers from every log line; prompts and answers are not logged, and the adapter never asks the provider to store a completion.
+- With no endpoint configured (or, for `anthropic`, no key) the step reports `not_configured`, so local development and tests run without Azure access.
 
 ### Security
 
@@ -178,14 +199,16 @@ The model step never produces a `5xx`. The timeout is 15 seconds for `text` and 
 
 The rest of Ontaix runs in Azure France Central. The model step is the one place where tenant content leaves that environment. What leaves, per call: the sentence being taught (typed text, a speech transcript or an imported document sentence), up to 8 earlier sentences of the session, the company name, up to 200 concept labels with their domain keys and pending flags, other companies' names and matching labels when `crossCompany` is on, the domain templates and the action guidance. Nothing in the never-sent list above leaves.
 
-With the default configuration it goes to Anthropic's API (`ONTAIX_LLM_PROVIDER` `anthropic`), a service operated by Anthropic outside Azure. This configuration gives no guarantee that the data stays in France or in the EU; where Anthropic processes it is set by Anthropic's API terms, not by Ontaix. Retention of prompts and answers by the provider follows the provider's API terms in force for the account that owns the key; Ontaix itself stores neither. The adapter's provider setting is the lever for a different residency, for example a provider endpoint in an EU region, and needs no contract change.
+Default provider (`azure_foundry`, decision row 93). The request goes to the Azure AI Foundry resource of the Ontaix environment, created in France Central in the Insight Azure subscription (Microsoft Azure Sponsorship), and is processed by Microsoft Azure under that subscription's terms. The deployment type is DataZoneStandard (EU): Azure may run inference in any Azure region of the EU data zone, not only France Central, and never outside the EU data zone; data the resource stores at rest stays in its geography. The content reaches neither OpenAI nor Anthropic. Under Azure's terms for models sold by Azure, prompts and answers are not used to train models. Azure abuse monitoring may keep prompts and answers for up to 30 days for review unless the subscription is granted an exemption; Ontaix stores neither and never enables stored completions. The call reaches the resource's endpoint over TLS, authenticated with Entra ID; public network access follows the rest of the `dev` environment, and a private endpoint is a later infrastructure step.
 
-Egress is on by default (decision row 87). `llmMonthlyTokenCap` defaults to 2,000,000 tokens per month for every tenant, so once a provider key is configured, every sentence that triggers the model step leaves Azure France Central for the provider, with the context listed above, without any tenant action. A tenant administrator opts out by setting `llmMonthlyTokenCap` to `0` (`PATCH /settings`, `settings.write`, audited); from then on nothing leaves for that tenant.
+Optional provider (`anthropic`). When a deployment sets `ONTAIX_LLM_PROVIDER` to `anthropic`, the request goes to Anthropic's API, a service operated by Anthropic outside Azure. That path gives no guarantee that the data stays in France or in the EU; where Anthropic processes it and how long it keeps it are set by Anthropic's API terms for the account that owns the key, not by Ontaix. Claude models offered through Azure AI Foundry are in the same position, because they run on Anthropic-hosted infrastructure, and are not the default for that reason. Choosing this provider is a deployment decision that needs no contract change and should be recorded in `docs/decisions.md`.
+
+Egress is on by default (decision row 87). `llmMonthlyTokenCap` defaults to 2,000,000 tokens per month for every tenant, so once the provider is configured, every sentence that triggers the model step leaves Azure France Central for the provider (by default, Azure inference within the EU data zone), with the context listed above, without any tenant action. A tenant administrator opts out by setting `llmMonthlyTokenCap` to `0` (`PATCH /settings`, `settings.write`, audited); from then on nothing leaves for that tenant.
 
 ## Consequences
 
 - The owner's natural sentences produce drafts; the grammar stays the verbatim port and the screenshot suite is unaffected, because the Studio renders the same drafts and captions.
 - A typed sentence that triggers the step, or a document sentence, waits up to 15 seconds longer, and a speech transcript up to 45 seconds; typed sentences the grammar fully understands pay nothing. The Studio adds no waiting indicator: it shows what the reference shows while a sentence is being taught, and nothing new.
-- Sentences that trigger the step, recent session sentences and candidate labels leave Azure France Central for the configured provider (see Data Residency). This happens by default; a tenant administrator opts out with `llmMonthlyTokenCap` set to `0`.
+- Sentences that trigger the step, recent session sentences and candidate labels leave Azure France Central for the configured provider - by default Azure AI Foundry inference within the EU data zone (see Data Residency). This happens by default; a tenant administrator opts out with `llmMonthlyTokenCap` set to `0`.
 - Model spend is measured per call, capped per caller per hour and per tenant per month, and visible in `GET /cost`.
 - `confidence` and `explanation` reach the API client only; showing them in the Studio needs a UI contract decision first.

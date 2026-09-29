@@ -3851,7 +3851,7 @@ components:
         llmOutcome:
           type: string
           enum: [not_triggered, used, not_configured, rate_limited, budget_exhausted, timeout, provider_error, invalid_output]
-          description: What happened to the model step. `not_triggered` - no fallback trigger held. `used` - the model answered and its output validated. `not_configured` - the deployment has no model provider or key. `rate_limited` - the caller's hourly `llm` budget is spent. `budget_exhausted` - the tenant's `llmMonthlyTokenCap` is reached (or is 0). `timeout` - no answer within 15 seconds (`text`, `document`) or 45 seconds (`speech` transcript). `provider_error` - the provider refused or failed. `invalid_output` - the answer did not validate against `contracts/teach-extraction.schema.json` or cited a candidate that was not sent. None of these is an error status; the response is `200`.
+          description: What happened to the model step. `not_triggered` - no fallback trigger held. `used` - the model answered and its output validated. `not_configured` - the deployment has no model provider configured (no endpoint, or no credential the provider needs). `rate_limited` - the caller's hourly `llm` budget is spent. `budget_exhausted` - the tenant's `llmMonthlyTokenCap` is reached (or is 0). `timeout` - no answer within 15 seconds (`text`, `document`) or 45 seconds (`speech` transcript). `provider_error` - the provider refused or failed. `invalid_output` - the answer did not validate against `contracts/teach-extraction.schema.json` or cited a candidate that was not sent. None of these is an error status; the response is `200`.
         draftNotes:
           type: array
           maxItems: 150
@@ -4276,7 +4276,7 @@ components:
         costEur:
           type: number
           minimum: 0
-          description: Estimated cost in euros from the deployment's price table for each model; an estimate, not the provider's invoice.
+          description: Estimated cost in euros from the deployment's configured price table for each model (euros per million input and output tokens); an estimate, not the provider's invoice. No price is part of this contract.
         byPurpose:
           type: array
           items:

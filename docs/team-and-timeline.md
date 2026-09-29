@@ -2,7 +2,7 @@
 
 The demo is built by 12 specialised agents under one orchestrator, from contracts frozen on day 1.
 The owner is the only human: approves the contracts, reviews one PR bundle per checkpoint,
-provides the Azure subscription, the LLM API key (via environment/Key Vault) and the design partner.
+provides the Azure subscription (which also hosts the Azure AI Foundry model, reached without a key) and the design partner.
 
 ## Agents
 | Role | Owns | Delivers |

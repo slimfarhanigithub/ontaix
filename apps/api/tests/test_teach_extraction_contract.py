@@ -1,7 +1,7 @@
 """Recorded model answers against the teach extraction contract, and a live provider check.
 
-The live test calls the configured provider and runs only when ONTAIX_ANTHROPIC_API_KEY is set;
-CI never sets it.
+The live test calls the configured provider and runs only when ONTAIX_FOUNDRY_ENDPOINT is set
+(with `az login` and a price for ONTAIX_LLM_MODEL in ONTAIX_LLM_PRICE_TABLE); CI never sets it.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def test_the_contract_refuses_markup_the_api_refuses() -> None:
 
 @pytest.mark.live
 @pytest.mark.skipif(
-    not os.environ.get("ONTAIX_ANTHROPIC_API_KEY"), reason="ONTAIX_ANTHROPIC_API_KEY is not set"
+    not os.environ.get("ONTAIX_FOUNDRY_ENDPOINT"), reason="ONTAIX_FOUNDRY_ENDPOINT is not set"
 )
 @pytest.mark.asyncio(loop_scope="session")
 async def test_the_configured_provider_answers_the_first_sentence() -> None:
@@ -75,7 +75,7 @@ async def test_the_configured_provider_answers_the_first_sentence() -> None:
         "domainTemplates": [{"key": "sales", "name": "Sales"}],
     }
     answer = await client.complete(
-        LlmRequest(SYSTEM_PROMPT, json.dumps(data), OUTPUT_SCHEMA, MAX_OUTPUT_TOKENS)
+        LlmRequest(SYSTEM_PROMPT, json.dumps(data), OUTPUT_SCHEMA, MAX_OUTPUT_TOKENS, 15.0)
     )
     parsed = TeachExtractionAnswer.model_validate_json(answer.text)
     contract().validate(json.loads(answer.text))

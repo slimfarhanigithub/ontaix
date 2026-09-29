@@ -7,8 +7,10 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.14",
     "anthropic==1.9.0",
+    "azure-identity==1.25.3",
     "defusedxml==0.7.1",
     "fastapi>=0.115",
+    "openai==3.20.0",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.6",
     "pypdf==6.1.1",
@@ -42,7 +44,7 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 markers = [
-    "live: calls the configured language model provider; runs only when ONTAIX_ANTHROPIC_API_KEY is set",
+    "live: calls the configured language model provider; runs only when ONTAIX_FOUNDRY_ENDPOINT is set",
 ]
 
 [tool.ruff]

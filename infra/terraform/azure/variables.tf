@@ -137,3 +137,40 @@ variable "workload_service_account" {
   type        = string
   default     = "ontaix-api"
 }
+
+# Azure AI Foundry
+variable "foundry_public_network_access_enabled" {
+  description = "Whether the Foundry endpoint is reachable from the public internet. Authentication stays Entra ID only."
+  type        = bool
+  default     = true
+}
+
+variable "foundry_deployment_name" {
+  description = "Name of the model deployment; the API passes it as the model/deployment id."
+  type        = string
+  default     = "gpt-6-sol"
+}
+
+variable "foundry_model_name" {
+  description = "OpenAI model name in the Foundry catalogue."
+  type        = string
+  default     = "gpt-6-sol"
+}
+
+variable "foundry_model_version" {
+  description = "Model version string as listed by the Foundry catalogue for the region."
+  type        = string
+  default     = "2026-09-22"
+}
+
+variable "foundry_deployment_sku" {
+  description = "Deployment SKU. DataZoneStandard keeps processing inside the EU data zone."
+  type        = string
+  default     = "DataZoneStandard"
+}
+
+variable "foundry_deployment_capacity" {
+  description = "Deployment capacity in units of 1,000 tokens per minute."
+  type        = number
+  default     = 100
+}

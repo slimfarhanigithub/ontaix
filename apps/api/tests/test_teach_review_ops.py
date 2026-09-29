@@ -283,6 +283,12 @@ def _handler_for(mode):
 async def test_real_adapter_never_leaks_key(client, tenant: TenantFixture, monkeypatch, mode):
     company_id, _ = await add_company(tenant, "Insight")
     await configure(tenant)
+    monkeypatch.setenv("ONTAIX_LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("ONTAIX_LLM_MODEL", "claude-sonnet-5")
+    monkeypatch.setenv(
+        "ONTAIX_LLM_PRICE_TABLE",
+        '{"claude-sonnet-5": {"inputEurPerMTok": 1, "outputEurPerMTok": 5}}',
+    )
     monkeypatch.setenv("ONTAIX_ANTHROPIC_API_KEY", SECRET)
     monkeypatch.setenv("ONTAIX_LLM_TIMEOUT_SECONDS", "1")
     get_settings.cache_clear()
