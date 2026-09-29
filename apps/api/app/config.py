@@ -19,6 +19,9 @@ MAX_LLM_SPEECH_TIMEOUT_SECONDS = 45.0
 
 LlmProvider = Literal["azure_foundry", "anthropic"]
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
+# What `python -m app.seed` loads into the demo tenant: only its directory, or the directory
+# with the Northwind and Aurora example companies.
+SeedMode = Literal["empty", "fixture"]
 
 
 class ModelPrice(BaseModel):
@@ -50,6 +53,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     database_url: str | None = None
     test_seed: int | None = None
+    seed: SeedMode = "fixture"
     import_purge_interval_seconds: float = Field(default=15 * 60, gt=0)
     extraction_concurrency: int | None = Field(default=None, ge=1)
     extraction_memory_limit_bytes: int = Field(default=512 * 1024 * 1024, ge=0)

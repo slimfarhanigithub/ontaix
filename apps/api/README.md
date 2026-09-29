@@ -33,6 +33,7 @@ tests/                   pytest against a real PostgreSQL (embedded pgserver or 
 ```bash
 uv sync
 uv run python -m app.seed            # migrate, then load the demo tenant (idempotent)
+ONTAIX_SEED=empty uv run python -m app.seed   # the tenant and its users only, no company
 uv run uvicorn app.main:app --reload --port 8000
 uv run pytest
 uv run ruff check

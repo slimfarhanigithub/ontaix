@@ -15,7 +15,13 @@ const script = resolve(here, '../../scripts/dev-stack.mjs');
 export default async function globalSetup(): Promise<() => Promise<void>> {
   const stack = fork(script, [], {
     cwd: resolve(here, '../..'),
-    env: { ...process.env, ONTAIX_API_PORT: String(API_PORT), ONTAIX_STUDIO_PORT: String(STUDIO_PORT) },
+    // The suite checks the example companies, so it always seeds the fixture.
+    env: {
+      ...process.env,
+      ONTAIX_API_PORT: String(API_PORT),
+      ONTAIX_STUDIO_PORT: String(STUDIO_PORT),
+      ONTAIX_SEED: 'fixture',
+    },
     stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
   });
   const exited = new Promise<void>((ok) => stack.once('exit', () => ok()));

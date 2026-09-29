@@ -1,5 +1,6 @@
-"""Builds the dev and test fixture tenant: directory, Northwind Industries, Aurora Valves and
-their equivalences.
+"""Builds the dev and test demo tenant: empty (its settings and directory, no company), or the
+fixture (the directory, Northwind Industries, Aurora Valves and their equivalences). The domain
+templates and the connector catalogue come with the schema, so both have them.
 
 Every concept and relation goes through the proposal service and is approved through the
 decision service, so the seeded state carries real audit entries, outbox rows and domain
@@ -43,17 +44,30 @@ logger = logging.getLogger(__name__)
 
 async def seed_demo_tenant(session: AsyncSession) -> bool:
     """Create the fixture tenant with its data; returns False when it already exists."""
-    if await tenant_repository.get_by_slug(session, directory.TENANT_SLUG) is not None:
+    users = await _create_tenant(session)
+    if users is None:
         return False
-    tenant = await tenant_repository.create(session, directory.TENANT_SLUG, directory.TENANT_NAME)
-    await tenant_settings_repository.create(session, tenant.id)
-    await view_state_repository.create(session, tenant.id)
-    users = await _seed_directory(session, tenant.id)
     proposer = await _caller_for(session, users[directory.PROPOSER_EMAIL])
     approver = await _caller_for(session, users[directory.APPROVER_EMAIL])
     await _seed_northwind(session, proposer, approver)
     await _seed_aurora(session, proposer, approver)
     return True
+
+
+async def seed_empty_tenant(session: AsyncSession) -> bool:
+    """Create the demo tenant with its settings and directory and no company, so the first
+    company added becomes its home company; returns False when the tenant already exists."""
+    return await _create_tenant(session) is not None
+
+
+async def _create_tenant(session: AsyncSession) -> dict[str, AppUser] | None:
+    """The demo tenant, its settings, view state and directory; None when it already exists."""
+    if await tenant_repository.get_by_slug(session, directory.TENANT_SLUG) is not None:
+        return None
+    tenant = await tenant_repository.create(session, directory.TENANT_SLUG, directory.TENANT_NAME)
+    await tenant_settings_repository.create(session, tenant.id)
+    await view_state_repository.create(session, tenant.id)
+    return await _seed_directory(session, tenant.id)
 
 
 async def _seed_directory(session: AsyncSession, tenant_id: uuid.UUID) -> dict[str, AppUser]:
