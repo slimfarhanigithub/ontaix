@@ -68,13 +68,13 @@ cd packages/connectors && uv sync && uv run pytest
 `pnpm dev:stack` (from the repository root, after `pnpm install`; it runs `uv sync` in `apps/api` when the virtualenv is missing) starts the whole stack without Docker:
 
 1. an embedded PostgreSQL 16 from the api's `pgserver` dev dependency, in a temporary directory deleted on exit (set `ONTAIX_DATABASE_URL` to use another server instead);
-2. `python -m app.seed`: migrations, then the demo tenant with Northwind Industries and Aurora Valves;
+2. `python -m app.seed`: migrations, then an empty demo tenant: its settings and seeded users, the domain templates and the connector catalogue, and no company. The first company you add with "+ Company" becomes the home company. To load the Northwind Industries and Aurora Valves example instead, run `ONTAIX_SEED=fixture pnpm dev:stack`; an `ONTAIX_SEED` already set always wins;
 3. the API under uvicorn on http://127.0.0.1:8000 with `ONTAIX_ENVIRONMENT=dev` (selector event loop on Windows);
 4. the Studio's Vite dev server on http://127.0.0.1:5173 with `VITE_ONTAIX_API_URL=/api/v1`, proxying `/api` to the API.
 
-In this dev build the Studio identifies itself with `X-Ontaix-User`: `VITE_ONTAIX_DEV_USER`, else the seed's Builder (`sam.okafor@northwind.com`), who can teach and propose; `?user=<email>` switches user per tab, for example the Governor (`hugo.brandt@northwind.com`) to approve. Production builds send no such header. Ports come from `ONTAIX_API_PORT` and `ONTAIX_STUDIO_PORT`; Ctrl+C stops everything, the database included.
+In this dev build the Studio identifies itself with `X-Ontaix-User`: `VITE_ONTAIX_DEV_USER`, else the seed's full-access demo user (`demo@northwind.com`: Administrator, Builder, Governor and Auditor), who can do everything in one tab; `?user=<email>` switches user per tab, for example the Builder (`sam.okafor@northwind.com`) or the Governor (`hugo.brandt@northwind.com`) to show separation of duties. Production builds send no such header. Ports come from `ONTAIX_API_PORT` and `ONTAIX_STUDIO_PORT`; Ctrl+C stops everything, the database included.
 
-`pnpm --filter studio test:e2e` boots the same stack on ports 8788 and 5788, checks both companies and their concept counts, teaches and approves one concept, and writes `tests/e2e/output/studio-both-companies.png`.
+`pnpm --filter studio test:e2e` boots the same stack with the fixture seed on ports 8788 and 5788, checks both companies and their concept counts, teaches and approves one concept, and writes `tests/e2e/output/studio-both-companies.png`.
 
 Each Python package runs `uv run pytest` and `uv run ruff check`; the root `pnpm lint`, `pnpm test` and `pnpm build` cover every workspace package.
 

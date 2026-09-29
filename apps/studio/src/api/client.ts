@@ -51,8 +51,8 @@ export const API_BASE: string = (import.meta.env.VITE_ONTAIX_API_URL as string |
 
 /**
  * Dev builds only: the user the API's dev environment resolves from `X-Ontaix-User`. `?user=<email>`
- * overrides `VITE_ONTAIX_DEV_USER`, whose default is the seed's Builder. A production build
- * compiles this away and sends no identity header.
+ * overrides `VITE_ONTAIX_DEV_USER`, whose default is the seed's full-access demo user. A
+ * production build compiles this away and sends no identity header.
  */
 const IDENTITY: Record<string, string> = import.meta.env.DEV ? devIdentity() : {};
 
@@ -60,7 +60,7 @@ function devIdentity(): Record<string, string> {
   const user =
     new URLSearchParams(location.search).get('user') ||
     (import.meta.env.VITE_ONTAIX_DEV_USER as string | undefined) ||
-    'sam.okafor@northwind.com';
+    'demo@northwind.com';
   return { 'X-Ontaix-User': user };
 }
 

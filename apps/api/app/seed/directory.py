@@ -44,6 +44,7 @@ USERS: tuple[SeedUser, ...] = (
     SeedUser("sam.okafor@northwind.com", "Sam Okafor", "IT"),
     SeedUser("priya.nair@northwind.com", "Priya Nair", "People"),
     SeedUser("felix.grau@northwind.com", "Felix Grau", "Finance"),
+    SeedUser("demo@northwind.com", "Demo User", "Demo"),
 )
 
 EVERYONE = tuple(u.email for u in USERS)
@@ -85,6 +86,19 @@ GROUPS: tuple[SeedGroup, ...] = (
         "Time-boxed read access across the portfolio",
         ("felix.grau@northwind.com",),
         (SeedRole("auditor", "tenant"),),
+    ),
+    # One person who can do everything, so a demo runs in a single tab. It deliberately sets
+    # aside separation of duties and exists only in this development and test seed.
+    SeedGroup(
+        "Demo · full access",
+        "Teaches, approves and administers everything, for demonstrations",
+        ("demo@northwind.com",),
+        (
+            SeedRole("administrator", "tenant"),
+            SeedRole("builder", "tenant"),
+            SeedRole("governor", "tenant"),
+            SeedRole("auditor", "tenant"),
+        ),
     ),
 )
 

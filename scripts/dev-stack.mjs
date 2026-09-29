@@ -9,7 +9,9 @@
  *   ONTAIX_API_PORT        API port (default 8000)
  *   ONTAIX_STUDIO_PORT     Studio port (default 5173)
  *   ONTAIX_DATABASE_URL    use this PostgreSQL instead of the embedded one (CI: postgres:16 service)
- *   VITE_ONTAIX_DEV_USER   dev identity the Studio sends (default: the seed's Governor)
+ *   ONTAIX_SEED            empty (default here: the demo tenant and its users, no company) or
+ *                          fixture (the Northwind and Aurora example)
+ *   VITE_ONTAIX_DEV_USER   dev identity the Studio sends (default: the seed's full-access demo user)
  *
  * The embedded database lives in a temporary directory and is deleted on exit, so every run
  * starts from the seed. The stack stops on Ctrl+C, SIGTERM, or, when started by another Node
@@ -99,7 +101,7 @@ async function startPostgres(py) {
 }
 
 function seed(py, env) {
-  log('migrating and seeding the demo tenant');
+  log(`migrating and seeding the demo tenant (${env.ONTAIX_SEED})`);
   const run = spawnSync(py, ['-m', 'app.seed'], { cwd: apiDir, env, stdio: 'inherit' });
   if (run.status !== 0) throw new Error('python -m app.seed failed');
 }
@@ -169,7 +171,12 @@ async function main() {
   await ensureFree(studioPort);
   const py = python();
   const databaseUrl = process.env.ONTAIX_DATABASE_URL || (await startPostgres(py));
-  const apiEnv = { ...process.env, ONTAIX_ENVIRONMENT: 'dev', ONTAIX_DATABASE_URL: databaseUrl };
+  const apiEnv = {
+    ...process.env,
+    ONTAIX_ENVIRONMENT: 'dev',
+    ONTAIX_DATABASE_URL: databaseUrl,
+    ONTAIX_SEED: process.env.ONTAIX_SEED || 'empty',
+  };
   seed(py, apiEnv);
 
   // psycopg's async driver needs a selector loop; uvicorn picks the proactor loop on Windows.
