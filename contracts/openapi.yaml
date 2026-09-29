@@ -1444,7 +1444,10 @@ paths:
       description: Writes nothing to the model. Runs the rule-based grammar (domain prefix, specialisation patterns, verb lexicon, list splitting, passives) against the company's current labels and returns the intents, the drafts the client may submit to `POST /proposals/batch`, and the caption outcome (`understood`, `partly_understood`, `not_understood`). No ontology row is written. The sentence comes from one of the three entry paths - `text` typed in the teach bar, `text` holding a speech transcript (the Studio transcribes the microphone and sends the final transcript, so speech has no endpoint of its own), or `importRef` citing a stored sentence of a document import, whose text the server reads from the import. Every path is parsed the same way. A call with `importRef` increments that sentence's parse counter, and a sentence may be parsed at most 3 times (`409 import_sentence_used` after that). A call with `importRef` spends no parse unit, because the import charged one per sentence; a call with `text` spends one parse unit. Refusals - `409 channel_disabled` when `text` is sent while the `liveTeaching` setting is off, when `origin` is `speech` while the `voice` setting is off, or when `importRef` is sent while the `importDocs` setting is off. `origin` is declared by the client, so the `voice` check stops only honest clients; the Studio also hides the microphone when `voice` is off. `404` for an import of another tenant or actor, `410 import_expired` past its expiry.
 
 
-        Language model fallback (ADR 0008). The rule-based grammar always runs first. A language model extraction step runs afterwards only when at least one trigger holds - the rules understand nothing (`not_understood`) or only part of the sentence (`partly_understood`); the sentence holds a back-reference word (`these`, `those`, `it`, `they`, `them`, `this`) as a whole word; the sentence holds a list preamble (a count word `two` to `twelve` or a number, then one to three words, then `,` or `:`, as in `three areas, app, data and AI`); or the sentence holds a verb form that is not a variant of the reference lexicon (checked against a verb word list shipped with the API, which never changes the lexicon). The model receives the sentence, the session's recent turns, the company name, up to 200 candidate concepts of the company and the domain templates, and returns intents only; the server validates them against `contracts/teach-extraction.schema.json` and turns them into drafts with the same rules as the grammar. Nothing the model returns is written - it becomes drafts the client submits as proposals for a human to approve. When the model output is invalid, or the step fails or is skipped, no model draft is returned and the whole sentence is listed in `unresolved` with the reason. When a back-reference, list preamble or unknown verb triggered the step and the model answered validly, its intents replace the grammar's; when only `partly_understood` triggered it, the grammar's intents are kept and the model's are added after removing duplicates. Each call to the model spends one unit of the caller's `llm` budget (hourly, per user or agent) and reserves tokens from the tenant's `llmMonthlyTokenCap`; either being exhausted skips the step. A skipped, failed, timed-out (15 seconds at most) or invalid model step never fails the request - the response is `200` with the grammar's result, `extractor` `rules`, `degraded` true and `llmOutcome` saying why. The model is configured per deployment (provider and model name); no provider name, key or model name appears in this API.
+        Routing by origin (ADR 0008, decision row 88). `speech` - the model runs first on the whole transcript as one request (up to 4,000 characters); it segments the transcript into sentences, ignores fillers and disfluencies, resolves back-references with the session's turns and returns the concepts, the parent each is born from, the action of each birth relation, further relations with their actions, and domains. `document` (`importRef`) - the model runs first on the cited sentence, with up to two sentences before and two after it from the same stored import as context (read by the server, never sent by the client). `text` - the grammar runs first and the model only as the fallback below. When the model step is off (`llmMonthlyTokenCap` 0), out of budget, failing, timed out or invalid, `speech` and `document` fall back to the grammar with `degraded` true; a transcript is then split into segments on sentence punctuation and newlines (a segment longer than 400 characters is cut at its last space before 400) and each segment is parsed by the grammar.
+
+
+        Language model fallback for `text` (ADR 0008). The rule-based grammar always runs first. A language model extraction step runs afterwards only when at least one trigger holds - the rules understand nothing (`not_understood`) or only part of the sentence (`partly_understood`); the sentence holds a back-reference word (`these`, `those`, `it`, `they`, `them`, `this`) as a whole word; the sentence holds a list preamble (a count word `two` to `twelve` or a number, then one to three words, then `,` or `:`, as in `three areas, app, data and AI`); or the sentence holds a verb form that is not a variant of the reference lexicon (checked against a verb word list shipped with the API, which never changes the lexicon). The model receives the sentence, the session's recent turns, the company name, up to 200 candidate concepts of the company and the domain templates, and returns intents only; the server validates them against `contracts/teach-extraction.schema.json` and turns them into drafts with the same rules as the grammar. Nothing the model returns is written - it becomes drafts the client submits as proposals for a human to approve. When the model output is invalid, or the step fails or is skipped, no model draft is returned and the whole sentence is listed in `unresolved` with the reason. When a back-reference, list preamble or unknown verb triggered the step and the model answered validly, its intents replace the grammar's; when only `partly_understood` triggered it, the grammar's intents are kept and the model's are added after removing duplicates. Each call to the model spends one unit of the caller's `llm` budget (hourly, per user or agent) and reserves tokens from the tenant's `llmMonthlyTokenCap`; either being exhausted skips the step. A skipped, failed, timed-out (15 seconds at most for `text` and `document`, 45 seconds for a `speech` transcript, wall clock with connect included) or invalid model step never fails the request - the response is `200` with the grammar's result, `extractor` `rules`, `degraded` true and `llmOutcome` saying why. The model is configured per deployment (provider and model name); no provider name, key or model name appears in this API.
       operationId: parseTeach
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1464,8 +1467,8 @@ paths:
                 text:
                   type: string
                   minLength: 1
-                  maxLength: 400
-                  description: Typed text or a speech transcript. Not sent with `importRef`.
+                  maxLength: 4000
+                  description: Typed text (at most 400 characters) or, with `origin` `speech`, a whole speech transcript (at most 4,000 characters); a longer `text` is `422 validation_failed`. Not sent with `importRef`. A `text` call spends one parse unit per started 400 characters (at most 10 for a transcript).
                 origin:
                   $ref: '#/components/schemas/InputOrigin'
                 importRef:
@@ -1473,7 +1476,7 @@ paths:
                 sessionId:
                   type: string
                   format: uuid
-                  description: Generated by the client once per teach bar session (a new one when the Studio loads or the company changes) and sent with every sentence of that session, so the model step can resolve back-references such as `these services`. The server keeps the last 8 sentences of a session with the concepts each one referenced or introduced, keyed by tenant, caller, company and session; each sentence is kept for 2 hours. A session is readable only by the caller that created it, in the same tenant and company; an unknown or expired `sessionId` starts an empty session and is never an error. Without `sessionId` the sentence is parsed with no history.
+                  description: Generated by the client once per teach bar session (a new one when the Studio loads or the company changes) and sent with every sentence of that session, so the model step can resolve back-references such as `these services`. The server keeps the last 8 sentences of a session with the concepts each one referenced or introduced, keyed by tenant, caller, company and session; each sentence is kept for 2 hours. A session is readable only by the caller that created it, in the same tenant and company; an unknown or expired `sessionId` starts an empty session and is never an error. A `speech` transcript is stored as one turn per segment, in order. Without `sessionId` the sentence is parsed with no history.
       responses:
         '410':
           $ref: '#/components/responses/Gone'
@@ -3848,17 +3851,17 @@ components:
         llmOutcome:
           type: string
           enum: [not_triggered, used, not_configured, rate_limited, budget_exhausted, timeout, provider_error, invalid_output]
-          description: What happened to the model step. `not_triggered` - no fallback trigger held. `used` - the model answered and its output validated. `not_configured` - the deployment has no model provider or key. `rate_limited` - the caller's hourly `llm` budget is spent. `budget_exhausted` - the tenant's `llmMonthlyTokenCap` is reached (or is 0). `timeout` - no answer within 15 seconds. `provider_error` - the provider refused or failed. `invalid_output` - the answer did not validate against `contracts/teach-extraction.schema.json` or cited a candidate that was not sent. None of these is an error status; the response is `200`.
+          description: What happened to the model step. `not_triggered` - no fallback trigger held. `used` - the model answered and its output validated. `not_configured` - the deployment has no model provider or key. `rate_limited` - the caller's hourly `llm` budget is spent. `budget_exhausted` - the tenant's `llmMonthlyTokenCap` is reached (or is 0). `timeout` - no answer within 15 seconds (`text`, `document`) or 45 seconds (`speech` transcript). `provider_error` - the provider refused or failed. `invalid_output` - the answer did not validate against `contracts/teach-extraction.schema.json` or cited a candidate that was not sent. None of these is an error status; the response is `200`.
         draftNotes:
           type: array
-          maxItems: 60
-          description: One entry per element of `drafts`, in the same order. Advisory for the reviewer; never submitted with the draft.
+          maxItems: 150
+          description: One entry per element of `drafts`, in the same order; the same cap as `drafts`. Advisory for the reviewer; never submitted with the draft.
           items:
             $ref: '#/components/schemas/DraftNote'
         unresolved:
           type: array
-          maxItems: 20
-          description: Phrases of the sentence that produced no draft, with the reason. Empty when everything was understood. Each `text` is a substring of the sentence the server holds (or the whole sentence), never text taken from the model. At most 20 entries; phrases beyond the 20th are dropped from the list, and the result stays `partly_understood` or `not_understood`.
+          maxItems: 40
+          description: Phrases of the sentence that produced no draft, with the reason. Empty when everything was understood. Each `text` is a substring of the sentence or transcript the server holds (or the whole sentence), never text taken from the model. At most 20 entries, 40 for a `speech` transcript; phrases beyond the cap are dropped from the list, and the result stays `partly_understood` or `not_understood`.
           items:
             $ref: '#/components/schemas/UnresolvedPhrase'
         origin:
@@ -3878,15 +3881,22 @@ components:
           description: The domain prefix stripped from the sentence, if any.
         intents:
           type: array
-          maxItems: 60
+          maxItems: 150
+          description: At most 60, or 150 for a `speech` transcript - the same cap as `drafts`.
           items:
             $ref: '#/components/schemas/Intent'
         drafts:
           type: array
-          maxItems: 60
-          description: Proposal drafts in submission order, ready for `POST /proposals/batch`; each carries the request's `origin` and `importRef`. At most 60, counting grammar and model drafts together. When the result would hold more, the server keeps intents in sentence order (grammar intents first for `rules+llm`) while their drafts fit and fewer than 60 intents are kept, counting intents that produce no draft, drops the rest with their drafts, and lists their text as one `unresolved` entry with reason `too_many_drafts`.
+          maxItems: 150
+          description: Proposal drafts in submission order, ready for `POST /proposals/batch`; each carries the request's `origin` and `importRef`. At most 60 for `text` and `document`, and 150 for a `speech` transcript (up to 60 model intents, most of which draft one concept, plus room for two-draft intents), counting grammar and model drafts together; 150 stays under the 200-draft limit of `POST /proposals/batch`. When the result would hold more, the server keeps intents in transcript order (grammar intents first for `rules+llm`) while their drafts fit and fewer intents than the cap are kept, counting intents that produce no draft, drops the rest with their drafts, and lists their text as one `unresolved` entry with reason `too_many_drafts`.
           items:
             $ref: '#/components/schemas/ProposalDraft'
+        segments:
+          type: array
+          maxItems: 40
+          description: The sentences the request was split into, in order - one segment for `text` and `document`, one per sentence the model (or, when degraded, the grammar's splitter) found in a `speech` transcript. Fillers and disfluencies between segments belong to no segment. Each segment is stored as one session turn.
+          items:
+            $ref: '#/components/schemas/SourceSegment'
         statements:
           type: array
           description: One line per intent for the caption, for example `A pred B (new)`.
@@ -3935,7 +3945,42 @@ components:
         explanation:
           type: string
           maxLength: 300
-          description: Model drafts only - a short plain-text reason, for example `these services refers to Services from the previous sentence`. Text only, never markup; HTML-escaped wherever the server interpolates it and rendered by any client as text.
+          description: Model drafts only - a short plain-text reason, for example `these services refers to Services from the previous sentence`. When a spoken list's stated number differs from its length (`3 offerings` followed by four names), the drafts follow the list and the server appends `stated <n>, listed <m>` to the explanation of each draft of that list. Text only, never markup; HTML-escaped wherever the server interpolates it and rendered by any client as text.
+        segment:
+          type: integer
+          minimum: 0
+          maximum: 39
+          description: Index into `TeachResult.segments` of the sentence the draft came from.
+        sourceSpan:
+          $ref: '#/components/schemas/SourceSpan'
+          description: The words of the request that produced the draft - the model's span for a model draft (checked by the server to lie inside its segment), the matched clause for a grammar draft.
+
+    SourceSpan:
+      type: object
+      additionalProperties: false
+      description: A half-open range `[start, end)` of Unicode code points in the request's text (the typed text, the transcript, or the cited import sentence as the server holds it). Clients that index strings in UTF-16 convert, for example with `Array.from`.
+      required: [start, end]
+      properties:
+        start:
+          type: integer
+          minimum: 0
+          maximum: 3999
+        end:
+          type: integer
+          minimum: 1
+          maximum: 4000
+
+    SourceSegment:
+      type: object
+      additionalProperties: false
+      required: [index, span]
+      properties:
+        index:
+          type: integer
+          minimum: 0
+          maximum: 39
+        span:
+          $ref: '#/components/schemas/SourceSpan'
 
     UnresolvedPhrase:
       type: object
@@ -3949,8 +3994,8 @@ components:
           description: A substring of the sentence the server holds, or the whole sentence when the model step failed or was skipped. For a phrase the model reported, the server uses the matching substring of the sentence and the whole sentence when there is no exact match.
         reason:
           type: string
-          enum: [not_understood, ambiguous_reference, low_confidence, model_unavailable, model_invalid_output, too_many_drafts]
-          description: '`not_understood` - neither the grammar nor the model found an intent. `ambiguous_reference` - the model could not tell what a back-reference points to. `low_confidence` - the model reported a confidence below 0.4. `model_unavailable` - the model step was triggered and did not answer (`llmOutcome` `not_configured`, `rate_limited`, `budget_exhausted`, `timeout` or `provider_error`). `model_invalid_output` - the answer failed validation. `too_many_drafts` - the intents beyond the 60-draft cap of `drafts`.'
+          enum: [not_understood, ambiguous_reference, low_confidence, model_unavailable, model_invalid_output, too_many_drafts, not_a_statement]
+          description: '`not_understood` - neither the grammar nor the model found an intent. `ambiguous_reference` - the model could not tell what a back-reference points to. `low_confidence` - the model reported a confidence below 0.4. `model_unavailable` - the model step was triggered and did not answer (`llmOutcome` `not_configured`, `rate_limited`, `budget_exhausted`, `timeout` or `provider_error`). `model_invalid_output` - the answer failed validation. `too_many_drafts` - the intents beyond the draft cap of `drafts`. `not_a_statement` - a transcript sentence the model read as talk rather than teaching (a question, an aside, a correction it could not apply).'
 
     CurrentUser:
       type: object
