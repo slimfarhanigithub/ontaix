@@ -5,9 +5,9 @@ lease: a new epoch, one more attempt, five minutes. A job past its attempt limit
 The runner then reads the import's sentences, cuts them into chunks and runs pass 1 (outline)
 and pass 2 (sections) chunk by chunk from the first unfinished chunk, so a job whose runner died
 resumes where it stopped. No transaction is open during a model call; the lease is renewed
-while the call runs, and every write after the claim - progress, outline, tokens, the final
-state and the `extraction.changed` row - is fenced on the lease, so a runner that lost it stops
-without writing more, settling only its own token reservation.
+while the call runs and while mapping runs, and every write after the claim - progress, outline,
+tokens, the final state and the `extraction.changed` row - is fenced on the lease, so a runner
+that lost it stops without writing more, settling only its own token reservation.
 
 A chunk whose answer is invalid, timed out, refused or failed is listed as unresolved and the
 job goes on. The job stops calling the model at its token ceiling, the tenant's monthly cap,
@@ -21,6 +21,7 @@ import asyncio
 import contextlib
 import logging
 import uuid
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -334,7 +335,12 @@ class _Run:
 
     async def _complete_renewing(self, client: LlmClient, request: LlmRequest) -> LlmAnswer:
         """The model call, with the lease renewed every minute while it runs."""
-        call = asyncio.ensure_future(client.complete(request))
+        return await self._renewing(client.complete(request))
+
+    async def _renewing[T](self, work: Awaitable[T]) -> T:
+        """`work`, with the lease renewed every `RENEW_SECONDS` while it runs; a lost lease
+        cancels it."""
+        call = asyncio.ensure_future(work)
         try:
             while True:
                 done, _ = await asyncio.wait({call}, timeout=RENEW_SECONDS)
@@ -376,7 +382,12 @@ class _Run:
     async def _map(self, details: dict[int, dict[str, Any]], stopped: str | None) -> None:
         await self._progress({"phase": "mapping"})
         view = await self._view()
-        mapped = map_tree(view, self.job.company_id, self.entries, details, self.job.node_ceiling)
+        # Mapping runs in a worker thread so the lease is renewed while it works.
+        mapped = await self._renewing(
+            asyncio.to_thread(
+                map_tree, view, self.job.company_id, self.entries, details, self.job.node_ceiling
+            )
+        )
         self._add_unresolved(mapped.unresolved)
         self.degraded = self.degraded or mapped.degraded
         if not mapped.drafts:

@@ -4,6 +4,7 @@ proposals, against recorded model answers."""
 from __future__ import annotations
 
 import json
+import time
 import uuid
 
 import httpx
@@ -346,3 +347,36 @@ async def test_a_cancel_requested_while_running_ends_the_job(
 
     status = (await client.get(f"/extractions/{job['id']}", headers=tenant.builder.headers)).json()
     assert status["state"] == "cancelled" and fake.requests == []
+
+
+async def test_the_lease_is_renewed_while_mapping_runs(
+    client: httpx.AsyncClient,
+    tenant: TenantFixture,
+    fake_llm: FakeLlmClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import_id = await imported(client, tenant)
+    job = (await start(client, tenant, import_id)).json()
+    fake_llm.answer(OUTLINE, SECTIONS)
+    original = document_extraction_runner_service.map_tree
+    renewals: list[object] = []
+
+    def slow_map(*args: object) -> object:
+        time.sleep(0.5)
+        return original(*args)
+
+    async def count_writes(self, values, *, event=False):  # type: ignore[no-untyped-def]
+        if values == {}:
+            renewals.append(values)
+        await real_write(self, values, event=event)
+
+    real_write = document_extraction_runner_service._Run._write
+    monkeypatch.setattr(document_extraction_runner_service, "map_tree", slow_map)
+    monkeypatch.setattr(document_extraction_runner_service, "RENEW_SECONDS", 0.05)
+    monkeypatch.setattr(document_extraction_runner_service._Run, "_write", count_writes)
+
+    await document_extraction_runner_service.run_once()
+
+    status = (await client.get(f"/extractions/{job['id']}", headers=tenant.builder.headers)).json()
+    assert status["state"] == "succeeded"
+    assert len(renewals) >= 2

@@ -5,7 +5,6 @@
 import { useEffect } from 'react';
 
 import { store } from '../store/store';
-import { openImportDialog } from './ImportDialog';
 
 export function useKeyboard(): void {
   useEffect(() => {
@@ -13,7 +12,7 @@ export function useKeyboard(): void {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' && e.key !== 'Escape') return;
       if (e.key === 'a' || e.key === 'A') store.arrange();
-      if (e.key === 'i' || e.key === 'I') openImportDialog();
+      if (e.key === 'i' || e.key === 'I') (document.getElementById('importFile') as HTMLInputElement | null)?.click();
       if (e.key === 'l' || e.key === 'L') store.toggleLegend();
       if (e.key === 'd' || e.key === 'D') store.toggleDomainsCard();
       if (e.key === 'p' || e.key === 'P') store.togglePanel();

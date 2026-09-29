@@ -8,7 +8,7 @@ import { store } from '../store/store';
 import { Dialog } from './Dialog';
 import { Drawer } from './Drawer';
 import { canExpandFromDrawer, noSuggestionsText, openExpandDialog, toggleSelection } from './ExpandDialog';
-import { IMPORT_MODES, openImportDialog } from './ImportDialog';
+import { IMPORT_MODES, ImportModeRows, importMode } from './ImportMode';
 import { Panel, branchSize } from './Panel';
 
 const flush = () => act(() => new Promise((r) => setTimeout(r, 0)));
@@ -191,23 +191,24 @@ describe('Approve branch', () => {
   });
 });
 
-describe('Import dialog', () => {
-  afterEach(() => {
-    store.ui.dialogs = [];
-  });
-
+describe('Import mode', () => {
   it('offers sentence by sentence, the default, and whole document as radio rows', () => {
-    const { container } = render(<Dialog />);
-    act(() => openImportDialog());
+    const { container } = render(<ImportModeRows />);
     const rows = [...container.querySelectorAll('#imMode .chk')];
     expect(rows.map((r) => [r.querySelector('b')?.textContent, r.querySelector('small')?.textContent])).toEqual([
       ['Sentence by sentence', 'Each sentence is taught on its own'],
       ['Whole document', 'The model maps the whole document into one tree of proposals'],
     ]);
     expect(IMPORT_MODES.map((m) => m.mode)).toEqual(['sentences', 'document']);
-    expect([...container.querySelectorAll<HTMLInputElement>('#imMode input')].map((i) => [i.type, i.checked])).toEqual([
+    const inputs = [...container.querySelectorAll<HTMLInputElement>('#imMode input')];
+    expect(inputs.map((i) => [i.type, i.checked])).toEqual([
       ['radio', true],
       ['radio', false],
     ]);
+    expect(importMode()).toBe('sentences');
+    fireEvent.click(inputs[1]);
+    expect(importMode()).toBe('document');
+    fireEvent.click(inputs[0]);
+    expect(importMode()).toBe('sentences');
   });
 });

@@ -1,14 +1,14 @@
 /**
  * The tool row above the teach bar. Markup from reference/ontaix-studio-reference.html lines
  * 194-201 without the Finalise all button; behaviours from lines 548-565 (arrange, coverage,
- * skip), 616 (add a company) and 904-906 (import, drag and drop). Import opens the import dialog,
- * where the reading mode is chosen before the file picker opens.
+ * skip), 616 (add a company) and 904-906 (import, drag and drop). The file is read with the
+ * mode checked in `#imMode`.
  */
 import { useEffect, useRef } from 'react';
 
 import { importDocument } from '../teach/teach';
 import { openAddCompany } from './AddCompany';
-import { importMode, openImportDialog } from './ImportDialog';
+import { ImportModeRows, importMode } from './ImportMode';
 import { useStore } from './dom';
 
 export function Tools() {
@@ -51,7 +51,7 @@ export function Tools() {
         title="Import a document and detect concepts and relations (I)"
         style={{ display: settings && !settings.importDocs ? 'none' : undefined }}
         disabled={st.ui.importing}
-        onClick={openImportDialog}
+        onClick={() => file.current?.click()}
       >
         <svg viewBox="0 0 16 16">
           <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10" />
@@ -70,6 +70,7 @@ export function Tools() {
           if (f) void importDocument(f, importMode());
         }}
       />
+      <ImportModeRows />
       <button type="button" id="arrange" title={st.arrangeTitle()} onClick={() => st.arrange()}>
         <svg viewBox="0 0 16 16">
           <circle cx="8" cy="3" r="1.6" />
