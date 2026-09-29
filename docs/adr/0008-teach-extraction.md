@@ -138,6 +138,14 @@ For the owner's two sentences, with `Insight` as `c0`:
 - `Insight sells services` gives `rel c0 sells newLabel Services`, drafted as `ConceptDraft` (parent `Insight`, label `Services`, action `sells`).
 - `these services are focused around three areas, app, data and AI`, with `Services` pending from the first sentence and sent as a candidate, gives three `rel` intents from that candidate with action `focuses on` to `App`, `Data` and `AI`, drafted as three `ConceptDraft`s with `parentId` set to `Services`.
 
+### Worked Examples
+
+The model cannot be fine-tuned, so it learns by example in the prompt (decision row 125).
+
+- Fixed examples: the system prompt is the instructions followed by five worked examples (a deep chain, a grouping noun, a descriptive list, a role with a relative clause, reuse of existing concepts). Each is an input and the exact answer the API accepts, with labels in the input's own words. The system prompt is byte-identical on every call, so a provider's prompt cache can hold it.
+- Retrieved examples: `apps/api/app/ai/examples/teach_examples.json` holds a library of 20 to 40 entries (input, expected answer, tags, source). Per call the API ranks them by Okapi BM25 over words (NFKC, case folded) against the text, a word for the reading mode added on both sides, and sends the best three whose estimated tokens together stay within 2,000, as the `examples` field that opens the user message, before the caller's text. The call's token reservation counts them. There is no embedding deployment; the ranking is standard library only and deterministic.
+- Learn/test split (`apps/api/app/ai/examples/split.json`): examples come only from LEARN, which is the GoodRelations benchmark and a stratified half of the non-private bake-off cases and documents (strata by kind, language and main stress). TEST is the W3C Organization benchmark, the other half, and every private input; it never supplies an example, so measured quality stays honest. A test fails when an example names a TEST source or quotes W3C Organization material, and, where the bake-off material is present, when an example shares a six-word phrase with TEST text.
+
 ### Costs And Budgets
 
 - Every call to the provider, including failed and timed-out ones, writes one `llm_call` row: tenant, caller, company, purpose `teach_extraction`, provider, model, input and output tokens, estimated euro cost from the deployment's price table (`ONTAIX_LLM_PRICE_TABLE`, see Adapter, Configuration And Credentials), latency and outcome. It never holds the sentence, prompt, answer or key. Rows are kept 400 days.

@@ -29,7 +29,9 @@ from app.config import ModelPrice, ReasoningEffort
 PROVIDER = "anthropic_foundry"
 TOKEN_SCOPE = "https://ai.azure.com/.default"
 
-_REDACTING_FILTER = protect_loggers(("anthropic", "azure", "msal", "httpx2", "httpx", "httpcore"))
+_REDACTING_FILTER = protect_loggers(
+    ("anthropic", "azure", "msal", "httpx2", "httpx", "httpcore", "urllib3")
+)
 
 
 class AnthropicFoundryLlmClient:
