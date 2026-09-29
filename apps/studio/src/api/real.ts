@@ -10,6 +10,8 @@
  *   POST /teach/parse   parsed in the browser (./local-teach)
  *   POST /demo/reset    reloads the scene instead of rebuilding the home company
  * Settings, appearance and view-state writes already tolerate a refusal at their call sites.
+ * Source state changes (enable, disable, refresh) answer with the source only, so they are
+ * followed by `snapshot.required` for the freshness of what the source feeds.
  */
 import { nowDate } from '../runtime/clock';
 import { store } from '../store/store';
@@ -55,6 +57,49 @@ export function connectRealApi(): void {
     const dp = await raw.updateDomainProduct(id, patch);
     emit('domain_product.changed', SYSTEM, { domainProduct: dp });
     return dp;
+  };
+  api.proposeRemoveSource = async (id) => {
+    const p = await raw.proposeRemoveSource(id);
+    created(p);
+    return p;
+  };
+  api.proposeUnbind = async (id) => {
+    const p = await raw.proposeUnbind(id);
+    created(p);
+    return p;
+  };
+  api.proposeRemoveCompany = async (id) => {
+    const p = await raw.proposeRemoveCompany(id);
+    created(p);
+    return p;
+  };
+  api.updateSource = async (id, patch) => {
+    const src = await raw.updateSource(id, patch);
+    emit('source.changed', SYSTEM, { source: src, bindings: [] });
+    return src;
+  };
+  api.enableSource = async (id) => resync(await raw.enableSource(id));
+  api.disableSource = async (id) => resync(await raw.disableSource(id));
+  api.refreshAllSources = async () => resync(await raw.refreshAllSources());
+  api.disableCrossCompany = async (confirmation) => {
+    const res = await raw.disableCrossCompany(confirmation);
+    emit('settings.changed', SYSTEM, { settings: res.settings });
+    return resync(res);
+  };
+  api.patchSettings = async (patch) => {
+    const settings = await raw.patchSettings(patch);
+    emit('settings.changed', SYSTEM, { settings });
+    return settings;
+  };
+  api.patchAppearance = async (patch) => {
+    const appearance = await raw.patchAppearance(patch);
+    emit('appearance.changed', SYSTEM, { appearance });
+    return appearance;
+  };
+  api.resetAppearance = async () => {
+    const appearance = await raw.resetAppearance();
+    emit('appearance.changed', SYSTEM, { appearance });
+    return appearance;
   };
   api.teachParse = async (body) => {
     try {

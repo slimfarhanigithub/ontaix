@@ -29,8 +29,14 @@ async function start(): Promise<void> {
     // Without a configured API the in-browser mock answers; `?api=mock` forces it.
     mock = !import.meta.env.VITE_ONTAIX_API_URL || params.get('api') === 'mock';
     if (mock) {
-      const { installMockFetch } = await import('./api/mock/install');
-      installMockFetch(API_BASE);
+      const [{ installMockFetch }, { createMockServer }, { liveEvents }, { store }] = await Promise.all([
+        import('./api/mock/install'),
+        import('./api/mock/server'),
+        import('./api/events'),
+        import('./store/store'),
+      ]);
+      // Concepts the mock proposes by itself divide with the draws it made, in the reference's order.
+      installMockFetch(API_BASE, createMockServer(liveEvents, { rememberBirth: (c, l, d) => store.rememberBirth(c, l, d) }));
     }
   }
   if (!mock) {

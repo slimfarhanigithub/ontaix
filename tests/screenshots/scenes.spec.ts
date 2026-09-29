@@ -4,7 +4,8 @@
  *
  * Scenes of this increment: empty canvas (the home company before it knows itself), first
  * company seeded (scene 1 played and approved), pending proposals visible (scene 1 played, not
- * approved), legend hidden. Each runs in dark and light at 1440x900 and 1920x1080.
+ * approved), legend hidden. Each runs in dark and light at 1440x900 and 1920x1080. The story
+ * finalised from scene 1 (every scene played and approved) runs in dark and light at 1440x900.
  */
 import { test, expect, type Page } from '../../apps/studio/test-support/playwright';
 import {
@@ -19,12 +20,15 @@ import {
   TOLERANCE,
   VIEWPORTS,
   type Theme,
+  type Viewport,
 } from './harness';
 
 interface SceneScript {
   name: string;
   /** Drives one page from load to the frame under test. Both pages get the same script. */
   play: (page: Page) => Promise<void>;
+  /** Viewports the scene runs at; every contract viewport when left out. */
+  viewports?: Viewport[];
 }
 
 /** Settles the page: fonts, then enough frames for the caption typer and the toggles to land. */
@@ -61,6 +65,20 @@ const scenes: SceneScript[] = [
     },
   },
   {
+    name: 'story-finalised',
+    viewports: [VIEWPORTS[0]],
+    play: async (page) => {
+      await settle(page, 500);
+      await page.click('#skip');
+      await page.keyboard.press('Space');
+      await advance(page, 1500);
+      await page.click('#approveAll');
+      await advance(page, 4000);
+      await page.click('#finalise');
+      await advance(page, 8000);
+    },
+  },
+  {
     name: 'legend-hidden',
     play: async (page) => {
       await settle(page, 500);
@@ -74,6 +92,7 @@ const themes: Theme[] = ['dark', 'light'];
 
 for (const vp of VIEWPORTS) {
   for (const scene of scenes) {
+    if (scene.viewports && !scene.viewports.includes(vp)) continue;
     for (const theme of themes) {
       test(`${scene.name} · ${theme} · ${vp.width}x${vp.height}`, async ({ browser }, info) => {
         const refCtx = await browser.newContext({ viewport: vp });

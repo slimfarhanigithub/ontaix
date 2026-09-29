@@ -11,7 +11,8 @@ export function Toasts() {
     <div className="toasts2" id="toasts2">
       {st.ui.toasts.map((t) => (
         <div key={t.id} className="toast2">
-          <b>{t.strong}</b> {t.text}
+          <b>{t.strong}</b>
+          {` ${t.text}`}
         </div>
       ))}
     </div>

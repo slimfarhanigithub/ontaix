@@ -15,7 +15,8 @@ import { escapeHtml } from '../../shell/sanitize';
 import { mixedRelationEnd } from '../drafts';
 import { liveEvents, type EventBus, type EventType } from '../events';
 import type * as T from '../types';
-import { ATTR, CATALOG, generic, HOME_COMPANY, RECORDS, SEED, type AttrSpec } from './seed';
+import { createDirectory, DirectoryRefusal, pageOf, parseListArgs } from './directory';
+import { ATTR, CATALOG, DISCOVER, generic, HOME_COMPANY, RECORDS, SEED, type AttrSpec } from './seed';
 
 interface MCompany {
   id: string;
@@ -133,6 +134,8 @@ interface MProposal {
   sourceId: string | null;
   bindingIds: string[];
   attributeId: string | null;
+  /** Further concepts a decision changed, reported with its artefacts. */
+  conceptIds?: string[];
   createdAt: string;
   decidedAt: string | null;
   second: boolean;
@@ -147,6 +150,23 @@ export interface MockResponse {
 
 export interface MockServer {
   handle(method: string, path: string, body?: unknown): MockResponse;
+}
+
+/** Birth draws of a concept: angle noise, node seed and link bend. */
+export interface MockBirth {
+  noise: number;
+  node: number;
+  link: number;
+}
+
+export interface MockHooks {
+  /**
+   * Receives the birth draws of a concept the server proposes on its own (a new company's
+   * starter vocabulary). With it, the server draws noise, node seed and link bend in the
+   * reference's order and the canvas divides with them; without it, the server draws the bend
+   * only and the canvas draws the rest.
+   */
+  rememberBirth?(companyId: string, label: string, draws: MockBirth): void;
 }
 
 class Refusal extends Error {
@@ -171,7 +191,7 @@ const KIND_HEADING: Record<T.ProposalType, string> = {
   attr: 'Attribute',
 };
 
-export function createMockServer(bus: EventBus = liveEvents): MockServer {
+export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = {}): MockServer {
   let counter = 0;
   const uuid = () => `00000000-0000-4000-8000-${String(++counter).padStart(12, '0')}`;
   const iso = () => nowDate().toISOString();
@@ -209,6 +229,13 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
     demoStory: true,
   };
   const appearance = { theme: 'dark' as 'dark' | 'light', colors: {} as Record<string, string>, accent: '#3fb8a9', source: DEFAULT_BRASS };
+  const directory = createDirectory({
+    companies: () => companies.map((c) => ({ id: c.id, name: c.name })),
+    addAudit: (kind, what, ok) => {
+      addAudit(kind, what, ok);
+    },
+    agentAccess: () => settings.agentAccess,
+  });
 
   const colourOf = (d: MDomain) => appearance.colors[d.key] || d.templateColor;
   const companyOf = (id: string) => companies.find((c) => c.id === id) || null;
@@ -388,7 +415,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
   };
 
   const artefactsOf = (p: MProposal): T.Artefacts => {
-    const cs = [p.conceptId].map(conceptById).filter((x): x is MConcept => !!x);
+    const cs = [p.conceptId, ...(p.conceptIds || [])].map(conceptById).filter((x): x is MConcept => !!x);
     const rs = [p.relationId, ...p.relationIds].map(relationById).filter((x): x is MRelation => !!x);
     const ss = [p.sourceId].map(sourceById).filter((x): x is MSource => !!x);
     const bs = p.bindingIds.map((id) => bindings.find((b) => b.id === id)).filter((x): x is MBinding => !!x);
@@ -868,7 +895,9 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
           p.sub = 'scrapped · certified';
           const j = relations.findIndex((l) => l.aId === p.id && l.kind === 'isa');
           if (j >= 0) relations.splice(j, 1);
-          newRelation(p, q, 'isa', 300, 'is a');
+          const r = newRelation(p, q, 'isa', 300, 'is a');
+          this.conceptIds = [q.id, p.id];
+          this.relationIds = [r.id];
         },
       });
     }
@@ -1010,6 +1039,140 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
             link.aId = link.bId;
             link.bId = t;
           }
+        },
+      });
+    }
+    if (draft.changeKind === 'unbind') {
+      const b = bindings.find((x) => x.id === pl.bindingId && !x.pending);
+      if (!b) throw new Refusal(404, 'binding_not_found', 'binding does not exist');
+      const n = conceptById(b.conceptId) as MConcept,
+        src = sourceById(b.sourceId) as MSource;
+      const d = domainOfConcept(n);
+      return newProposal({
+        type: 'change',
+        changeKind: 'unbind',
+        title: `Unbind ${n.label} from ${src.label}`,
+        heading: KIND_HEADING.change + (d ? ` · ${d.name}` : ''),
+        color: appearance.source,
+        companyId: n.companyId,
+        domainId: d ? d.id : null,
+        parentLabel: null,
+        deps: [],
+        ready: () => true,
+        waitFor: null,
+        html: `Unbind <b>${e(n.label)}</b> from <b>${e(src.label)}</b>`,
+        why: 'attributes stay as declared',
+        caption: draft.caption ?? `${n.label} is no longer fed by ${src.label}.`,
+        conceptId: n.id,
+        relationId: null,
+        relationIds: [],
+        sourceId: null,
+        bindingIds: [],
+        attributeId: null,
+        apply() {
+          bindings = bindings.filter((x) => x !== b);
+          if (n.bound === b) n.bound = null;
+        },
+      });
+    }
+    if (draft.changeKind === 'remove_source' || draft.changeKind === 'rename_source') {
+      const src = sourceById(pl.sourceId);
+      if (!src || src.dyingAt) throw new Refusal(404, 'source_not_found', 'source does not exist');
+      if (draft.changeKind === 'rename_source') {
+        const name = (pl.newLabel || '').trim();
+        if (!name || name === src.label) throw new Refusal(422, 'same_label', 'the new label equals the current one');
+        return newProposal({
+          type: 'change',
+          changeKind: 'rename_source',
+          title: `Rename ${src.label} to ${name}`,
+          heading: KIND_HEADING.change,
+          color: appearance.source,
+          companyId: src.companyId,
+          domainId: null,
+          parentLabel: null,
+          deps: [],
+          ready: () => true,
+          waitFor: null,
+          html: `Rename <b>${e(src.label)}</b> to <b>${e(name)}</b>`,
+          why: 'bindings keep pointing at it',
+          caption: draft.caption ?? `${src.label} is now called ${name}.`,
+          conceptId: null,
+          relationId: null,
+          relationIds: [],
+          sourceId: src.id,
+          bindingIds: [],
+          attributeId: null,
+          apply() {
+            src.label = name;
+          },
+        });
+      }
+      const fed = bindings.filter((b) => b.sourceId === src.id).length;
+      return newProposal({
+        type: 'change',
+        changeKind: 'remove_source',
+        title: `Remove ${src.label}`,
+        heading: KIND_HEADING.change,
+        color: C.conflict,
+        companyId: src.companyId,
+        domainId: null,
+        parentLabel: null,
+        deps: [],
+        ready: () => true,
+        waitFor: null,
+        html: `Disconnect data source <b>${e(src.label)}</b> and unbind ${fed} concept${fed === 1 ? '' : 's'}`,
+        why: 'the concepts keep their attributes as declared; counts and freshness disappear',
+        caption: draft.caption ?? `${src.label} was disconnected.`,
+        conceptId: null,
+        relationId: null,
+        relationIds: [],
+        sourceId: src.id,
+        bindingIds: [],
+        attributeId: null,
+        apply() {
+          for (const b of bindings.filter((x) => x.sourceId === src.id)) {
+            const n = conceptById(b.conceptId);
+            if (n && n.bound === b) n.bound = null;
+          }
+          bindings = bindings.filter((x) => x.sourceId !== src.id);
+          src.dyingAt = iso();
+        },
+      });
+    }
+    if (draft.changeKind === 'remove_company') {
+      const co = companyOf(pl.companyId || '');
+      if (!co) throw new Refusal(404, 'company_not_found', 'company does not exist');
+      if (co.position === 0 || companies.length < 2) throw new Refusal(409, 'home_company', 'the home company cannot be removed');
+      const cells =
+        concepts.filter((x) => x.companyId === co.id && !x.dyingAt).length + sources.filter((x) => x.companyId === co.id && !x.dyingAt).length;
+      return newProposal({
+        type: 'change',
+        changeKind: 'remove_company',
+        title: `Remove ${co.name}`,
+        heading: KIND_HEADING.change,
+        color: C.conflict,
+        companyId: co.id,
+        domainId: null,
+        parentLabel: null,
+        deps: [],
+        ready: () => true,
+        waitFor: null,
+        html: `Remove <b>${e(co.name)}</b> from the portfolio with its ${cells} cells`,
+        why: 'equivalences to other companies are removed too',
+        caption: draft.caption ?? `${co.name} left the view.`,
+        conceptId: null,
+        relationId: null,
+        relationIds: [],
+        sourceId: null,
+        bindingIds: [],
+        attributeId: null,
+        apply() {
+          const ids = new Set(concepts.filter((x) => x.companyId === co.id).map((x) => x.id));
+          relations = relations.filter((l) => !ids.has(l.aId) && !ids.has(l.bId));
+          bindings = bindings.filter((b) => !ids.has(b.conceptId));
+          concepts = concepts.filter((x) => !ids.has(x.id));
+          sources = sources.filter((x) => x.companyId !== co.id);
+          companies = companies.filter((x) => x !== co);
         },
       });
     }
@@ -1231,7 +1394,13 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
         const host = findConcept(parent || c.name, c.id);
         if (!host) continue;
         const domName = c.domains.find((d) => d.key === dom)?.name;
-        const p = pConcept(host, label, dom, pred, `${label} is kept in ${c.name}’s ${domName}.`, false);
+        let seed: number | undefined;
+        if (hooks.rememberBirth) {
+          const draws: MockBirth = { noise: random(), node: random() * 100, link: random() };
+          hooks.rememberBirth(c.id, label, draws);
+          seed = draws.link;
+        }
+        const p = pConcept(host, label, dom, pred, `${label} is kept in ${c.name}’s ${domName}.`, false, seed);
         made.push(p);
         emit('proposal.created', { proposal: toProposal(p), artefacts: artefactsOf(p), cascaded: [] });
       }
@@ -1357,12 +1526,199 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
   const problem = (r: Refusal): MockResponse =>
     json(r.status, { type: 'about:blank', title: r.code, status: r.status, detail: r.detail, code: r.code } satisfies T.Problem);
 
+  /** A source's state and the freshness of what it feeds, for the canvas. */
+  function emitSource(src: MSource): void {
+    emit('source.changed', { source: toSource(src), bindings: bindings.filter((b) => b.sourceId === src.id).map(toBinding) });
+  }
+
+  function proposeChange(draft: T.ChangeDraft): MockResponse {
+    const p = pChange(draft);
+    const out = toProposal(p);
+    emit('proposal.created', { proposal: out, artefacts: out.artefacts, cascaded: [] });
+    return json(202, out);
+  }
+
+  const AUTHS: T.SourceAuth[] = ['service_principal', 'oauth2_client_credentials', 'managed_identity', 'key_vault_api_key'];
+  const REFRESH: T.RefreshInterval[] = ['5 min', '15 min', '1 h', 'daily'];
+
+  /** The administration routes: sources, connectors, directory, agents, cost, audit, appearance reset, cross-company. */
+  function adminRoute(method: string, seg: string[], search: string, body: unknown): MockResponse | null {
+    const is = (m: string, ...parts: (string | null)[]) =>
+      method === m && seg.length === parts.length && parts.every((p, i) => p === null || p === seg[i]);
+    const sourceOf = (id: string) => {
+      const src = sourceById(id);
+      if (!src || src.dyingAt) throw new Refusal(404, 'source_not_found', 'source does not exist');
+      return src;
+    };
+
+    if (is('GET', 'connectors')) return json(200, CATALOG.map(([code, name, category, scopeText]) => ({ code, name, category, scopeText })));
+    if (is('POST', 'connectors', null, 'discover')) {
+      const code = decodeURIComponent(seg[1]);
+      const req = (body || {}) as T.DiscoveryRequest;
+      if (!AUTHS.includes(req.auth)) throw new Refusal(422, 'validation_failed', 'auth is required');
+      if ((req.host || '').length > 300 || (req.scope || '').length > 500) throw new Refusal(422, 'validation_failed', 'host or scope is too long');
+      const names = DISCOVER[code] || ['schema discovered'];
+      const objects = names.map((name) => ({ name, rows: 200 + Math.floor(random() * 90000) }));
+      return json(200, { connected: true, statusText: `Connected · read-only · ${names.length} objects discovered`, objects } satisfies T.Discovery);
+    }
+    if (is('GET', 'sources')) return json(200, sources.filter((n) => !n.dyingAt).map(toSource));
+    if (is('POST', 'sources', 'refresh-all')) {
+      let touched = 0;
+      for (const c of concepts) {
+        if (!c.bound) continue;
+        const src = sourceById(c.bound.sourceId);
+        if (src && !src.disabled) {
+          c.bound.fresh = 'just now';
+          touched++;
+        }
+      }
+      addAudit('source', 'all sources refreshed', true);
+      const live = sources.filter((n) => !n.dyingAt);
+      for (const src of live) emitSource(src);
+      return json(200, { sources: live.filter((n) => !n.disabled && !n.pending).length, bindings: touched } satisfies T.RefreshAllResult);
+    }
+    if (is('POST', 'sources')) {
+      const p = createFromDraft({ ...(body as T.SourceDraft), type: 'source' }, []);
+      const out = toProposal(p);
+      emit('proposal.created', { proposal: out, artefacts: out.artefacts, cascaded: [] });
+      return json(202, out);
+    }
+    if (is('GET', 'sources', null)) return json(200, toSource(sourceOf(seg[1])));
+    if (is('PATCH', 'sources', null)) {
+      const src = sourceOf(seg[1]);
+      const patch = (body || {}) as T.SourceUpdate;
+      if (patch.auth !== undefined && !AUTHS.includes(patch.auth)) throw new Refusal(422, 'validation_failed', 'unknown authentication method');
+      if (patch.refresh !== undefined && !REFRESH.includes(patch.refresh)) throw new Refusal(422, 'validation_failed', 'unknown refresh interval');
+      if ((patch.host || '').length > 300 || (patch.scope || '').length > 500) throw new Refusal(422, 'validation_failed', 'host or scope is too long');
+      if (patch.host !== undefined) src.host = patch.host;
+      if (patch.scope !== undefined) src.scope = patch.scope;
+      if (patch.auth !== undefined) src.auth = patch.auth;
+      if (patch.refresh !== undefined) src.refresh = patch.refresh;
+      addAudit('source', `${src.label} reconfigured`, true);
+      emitSource(src);
+      return json(200, toSource(src));
+    }
+    if (is('POST', 'sources', null, 'enable') || is('POST', 'sources', null, 'disable')) {
+      const src = sourceOf(seg[1]);
+      if (src.pending) throw new Refusal(409, 'source_pending', 'the source is awaiting approval');
+      const off = seg[2] === 'disable';
+      if (src.disabled !== off) {
+        src.disabled = off;
+        for (const b of bindings) if (b.sourceId === src.id && conceptById(b.conceptId)?.bound === b) b.fresh = off ? 'paused' : '2 min';
+        addAudit('source', `${src.label} ${off ? 'disabled' : 'enabled'}`, true);
+      }
+      emitSource(src);
+      return json(200, toSource(src));
+    }
+    if (is('DELETE', 'sources', null)) return proposeChange({ type: 'change', changeKind: 'remove_source', payload: { sourceId: seg[1] } });
+    if (is('DELETE', 'bindings', null)) return proposeChange({ type: 'change', changeKind: 'unbind', payload: { bindingId: seg[1] } });
+    if (is('DELETE', 'companies', null)) return proposeChange({ type: 'change', changeKind: 'remove_company', payload: { companyId: seg[1] } });
+    if (is('POST', 'settings', 'cross-company', 'disable')) {
+      if ((body as { confirmation?: string } | undefined)?.confirmation !== 'disable')
+        throw new Refusal(409, 'confirmation_mismatch', 'type disable to confirm');
+      const cross = relations.filter((l) => !l.dyingAt && conceptById(l.aId)?.companyId !== conceptById(l.bId)?.companyId);
+      const t = iso();
+      for (const l of cross) l.dyingAt = t;
+      emit('relation.removed', { relationIds: cross.map((l) => l.id) });
+      let rejected = 0;
+      for (const q of open()) {
+        const l = relationById(q.relationId);
+        if (q.type === 'relation' && l && cross.includes(l)) {
+          reject(q, []);
+          rejected++;
+        }
+      }
+      settings.crossCompany = false;
+      const n = cross.length;
+      const entry = addAudit('setting', `companies may interact disabled · ${n} cross-company relationship${n === 1 ? '' : 's'} removed`, true);
+      const bulk = newProposal({
+        type: 'change',
+        changeKind: 'remove_relation',
+        title: `Remove ${n} cross-company relationship${n === 1 ? '' : 's'}`,
+        heading: KIND_HEADING.change,
+        color: C.conflict,
+        companyId: null,
+        domainId: null,
+        parentLabel: null,
+        deps: [],
+        ready: () => true,
+        waitFor: null,
+        html: `Remove ${n} cross-company relationship${n === 1 ? '' : 's'}`,
+        why: 'confirmed by typing disable',
+        caption: null,
+        conceptId: null,
+        relationId: null,
+        relationIds: [],
+        sourceId: null,
+        bindingIds: [],
+        attributeId: null,
+      });
+      bulk.state = 'approved';
+      bulk.decidedAt = t;
+      relations = relations.filter((l) => !l.dyingAt);
+      emit('settings.changed', { settings: { ...settings } });
+      return json(200, {
+        removedRelations: n,
+        rejectedProposals: rejected,
+        proposal: toProposal(bulk),
+        audit: entry,
+        settings: { ...settings },
+      } satisfies T.CrossCompanyDisabled);
+    }
+    if (is('POST', 'appearance', 'reset')) {
+      appearance.colors = {};
+      appearance.accent = '#3fb8a9';
+      appearance.source = DEFAULT_BRASS;
+      addAudit('setting', 'colours reset', true);
+      emit('appearance.changed', { appearance: toAppearance() });
+      return json(200, toAppearance());
+    }
+    if (is('GET', 'audit'))
+      return json(
+        200,
+        pageOf(audit, parseListArgs(search), {
+          search: (x) => [x.kind, x.what],
+          filters: { kind: (x) => x.kind, ok: (x) => String(x.ok), actorKind: (x) => x.actor.kind },
+          sorts: {},
+        }),
+      );
+    if (is('GET', 'users')) return json(200, directory.listUsers(search));
+    if (is('GET', 'users', null)) return json(200, directory.getUser(seg[1]));
+    if (is('GET', 'groups')) return json(200, directory.listGroups(search));
+    if (is('POST', 'groups')) return json(201, directory.createGroup(body as T.GroupInput));
+    if (is('GET', 'groups', null)) return json(200, directory.getGroup(seg[1]));
+    if (is('PATCH', 'groups', null)) return json(200, directory.updateGroup(seg[1], body as T.GroupInput));
+    if (is('DELETE', 'groups', null)) {
+      directory.deleteGroup(seg[1]);
+      return json(204, undefined);
+    }
+    if (is('PUT', 'groups', null, 'members', null) || is('DELETE', 'groups', null, 'members', null)) {
+      directory.setMember(seg[1], seg[3], method === 'PUT');
+      return json(204, undefined);
+    }
+    if (is('POST', 'groups', null, 'roles')) return json(201, directory.addRole(seg[1], body as { role: T.RoleName; scope: T.Scope }));
+    if (is('DELETE', 'groups', null, 'roles', null)) {
+      directory.removeRole(seg[1], seg[3]);
+      return json(204, undefined);
+    }
+    if (is('GET', 'roles')) return json(200, directory.listRoles());
+    if (is('GET', 'roles', null, 'groups')) return json(200, directory.listRoleGroups(seg[1]));
+    if (is('GET', 'scopes')) return json(200, directory.listScopes());
+    if (is('GET', 'agents')) return json(200, directory.listAgents(search));
+    if (is('PATCH', 'agents', null)) return json(200, directory.updateAgent(seg[1], body as { access?: unknown }));
+    if (is('GET', 'cost')) return json(200, directory.cost(`${iso().slice(0, 7)}-01`));
+    return null;
+  }
+
   function route(method: string, rawPath: string, body: unknown): MockResponse {
     const [path] = rawPath.split('?');
+    const search = rawPath.includes('?') ? rawPath.slice(rawPath.indexOf('?')) : '';
     const seg = path.replace(/^\/+|\/+$/g, '').split('/');
     const is = (m: string, ...parts: (string | null)[]) =>
       method === m && seg.length === parts.length && parts.every((p, i) => p === null || p === seg[i]);
 
+    const admin = adminRoute(method, seg, search, body);
+    if (admin) return admin;
     if (is('GET', 'scene')) return json(200, toScene());
     if (is('GET', 'proposals')) {
       const items = open().map(toProposal);
@@ -1449,9 +1805,21 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
     if (is('GET', 'settings')) return json(200, { ...settings });
     if (is('PATCH', 'settings')) {
       const patch = body as T.SettingsPatch;
+      for (const k of Object.keys(patch))
+        if (k === 'approvalRequired' || k === 'readOnlyConnectors') throw new Refusal(409, 'locked_setting', `${k} is always on`);
+      if (
+        patch.crossCompany === false &&
+        settings.crossCompany &&
+        relations.some((l) => !l.dyingAt && conceptById(l.aId)?.companyId !== conceptById(l.bId)?.companyId)
+      )
+        throw new Refusal(409, 'confirmation_required', 'companies already interact; confirm by typing disable');
       for (const k of Object.keys(patch) as (keyof T.SettingsPatch)[]) {
-        if (k === 'refresh') settings.refresh = patch.refresh as T.RefreshInterval;
-        else if (typeof patch[k] === 'boolean') (settings as unknown as Record<string, boolean>)[k] = patch[k] as boolean;
+        if (k === 'refresh') {
+          settings.refresh = patch.refresh as T.RefreshInterval;
+          addAudit('setting', `refresh interval ${patch.refresh}`, true);
+          continue;
+        }
+        if (typeof patch[k] === 'boolean') (settings as unknown as Record<string, boolean>)[k] = patch[k] as boolean;
         addAudit('setting', `${k} ${patch[k] === true ? 'enabled' : patch[k] === false ? 'disabled' : String(patch[k])}`, true);
       }
       emit('settings.changed', { settings: { ...settings } });
@@ -1500,6 +1868,7 @@ export function createMockServer(bus: EventBus = liveEvents): MockServer {
         return route(method.toUpperCase(), path, body);
       } catch (e) {
         if (e instanceof Refusal) return problem(e);
+        if (e instanceof DirectoryRefusal) return problem(new Refusal(e.status, e.code, e.detail));
         throw e;
       }
     },

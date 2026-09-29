@@ -1,9 +1,10 @@
 /**
  * The administration portal frame: backdrop, window and header with the theme switch. Markup
  * from reference/ontaix-studio-reference.html line 192; open, close and theme behaviour from
- * lines 948-952. The navigation and the pages inside are rendered by the admin portal module;
- * this frame leaves `#adminNav` and `#adminMain` empty.
+ * lines 948-952. The navigation and the pages come from the admin module.
  */
+import { invalidateDirectory } from '../admin/adminData';
+import { AdminMain, AdminNav } from '../admin/AdminPortal';
 import { refStyle, useStore } from './dom';
 
 export function AdminOverlay() {
@@ -31,7 +32,13 @@ export function AdminOverlay() {
             id="themeBtn"
             ref={refStyle('margin-left:auto;display:inline-flex;align-items:center;gap:6px')}
             title="Switch between dark and light mode"
-            onClick={() => st.toggleTheme()}
+            onClick={() => {
+              st.toggleTheme();
+              if (st.ui.adminOpen) {
+                invalidateDirectory();
+                st.renderAdmin();
+              }
+            }}
           >
             <svg viewBox="0 0 16 16" ref={refStyle('width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round')}>
               <circle cx="8" cy="8" r="3" />
@@ -43,8 +50,12 @@ export function AdminOverlay() {
             ×
           </button>
         </div>
-        <nav id="adminNav"></nav>
-        <main id="adminMain"></main>
+        <nav id="adminNav">
+          <AdminNav />
+        </nav>
+        <main id="adminMain">
+          <AdminMain />
+        </main>
       </div>
     </div>
   );

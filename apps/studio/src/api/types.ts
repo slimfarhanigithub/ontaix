@@ -239,6 +239,7 @@ export type ChangeKind =
   | 'unbind'
   | 'remove_source'
   | 'remove_company'
+  | 'rename_source'
   | 'resolve_conflict';
 
 export interface ChangeDraft {
@@ -468,4 +469,117 @@ export class ApiError extends Error {
     super(problem.detail || problem.title);
     this.name = 'ApiError';
   }
+}
+
+// ------------------------------------------------------------ administration
+
+export interface SourceUpdate {
+  host?: string;
+  scope?: string;
+  auth?: SourceAuth;
+  refresh?: RefreshInterval;
+}
+
+export interface DiscoveryRequest {
+  host?: string;
+  scope?: string;
+  auth: SourceAuth;
+  displayName?: string;
+}
+
+export interface Discovery {
+  connected: boolean;
+  statusText: string;
+  objects: { name: string; rows: number }[];
+}
+
+export type RoleName = 'owner' | 'builder' | 'governor' | 'member' | 'administrator' | 'auditor' | 'agent';
+
+export interface Scope {
+  kind: 'tenant' | 'company' | 'domain';
+  companyId?: string | null;
+  domainKey?: DomainKey | null;
+  label: string;
+}
+
+export interface RoleAssignment {
+  id: string;
+  groupId?: string;
+  role: RoleName;
+  scope: Scope;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  department?: string | null;
+  companyId?: string | null;
+  companyName?: string | null;
+  groups: { id: string; name: string }[];
+  effectiveRoles: RoleAssignment[];
+  lastLoginAt?: string | null;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  description: string;
+  validUntil?: string | null;
+  memberCount: number;
+  members?: User[];
+  roles: RoleAssignment[];
+}
+
+export interface GroupInput {
+  name: string;
+  description?: string;
+}
+
+export interface RoleInfo {
+  role: RoleName;
+  label: string;
+  description: string;
+  assigned: number;
+}
+
+export interface RoleGroup {
+  group: Group;
+  scopes: Scope[];
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  platform: string;
+  companyId?: string | null;
+  domainKey?: DomainKey | null;
+  domainName?: string | null;
+  owner: string;
+  access: boolean;
+  reads: number;
+  costEur: number;
+}
+
+export interface CostSummary {
+  month: string;
+  measuredEur: number;
+  allocatedEur: number;
+  agentsRegistered: number;
+  agentsWithAccess: number;
+  reads: number;
+  byPlatform: { platform: string; agentsWithAccess: number; costEur: number; sharePercent: number }[];
+}
+
+export interface CrossCompanyDisabled {
+  removedRelations: number;
+  rejectedProposals: number;
+  proposal: Proposal;
+  audit: AuditEntry;
+  settings: Settings;
+}
+
+export interface RefreshAllResult {
+  sources: number;
+  bindings: number;
 }

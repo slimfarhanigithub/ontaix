@@ -3,8 +3,8 @@
  * one fake clock, so that both pages draw the same numbers in the same frames, and compares the
  * two screenshots pixel by pixel.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { mulberry32 } from '../../apps/studio/src/runtime/mulberry32';
@@ -13,6 +13,8 @@ import { expect, pixelmatch, PNG, type Page, type TestInfo } from '../../apps/st
 const here = dirname(fileURLToPath(import.meta.url));
 export const REFERENCE_URL = pathToFileURL(resolve(here, '../../reference/ontaix-studio-reference.html')).href;
 export const OUTPUT_DIR = resolve(here, 'output');
+/** Sora as Google Fonts serves it (CSS and woff2 files), kept in the repository so no run depends on the network. */
+export const FONTS_DIR = resolve(here, 'fonts');
 
 /** Seed both pages draw from; fixed so that a run is reproducible on every machine. */
 export const SEED = 42;
@@ -39,6 +41,7 @@ export const VIEWPORTS: Viewport[] = [
  * advances time. The reference also gets `Math.random` replaced with the Studio's generator.
  */
 export async function prepare(page: Page, opts: { seedMathRandom: boolean }): Promise<void> {
+  await serveFontsLocally(page);
   await page.clock.install({ time: START_TIME });
   await page.clock.pauseAt(START_TIME);
   if (opts.seedMathRandom) {
@@ -46,6 +49,23 @@ export async function prepare(page: Page, opts: { seedMathRandom: boolean }): Pr
       `(() => { const g = (${mulberry32.toString()})(${SEED}); const draws = []; window.__ontaixDraws = draws; Math.random = () => { const v = g(); draws.push([performance.now(), v]); return v; }; })();`,
     );
   }
+}
+
+/**
+ * Answers both pages' Google Fonts requests from tests/screenshots/fonts: the stylesheet for
+ * fonts.googleapis.com and the woff2 files for fonts.gstatic.com, by file name. A file that is
+ * not kept locally fails the request instead of reaching the network.
+ */
+export async function serveFontsLocally(page: Page): Promise<void> {
+  const cors = { 'access-control-allow-origin': '*' };
+  await page.route(/^https:\/\/fonts\.googleapis\.com\//, (route) =>
+    route.fulfill({ status: 200, contentType: 'text/css; charset=utf-8', headers: cors, body: readFileSync(resolve(FONTS_DIR, 'sora.css')) }),
+  );
+  await page.route(/^https:\/\/fonts\.gstatic\.com\//, (route) => {
+    const file = resolve(FONTS_DIR, basename(new URL(route.request().url()).pathname));
+    if (!existsSync(file)) return route.fulfill({ status: 404, headers: cors, body: '' });
+    return route.fulfill({ status: 200, contentType: 'font/woff2', headers: cors, body: readFileSync(file) });
+  });
 }
 
 /**
