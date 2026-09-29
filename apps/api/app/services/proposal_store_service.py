@@ -114,6 +114,7 @@ async def store(
     relation_id: uuid.UUID | None,
     bulk: bool,
     provenance: Provenance = TYPED_TEXT,
+    attribute_id: uuid.UUID | None = None,
 ) -> Proposal:
     """Write the proposal row and its `proposal.created` event.
 
@@ -141,6 +142,7 @@ async def store(
         concept_id=concept_id,
         relation_id=relation_id,
         relation_ids=[],
+        attribute_id=attribute_id,
         proposer_kind=ActorKind(proposer.kind),
         proposer_user_id=proposer.id if proposer.kind == "user" else None,
         bulk=bulk,

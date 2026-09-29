@@ -96,6 +96,19 @@ Return one intent per fact:
   object is born from the subject with the action as its birth relation.
 - kind "spec": the subject is a kind of the object (the subject is the specialised child, the
   object the parent), with an optional rule that defines the child.
+- kind "attr": a fact about one concept, not a new concept or a relation - how it is billed or
+  priced, how large it is, where it is based. subject is that concept: its candidate handle,
+  or the newLabel another intent of this answer introduces; an attr intent never creates a
+  concept. attributeName is the property as a lower-case noun made from the speaker's own word
+  (billing for billed, pricing for priced, headcount, base for based); attributeValue is the
+  value exactly as spoken (monthly, per day, 40, Leeds). valueType is number when the value is
+  a number as spoken (a unit word stays in the value, as 30 days), date for a calendar date,
+  and left out otherwise. An attr intent has no object, action, rule, members, listId or
+  domainKey. "X is billed monthly" gives subject X, attributeName billing, attributeValue
+  monthly; "X is priced per day" gives pricing, per day; "X has a headcount of 40" gives
+  headcount, 40, valueType number; "X is based in Leeds" gives base, Leeds when no candidate is
+  Leeds (a place the candidates hold is a rel intent). The span covers the subject's words and
+  the value.
 - subject and object are each {{"candidate": "<handle>"}} for an existing concept, or
   {{"newLabel": "<Label>"}} for a new concept. Whenever the text names an existing concept of
   the company being taught - by its label, singular or plural, or by a back-reference - cite
@@ -237,9 +250,9 @@ OUTPUT_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["kind", "subject", "object", "confidence", "source"],
+                "required": ["kind", "subject", "confidence", "source"],
                 "properties": {
-                    "kind": {"type": "string", "enum": ["rel", "spec"]},
+                    "kind": {"type": "string", "enum": ["rel", "spec", "attr"]},
                     "subject": {"$ref": "#/$defs/conceptRef"},
                     "object": {"$ref": "#/$defs/conceptRef"},
                     "action": {"type": "string"},
@@ -256,6 +269,9 @@ OUTPUT_SCHEMA: dict[str, Any] = {
                     "memberAction": {"type": "string"},
                     "statedCount": {"type": "integer"},
                     "listId": {"type": "integer"},
+                    "attributeName": {"type": "string"},
+                    "attributeValue": {"type": "string"},
+                    "valueType": {"type": "string", "enum": ["text", "number", "date"]},
                 },
             },
         },
@@ -287,6 +303,7 @@ OUTPUT_SCHEMA: dict[str, Any] = {
                             "ambiguous_reference",
                             "low_confidence",
                             "not_a_statement",
+                            "attribute_exists",
                         ],
                     },
                     "segment": {"type": "integer"},

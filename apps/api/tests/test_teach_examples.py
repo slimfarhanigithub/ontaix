@@ -24,7 +24,13 @@ from app.ai.prompts.teach_extraction import (
 )
 from app.clients.llm_client import LlmRequest, estimate_tokens
 from app.models.llm.teach_extraction_answer import NewLabelRef, TeachExtractionAnswer
-from app.services.teach_extraction_service import _ground, example_tokens, examples_for
+from app.services.teach_extraction_service import (
+    _ground,
+    _ground_name,
+    _ground_value,
+    example_tokens,
+    examples_for,
+)
 from app.utilities.example_selection import most_similar, within_budget
 from tests.conftest import TenantFixture
 from tests.llm_fakes import FakeLlmClient, recorded
@@ -80,7 +86,13 @@ def test_every_example_answer_is_one_the_api_accepts(example: dict) -> None:
         source = (intent.source.start, intent.source.end)
         # The quote is the input's own words at the stated offsets.
         assert text[source[0] : source[1]] == intent.span
+        if intent.kind == "attr":
+            assert intent.attribute_name and intent.attribute_value
+            assert _ground_name(intent.attribute_name, text, source) is not None
+            assert _ground_value(intent.attribute_value, text, source) is not None
         for ref in [intent.subject, intent.object, *(intent.members or [])]:
+            if ref is None:
+                continue
             if not isinstance(ref, NewLabelRef):
                 assert ref.candidate in handles
                 continue

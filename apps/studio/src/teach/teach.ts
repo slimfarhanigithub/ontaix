@@ -293,7 +293,7 @@ export function withoutKnown(drafts: ProposalDraft[]): DuplicatePlan {
   const replaced = new Map<string, Node | null>();
   const key = (label: string | undefined): string | undefined => label?.toLowerCase();
   for (const d of drafts) {
-    const via = d.type === 'concept' || d.type === 'spec' ? key(d.parentLabel) : undefined;
+    const via = d.type === 'concept' || d.type === 'spec' ? key(d.parentLabel) : d.type === 'attr' ? key(d.conceptLabel) : undefined;
     const ends = d.type === 'relation' ? [key(d.aLabel), key(d.bLabel)] : [];
     if ((via && replaced.get(via) === null) || ends.some((e) => e && replaced.get(e) === null)) {
       plan.orphaned.push(draftName(d));
@@ -304,6 +304,10 @@ export function withoutKnown(drafts: ProposalDraft[]): DuplicatePlan {
     if ((draft.type === 'concept' || draft.type === 'spec') && via && replaced.get(via)?.sid) {
       const { parentLabel: _, ...rest } = draft;
       draft = { ...rest, parentId: replaced.get(via)!.sid! } as ProposalDraft;
+    }
+    if (draft.type === 'attr' && via && replaced.get(via)?.sid) {
+      const { conceptLabel: _, companyId: __, ...rest } = draft;
+      draft = { ...rest, conceptId: replaced.get(via)!.sid! };
     }
     if (draft.type === 'relation') {
       const a = key(draft.aLabel),
@@ -331,13 +335,17 @@ export function withoutKnown(drafts: ProposalDraft[]): DuplicatePlan {
   return plan;
 }
 
-/** A draft's name for the toast: a concept's label, or a relation's words. */
+/** A draft's name for the toast: a concept's label, a relation's words, or an attribute and its value. */
 function draftName(d: ProposalDraft): string {
   if (d.type === 'concept' || d.type === 'spec') return d.label;
   if (d.type === 'relation') {
     const a = bySid(store.s, d.aId)?.label ?? d.aLabel ?? '',
       b = bySid(store.s, d.bId)?.label ?? d.bLabel ?? '';
     return `${a} ${normaliseAction(d.action)} ${b}`.trim();
+  }
+  if (d.type === 'attr') {
+    const holder = bySid(store.s, d.conceptId)?.label ?? d.conceptLabel ?? '';
+    return `${holder} ${d.name}: ${d.value ?? d.col ?? ''}`.trim();
   }
   return d.type;
 }
