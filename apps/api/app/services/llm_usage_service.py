@@ -24,6 +24,8 @@ from app.utilities.clock import get_clock
 logger = logging.getLogger(__name__)
 
 TEACH_EXTRACTION = "teach_extraction"
+CONCEPT_EXPANSION = "concept_expansion"
+DOCUMENT_EXTRACTION = "document_extraction"
 RETENTION = timedelta(days=400)
 
 

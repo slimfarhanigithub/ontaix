@@ -11,7 +11,7 @@ from app.models.api.base import ApiModel
 
 
 class LlmPurposeUsage(ApiModel):
-    purpose: Literal["teach_extraction"]
+    purpose: Literal["teach_extraction", "concept_expansion", "document_extraction", "document_ocr"]
     calls: int = Field(ge=0)
     cost_eur: float = Field(ge=0)
 

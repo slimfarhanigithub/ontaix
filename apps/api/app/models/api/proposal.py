@@ -64,6 +64,9 @@ class Proposal(ApiModel):
     origin_detail: OriginDetail | None
     approvals: list[Approval] = Field(default_factory=list)
     bulk: bool = False
+    # Open proposals in the branch of an open concept or spec proposal, itself excluded; set by
+    # the reads that list proposals, absent elsewhere.
+    open_below: int | None = Field(default=None, ge=0, exclude_if=lambda v: v is None)
     created_at: datetime
     decided_at: datetime | None = None
     artefacts: Artefacts | None = None
@@ -79,6 +82,15 @@ class DecisionResult(ApiModel):
 
 class RejectRequest(ApiModel):
     reason: str | None = Field(default=None, max_length=500)
+
+
+class BranchResult(ApiModel):
+    root_id: uuid.UUID
+    approved: int = Field(ge=0)
+    skipped: int = Field(ge=0)
+    remaining: int = Field(ge=0)
+    batches: int = Field(ge=0)
+    complete: bool
 
 
 class BulkResult(ApiModel):

@@ -9,7 +9,7 @@ from pydantic import Field
 
 from app.models.api.base import ApiModel
 
-Origin = Literal["text", "speech", "document"]
+Origin = Literal["text", "speech", "document", "suggestion", "ontology_import"]
 InputOrigin = Literal["text", "speech"]
 ImportMediaType = Literal[
     "text/plain",

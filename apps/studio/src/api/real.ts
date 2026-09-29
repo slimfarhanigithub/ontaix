@@ -40,6 +40,17 @@ export function connectRealApi(): void {
     return res;
   };
   api.approveAll = async () => resync(await raw.approveAll());
+  api.approveBranch = async (id) => resync(await raw.approveBranch(id));
+  api.proposeExpansion = async (id, indexes) => {
+    const ps = await raw.proposeExpansion(id, indexes);
+    for (const p of ps) created(p);
+    return ps;
+  };
+  api.proposeDocumentExtraction = async (id, indexes) => {
+    const ps = await raw.proposeDocumentExtraction(id, indexes);
+    for (const p of ps) created(p);
+    return ps;
+  };
   api.rejectAll = async () => resync(await raw.rejectAll());
   api.createCompany = async (body) => {
     const res = await raw.createCompany(body);
