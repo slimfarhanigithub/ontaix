@@ -110,7 +110,7 @@ export function Entities() {
                 <button data-fn="rename" style={ACT(66)} onClick={() => renameDialog(r.n)}>
                   Rename
                 </button>
-                <button className="danger" data-fn="del" style={ACT(64)} onClick={() => deleteNodeDialog(r.n, r.rels)}>
+                <button className="danger" data-fn="del" style={ACT(64)} onClick={() => deleteNodeDialog(r.n)}>
                   Delete
                 </button>
               </td>

@@ -2,9 +2,13 @@
  * What the model knows about a cell, and its lineage. Markup from
  * reference/ontaix-studio-reference.html line 214; content from `openDrawer` (lines 637-646)
  * and `showLineage` (lines 653-662). Labels, subs, names and freshness are rendered as text.
+ * Delete, offered for approved concepts, is an owner addition absent from the reference; it opens
+ * the same proposal dialog as the admin portal's Entities page.
  */
 import { useEffect } from 'react';
 
+import { deleteNodeDialog } from '../admin/actions';
+import { canDeleteFromDrawer } from '../admin/conceptDeletion';
 import { ancestorsOf, childrenOf, descendantsOf } from '../canvas/lineage';
 import type { Node } from '../canvas/types';
 import { useStore } from './dom';
@@ -161,6 +165,11 @@ export function Drawer() {
         >
           Lineage
         </button>
+        {canDeleteFromDrawer(n) ? (
+          <button id="drDelete" onClick={() => deleteNodeDialog(n)}>
+            Delete
+          </button>
+        ) : null}
       </div>
       <div id="drLine" style={{ display: lineageOn ? undefined : 'none' }}>
         {lineageOn ? <Lineage n={n} /> : null}
