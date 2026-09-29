@@ -1,6 +1,6 @@
 /**
- * The three ways content enters the model: text typed in the teach bar, a speech transcript from
- * the teach bar microphone, and a document uploaded to the API. Each sentence goes through
+ * The three ways content enters the model: text typed in the teach bar, sentences spoken into the
+ * teach bar microphone, and a document uploaded to the API. Each sentence goes through
  * `POST /teach/parse` and the drafts it returns are proposed; nothing is written without approval.
  * Captions and pacing follow reference/ontaix-studio-reference.html lines 864-903 (`teach`,
  * `importDocument`) on its import path, where no sentence is intercepted.
@@ -69,14 +69,129 @@ async function teachSentence(importRef: ImportRef): Promise<void> {
   await parseAndPropose({ companyId: co.sid, importRef, sessionId: teachSessionId(co.sid) });
 }
 
-async function parseAndPropose(request: TeachRequest): Promise<void> {
-  let result: TeachResult;
-  try {
-    result = await api.teachParse(request);
-  } catch (err) {
-    store.refused(err);
+/** The longest spoken sentence one request carries, in characters, as the API allows for `speech`. */
+const SPEECH_MAX_CHARS = 4000;
+/** How long a spoken sentence's parse may take before it is given up, a little above the API's 45 s. */
+export const SPEECH_PARSE_TIMEOUT_MS = 50_000;
+
+/** One recording of the teach bar microphone. */
+export interface SpeechStream {
+  /** Queues one finished spoken sentence for the parser. */
+  sentence(text: string): void;
+  /** Resolves once every queued sentence is parsed and proposed. */
+  settled(): Promise<void>;
+}
+
+/** The end of the spoken-sentence queue, shared by every recording so one parse is in flight at most. */
+let speechTail: Promise<void> = Promise.resolve();
+/** True from a `429` refusal of a spoken sentence until one is parsed again; its toast shows once. */
+let speechRateLimited = false;
+
+/**
+ * Opens a recording for the active company. Each finished sentence joins one queue shared by all
+ * recordings and is parsed as `speech` in the company's teach session, one request at a time: the
+ * next sentence goes out once the previous one is answered (or refused) and its drafts are
+ * proposed, so its back-references resolve through the stored session turn and the proposals it
+ * builds on. Queueing never blocks listening.
+ */
+export function speechStream(): SpeechStream {
+  const co = store.s.activeCompany;
+  const companyId = co?.sid;
+  const sessionId = companyId ? teachSessionId(companyId) : '';
+  return {
+    sentence(text) {
+      if (!companyId) return;
+      for (const piece of speechPieces(text)) {
+        speechTail = speechTail
+          .then(() => teachSpoken({ companyId, text: piece, origin: 'speech', sessionId }))
+          .catch(showSpeechRefusal);
+      }
+    },
+    settled: () => speechTail,
+  };
+}
+
+/**
+ * Parses and proposes one spoken sentence. A parse with no answer within the timeout is refused so
+ * the queue moves on. A `429` shows one toast for the whole run of refusals, holds the queue for
+ * its `Retry-After` and sends the sentence once more; the sentences after it follow.
+ */
+async function teachSpoken(request: TeachRequest): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    let result: TeachResult;
+    try {
+      result = await withTimeout(api.teachParse(request), SPEECH_PARSE_TIMEOUT_MS);
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 429)) {
+        showSpeechRefusal(err);
+        return;
+      }
+      if (!speechRateLimited) store.refused(err);
+      speechRateLimited = true;
+      if (attempt > 0) return;
+      await new Promise((r) => setTimeout(r, (err.retryAfter ?? 0) * 1000));
+      continue;
+    }
+    speechRateLimited = false;
+    await propose(result);
     return;
   }
+}
+
+/** Shows why a spoken sentence was not taught; a failure that is not an API refusal shows its message, so the queue never stops. */
+function showSpeechRefusal(err: unknown): void {
+  if (err instanceof ApiError) store.refused(err);
+  else store.toast2('Refused', err instanceof Error ? err.message : String(err));
+}
+
+/** The promise's outcome, or a refusal when it takes longer than `ms`. */
+function withTimeout<R>(promise: Promise<R>, ms: number): Promise<R> {
+  return new Promise<R>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('The model did not answer in time')), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+/** A spoken sentence trimmed and, past the API's limit, cut at its last space before the limit. */
+function speechPieces(text: string): string[] {
+  const pieces: string[] = [];
+  let rest = text.trim();
+  while (rest.length > SPEECH_MAX_CHARS) {
+    const space = rest.lastIndexOf(' ', SPEECH_MAX_CHARS);
+    const cut = space > 0 ? space : SPEECH_MAX_CHARS;
+    pieces.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) pieces.push(rest);
+  return pieces;
+}
+
+async function parseAndPropose(request: TeachRequest): Promise<void> {
+  const result = await parse(request);
+  if (result) await propose(result);
+}
+
+/** Parses one sentence; a refusal is shown and yields null. */
+async function parse(request: TeachRequest): Promise<TeachResult | null> {
+  try {
+    return await api.teachParse(request);
+  } catch (err) {
+    store.refused(err);
+    return null;
+  }
+}
+
+/** Proposes a parse's drafts and captions its outcome. */
+async function propose(result: TeachResult): Promise<void> {
   // All drafts of one parse leave as one all-or-nothing batch.
   if (result.drafts.length) await submitBatch(result.drafts.map(withSeed));
   if (result.outcome === 'understood') {

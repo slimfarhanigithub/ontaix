@@ -1,0 +1,33 @@
+format-version: 1.4
+ontology: acme
+
+[Term]
+id: ACME:0
+name: Acme Corp
+
+[Term]
+id: ACME:1
+name: Sales
+is_a: ACME:0 ! Acme Corp
+property_value: birth_action "runs" xsd:string
+property_value: accepted_action "has" xsd:string
+property_value: accepted_action "operates" xsd:string
+property_value: owner "Head of sales" xsd:string
+
+[Term]
+id: ACME:2
+name: Order
+is_a: ACME:1 ! Sales
+
+[Term]
+id: ACME:3
+name: Invoice
+is_a: ACME:1 ! Sales
+property_value: birth_action "produces" xsd:string
+relationship: bills ACME:2 ! Order
+
+[Typedef]
+id: bills
+name: bills
+property_value: accepted_action "charges" xsd:string
+property_value: inverse_action "is billed by" xsd:string
