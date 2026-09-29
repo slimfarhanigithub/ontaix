@@ -4,7 +4,8 @@
  * Markdown, CSV and JSON are decoded as UTF-8; Word documents are read from their ZIP archive
  * with no DTD; PDF text is read from its literal text operators, a best effort for simple files.
  * Sentences are split the way reference/ontaix-studio-reference.html line 900 (`sentencesOf`)
- * does, per paragraph when the paragraph is known.
+ * does, per paragraph when the paragraph is known, and a sentence longer than 399 characters is cut
+ * into pieces the way the API cuts it, so no text is lost to the length limit.
  */
 import type { DocumentPosition, ImportMediaType } from '../types';
 
@@ -49,15 +50,62 @@ export interface Extracted {
   fileName: string;
   mediaType: ImportMediaType;
   sentences: ExtractedSentence[];
+  /** Pieces of text left out of `sentences`. */
+  skipped: number;
 }
 
-/** Splits text into sentences of 13 to 399 characters. */
+const MIN_SENTENCE_CHARS = 13;
+const MAX_SENTENCE_CHARS = 399;
+// Clause boundaries a long sentence is cut after, in order of preference.
+const CLAUSE_ENDS = [/[;:]\s/g, /,\s(?=(?:and|or|but|so|yet|nor|while|whereas|because|which|including)\b)/g];
+
+/** Splits text into sentences of 13 to 399 characters; a longer sentence is cut into pieces. */
 export function sentencesOf(text: string): string[] {
+  return piecesOf(text).filter((x) => x.length >= MIN_SENTENCE_CHARS);
+}
+
+/** The pieces of text `sentencesOf` leaves out as shorter than 13 characters that hold a letter or a digit. */
+export function skippedOf(text: string): number {
+  return piecesOf(text).filter((x) => x.length < MIN_SENTENCE_CHARS && /[\p{L}\p{N}]/u.test(x)).length;
+}
+
+function piecesOf(text: string): string[] {
   return text
     .replace(/\s+/g, ' ')
     .split(/(?<=[.!?])\s+|\n+/)
-    .map((x) => x.trim())
-    .filter((x) => x.length > 12 && x.length < 400);
+    .flatMap((x) => fit(x.trim()));
+}
+
+/** `sentence` in pieces of at most 399 characters, each cut after a clause boundary, else at the
+ * last space, else at 399 characters; only the whitespace at a cut is dropped. */
+function fit(sentence: string): string[] {
+  const pieces: string[] = [];
+  let start = 0;
+  const end = sentence.length;
+  while (end - start > MAX_SENTENCE_CHARS) {
+    // Both sides of a cut keep at least 13 characters once the space at the cut is dropped.
+    const limit = Math.min(MAX_SENTENCE_CHARS, end - start - MIN_SENTENCE_CHARS - 1);
+    const window = sentence.slice(start, start + limit + 1);
+    let cut = 0;
+    for (const pattern of CLAUSE_ENDS) {
+      const ends = Array.from(window.matchAll(pattern), (m) => m.index + 1).filter(
+        (e) => e >= MIN_SENTENCE_CHARS && e <= limit,
+      );
+      if (ends.length) {
+        cut = ends[ends.length - 1];
+        break;
+      }
+    }
+    if (!cut) {
+      const space = window.lastIndexOf(' ');
+      cut = space >= MIN_SENTENCE_CHARS ? space : limit;
+    }
+    pieces.push(sentence.slice(start, start + cut).trim());
+    start += cut;
+    while (start < end && /\s/.test(sentence[start])) start++;
+  }
+  if (start < end) pieces.push(sentence.slice(start, end));
+  return pieces;
 }
 
 /** The basename of an uploaded file name, refused (never rewritten) when it breaks a rule. */
@@ -87,13 +135,15 @@ export async function extractDocument(rawName: string, contentType: string, byte
   const units = await unitsOf(mediaType, bytes);
   let chars = 0;
   const sentences: ExtractedSentence[] = [];
+  let skipped = 0;
   for (const unit of units) {
     chars += unit.text.length;
     if (chars > MAX_CHARS) throw tooLarge('the document holds more than 2,000,000 characters of text');
     for (const text of sentencesOf(unit.text)) sentences.push({ text, position: unit.position });
+    skipped += skippedOf(unit.text);
     if (sentences.length > MAX_SENTENCES) throw tooLarge('the document holds more than 2,000 sentences');
   }
-  return { fileName, mediaType, sentences };
+  return { fileName, mediaType, sentences, skipped };
 }
 
 /** Why the bytes are not a file of the media type: a Word document is a ZIP archive, a PDF

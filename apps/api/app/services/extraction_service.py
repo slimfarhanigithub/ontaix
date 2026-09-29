@@ -37,8 +37,9 @@ _OK = "ok"
 _slots: tuple[int, asyncio.Semaphore] | None = None
 
 
-async def extract(data: bytes, media_type: str) -> tuple[list[Sentence], int]:
-    """The sentences of a document and its extracted characters, read in a child process.
+async def extract(data: bytes, media_type: str) -> tuple[list[Sentence], int, int]:
+    """The sentences of a document, its extracted characters and the number of text pieces left
+    out, read in a child process.
 
     Raises `DocumentTooLargeError` past a limit or past `EXTRACTION_TIMEOUT_SECONDS`, and
     `DocumentUnreadableError` when the document cannot be read, and `503 busy` when every
@@ -68,7 +69,7 @@ def _semaphore() -> asyncio.Semaphore:
 
 def _run(
     data: bytes, media_type: str, timeout: float, memory_limit: int
-) -> tuple[list[Sentence], int]:
+) -> tuple[list[Sentence], int, int]:
     context = multiprocessing.get_context("spawn")
     receiver, sender = context.Pipe(duplex=False)
     process = context.Process(
@@ -97,16 +98,17 @@ def _run(
         raise DocumentTooLargeError(payload)
     if status == _UNREADABLE:
         raise DocumentUnreadableError(payload)
-    sentences, extracted = payload
-    return [Sentence(*s) for s in sentences], extracted
+    sentences, extracted, skipped = payload
+    return [Sentence(*s) for s in sentences], extracted, skipped
 
 
 def _child(sender: Connection, data: bytes, media_type: str, memory_limit: int) -> None:
     """Child process entry: cap the address space, extract, and send one result tuple back."""
     _limit_memory(memory_limit)
     try:
-        sentences, extracted = extract_sentences(data, media_type)
-        sender.send((_OK, ([(s.text, s.unit, s.index) for s in sentences], extracted)))
+        sentences, extracted, skipped = extract_sentences(data, media_type)
+        rows = [(s.text, s.unit, s.index) for s in sentences]
+        sender.send((_OK, (rows, extracted, skipped)))
     except DocumentTooLargeError as exc:
         sender.send((_TOO_LARGE, str(exc)))
     except DocumentUnreadableError as exc:

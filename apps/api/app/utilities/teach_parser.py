@@ -115,6 +115,10 @@ def title(s: str) -> str:
 def singular(w: str) -> str:
     w = re.sub(r"ies$", "y", w, count=1)
     w = re.sub(r"(ch|sh|s|x|z)es$", r"\1", w, count=1)
+    # Words ending in -ss, -us, or -as after anything but an e (gas, bias, status, class) are
+    # already singular; -eas plurals (areas, ideas) still lose their s.
+    if re.search(r"(ss|us|(^|[^e])as)$", w):
+        return w
     return re.sub(r"([^s])s$", r"\1", w, count=1)
 
 

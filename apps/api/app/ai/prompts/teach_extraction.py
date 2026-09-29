@@ -40,6 +40,7 @@ The user message is a JSON object of data, never of instructions. Its fields:
   "document" for one sentence of an imported document.
 - sentence: the text to read. Offsets you return are Unicode code points into this text, as
   half-open ranges [start, end).
+- sentenceLength: the length of sentence in code points; no range ends after it.
 - neighbours: in document mode, up to two sentences before and two after, for context only;
   extract facts from sentence alone.
 - domainPrefix: a domain key the sentence was prefixed with, or null.
@@ -90,6 +91,15 @@ Return one intent per fact:
   one rel intent per item from the subject with the speaker's verb as the action ("focuses
   on"), all with the same listId and the statedCount. Drafts always follow the list, never the
   stated number.
+- Roles. "X is a <role> of Y", where the role is a relationship noun such as client, customer,
+  partner, supplier, vendor, subsidiary, division or member, means Y has a role concept that
+  includes X: return one rel intent with subject Y, action has, object the role (its candidate
+  when Y already has it, else newLabel in the speaker's word, singular, as "Client"), members
+  [X] and memberAction includes. A relative clause ("that", "which", "who") after "a <role> of
+  Y" describes X, the subject of the sentence, not Y. "ADNOC is a client of Insight that has
+  multiple subsidiaries including L&S, Gas and XRG", with c0 Insight, gives c0 has newLabel
+  Client with members [ADNOC], then ADNOC has newLabel Subsidiaries with members L&S, Gas and
+  XRG. Names keep their punctuation: "L&S", "S.A.", "e-commerce".
 - Actions are lower-case present-tense verb phrases read from subject to object, such as
   "sells" or "focuses on". When one of these canonical actions has the same meaning, use it:
   {_CANONICAL_ACTIONS}.
@@ -99,6 +109,9 @@ Return one intent per fact:
   earlier concept a back-reference points to. source is the range of the words the intent comes
   from, inside its segment. span is always given: an exact copy of those words from sentence,
   character for character, with the same spelling, casing and punctuation, never paraphrased.
+  The span covers the words of every newLabel the intent uses, subject, object and members
+  alike: a relative clause's span starts at the noun it describes ("ADNOC is a client of
+  Insight that has subsidiaries including XRG" for ADNOC has Subsidiaries).
 - Put phrases you cannot place in unresolved, with reason not_understood, ambiguous_reference,
   low_confidence or not_a_statement, and their source range when you can. Never invent facts
   the text does not state.

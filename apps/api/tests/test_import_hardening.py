@@ -91,7 +91,7 @@ async def test_many_empty_docx_elements_stop_at_the_element_cap() -> None:
 async def test_docx_under_the_element_cap_still_reads_its_paragraphs() -> None:
     body = "<w:x/>" * 1000 + "<w:p><w:r><w:t>Machines have many sensors.</w:t></w:r></w:p>"
     xml = f"<w:document {WORD_NS}><w:body>{body}</w:body></w:document>"
-    sentences, _ = document_text.extract_sentences(docx_with_xml(xml), DOCX_TYPE)
+    sentences, _, _ = document_text.extract_sentences(docx_with_xml(xml), DOCX_TYPE)
     assert [(s.text, s.unit, s.index) for s in sentences] == [
         ("Machines have many sensors.", "paragraph", 1)
     ]

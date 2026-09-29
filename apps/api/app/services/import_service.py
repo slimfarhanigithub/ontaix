@@ -76,7 +76,7 @@ async def import_sentences(
     if mismatch:
         raise ProblemError(415, "unsupported_media_type", mismatch)
     try:
-        sentences, extracted = await extraction_service.extract(data, media_type)
+        sentences, extracted, skipped = await extraction_service.extract(data, media_type)
     except DocumentTooLargeError as exc:
         raise _too_large(str(exc)) from exc
     except DocumentUnreadableError as exc:
@@ -97,12 +97,19 @@ async def import_sentences(
     await document_import_sentence_repository.create_many(
         session, caller.tenant_id, row.id, [(s.text, s.unit, s.index) for s in sentences]
     )
-    logger.info("import %s: %d sentences of %s", row.id, len(sentences), media_type)
+    logger.info(
+        "import %s: %d sentences of %s, %d pieces skipped",
+        row.id,
+        len(sentences),
+        media_type,
+        skipped,
+    )
     return ImportResult(
         import_id=row.id,
         expires_at=row.expires_at,
         file_name=file_name,
         sentences=[s.text for s in sentences],
+        skipped=skipped,
         origin="document",
         origin_detail=ImportOriginDetail(file_name=file_name, media_type=media_type),
         positions=[

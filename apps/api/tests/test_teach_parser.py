@@ -46,3 +46,21 @@ def test_parser_reads_like_the_studio() -> None:
     assert domain_prefix("Plants run lines")[0] is None
     assert content_words("The plants have many downtimes!") == ["plant", "downtime"]
     assert split_list("a, b and c") == ["a", "b", "c"]
+
+
+def test_words_already_singular_keep_their_s() -> None:
+    assert [singular(w) for w in ("gas", "sour gas", "bias", "status", "campus", "class")] == [
+        "gas",
+        "sour gas",
+        "bias",
+        "status",
+        "campus",
+        "class",
+    ]
+    assert [singular(w) for w in ("areas", "ideas", "gases", "buses", "services")] == [
+        "area",
+        "idea",
+        "gas",
+        "bus",
+        "service",
+    ]
