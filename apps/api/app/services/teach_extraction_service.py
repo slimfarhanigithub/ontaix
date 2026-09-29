@@ -345,8 +345,7 @@ def _interpret(
         len(answer.intents) > MAX_SENTENCE_INTENTS or len(answer.unresolved) > MAX_SENTENCE_PHRASES
     ):
         raise _InvalidAnswer("too many intents or phrases for one sentence")
-    sources = [_locate(intent, text) for intent in answer.intents]
-    segments = _segments(answer, text, sources)
+    segments, sources = _ranges(answer, text)
     sent = {c.id for c in handles}
     cross_company = bool(drafter.view.settings and drafter.view.settings.cross_company)
     checked: list[_Checked] = []
@@ -474,32 +473,42 @@ class _Checked:
     grounded: bool
 
 
-def _segments(
-    answer: TeachExtractionAnswer, text: str, sources: list[tuple[int, int]]
-) -> list[tuple[int, int]]:
-    """The answer's segments in order; one covering the text when it gives none.
+def _ranges(
+    answer: TeachExtractionAnswer, text: str
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    """The answer's segments in order (one covering the text when it gives none), and each
+    intent's source range.
 
     The model's segment offsets are approximate: each segment is trimmed of surrounding
-    whitespace, a boundary that cuts a word is moved out to the word's edge, and the segment is
-    widened to cover the located sources of its intents. The order, overlap and length checks
-    run on the result."""
-    if not answer.segments:
-        return [(0, len(text))]
+    whitespace and a boundary that cuts a word is moved out to the word's edge. Each intent's
+    source is then located from its quote, and a segment is widened to cover the sources of its
+    intents; a source is never chosen where that widening would reach into another segment. The
+    order, overlap and length checks run on the result."""
     words = _words(text)
-    out: list[tuple[int, int]] = []
-    last_end = 0
+    if not answer.segments:
+        whole = [(0, len(text))]
+        return whole, [_locate(intent, text, words, whole, 0) for intent in answer.intents]
+    snapped: list[tuple[int, int]] = []
     for i, seg in enumerate(answer.segments):
         if seg.index != i or seg.end > len(text):
             raise _InvalidAnswer("a segment is out of order or outside the text")
-        start, end = _snap(text, words, seg.start, seg.end)
-        for intent, (a, b) in zip(answer.intents, sources, strict=True):
-            if (intent.segment if intent.segment is not None else 0) == i:
+        snapped.append(_snap(text, words, seg.start, seg.end))
+    owners = [intent.segment if intent.segment is not None else 0 for intent in answer.intents]
+    sources = [
+        _locate(intent, text, words, snapped, own)
+        for intent, own in zip(answer.intents, owners, strict=True)
+    ]
+    out: list[tuple[int, int]] = []
+    last_end = 0
+    for i, (start, end) in enumerate(snapped):
+        for own, (a, b) in zip(owners, sources, strict=True):
+            if own == i:
                 start, end = min(start, a), max(end, b)
         if start >= end or start < last_end or end - start > MAX_SEGMENT_CHARS:
             raise _InvalidAnswer("segments overlap, go backwards or are too long")
         out.append((start, end))
         last_end = end
-    return out
+    return out, sources
 
 
 def _snap(text: str, words: list[tuple[int, int]], start: int, end: int) -> tuple[int, int]:
@@ -517,23 +526,46 @@ def _snap(text: str, words: list[tuple[int, int]], start: int, end: int) -> tupl
     return start, end
 
 
-def _locate(intent: AnswerIntent, text: str) -> tuple[int, int]:
+def _locate(
+    intent: AnswerIntent,
+    text: str,
+    words: list[tuple[int, int]],
+    segments: list[tuple[int, int]],
+    own: int,
+) -> tuple[int, int]:
     """The intent's source range, found from its quoted words rather than the model's offsets.
 
     A model counts characters unreliably (it drops a space, or counts UTF-16 units or bytes), so
-    when the intent quotes its words in `span` the range is where that quote occurs in `text`:
-    an exact occurrence first, else one matching after whitespace collapse and case folding,
-    the occurrence nearest the model's own start winning. The range is always a slice of the
-    caller's input, so grounding still judges it word by word. Without a quote, or when the
-    quote is not in the text, the model's offsets stand."""
+    when the intent quotes its words in `span` the range is an occurrence of that quote in
+    `text`, exact or after whitespace collapse and case folding. An occurrence whose widening of
+    the intent's segment would reach into another segment is never chosen. Of the rest, in
+    order: a whole-word occurrence inside the intent's own segment; any other whole-word
+    occurrence; an occurrence cutting a word. Ties go to an exact match, then to the occurrence
+    nearest the model's own start. The range is always a slice of the caller's input, so
+    grounding still judges it word by word. Without a quote, or when no occurrence qualifies,
+    the model's offsets stand."""
     claimed = (intent.source.start, intent.source.end)
     quote = (intent.span or "").strip()
     if not quote:
         return claimed
-    found = _occurrences_exact(text, quote) or _occurrences_folded(text, quote)
-    if not found:
-        return claimed
-    return min(found, key=lambda r: (abs(r[0] - claimed[0]), r[0]))
+    found: dict[tuple[int, int], int] = dict.fromkeys(_occurrences_exact(text, quote), 0)
+    for r in _occurrences_folded(text, quote):
+        found.setdefault(r, 1)
+    home = segments[own] if own < len(segments) else None
+    others = [seg for j, seg in enumerate(segments) if j != own]
+
+    def reaches_another(r: tuple[int, int]) -> bool:
+        lo, hi = (min(home[0], r[0]), max(home[1], r[1])) if home else r
+        return any(lo < b and hi > a for a, b in others)
+
+    def rank(r: tuple[int, int]) -> tuple[int, int, int, int]:
+        whole = not any(a < r[0] < b or a < r[1] < b for a, b in words)
+        inside = home is not None and home[0] <= r[0] and r[1] <= home[1]
+        tier = 0 if whole and inside else 1 if whole else 2
+        return (tier, found[r], abs(r[0] - claimed[0]), r[0])
+
+    choices = [r for r in found if not reaches_another(r)]
+    return min(choices, key=rank) if choices else claimed
 
 
 def _occurrences_exact(text: str, quote: str) -> list[tuple[int, int]]:

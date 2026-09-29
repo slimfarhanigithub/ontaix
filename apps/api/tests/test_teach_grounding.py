@@ -294,3 +294,124 @@ async def test_offsets_counted_in_utf16_units_are_replaced_by_the_quote(
 
     assert births(result) == [("Rockets", str(root_id), "sells")]
     assert result["draftNotes"][0]["sourceSpan"] == {"start": 2, "end": len(sentence)}
+
+
+def speech_answer(intents: list[dict], segments: list[tuple[int, int]]) -> str:
+    return json.dumps(
+        {
+            "intents": [{"kind": "rel", "confidence": 0.9, **intent} for intent in intents],
+            "segments": [
+                {"index": i, "start": start, "end": end} for i, (start, end) in enumerate(segments)
+            ],
+            "unresolved": [],
+        }
+    )
+
+
+async def test_a_repeated_word_is_located_in_its_own_segment_not_the_next(
+    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
+) -> None:
+    company_id, root_id = await add_company(tenant, "Insight")
+    await configure(tenant)
+    transcript = "we sell data. data helps apps"
+    # Both sources are one code point late; the late "data" of segment 0 is the copy in
+    # segment 1.
+    fake_llm.answer(
+        speech_answer(
+            [
+                {
+                    "subject": C0,
+                    "object": new("Data"),
+                    "action": "sells",
+                    "span": "data",
+                    "segment": 0,
+                    "source": {"start": 13, "end": 17},
+                },
+                {
+                    "subject": new("Data"),
+                    "object": new("Apps"),
+                    "action": "helps",
+                    "span": "data helps apps",
+                    "segment": 1,
+                    "source": {"start": 13, "end": 28},
+                },
+            ],
+            [(0, 13), (14, 29)],
+        )
+    )
+
+    result = await speak(client, tenant, company_id, transcript)
+
+    assert result["llmOutcome"] == "used"
+    assert births(result) == [("Data", str(root_id), "sells"), ("Apps", "Data", "helps")]
+    assert [n["sourceSpan"] for n in result["draftNotes"]] == [
+        {"start": 8, "end": 12},
+        {"start": 14, "end": 29},
+    ]
+
+
+async def test_a_whole_word_occurrence_beats_an_exact_match_inside_a_longer_word(
+    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
+) -> None:
+    company_id, root_id = await add_company(tenant, "Insight")
+    await configure(tenant)
+    transcript = "a Database and data"
+    fake_llm.answer(
+        speech_answer(
+            [
+                {
+                    "subject": C0,
+                    "object": new("Data"),
+                    "action": "has",
+                    "span": "Data",
+                    "segment": 0,
+                    "source": {"start": 2, "end": 6},
+                }
+            ],
+            [(0, len(transcript))],
+        )
+    )
+
+    result = await speak(client, tenant, company_id, transcript)
+
+    assert births(result) == [("Data", str(root_id), "has")]
+    assert result["draftNotes"][0]["sourceSpan"] == {"start": 15, "end": 19}
+
+
+async def test_a_widened_segment_never_grounds_a_filler_outside_the_intents_source(
+    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
+) -> None:
+    company_id, root_id = await add_company(tenant, "Insight")
+    await configure(tenant)
+    transcript = "Insight sells services. um so Services has apps and data."
+    has_apps = {
+        "subject": new("Services"),
+        "action": "has",
+        "span": "Services has apps",
+        "segment": 1,
+        "source": {"start": 33, "end": 46},
+    }
+    fake_llm.answer(
+        speech_answer(
+            [
+                {
+                    "subject": C0,
+                    "object": new("Services"),
+                    "action": "sells",
+                    "span": "Insight sells services",
+                    "segment": 0,
+                    "source": {"start": 0, "end": 22},
+                },
+                {**has_apps, "object": new("Apps")},
+                {**has_apps, "object": new("Um")},
+            ],
+            # The model's segment 1 starts late, at "has"; the quote widens it to "Services".
+            [(0, 23), (39, len(transcript))],
+        )
+    )
+
+    result = await speak(client, tenant, company_id, transcript)
+
+    assert result["segments"][1]["span"] == {"start": 30, "end": len(transcript)}
+    assert births(result) == [("Services", str(root_id), "sells"), ("Apps", "Services", "has")]
+    assert result["unresolved"] == [{"text": "Services has apps", "reason": "ungrounded_label"}]
