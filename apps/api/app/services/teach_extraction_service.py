@@ -250,9 +250,16 @@ def _candidates(
     for turn in reversed(turns):
         referenced.extend(view.concepts.get(concept_id) for concept_id in turn.concept_ids)
         referenced.extend(drafter.resolve(label) for label in turn.new_labels)
-    for c in referenced:
-        take(c)
     matched = [c for c in drafter.mine if _matches(c.label, phrases)]
+    # Concepts the sentence names keep their places: session references never crowd them out,
+    # so the model can cite them by handle instead of proposing their labels again.
+    unseen = [c.id for c in matched if c.id not in seen]
+    named = set(unseen[: MAX_CANDIDATES - len(chosen)])
+    for c in referenced:
+        owed = len(named - seen)
+        if c is not None and c.id not in named and len(chosen) + owed >= MAX_CANDIDATES:
+            continue
+        take(c)
     for c in matched:
         take(c)
     for c in [*referenced, *matched]:

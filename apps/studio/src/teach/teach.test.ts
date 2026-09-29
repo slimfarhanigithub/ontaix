@@ -1,5 +1,6 @@
 import { api } from '../api/client';
 import { ApiError, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
+import { addCompany, addLink, addNode } from '../canvas/state';
 import { store } from '../store/store';
 import { teach, teachSessionId } from './teach';
 
@@ -86,5 +87,48 @@ describe('submitting a parse', () => {
 
     expect(batch).toHaveBeenCalledTimes(2);
     expect(batch.mock.calls[1][0]).toHaveLength(2);
+  });
+
+  it('drops the drafts the canvas already holds when a batch is refused as a duplicate, and sends the rest once', async () => {
+    const s = store.s;
+    const counts = [s.companies.length, s.nodes.length, s.links.length];
+    const insight = addCompany(s, 'Insight', '');
+    insight.sid = 'insight';
+    insight.root!.sid = 'root';
+    const services = addNode(s, { sid: 'services', label: 'Services', company: insight });
+    addLink(s, insight.root!, services, 'rel', 230, 'has');
+    store.s.activeCompany = insight;
+    const known = { type: 'relation', aId: 'root', bId: 'services', action: 'Has' } as ProposalDraft;
+    const born = ['AI', 'Data', 'Apps'].map(
+      (label) =>
+        ({ type: 'concept', companyId: 'insight', parentId: 'services', label, domainKey: 'sales', action: 'is split into' }) as ProposalDraft,
+    );
+    vi.spyOn(api, 'teachParse').mockResolvedValue({ ...result, outcome: 'understood', drafts: [known, ...born] });
+    const duplicate = new ApiError(409, { title: 'Duplicate relation', status: 409, code: 'duplicate_relation' });
+    const batch = vi.spyOn(api, 'createProposalBatch').mockRejectedValueOnce(duplicate).mockResolvedValue([]);
+    const refused = vi.spyOn(store, 'refused');
+    try {
+      await teach('Insight has services, they are split into AI, Data and Apps.');
+    } finally {
+      s.links.splice(counts[2]);
+      s.nodes.splice(counts[1]);
+      s.companies.splice(counts[0]);
+    }
+
+    expect(batch).toHaveBeenCalledTimes(2);
+    expect(batch.mock.calls[1][0].map((d) => (d.type === 'concept' ? d.label : d.type))).toEqual(['AI', 'Data', 'Apps']);
+    expect(refused).not.toHaveBeenCalled();
+  });
+
+  it('shows a duplicate refusal when no draft can be told apart as already there', async () => {
+    vi.spyOn(api, 'teachParse').mockResolvedValue({ ...result, outcome: 'understood', drafts });
+    const duplicate = new ApiError(409, { title: 'Duplicate label', status: 409, code: 'duplicate_label' });
+    const batch = vi.spyOn(api, 'createProposalBatch').mockRejectedValue(duplicate);
+    const refused = vi.spyOn(store, 'refused').mockImplementation(() => undefined);
+
+    await teach('A plant feeds lines');
+
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(refused).toHaveBeenCalledWith(duplicate);
   });
 });

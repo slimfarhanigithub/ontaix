@@ -71,9 +71,14 @@ Return one intent per fact:
 - kind "spec": the subject is a kind of the object (the subject is the specialised child, the
   object the parent), with an optional rule that defines the child.
 - subject and object are each {{"candidate": "<handle>"}} for an existing concept, or
-  {{"newLabel": "<Label>"}} for a new concept. Prefer a candidate whenever the text or a
-  back-reference means it. New labels are short noun phrases keeping the speaker's casing, with
-  the first letter capitalised (Apps, Data, AI) and no surrounding spaces.
+  {{"newLabel": "<Label>"}} for a new concept. Whenever the text names an existing concept -
+  by its label, singular or plural, or by a back-reference - cite its candidate handle, never a
+  newLabel: "Insight has services, they are split into AI, Data and Apps", with c0 Insight and
+  c1 Services, gives c0 has c1, then c1 is split into AI, Data and Apps as new labels, so the
+  new concepts are born from the existing Services. The company's name means c0. Still return
+  an intent for a fact the candidates already hold; the API recognises it. New labels are short
+  noun phrases keeping the speaker's casing, with the first letter capitalised (Apps, Data, AI)
+  and no surrounding spaces.
 - Cite a new concept by the same newLabel in every intent that uses it: it is born once, from
   the first intent that mentions it, and later intents build on it.
 - Grouping nouns. When the object is a grouping concept the text names and lists

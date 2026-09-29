@@ -8,6 +8,7 @@
 import { api } from '../api/client';
 import { ApiError, type ImportRef, type InputOrigin, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
 import { drawBirth } from '../canvas/division';
+import { bySid, find } from '../canvas/state';
 import { random } from '../runtime/rng';
 import { store } from '../store/store';
 
@@ -89,12 +90,26 @@ async function parseAndPropose(request: TeachRequest): Promise<void> {
   store.caption('Not understood', result.caption);
 }
 
+/** The refusals of a batch that name a fact the model already holds. */
+const DUPLICATE_CODES = new Set(['duplicate_label', 'duplicate_relation']);
+
 /** Submits one parse's drafts; a batch refused for the proposal budget is retried whole once
- * after its `Retry-After` when that is short, never split. */
+ * after its `Retry-After` when that is short, never split. A batch refused because a draft
+ * restates a fact already in the model is sent once more without the drafts the canvas shows
+ * as already there, so the new facts of the parse are still proposed. */
 async function submitBatch(drafts: ProposalDraft[]): Promise<void> {
   try {
     await api.createProposalBatch(drafts);
   } catch (err) {
+    if (err instanceof ApiError && err.status === 409 && DUPLICATE_CODES.has(err.problem.code)) {
+      const fresh = drafts.filter((d) => !alreadyInModel(d));
+      if (!fresh.length || fresh.length === drafts.length) {
+        store.refused(err);
+        return;
+      }
+      await api.createProposalBatch(fresh).catch((e) => store.refused(e));
+      return;
+    }
     const wait = err instanceof ApiError && err.status === 429 ? err.retryAfter : null;
     if (wait === null || wait > BATCH_RETRY_MAX_S) {
       store.refused(err);
@@ -103,6 +118,27 @@ async function submitBatch(drafts: ProposalDraft[]): Promise<void> {
     await new Promise((r) => setTimeout(r, wait * 1000));
     await api.createProposalBatch(drafts).catch((e) => store.refused(e));
   }
+}
+
+/** Relation actions compared as the API compares them: NFKC, whitespace collapsed, trimmed, lower case. */
+const normaliseAction = (action: string): string => action.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+
+/** True when the canvas already holds what the draft proposes: a concept of that label in its
+ * company, or a relation with the same ends and action. */
+export function alreadyInModel(draft: ProposalDraft): boolean {
+  const s = store.s;
+  if (draft.type === 'concept' || draft.type === 'spec') {
+    const company = store.companyBySid(draft.companyId);
+    return !!company && !!find(s, draft.label, company);
+  }
+  if (draft.type === 'relation') {
+    const a = bySid(s, draft.aId),
+      b = bySid(s, draft.bId);
+    if (!a || !b) return false;
+    const action = normaliseAction(draft.action);
+    return s.links.some((l) => l.a === a && l.b === b && normaliseAction(l.label) === action);
+  }
+  return false;
 }
 
 /** Uploads a document to the API, which extracts and stores its sentences; each is then taught like a spoken one. */

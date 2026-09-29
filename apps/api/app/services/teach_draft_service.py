@@ -7,7 +7,10 @@ with `has` and a second one born from it by label. A `spec` intent (subject the 
 the parent): new child and existing parent give a spec draft; existing child and existing
 parent give an `is a` relation; existing child and new parent give the parent born from the
 child with `is a kind of` and `reverse`; two new concepts give the parent born from the root
-with `has` and the child specialised from it by label.
+with `has` and the child specialised from it by label. A relation the model already holds,
+pending or approved, is not drafted again: its intent is kept with no draft and its statement
+says the fact is already in the model, so the rest of the result is submitted without a
+duplicate refusal.
 
 Every intent is planned first and kept only while the result stays within 60 intents and 60
 drafts; the rest are dropped together and reported as one `too_many_drafts` phrase.
@@ -36,6 +39,9 @@ MAX_TRANSCRIPT_UNRESOLVED = 40
 MAX_PHRASE_CHARS = 400
 DEFAULT_DOMAIN = "production"
 RULES_NOTE = DraftNote(extractor="rules", confidence=1)
+# Appended to the statement of an intent that restates a relation the model already holds; such
+# an intent is kept and drafts nothing.
+ALREADY_KNOWN = " (already in the model)"
 
 
 @dataclass(frozen=True)
@@ -114,6 +120,16 @@ class Drafter:
         wanted = label.lower()
         return next((n for n in self.mine if n.label.lower() == wanted), None)
 
+    def known(self, a: Concept, action: str, b: Concept) -> bool:
+        """True when the model already holds the relation `a action b`, pending or approved,
+        compared as the proposal endpoints compare it; proposing it again would be refused as a
+        duplicate relation."""
+        wanted = normalise_action(action)
+        return any(
+            r.a_id == a.id and r.b_id == b.id and normalise_action(r.label) == wanted
+            for r in self.view.live_relations()
+        )
+
     def key(self, fallback: str | None) -> str:
         return self.dom_key or fallback or DEFAULT_DOMAIN
 
@@ -154,6 +170,8 @@ class Drafter:
                 )
             )
             made.append(f"{child.label} is a {p.label}")
+        elif p and c and self.known(c, "is a", p):
+            made.append(f"{c.label} is a {p.label}{ALREADY_KNOWN}")
         elif p and c:
             drafts.append(
                 self.draft(
@@ -226,7 +244,9 @@ class Drafter:
             object_resolved=b.id if b else None,
         )
         if a and b:
-            if a.id != b.id:
+            if a.id != b.id and self.known(a, pred, b):
+                made.append(f"{a.label} {pred} {b.label}{ALREADY_KNOWN}")
+            elif a.id != b.id:
                 drafts.append(
                     self.draft(
                         type="relation",
@@ -429,6 +449,7 @@ class Drafter:
         return {**self.extras, **fields}
 
 
+WAITING = ". Waiting for your approval on the right."
 NOT_UNDERSTOOD = (
     "Try “<subject> <action> <object>”, “A is a B”, or “A that … is a B”. "
     "Start with “In quality, …” to choose the domain product."
@@ -458,8 +479,7 @@ def plan_grammar(drafter: Drafter, text: str) -> GrammarPlan:
         planned.append(drafter.rel(a, b, it.pred or "relates to", RULES_NOTE))
     statements = [s for p in planned for s in p.statements]
     if statements:
-        caption = " · ".join(statements) + ". Waiting for your approval on the right."
-        return GrammarPlan(planned, "understood", caption)
+        return GrammarPlan(planned, "understood", caption_for(planned))
 
     # Nothing parsed: propose the unknown words mentioned next to a concept the sentence names.
     words = content_words(text)
@@ -503,6 +523,13 @@ def plan_grammar(drafter: Drafter, text: str) -> GrammarPlan:
         "Click the line to give it the right action."
     )
     return GrammarPlan(planned, "partly_understood", caption)
+
+
+def caption_for(planned: list[PlannedIntent]) -> str:
+    """The statements of the planned intents; the wait for approval is named only when at least
+    one of them drafts something."""
+    statements = " · ".join(line for p in planned for line in p.statements)
+    return statements + (WAITING if any(p.drafts for p in planned) else ".")
 
 
 def assemble(planned: list[PlannedIntent], sentence: str, cap: int = MAX_INTENTS) -> Assembled:
