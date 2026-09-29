@@ -254,3 +254,36 @@ async def test_a_spoken_name_that_sounds_like_an_existing_concept_is_listed_not_
     )
     assert typed.status_code == 200, typed.text
     assert "Ahmedabus" in [d.get("label") for d in typed.json()["drafts"]]
+
+
+async def test_a_group_keeps_each_left_out_members_own_reason(
+    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
+) -> None:
+    company_id, _ = await add_company(tenant, "Amdaris")
+    await configure(tenant)
+    heard = "our teams are ahmedabus and Zorvik"
+    fake_llm.answer(
+        answer(
+            heard,
+            [
+                rel(
+                    heard,
+                    cand("c0"),
+                    "has",
+                    new("Teams"),
+                    heard,
+                    members=[new("Ahmedabus"), new("Quillon"), new("Zorvik")],
+                    memberAction="includes",
+                ),
+            ],
+        )
+    )
+
+    spoken = await speak(client, tenant, company_id, heard)
+
+    assert spoken["statements"] == ["Amdaris has Teams (new)", "Teams includes Zorvik (new)"]
+    # One member sounds like Amdaris, another is not in the words: each reason is kept.
+    assert spoken["unresolved"] == [
+        {"text": heard, "reason": "ambiguous_reference"},
+        {"text": heard, "reason": "ungrounded_label"},
+    ]
