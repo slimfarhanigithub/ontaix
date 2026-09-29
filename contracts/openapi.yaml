@@ -673,7 +673,7 @@ paths:
     post:
       tags: [Relations]
       summary: Propose a relation between two concepts
-      description: Creates a `relation` proposal. The action is normalised first - NFKC, whitespace runs collapsed to one space, trimmed, lower-cased - on this endpoint and on every other path that proposes a relation (drafts, batch, teach extraction). Normalised action `is a` produces an `isa` relation, `equivalent to` produces a `same` relation. Refused with `409 duplicate_relation` when the triple exists and `409 cross_company_disabled` when the ends belong to different companies and the switch is off.
+      description: Creates a `relation` proposal. The action is normalised first - NFKC, whitespace runs collapsed to one space, trimmed, lower-cased - on this endpoint and on every other path that sets a relation action - relation edits (`RelationEdit.action`), concept birth actions (`ConceptDraft.action`), drafts, batch and teach extraction. Normalised action `is a` produces an `isa` relation, `equivalent to` produces a `same` relation. The `duplicate_relation` check compares normalised forms on both sides - the stored label is normalised the same way before it is compared with the new action. Refused with `409 duplicate_relation` when the triple exists and `409 cross_company_disabled` when the ends belong to different companies and the switch is off.
       operationId: proposeRelation
       x-ontaix-permission: proposal.create
       requestBody:
@@ -3884,7 +3884,7 @@ components:
         drafts:
           type: array
           maxItems: 60
-          description: Proposal drafts in submission order, ready for `POST /proposals/batch`; each carries the request's `origin` and `importRef`. At most 60, counting grammar and model drafts together. When the result would hold more, the server keeps the intents whose drafts fit, in sentence order (grammar intents first for `rules+llm`), drops the rest with their drafts, and lists their text as one `unresolved` entry with reason `too_many_drafts`.
+          description: Proposal drafts in submission order, ready for `POST /proposals/batch`; each carries the request's `origin` and `importRef`. At most 60, counting grammar and model drafts together. When the result would hold more, the server keeps intents in sentence order (grammar intents first for `rules+llm`) while their drafts fit and fewer than 60 intents are kept, counting intents that produce no draft, drops the rest with their drafts, and lists their text as one `unresolved` entry with reason `too_many_drafts`.
           items:
             $ref: '#/components/schemas/ProposalDraft'
         statements:

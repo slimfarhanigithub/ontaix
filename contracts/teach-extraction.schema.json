@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:ontaix:contract:teach-extraction:1.0.0",
   "title": "Teach Extraction Output",
-  "description": "The only shape the language model step of POST /teach/parse may return (ADR 0008). Every free-text field refuses markup (< and >), C0 and C1 control characters, DEL, U+00A0, the bidirectional controls (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069), the zero-width characters U+200B to U+200D, U+2028, U+2029 and U+FEFF. The API validates every answer against this schema, normalises each action (NFKC, whitespace runs collapsed to one space, trimmed, lower-cased - the same normalisation the relation endpoints apply) and then checks that every cited candidate was in the list it sent, that no intent joins a concept to itself, that no normalised rel action is is a or equivalent to, and that every spec intent has a draftable form (ADR 0008). Any failure makes the whole answer invalid: no model draft is returned and the sentence is listed in unresolved. The API turns valid intents into drafts with the same mapping as the rule-based grammar; the model never writes and never produces a draft directly.",
+  "description": "The only shape the language model step of POST /teach/parse may return (ADR 0008). Every free-text field refuses markup (< and >), C0 and C1 control characters, DEL, U+00A0, U+2028, U+2029 and every Unicode format character (category Cf) in the Basic Multilingual Plane: U+00AD, U+0600 to U+0605, U+061C, U+06DD, U+070F, U+0890, U+0891, U+08E2, U+180E, U+200B to U+200F, U+202A to U+202E, U+2060 to U+2064, U+2066 to U+206F, U+FEFF and U+FFF9 to U+FFFB. The API's normalisation step also refuses every Cf character outside that plane (U+110BD, U+110CD, U+13430 to U+1343F, U+1BCA0 to U+1BCA3, U+1D173 to U+1D17A, U+E0001, U+E0020 to U+E007F), which a JSON Schema pattern cannot list portably. The API validates every answer against this schema, normalises each action (NFKC, whitespace runs collapsed to one space, trimmed, lower-cased - the same normalisation the relation endpoints apply) and then checks that every cited candidate was in the list it sent, that no intent joins a concept to itself, that no normalised rel action is is a or equivalent to, and that every spec intent has a draftable form (ADR 0008). Any failure makes the whole answer invalid: no model draft is returned and the sentence is listed in unresolved. The API turns valid intents into drafts with the same mapping as the rule-based grammar; the model never writes and never produces a draft directly.",
   "type": "object",
   "additionalProperties": false,
   "required": ["intents", "unresolved"],
@@ -34,13 +34,13 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 60,
-          "pattern": "^[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u061c\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]([^A-Z<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u061c\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]*[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u061c\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff])?$",
+          "pattern": "^[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^A-Z<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
           "description": "Required for rel, absent for spec. Lower-case present-tense verb phrase read subject to object, for example sells or focuses on; a canonical predicate of the reference lexicon when one has the same meaning. No leading or trailing space. After normalisation, is a and equivalent to are refused for rel."
         },
         "rule": {
           "type": "string",
           "maxLength": 200,
-          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u061c\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]*$",
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$",
           "description": "spec only: the condition that defines the child, as in a machine that has run 5,000 hours."
         },
         "domainKey": {
@@ -55,13 +55,13 @@
         "explanation": {
           "type": "string",
           "maxLength": 300,
-          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u061c\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]*$",
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$",
           "description": "Plain text, no markup: why this intent, for example which earlier concept a back-reference points to."
         },
         "span": {
           "type": "string",
           "maxLength": 400,
-          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u061c\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]*$",
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$",
           "description": "The part of the sentence this intent comes from. Used to order intents and to build unresolved text; never returned as is."
         }
       },
@@ -93,7 +93,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 120,
-              "pattern": "^[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u061c\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]([^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u061c\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]*[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u061c\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff])?$",
+              "pattern": "^[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
               "description": "No leading or trailing space, so a whitespace-only label is refused."
             }
           }
@@ -109,7 +109,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 400,
-          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u061c\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]*$",
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$",
           "description": "Located in the sentence the API holds; the response carries the matching substring of that sentence, never this text."
         },
         "reason": { "enum": ["not_understood", "ambiguous_reference", "low_confidence"] }
