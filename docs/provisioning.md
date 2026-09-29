@@ -11,7 +11,7 @@ Terraform (`infra/terraform/azure`), applied by GitHub Actions through OIDC fede
 | AKS | aks-ontaix-dev-frc | Free tier, 1–3 × Standard_D4s_v5, Azure CNI overlay + Cilium, OIDC issuer + workload identity, Container Insights |
 | Container registry | crontaixdevfrc&lt;hash&gt; | Basic; AcrPull for the kubelet identity, no admin user |
 | PostgreSQL Flexible 16 | psql-ontaix-dev-frc-&lt;hash&gt; | B_Standard_B2s, VNet-only, private DNS; password generated → Key Vault |
-| Key Vault | kv-ontaix-dev-frc-&lt;hash&gt; | RBAC; secrets `postgres-admin-password`, `database-url` |
+| Key Vault | kv-ontaix-dev-frc-&lt;hash&gt; | RBAC; secrets `postgres-admin-password`, `database-url`; `anthropic-api-key` is set by the owner, not by Terraform (see below) |
 | Managed identity | id-ontaix-dev-frc | workload identity for `ontaix/ontaix-api`; Key Vault Secrets User |
 | Log Analytics | log-ontaix-dev-frc | 30-day retention |
 | Budget | budget-ontaix-dev-frc | €400/month; alerts at 80 % actual and 100 % forecast |
@@ -38,6 +38,14 @@ terraform init -backend-config="resource_group_name=$TF_STATE_RESOURCE_GROUP" \
   -backend-config="container_name=tfstate" -backend-config="key=azure-dev.tfstate"
 TF_VAR_subscription_id=<id> terraform plan -var-file=env/dev.tfvars
 ```
+
+## Language Model Provider Key
+The teach extraction fallback (ADR 0008) calls the configured language model provider, Anthropic by default. Its API key is a secret and exists in two places only:
+
+- Azure Key Vault, secret name `anthropic-api-key`. The owner sets the value from a signed-in shell of their own; Terraform does not manage the value, so it never enters Terraform state or CI logs. The API reads it at start-up through the workload identity `id-ontaix-dev-frc`, which already holds Key Vault Secrets User.
+- Local development: the ignored `.env` file, variable `ONTAIX_ANTHROPIC_API_KEY`.
+
+The key is never in settings, API responses, events, audit entries, logs, tests, fixtures, commits or documentation, and no agent asks the owner for it in a conversation. Provider and model are deployment configuration (`ONTAIX_LLM_PROVIDER`, default `anthropic`; `ONTAIX_LLM_MODEL`, default `claude-sonnet-5`; `ONTAIX_LLM_TIMEOUT_SECONDS`, default and maximum 15). Without a key the API runs normally and the teach bar uses the rule-based grammar alone (`llmOutcome` `not_configured`).
 
 ## Security posture
 - No client secret anywhere: CI uses OIDC federation; pods use workload identity; images are pulled

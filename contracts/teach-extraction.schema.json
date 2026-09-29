@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ontaix:contract:teach-extraction:1.0.0",
+  "title": "Teach Extraction Output",
+  "description": "The only shape the language model step of POST /teach/parse may return (ADR 0008). The API validates every answer against this schema and then checks that every cited candidate was in the list it sent, that no intent joins a concept to itself, and that no rel action is is a or equivalent to. Any failure makes the whole answer invalid: no model draft is returned and the sentence is listed in unresolved. The API turns valid intents into drafts with the same mapping as the rule-based grammar; the model never writes and never produces a draft directly.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intents", "unresolved"],
+  "properties": {
+    "intents": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/intent" }
+    },
+    "unresolved": {
+      "type": "array",
+      "maxItems": 10,
+      "items": { "$ref": "#/$defs/unresolved" }
+    }
+  },
+  "$defs": {
+    "intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "subject", "object", "confidence"],
+      "properties": {
+        "kind": {
+          "enum": ["rel", "spec"],
+          "description": "rel: subject action object. spec: subject is a kind of object (subject is the specialised child, object the parent), like the grammar's spec intent."
+        },
+        "subject": { "$ref": "#/$defs/conceptRef" },
+        "object": { "$ref": "#/$defs/conceptRef" },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[^A-Z<>\\u0000-\\u001f\\u007f-\\u009f]+$",
+          "description": "Required for rel, absent for spec. Lower-case present-tense verb phrase read subject to object, for example sells or focuses on; a canonical predicate of the reference lexicon when one has the same meaning. is a and equivalent to are refused for rel."
+        },
+        "rule": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "spec only: the condition that defines the child, as in a machine that has run 5,000 hours."
+        },
+        "domainKey": {
+          "enum": ["production", "supply", "sales", "logistics", "quality", "maintenance", "finance", "people", "engineering", null],
+          "description": "The domain template the new concept belongs to, or null to inherit from its parent. A domain prefix typed in the sentence always wins."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "explanation": {
+          "type": "string",
+          "maxLength": 300,
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f]*$",
+          "description": "Plain text, no markup: why this intent, for example which earlier concept a back-reference points to."
+        },
+        "span": {
+          "type": "string",
+          "maxLength": 400,
+          "description": "The part of the sentence this intent comes from."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "rel" } } },
+          "then": { "required": ["action"], "not": { "required": ["rule"] } },
+          "else": { "not": { "required": ["action"] } }
+        }
+      ]
+    },
+    "conceptRef": {
+      "description": "An existing concept cited by the handle the API sent in the candidate list (c0 is always the company root), or a new concept by label. A new label that matches an existing concept of the company (case-insensitive, singular or plural) is resolved to that concept by the API, as the grammar does.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["candidate"],
+          "properties": {
+            "candidate": { "type": "string", "pattern": "^c(0|[1-9][0-9]?|1[0-9]{2})$" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["newLabel"],
+          "properties": {
+            "newLabel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u2028-\\u202e\\u2066-\\u2069\\ufeff]+$"
+            }
+          }
+        }
+      ]
+    },
+    "unresolved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "reason"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "reason": { "enum": ["not_understood", "ambiguous_reference", "low_confidence"] }
+      }
+    }
+  }
+}
