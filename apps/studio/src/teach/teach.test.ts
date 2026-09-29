@@ -2,7 +2,7 @@ import { api } from '../api/client';
 import { ApiError, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
 import { addCompany, addLink, addNode } from '../canvas/state';
 import { store } from '../store/store';
-import { ONTOLOGY_NOT_AVAILABLE, SPEECH_PARSE_TIMEOUT_MS, importDocument, skippedText, speechStream, teach, teachSessionId, withoutKnown } from './teach';
+import { SPEECH_PARSE_TIMEOUT_MS, importDocument, skippedText, speechStream, teach, teachSessionId, withoutKnown } from './teach';
 
 const result: TeachResult = {
   outcome: 'not_understood',
@@ -403,12 +403,29 @@ describe('leaving out what the canvas already holds', () => {
 describe('Ontology import mode', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('refuses the file with a toast and uploads nothing', async () => {
-    const toast = vi.spyOn(store, 'toast2').mockImplementation(() => undefined);
+  it('sends the file to ontology import, not to sentence extraction', async () => {
+    const before = store.s.activeCompany;
+    store.s.activeCompany = { sid: 'company-a' } as typeof before;
+    vi.spyOn(store, 'refreshProposals').mockResolvedValue();
     const upload = vi.spyOn(api, 'importSentences');
-    await importDocument(new File(['a'], 'model.owl'), 'ontology');
-    expect(toast).toHaveBeenCalledWith('Refused', 'Ontology import is not available yet');
-    expect(ONTOLOGY_NOT_AVAILABLE).toBe('Ontology import is not available yet');
+    const mapping = vi.spyOn(api, 'importOntology').mockResolvedValue({
+      ontologyImportId: 'oi-1',
+      expiresAt: '2026-09-30T12:00:00Z',
+      companyId: 'company-a',
+      parentConceptId: null,
+      format: 'rdf_xml',
+      languages: ['en'],
+      individuals: 'skip',
+      drafts: [],
+      notes: [],
+      skipped: [],
+    });
+    try {
+      await importDocument(new File(['a'], 'model.owl'), 'ontology');
+    } finally {
+      store.s.activeCompany = before;
+    }
+    expect(mapping).toHaveBeenCalledTimes(1);
     expect(upload).not.toHaveBeenCalled();
     expect(store.ui.importing).toBe(false);
   });

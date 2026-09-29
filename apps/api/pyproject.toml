@@ -10,11 +10,13 @@ dependencies = [
     "azure-identity==1.25.3",
     "defusedxml==0.7.1",
     "fastapi>=0.115",
+    "httpx==0.28.1",
     "openai==3.20.0",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.6",
     "pypdf==6.1.1",
     "python-multipart==0.0.20",
+    "rdflib==7.6.0",
     "sqlalchemy[asyncio]>=2.0",
     "uvicorn[standard]>=0.32",
 ]

@@ -1,0 +1,27 @@
+format-version: 1.2
+ontology: plant
+import: http://example.org/remote/units.obo
+
+[Term]
+id: PL:0001
+name: equipment
+
+[Term]
+id: PL:0002
+name: heat exchanger
+is_a: PL:0001 ! equipment
+relationship: part_of PL:0003 ! cooling loop
+
+[Term]
+id: PL:0003
+name: cooling loop
+is_a: PL:0001 ! equipment
+
+[Term]
+id: PL:0004
+name: plate exchanger
+equivalent_to: PL:0002
+
+[Typedef]
+id: part_of
+name: part of

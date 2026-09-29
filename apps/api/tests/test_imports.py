@@ -23,6 +23,15 @@ pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 TXT = b"A plant has machines. Machines have sensors!\nok.\n"
 DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+DOCX_MAIN = "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"
+
+
+def content_types(main_type: str, part: str) -> str:
+    """A `[Content_Types].xml` declaring one main part."""
+    return (
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        f'<Override PartName="{part}" ContentType="{main_type}"/></Types>'
+    )
 
 
 def docx(paragraphs: list[str], doctype: str = "") -> bytes:
@@ -35,7 +44,7 @@ def docx(paragraphs: list[str], doctype: str = "") -> bytes:
     )
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w") as z:
-        z.writestr("[Content_Types].xml", "<Types/>")
+        z.writestr("[Content_Types].xml", content_types(DOCX_MAIN, "/word/document.xml"))
         z.writestr("word/document.xml", xml)
     return out.getvalue()
 
@@ -205,13 +214,13 @@ async def test_word_document_with_a_dtd_is_refused(
 
 
 async def test_pdf_keeps_page_positions(client: httpx.AsyncClient, tenant: TenantFixture) -> None:
-    data = pdf(["A plant has machines.", "A warehouse holds stock."])
+    data = pdf(["A plant has many machines.", "A warehouse holds stock."])
 
     response = await upload(client, tenant.builder, "model.pdf", data)
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["sentences"] == ["A plant has machines.", "A warehouse holds stock."]
+    assert body["sentences"] == ["A plant has many machines.", "A warehouse holds stock."]
     assert body["positions"] == [{"unit": "page", "index": 1}, {"unit": "page", "index": 2}]
 
 

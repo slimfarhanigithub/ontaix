@@ -151,9 +151,10 @@ def check_llm_configuration(settings: Settings) -> None:
         return
     for profile in LLM_PROFILES:
         model = _priced_model(settings, profile)
-        if model not in settings.llm_price_table:
+        if not isinstance(settings.llm_price_table.get(model), ModelPrice):
             raise LlmConfigurationError(
-                f"ONTAIX_LLM_PRICE_TABLE has no price for {model!r}, the {profile} profile's model"
+                f"ONTAIX_LLM_PRICE_TABLE has no token price for {model!r}, the {profile} "
+                "profile's model"
             )
 
 
@@ -194,7 +195,7 @@ def _priced_model(settings: Settings, profile: LlmProfile) -> str:
 
 def _configured(settings: Settings, profile: LlmProfile) -> LlmClient | None:
     price = settings.llm_price_table.get(_priced_model(settings, profile))
-    if not _provider_configured(settings) or price is None:
+    if not _provider_configured(settings) or not isinstance(price, ModelPrice):
         return None
     chosen = settings.llm_profile(profile)
     if settings.llm_provider in FOUNDRY_PROVIDERS:

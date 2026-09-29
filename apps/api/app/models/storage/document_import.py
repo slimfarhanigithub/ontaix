@@ -33,6 +33,7 @@ class DocumentImport(Base):
     sha256: Mapped[bytes] = mapped_column(LargeBinary)
     sentence_count: Mapped[int] = mapped_column(Integer)
     extracted_chars: Mapped[int] = mapped_column(Integer)
+    ocr_pages: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )

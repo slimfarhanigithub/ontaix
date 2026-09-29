@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<!DOCTYPE Ontology [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">]>
+<Ontology xmlns="http://www.w3.org/2002/07/owl#" ontologyIRI="http://example.org/plant">
+  <Declaration><Class IRI="http://example.org/plant#Equipment"/></Declaration>
+  <AnnotationAssertion><AnnotationProperty IRI="http://www.w3.org/2000/01/rdf-schema#label"/><IRI>http://example.org/plant#Equipment</IRI><Literal>&b;</Literal></AnnotationAssertion>
+</Ontology>

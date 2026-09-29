@@ -23,15 +23,16 @@ class SentenceRow:
     text: str
     position_unit: str | None
     position_index: int | None
+    position_row: int | None = None
 
 
 async def create_many(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     import_id: uuid.UUID,
-    sentences: list[tuple[str, str | None, int | None]],
+    sentences: list[tuple[str, str | None, int | None, int | None]],
 ) -> None:
-    """Insert the sentences of one import in document order: `(text, unit, index)` each."""
+    """Insert the sentences of one import in document order: `(text, unit, index, row)` each."""
     if not sentences:
         return
     await session.execute(
@@ -44,8 +45,9 @@ async def create_many(
                 "text": text,
                 "position_unit": unit,
                 "position_index": index,
+                "position_row": row,
             }
-            for i, (text, unit, index) in enumerate(sentences)
+            for i, (text, unit, index, row) in enumerate(sentences)
         ],
     )
 
@@ -92,6 +94,7 @@ async def claim_parse(
                 DocumentImportSentence.text,
                 DocumentImportSentence.position_unit,
                 DocumentImportSentence.position_index,
+                DocumentImportSentence.position_row,
             )
         )
     ).first()
@@ -115,6 +118,7 @@ async def claim_draft(
                 DocumentImportSentence.text,
                 DocumentImportSentence.position_unit,
                 DocumentImportSentence.position_index,
+                DocumentImportSentence.position_row,
             )
         )
     ).first()

@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'react';
 
 import { importDocument } from '../teach/teach';
 import { openAddCompany } from './AddCompany';
-import { ImportModePill, importMode } from './ImportMode';
+import { IMPORT_ACCEPT, ImportModePill, importMode } from './ImportMode';
 import { useStore } from './dom';
 
 export function Tools() {
@@ -61,7 +61,7 @@ export function Tools() {
       <input
         type="file"
         id="importFile"
-        accept=".txt,.md,.csv,.json,.docx,.pdf"
+        accept={IMPORT_ACCEPT}
         hidden
         ref={file}
         onChange={(e) => {

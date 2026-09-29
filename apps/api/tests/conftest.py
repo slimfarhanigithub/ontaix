@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients import db_client
 from app.clients.llm_client import reset_llm_client, set_llm_client
+from app.clients.ocr_client import reset_ocr_client, set_ocr_client
 from app.config import get_settings
 from app.main import app
 from app.migrations.runner import upgrade_to_head
@@ -78,13 +79,15 @@ def pytest_asyncio_loop_factories(config: pytest.Config, item: pytest.Item) -> d
 
 @pytest.fixture(autouse=True)
 def no_language_model(request: pytest.FixtureRequest) -> Iterator[None]:
-    """No test reaches a model provider unless it is marked `live`."""
+    """No test reaches a model or OCR provider unless it is marked `live`."""
     if request.node.get_closest_marker("live") is None:
         set_llm_client(None)
+        set_ocr_client(None)
     try:
         yield
     finally:
         reset_llm_client()
+        reset_ocr_client()
 
 
 @pytest.fixture
