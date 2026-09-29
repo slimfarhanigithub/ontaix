@@ -43,7 +43,7 @@ resource "azurerm_role_assignment" "speech_identity_speech_user" {
   principal_type       = "ServicePrincipal"
 }
 
-# Locally the API mints the token with the owner's own `az login` session.
+# The owner can try the resource directly (Speech Studio, REST); the API never mints with this grant.
 resource "azurerm_role_assignment" "owner_speech_user" {
   scope                = azurerm_cognitive_account.speech.id
   role_definition_name = "Cognitive Services Speech User"

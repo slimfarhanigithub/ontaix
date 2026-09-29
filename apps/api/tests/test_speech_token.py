@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 
 import httpx
 import pytest
-from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
+from azure.identity import ManagedIdentityCredential
 from sqlalchemy import select
 
 from app.clients import db_client
@@ -219,17 +219,15 @@ async def test_a_credential_failure_keeps_only_its_type(
     assert all(ACCESS_TOKEN not in r.getMessage() for r in caplog.records)
 
 
-async def test_the_cluster_mints_with_the_dedicated_identity_and_dev_with_the_developer() -> None:
+async def test_only_the_dedicated_identity_mints_in_every_environment() -> None:
     client_id = "11111111-2222-3333-4444-555555555555"
     base = {"speech_resource_id": RESOURCE_ID, "speech_endpoint": ENDPOINT}
-    cluster = settings_for("production", speech_client_id=client_id, **base)
-    dev = settings_for("dev", **base)
 
-    assert speech_configured(cluster) and speech_configured(dev)
-    assert not speech_configured(settings_for("production", **base))
-    assert not speech_configured(settings_for("dev", speech_endpoint=ENDPOINT))
-    assert isinstance(_credential(cluster), ManagedIdentityCredential)
-    assert isinstance(_credential(dev), DefaultAzureCredential)
+    for environment in ("dev", "production"):
+        assert speech_configured(settings_for(environment, speech_client_id=client_id, **base))
+        assert not speech_configured(settings_for(environment, **base))
+    assert not speech_configured(settings_for("dev", speech_client_id=client_id))
+    assert isinstance(_credential(client_id), ManagedIdentityCredential)
 
 
 def settings_for(environment: str, **values: str) -> Settings:

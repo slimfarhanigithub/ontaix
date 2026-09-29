@@ -1,13 +1,14 @@
 """Microsoft Entra access tokens for Azure AI Speech, minted keyless for the browser's recogniser.
 
 The token is for `https://cognitiveservices.azure.com/.default`, which every Azure AI services
-resource accepts where the token's identity holds a role. It is therefore minted by a dedicated
-user-assigned managed identity that holds only Cognitive Services Speech User on the one Speech
-resource, never by the API's own identity. In the cluster `ManagedIdentityCredential` with that
-identity's client id exchanges the pod's projected service account token (Kubernetes workload
-identity); in `dev` `DefaultAzureCredential` uses the developer's own `az login` session. The
-credential caches its token until it nears expiry. Tokens are never logged: the Azure and MSAL
-loggers are held at WARNING and filtered, and a failure keeps only its exception type.
+resource accepts where the token's identity holds a role. It is therefore minted only by a
+dedicated user-assigned managed identity that holds only Cognitive Services Speech User on the one
+Speech resource: `ManagedIdentityCredential` with that identity's client id, which in the cluster
+exchanges the pod's projected service account token (Kubernetes workload identity). The API's own
+identity and a developer's `az login` session never mint one, in any environment; without the
+dedicated identity no client exists. The credential caches its token until it nears expiry.
+Tokens are never logged: the Azure and MSAL loggers are held at WARNING and filtered, and a
+failure keeps only its exception type.
 """
 
 from __future__ import annotations
@@ -63,7 +64,7 @@ class EntraSpeechTokenClient:
 
 
 _override: list[SpeechTokenClient | None] = []
-_cached: dict[tuple[object, ...], SpeechTokenClient] = {}
+_cached: dict[str, SpeechTokenClient] = {}
 
 
 def get_speech_token_client() -> SpeechTokenClient | None:
@@ -83,27 +84,27 @@ def reset_speech_token_client() -> None:
 
 
 def speech_configured(settings: Settings) -> bool:
-    """A Speech resource and its endpoint are set, and outside `dev` the minting identity."""
-    if settings.speech_resource_id is None or settings.speech_endpoint is None:
-        return False
-    return settings.is_dev or settings.speech_client_id is not None
+    """A Speech resource, its endpoint and the dedicated minting identity are all set."""
+    return (
+        settings.speech_resource_id is not None
+        and settings.speech_endpoint is not None
+        and settings.speech_client_id is not None
+    )
 
 
 def _configured(settings: Settings) -> SpeechTokenClient | None:
     if not speech_configured(settings):
         return None
-    key = (settings.is_dev, settings.speech_client_id)
-    client = _cached.get(key)
+    assert settings.speech_client_id is not None
+    client = _cached.get(settings.speech_client_id)
     if client is None:
-        client = EntraSpeechTokenClient(_credential(settings))
+        client = EntraSpeechTokenClient(_credential(settings.speech_client_id))
         _cached.clear()
-        _cached[key] = client
+        _cached[settings.speech_client_id] = client
     return client
 
 
-def _credential(settings: Settings) -> TokenCredential:
-    from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
+def _credential(client_id: str) -> TokenCredential:
+    from azure.identity import ManagedIdentityCredential
 
-    if settings.is_dev:
-        return DefaultAzureCredential()
-    return ManagedIdentityCredential(client_id=settings.speech_client_id)
+    return ManagedIdentityCredential(client_id=client_id)

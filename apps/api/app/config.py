@@ -133,8 +133,8 @@ class Settings(BaseSettings):
     speech_region: SpeechRegion = "francecentral"
     speech_endpoint: str | None = Field(default=None, pattern=r"^https://[^\s/?#]+/?$")
     # Client id of the dedicated managed identity that mints speech tokens; it holds only
-    # Cognitive Services Speech User on the Speech resource. Outside `dev` an unset value
-    # answers 503; in `dev` the signed-in developer's own credential mints the token.
+    # Cognitive Services Speech User on the Speech resource. Unset answers 503 in every
+    # environment: no other identity ever mints a token for the browser.
     speech_client_id: str | None = Field(
         default=None, pattern=r"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$"
     )

@@ -19,7 +19,7 @@ sequenceDiagram
   participant SP as Azure AI Speech, France Central (custom subdomain)
   S->>A: POST /speech/token {companyId} (bearer)
   A->>A: proposal.create in scope, voice on, speech budget, audit
-  A->>M: DefaultAzureCredential / ManagedIdentityCredential
+  A->>M: ManagedIdentityCredential(client_id)
   M->>E: token for https://cognitiveservices.azure.com/.default
   E-->>A: access token (Speech User on one resource only)
   A-->>S: 200 {token: aad#resourceId#accessToken, region, expiresAt, language} no-store
@@ -34,6 +34,8 @@ sequenceDiagram
 - `POST /speech/token` returns a Microsoft Entra access token for the scope `https://cognitiveservices.azure.com/.default`, wrapped as `aad#<resourceId>#<accessToken>`, the form the JavaScript Speech SDK takes in `SpeechConfig.fromAuthorizationToken(token, region)` for Entra authentication.
 - The token comes from a dedicated user-assigned managed identity, `id-ontaix-speech-<env>-frc`, not from the API's workload identity. That identity holds only the built-in role Cognitive Services Speech User on the Speech resource, and nothing else. A token for `cognitiveservices.azure.com` is valid on every Cognitive Services resource where its identity holds a role, so the API's own identity, which may call the Foundry model deployments, must never hand its token to a browser. With the dedicated identity, a token taken from the browser can only run speech recognition on this one resource until it expires.
 - No key exists (local auth off) and no key or managed-identity secret reaches the browser. The token grants nothing in Ontaix.
+- Only the dedicated identity ever mints a speech token, in every environment. The API never mints one with its own workload identity or with a developer's `az login` session (`DefaultAzureCredential`, `AzureCliCredential`): those tokens are valid on every Azure AI services resource the developer can use, including the Foundry model deployments. Without `ONTAIX_SPEECH_CLIENT_ID`, and on a developer machine where the managed identity is unreachable, `POST /speech/token` answers `503` and the Studio uses the browser recogniser.
+- A Speech-only token from the resource's `sts/v1.0/issueToken` endpoint, exchanged server-side from the Entra token, is not used: Cognitive Services Speech User does not grant that operation. Verified on 2026-09-29 against `spch-ontaix-dev-frc`: with the owner's Entra token and that role, Speech REST reads answer `200` and `issueToken` answers `401 PermissionDenied` ("Principal does not have access to API/Operation"). A role that grants it (Cognitive Services User) also reaches every other operation of the resource, so the dedicated identity keeps the narrower role.
 
 ### Recognition
 
@@ -66,7 +68,7 @@ Real-time speech to text is billed per hour of audio streamed (standard pay-as-y
 
 ### Permission
 
-The same as teaching: `proposal.create` in the scope of the company being taught (Owner, Builder, Agent in scope, or Member while `everyoneTeaches` is on, ADR 0003 check point 1), and the `voice` setting on (`409 channel_disabled` otherwise, as `speech` teach requests).
+The same as teaching: `proposal.create` in the scope of the company being taught (Owner, Builder, Agent in scope, or Member while `everyoneTeaches` is on, ADR 0003 check point 1), and the `voice` setting on (`409 channel_disabled` otherwise, as `speech` teach requests). A proposing role scoped to a domain product family (Owner, Builder or Agent on a domain, or Member there while `everyoneTeaches` is on) spans that domain in every company, so such a caller may mint a token for any company of the tenant it can read. The token grants nothing in Ontaix, and the audit entry names the company the caller chose.
 
 ### Configuration
 
@@ -75,7 +77,7 @@ The same as teaching: `proposal.create` in the scope of the company being taught
 | `ONTAIX_SPEECH_RESOURCE_ID` | none | The Speech resource's full Azure resource id; unset gives `503` and the browser fallback |
 | `ONTAIX_SPEECH_REGION` | `francecentral` | The resource's region, returned to the Studio |
 | `ONTAIX_SPEECH_ENDPOINT` | none | The Speech resource's endpoint on its custom subdomain; unset gives `503` and the browser fallback |
-| `ONTAIX_SPEECH_CLIENT_ID` | none | Client id of the managed identity `id-ontaix-speech-<env>-frc` used to mint tokens in the cluster (`ManagedIdentityCredential`); unset outside `dev` gives `503`. In `dev` the developer's own `az login` session mints the token (`DefaultAzureCredential`) and needs Cognitive Services Speech User on the resource |
+| `ONTAIX_SPEECH_CLIENT_ID` | none | Client id of the managed identity `id-ontaix-speech-<env>-frc` that mints tokens (`ManagedIdentityCredential`, through the pod's workload identity federation); unset gives `503` and the browser fallback in every environment, `dev` included |
 | `ONTAIX_SPEECH_LANGUAGE` | `en-GB` | `en-GB` or `en-US`; anything else stops the API at start-up |
 | `ONTAIX_SPEECH_TOKENS_PER_HOUR` | 60 | The per-caller hourly `speech` budget |
 
