@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<Ontology xmlns="http://www.w3.org/2002/07/owl#" ontologyIRI="http://example.org/plant">
+  <Prefix name="" IRI="http://example.org/plant#"/>
+  <Prefix name="rdfs" IRI="http://www.w3.org/2000/01/rdf-schema#"/>
+  <Import>http://example.org/remote/units</Import>
+  <Declaration><Class abbreviatedIRI=":Equipment"/></Declaration>
+  <Declaration><Class abbreviatedIRI=":ControlValve"/></Declaration>
+  <Declaration><ObjectProperty abbreviatedIRI=":controls"/></Declaration>
+  <Declaration><DataProperty abbreviatedIRI=":weight"/></Declaration>
+  <SubClassOf>
+    <Class abbreviatedIRI=":ControlValve"/>
+    <Class abbreviatedIRI=":Equipment"/>
+  </SubClassOf>
+  <SubClassOf>
+    <Class abbreviatedIRI=":ControlValve"/>
+    <ObjectAllValuesFrom>
+      <ObjectProperty abbreviatedIRI=":controls"/>
+      <Class abbreviatedIRI=":Equipment"/>
+    </ObjectAllValuesFrom>
+  </SubClassOf>
+  <DisjointClasses>
+    <Class abbreviatedIRI=":Equipment"/>
+    <Class abbreviatedIRI=":ControlValve"/>
+  </DisjointClasses>
+  <AnnotationAssertion>
+    <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+    <AbbreviatedIRI>:Equipment</AbbreviatedIRI>
+    <Literal xml:lang="en">Plant equipment</Literal>
+  </AnnotationAssertion>
+</Ontology>

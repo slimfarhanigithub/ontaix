@@ -12,6 +12,7 @@ import { bySid } from '../canvas/state';
 import type { Node } from '../canvas/types';
 import { random } from '../runtime/rng';
 import { store } from '../store/store';
+import { importOntology } from './ontology';
 import { readWholeDocument } from './wholeDocument';
 
 /** Pause between two imported sentences, as in the reference. */
@@ -367,9 +368,6 @@ export function skippedText(skipped: number): string {
   return ` ${skipped} short fragment${skipped === 1 ? '' : 's'} skipped.`;
 }
 
-/** The refusal toast's text for a file picked in Ontology mode before ontology import exists. */
-export const ONTOLOGY_NOT_AVAILABLE = 'Ontology import is not available yet';
-
 /** How an imported document is read: sentence by sentence, as a whole by the model, or as an ontology. */
 export type ImportMode = 'sentences' | 'document' | 'ontology';
 
@@ -380,12 +378,7 @@ export type ImportMode = 'sentences' | 'document' | 'ontology';
  */
 export async function importDocument(file: File | null | undefined, mode: ImportMode = 'sentences'): Promise<void> {
   if (!file || store.ui.importing) return;
-  // TODO: route `ontology` to ontology import (POST /ontology-imports) once that path lands;
-  // until then the file is refused with a toast and nothing is uploaded.
-  if (mode === 'ontology') {
-    store.toast2('Refused', ONTOLOGY_NOT_AVAILABLE);
-    return;
-  }
+  if (mode === 'ontology') return importOntology(file);
   store.ui.importing = true;
   store.bump();
   try {

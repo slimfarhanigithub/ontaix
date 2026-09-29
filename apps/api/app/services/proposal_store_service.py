@@ -120,7 +120,8 @@ async def store(
 
     `touched_company_ids` is recorded in `payload.companyIds`: read access to the proposal is
     decided from it, also after the rows it points at are gone. `provenance` is the origin the
-    proposal records, with the document detail when it cites an import.
+    proposal records, with the document detail when it cites an import and the `why` of an
+    imported ontology item.
     """
     unique_ids = list(dict.fromkeys(touched_company_ids))
     proposal = await proposal_repository.create(

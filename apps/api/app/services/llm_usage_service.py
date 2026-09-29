@@ -24,6 +24,7 @@ from app.utilities.clock import get_clock
 logger = logging.getLogger(__name__)
 
 TEACH_EXTRACTION = "teach_extraction"
+DOCUMENT_OCR = "document_ocr"
 CONCEPT_EXPANSION = "concept_expansion"
 DOCUMENT_EXTRACTION = "document_extraction"
 RETENTION = timedelta(days=400)
@@ -31,6 +32,8 @@ RETENTION = timedelta(days=400)
 
 @dataclass(frozen=True)
 class Reservation:
+    """Units counted against a monthly cap: tokens, or OCR pages for a page reservation."""
+
     tenant_id: uuid.UUID
     month: date
     tokens: int
@@ -56,22 +59,48 @@ async def settle(reservation: Reservation, record: CallRecord) -> None:
         await session.commit()
 
 
-async def month_usage(tenant_id: uuid.UUID, month: date, cap: int) -> LlmUsage:
-    """The month's calls, tokens and estimated cost, by purpose."""
+async def reserve_pages(tenant_id: uuid.UUID, pages: int, cap: int) -> Reservation | None:
+    """Count OCR `pages` against this month's page cap and commit; None when it would pass."""
+    month = month_of(get_clock().now())
+    async with get_session_factory()() as session:
+        counted = await llm_month_usage_repository.reserve_pages(
+            session, tenant_id, month, pages, cap
+        )
+        await session.commit()
+    return Reservation(tenant_id, month, pages) if counted is not None else None
+
+
+async def settle_pages(reservation: Reservation, record: CallRecord) -> None:
+    """Settle a page reservation to the pages the provider processed and store the cost record."""
+    async with get_session_factory()() as session:
+        await llm_month_usage_repository.settle_pages(
+            session, reservation.tenant_id, reservation.month, reservation.tokens, record.pages or 0
+        )
+        await llm_call_repository.insert(session, record)
+        await session.commit()
+
+
+async def month_usage(tenant_id: uuid.UUID, month: date, cap: int, page_cap: int) -> LlmUsage:
+    """The month's calls, tokens, OCR pages and estimated cost, by purpose."""
     start = datetime(month.year, month.month, 1, tzinfo=get_clock().now().tzinfo)
     end = _next_month(start)
     async with get_session_factory()() as session:
         totals = await llm_call_repository.totals_by_purpose(session, tenant_id, start, end)
         counted = await llm_month_usage_repository.tokens_for(session, tenant_id, month)
+        pages = await llm_month_usage_repository.pages_for(session, tenant_id, month)
     return LlmUsage(
         calls=sum(t.calls for t in totals),
         input_tokens=sum(t.input_tokens for t in totals),
         output_tokens=sum(t.output_tokens for t in totals),
         tokens_used=counted,
         token_cap=cap,
+        ocr_pages_used=pages,
+        ocr_page_cap=page_cap,
         cost_eur=round(sum(t.cost_eur for t in totals), 6),
         by_purpose=[
-            LlmPurposeUsage(purpose=t.purpose, calls=t.calls, cost_eur=round(t.cost_eur, 6))
+            LlmPurposeUsage(
+                purpose=t.purpose, calls=t.calls, pages=t.pages, cost_eur=round(t.cost_eur, 6)
+            )
             for t in totals
         ],
     )

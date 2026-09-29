@@ -22,6 +22,7 @@ async def create(
     sha256: bytes,
     sentence_count: int,
     extracted_chars: int,
+    ocr_pages: int = 0,
 ) -> DocumentImport:
     """Store one import; `created_at` and `expires_at` come from the database defaults."""
     row = DocumentImport(
@@ -33,6 +34,7 @@ async def create(
         sha256=sha256,
         sentence_count=sentence_count,
         extracted_chars=extracted_chars,
+        ocr_pages=ocr_pages,
     )
     session.add(row)
     await session.flush()

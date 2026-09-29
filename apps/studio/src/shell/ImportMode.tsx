@@ -14,6 +14,10 @@ interface ModeLabel {
   label: string;
 }
 
+/** Every document type of the import and every ontology format, for the file picker. */
+export const IMPORT_ACCEPT =
+  '.txt,.md,.csv,.json,.docx,.pdf,.pptx,.xlsx,.html,.htm,.owl,.owx,.rdf,.xml,.ttl,.nt,.jsonld,.obo';
+
 /** The reading modes in cycle order; the first is the default. */
 export const IMPORT_MODES: ModeLabel[] = [
   { mode: 'sentences', label: 'Sentences' },

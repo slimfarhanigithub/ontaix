@@ -245,7 +245,7 @@ describe('mock API: import refusals mirror the API', () => {
     const server = createMockServer(createEventBus());
     for (const [name, bytes] of [
       ['notes.txt', enc('%PDF-1.4 BT (Machines have sensors today) Tj ET')],
-      ['notes.txt', new Uint8Array([0xff, 0xfe, 0x41, 0x42])],
+      ['notes.txt', new Uint8Array([0xc3, 0x28, 0x41, 0x42])],
       ['report.pdf', enc('Every plant runs production lines.')],
       ['report.docx', enc('Every plant runs production lines.')],
     ] as const)

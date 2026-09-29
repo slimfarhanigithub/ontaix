@@ -12,7 +12,8 @@ from app.models.storage.base import ProposalOrigin
 class Provenance:
     """`detail` is the `originDetail` object, set exactly when `origin` is `document`. `why`,
     when set, is the proposal's panel line in place of the one its builder writes: the
-    confidence and rationale of a model suggestion."""
+    confidence and rationale of a model suggestion, or the file and source of an imported
+    ontology item."""
 
     origin: ProposalOrigin = ProposalOrigin.TEXT
     detail: dict[str, Any] | None = None

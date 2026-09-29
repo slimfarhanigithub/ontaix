@@ -1,7 +1,7 @@
 """`GET /cost`: the month's agent read figures and Ontaix's own language model usage.
 
 The agent figures (`measuredEur`, `byPlatform`) are agent reads through the gateway; the `llm`
-block is the teach extraction calls Ontaix made itself, from its cost records.
+block is the language model and OCR calls Ontaix made itself, from its cost records.
 """
 
 from __future__ import annotations
@@ -13,7 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
 from app.models.api.cost import CostSummary, PlatformCost
-from app.models.api.settings import DEFAULT_LLM_MONTHLY_TOKEN_CAP
+from app.models.api.settings import (
+    DEFAULT_LLM_MONTHLY_TOKEN_CAP,
+    DEFAULT_OCR_MONTHLY_PAGE_CAP,
+)
 from app.repositories import (
     agent_month_usage_repository,
     agent_repository,
@@ -38,6 +41,7 @@ async def summary(session: AsyncSession, caller: Caller, month: date | None) -> 
     allocated = await cost_allocation_repository.allocated_eur(session, caller.tenant_id, first)
     settings = await tenant_settings_repository.get(session, caller.tenant_id)
     cap = settings.llm_monthly_token_cap if settings else DEFAULT_LLM_MONTHLY_TOKEN_CAP
+    page_cap = settings.ocr_monthly_page_cap if settings else DEFAULT_OCR_MONTHLY_PAGE_CAP
     measured = sum(p.cost_eur for p in platforms)
     return CostSummary(
         month=first,
@@ -55,5 +59,5 @@ async def summary(session: AsyncSession, caller: Caller, month: date | None) -> 
             )
             for p in platforms
         ],
-        llm=await llm_usage_service.month_usage(caller.tenant_id, first, cap),
+        llm=await llm_usage_service.month_usage(caller.tenant_id, first, cap, page_cap),
     )

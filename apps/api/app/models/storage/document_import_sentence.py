@@ -27,5 +27,6 @@ class DocumentImportSentence(Base):
     text: Mapped[str]
     position_unit: Mapped[str | None]
     position_index: Mapped[int | None] = mapped_column(Integer)
+    position_row: Mapped[int | None] = mapped_column(Integer)
     parse_count: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
     drafted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

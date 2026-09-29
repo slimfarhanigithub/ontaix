@@ -1,0 +1,6 @@
+id,label,parent,action,domain
+1,Operations,,,
+2,Maintenance,1,runs,
+3,Work Order,Maintenance,,
+4,Inspection,2,is a,
+5,Orphan,99,,
