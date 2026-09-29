@@ -27,6 +27,9 @@ LLM_PROFILES: tuple[LlmProfile, ...] = ("live", "deep")
 # What `python -m app.seed` loads into the demo tenant: only its directory, or the directory
 # with the Northwind and Aurora example companies.
 SeedMode = Literal["empty", "fixture"]
+# Speech recognition is English only; the Studio passes the language to the Speech SDK.
+SpeechLanguage = Literal["en-GB", "en-US"]
+SpeechRegion = Literal["francecentral"]
 
 
 class ModelPrice(BaseModel):
@@ -121,9 +124,28 @@ class Settings(BaseSettings):
     # JSON: {"<model>": {"inputEurPerMTok": <number>, "outputEurPerMTok": <number>}}.
     llm_price_table: dict[str, ModelPrice] = Field(default_factory=dict)
     retention_purge_interval_seconds: float = Field(default=15 * 60, gt=0)
+    # The Azure AI Speech resource the microphone streams to: its full resource id, region and
+    # endpoint (custom subdomain). Unset id or endpoint answers `POST /speech/token` with 503 and
+    # the Studio uses the browser's recogniser.
+    speech_resource_id: str | None = Field(
+        default=None, max_length=512, pattern=r"^/subscriptions/[^#\s]+$"
+    )
+    speech_region: SpeechRegion = "francecentral"
+    speech_endpoint: str | None = Field(default=None, pattern=r"^https://[^\s/?#]+/?$")
+    # Client id of the dedicated managed identity that mints speech tokens; it holds only
+    # Cognitive Services Speech User on the Speech resource. Outside `dev` an unset value
+    # answers 503; in `dev` the signed-in developer's own credential mints the token.
+    speech_client_id: str | None = Field(
+        default=None, pattern=r"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$"
+    )
+    speech_language: SpeechLanguage = "en-GB"
+    speech_tokens_per_hour: int = Field(default=60, ge=0)
 
     @field_validator(
         "foundry_endpoint",
+        "speech_resource_id",
+        "speech_endpoint",
+        "speech_client_id",
         "foundry_deep_deployment",
         "foundry_deep_reasoning_effort",
         "llm_deep_reasoning_allowance_tokens",

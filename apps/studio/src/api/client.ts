@@ -42,6 +42,7 @@ import {
   type Scene,
   type Settings,
   type SettingsPatch,
+  type SpeechToken,
   type TeachRequest,
   type TeachResult,
   type ViewState,
@@ -149,6 +150,7 @@ export const api = {
   patchAppearance: (patch: AppearancePatch) => call<Appearance>('PATCH', '/appearance', patch),
   putViewState: (state: Partial<ViewState>) => call<ViewState>('PUT', '/view-state', state),
   teachParse: (body: TeachRequest) => call<TeachResult>('POST', '/teach/parse', body),
+  speechToken: (companyId: string) => call<SpeechToken>('POST', '/speech/token', { companyId }),
   importSentences: (file: File) => {
     const form = new FormData();
     form.append('file', file, file.name);

@@ -2005,6 +2005,8 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       return json(200, { coverage } satisfies T.ViewState);
     }
     if (is('POST', 'teach', 'parse')) return json(200, teachParse(body as T.TeachRequest));
+    // No Speech resource behind the mock: the microphone uses the browser's recogniser.
+    if (is('POST', 'speech', 'token')) throw new Refusal(503, 'unavailable', 'speech recognition is not configured');
     if (is('POST', 'import', 'sentences'))
       throw new Refusal(422, 'validation_failed', 'the document is sent as multipart form data in the field file');
     if (is('GET', 'healthz')) return json(200, { status: 'ok' });

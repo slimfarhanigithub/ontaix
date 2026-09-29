@@ -74,6 +74,10 @@ cd packages/connectors && uv sync && uv run pytest
 
 In this dev build the Studio identifies itself with `X-Ontaix-User`: `VITE_ONTAIX_DEV_USER`, else the seed's full-access demo user (`demo@northwind.com`: Administrator, Builder, Governor and Auditor), who can do everything in one tab; `?user=<email>` switches user per tab, for example the Builder (`sam.okafor@northwind.com`) or the Governor (`hugo.brandt@northwind.com`) to show separation of duties. Production builds send no such header. Ports come from `ONTAIX_API_PORT` and `ONTAIX_STUDIO_PORT`; Ctrl+C stops everything, the database included.
 
+### Voice With Azure AI Speech
+
+The teach bar microphone uses Azure AI Speech in France Central when the API has a Speech resource configured, and the browser's own recogniser otherwise (and whenever Azure Speech is unavailable or fails). To use it locally, run `az login` with an account that holds Cognitive Services Speech User on the Speech resource (Terraform grants it to the owner), then set in `apps/api/.env` the Terraform outputs `speech_resource_id` as `ONTAIX_SPEECH_RESOURCE_ID` and `speech_endpoint` as `ONTAIX_SPEECH_ENDPOINT` (`ONTAIX_SPEECH_REGION` stays `francecentral`). In `dev` the API mints the browser's token with your own `az login` session; in the cluster it uses the dedicated identity named by `ONTAIX_SPEECH_CLIENT_ID` (output `speech_identity_client_id`). The browser opens a WebSocket to the Speech service, so a Content Security Policy in front of the Studio must allow `wss://francecentral.stt.speech.microsoft.com` and `wss://<custom subdomain>.cognitiveservices.azure.com`.
+
 `pnpm --filter studio test:e2e` boots the same stack with the fixture seed on ports 8788 and 5788, checks both companies and their concept counts, teaches and approves one concept, and writes `tests/e2e/output/studio-both-companies.png`.
 
 Each Python package runs `uv run pytest` and `uv run ruff check`; the root `pnpm lint`, `pnpm test` and `pnpm build` cover every workspace package.

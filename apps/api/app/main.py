@@ -33,6 +33,7 @@ from app.routers import (
     proposals,
     relations,
     scene,
+    speech,
     teach,
 )
 from app.services import retention_purge_service
@@ -101,6 +102,7 @@ def create_app() -> FastAPI:
         relations,
         proposals,
         teach,
+        speech,
         imports,
         audit,
         cost,

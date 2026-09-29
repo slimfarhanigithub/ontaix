@@ -57,7 +57,7 @@ The audio stream goes from the browser straight to the Speech resource in France
 
 ### Cost
 
-Real-time speech to text is billed per hour of audio streamed (standard pay-as-you-go, per second), on the Insight Azure subscription. Phrase lists cost nothing extra. The cost is bounded by recording time: recording stops after 1.5 seconds of silence (row 127), and the `speech` budget bounds how often a caller can start. Speech cost is Azure consumption on the subscription and does not appear in `GET /cost`, which reports Ontaix's own model calls.
+Real-time speech to text is billed per hour of audio streamed (standard pay-as-you-go, per second), on the Insight Azure subscription. Phrase lists cost nothing extra. The cost is bounded by recording time: recording stops after 1.5 seconds of silence (row 127), or 8 seconds after the microphone starts when nothing is heard, and the `speech` budget bounds how often a caller can start. Speech cost is Azure consumption on the subscription and does not appear in `GET /cost`, which reports Ontaix's own model calls.
 
 ### Rate Limit And Audit
 
@@ -74,7 +74,8 @@ The same as teaching: `proposal.create` in the scope of the company being taught
 |---|---|---|
 | `ONTAIX_SPEECH_RESOURCE_ID` | none | The Speech resource's full Azure resource id; unset gives `503` and the browser fallback |
 | `ONTAIX_SPEECH_REGION` | `francecentral` | The resource's region, returned to the Studio |
-| `ONTAIX_SPEECH_CLIENT_ID` | none | Client id of the managed identity `id-ontaix-speech-<env>-frc` used to mint tokens |
+| `ONTAIX_SPEECH_ENDPOINT` | none | The Speech resource's endpoint on its custom subdomain; unset gives `503` and the browser fallback |
+| `ONTAIX_SPEECH_CLIENT_ID` | none | Client id of the managed identity `id-ontaix-speech-<env>-frc` used to mint tokens in the cluster (`ManagedIdentityCredential`); unset outside `dev` gives `503`. In `dev` the developer's own `az login` session mints the token (`DefaultAzureCredential`) and needs Cognitive Services Speech User on the resource |
 | `ONTAIX_SPEECH_LANGUAGE` | `en-GB` | `en-GB` or `en-US`; anything else stops the API at start-up |
 | `ONTAIX_SPEECH_TOKENS_PER_HOUR` | 60 | The per-caller hourly `speech` budget |
 
