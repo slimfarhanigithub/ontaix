@@ -1,0 +1,9 @@
+Parent,Child,Verb,Definition,Aliases
+,Sales,has,Everything about selling.,
+Acme Corp,Operations,runs,Everything about running the business.,Ops
+Sales,Customer,serves,A person or company that buys.,Client; Buyer
+Sales,Order,takes,A request to buy products.,
+Order,Online Order,,An order placed on the web.,
+Operations,Delivery,includes,,
+Sales,Delivery,includes,,
+,,,,

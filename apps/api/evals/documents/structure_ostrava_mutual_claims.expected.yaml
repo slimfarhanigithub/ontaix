@@ -1,0 +1,104 @@
+# Gold tree for structure_ostrava_mutual_claims.md. Reviewed twice against the document.
+company: Ostrava Mutual
+description: Claims handling standard of a fictional property and motor insurer pasted from a policy document; headings, bullet and numbered lists, a step table and an authority-limits table carry facts that the collapse-then-split import merges into dropped runs.
+tags: [document, document-structure, insurance, en]
+expected:
+  concepts:
+    - {label: Claims handling, parent: [Ostrava Mutual], action: [operates, runs, has]}
+    - {label: Delegated authority, parent: [Ostrava Mutual], action: [operates, runs, has]}
+
+    # Lifecycle stages (heading -> list)
+    - {label: First notification of loss, parent: [Claims handling], action: [includes, has, consists of]}
+    - {label: Triage, parent: [Claims handling], action: [includes, has, consists of]}
+    - {label: Assessment, parent: [Claims handling], action: [includes, has, consists of]}
+    - {label: Settlement, parent: [Claims handling], action: [includes, has, consists of]}
+    - {label: Recovery, parent: [Claims handling], action: [includes, has, consists of]}
+    - {label: Fraud referral, parent: [Claims handling], action: [includes, has, consists of]}
+
+    # First notification of loss
+    - {label: Notification channels, parent: [First notification of loss], action: [accepts notifications through, uses, has]}
+    - {label: Loss registration, parent: [First notification of loss], action: [includes, has, consists of]}
+    - {label: Telephone notification, parent: [Notification channels], action: [includes, has]}
+    - {label: Online claim form, parent: [Notification channels], action: [includes, has]}
+    - {label: Broker notification, parent: [Notification channels], action: [includes, has]}
+    - {label: Assistance line referral, parent: [Notification channels], action: [includes, has]}
+    - {label: Policy verification, parent: [Loss registration], action: [consists of, includes, has]}
+    - {label: Coverage check, parent: [Loss registration], action: [consists of, includes, has]}
+    - {label: Claim number allocation, parent: [Loss registration], action: [consists of, includes, has]}
+    - {label: Acknowledgement letter, parent: [Loss registration], action: [consists of, includes, has]}
+
+    # Triage
+    - {label: Handling tracks, parent: [Triage], action: [allocates to, has, uses]}
+    - {label: Fast track, parent: [Handling tracks, Triage], action: [includes, allocates to, has]}
+    - {label: Standard track, parent: [Handling tracks, Triage], action: [includes, allocates to, has]}
+    - {label: Complex loss track, parent: [Handling tracks, Triage], action: [includes, allocates to, has]}
+    - {label: Straight-through payment, parent: [Fast track], action: [includes, has]}
+    - {label: Loss adjuster appointment, parent: [Complex loss track], action: [arranges, requires, includes]}
+    - {label: Reserve review, parent: [Complex loss track], action: [carries out, requires, includes]}
+    - {label: Claims plan, parent: [Complex loss track], action: [agrees, requires, includes]}
+    - {label: Initial reserve, parent: [Complex loss track], action: [sets, requires, includes]}
+
+    # Assessment
+    - {label: Motor assessment, parent: [Assessment], action: [includes, has]}
+    - {label: Property assessment, parent: [Assessment], action: [includes, has]}
+    - {label: Vehicle inspection, parent: [Motor assessment], action: [consists of, includes, has]}
+    - {label: Total loss evaluation, parent: [Motor assessment], action: [consists of, includes, has]}
+    - {label: Repair authorisation, parent: [Motor assessment], action: [consists of, includes, has]}
+    - {label: Repair estimate, parent: [Vehicle inspection], action: [produces, creates, has]}
+    - {label: Photo evidence, parent: [Vehicle inspection], action: [produces, creates, has]}
+    - {label: Site visit, parent: [Property assessment], action: [consists of, includes, has]}
+    - {label: Emergency repairs, parent: [Property assessment], action: [consists of, includes, has]}
+    - {label: Scope of works, parent: [Property assessment], action: [consists of, includes, has]}
+    - {label: Moisture survey, parent: [Site visit], action: [includes, has]}
+
+    # Settlement (step table)
+    - {label: Liability decision, parent: [Settlement], action: [consists of, follows, includes]}
+    - {label: Quantum agreement, parent: [Settlement], action: [consists of, follows, includes]}
+    - {label: Settlement offer, parent: [Settlement], action: [consists of, follows, includes]}
+    - {label: Payment release, parent: [Settlement], action: [consists of, follows, includes]}
+    - {label: Decision letter, parent: [Liability decision], action: [produces, outputs, creates]}
+    - {label: Agreed loss figure, parent: [Quantum agreement], action: [produces, outputs, creates]}
+    - {label: Offer letter, parent: [Settlement offer], action: [produces, outputs, creates]}
+    - {label: Payment confirmation, parent: [Payment release], action: [produces, outputs, creates]}
+    - {label: Claim closure, parent: [Settlement], action: [consists of, follows, includes]}
+    - {label: Settlement methods, parent: [Settlement], action: [offers, uses, includes]}
+    - {label: Cash settlement, parent: [Settlement methods], action: [includes, has]}
+    - {label: Repair in kind, parent: [Settlement methods], action: [includes, has]}
+    - {label: Replacement in kind, parent: [Settlement methods], action: [includes, has]}
+    - {label: Total loss payment, parent: [Cash settlement], action: [is a, is a kind of, is a type of]}
+
+    # Recovery
+    - {label: Subrogation, parent: [Recovery], action: [includes, has, consists of]}
+    - {label: Salvage, parent: [Recovery], action: [includes, has, consists of]}
+    - {label: Excess recovery, parent: [Recovery], action: [includes, has, consists of]}
+    - {label: Third-party identification, parent: [Subrogation], action: [consists of, includes, has]}
+    - {label: Letter of claim, parent: [Subrogation], action: [consists of, includes, has]}
+    - {label: Recovery proceedings, parent: [Subrogation], action: [consists of, includes, has]}
+    - {label: Salvage auction, parent: [Salvage], action: [is disposed of through, uses, includes]}
+
+    # Fraud referral
+    - {label: Fraud indicators, parent: [Fraud referral], action: [includes, has]}
+    - {label: SIU investigation, parent: [Fraud referral], action: [includes, has]}
+    - {label: Late notification, parent: [Fraud indicators], action: [includes, has]}
+    - {label: Inconsistent account, parent: [Fraud indicators], action: [includes, has]}
+    - {label: Recent policy inception, parent: [Fraud indicators], action: [includes, has]}
+    - {label: Prior claims history, parent: [Fraud indicators], action: [includes, has]}
+    - {label: Desktop review, parent: [SIU investigation], action: [consists of, includes, has]}
+    - {label: Recorded interview, parent: [SIU investigation], action: [consists of, includes, has]}
+    - {label: Field investigation, parent: [SIU investigation], action: [consists of, includes, has]}
+
+    # Delegated authority (authority-limits table)
+    - {label: Tiers, parent: [Delegated authority], action: [includes, has]}
+    - {label: Desk authority, parent: [Tiers, Delegated authority], action: [includes, has, grants]}
+    - {label: Senior handler authority, parent: [Tiers, Delegated authority], action: [includes, has, grants]}
+    - {label: Team leader authority, parent: [Tiers, Delegated authority], action: [includes, has, grants]}
+    - {label: Claims manager authority, parent: [Tiers, Delegated authority], action: [includes, has, grants]}
+    - {label: Claims committee authority, parent: [Tiers, Delegated authority], action: [includes, has, grants]}
+  relations:
+    - {from: Fraud referral, to: Settlement, action: [suspends, holds], inverse: [is suspended by]}
+    - {from: Triage, to: Fraud indicators, action: [applies, uses, checks], inverse: [is applied by]}
+    - {from: Settlement offer, to: Delegated authority, action: [must never exceed, is limited by, respects], inverse: [limits]}
+    - {from: Subrogation, to: Liability decision, action: [relies on, uses, depends on], inverse: [is relied on by]}
+    - {from: Total loss evaluation, to: Salvage auction, action: [triggers, starts], inverse: [is triggered by]}
+    - {from: SIU investigation, to: Liability decision, action: [informs, feeds], inverse: [is informed by]}
+optional: [Closed file, Claims handler, Senior claims handler, Claims team leader, Claims manager, Claims Committee, Head of Claims, Special Investigations Unit, Policy administration system, Loss adjuster, Approved repairer, Exceptions register, Claims payments team, Recovery team]

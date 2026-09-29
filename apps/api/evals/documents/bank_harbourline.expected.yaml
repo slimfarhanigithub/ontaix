@@ -1,0 +1,412 @@
+# Gold tree for bank_harbourline.md. Reviewed twice against the document.
+company: Harbourline Bank
+description: Target operating model of a fictional regional retail bank; stresses deep process chains (domain, process, sub-process, step, document or decision), grouping concepts with count mismatches, is-a product facts and cross-domain relations.
+tags: [document, banking, en, operating-model, grouping, is-a, count-mismatch]
+expected:
+  concepts:
+    - label: Customer onboarding
+      parent: [Harbourline Bank]
+      action: [consists of, has, runs]
+    - label: Lending
+      parent: [Harbourline Bank]
+      action: [consists of, has, runs]
+    - label: Payments
+      parent: [Harbourline Bank]
+      action: [consists of, has, runs]
+    - label: Risk
+      parent: [Harbourline Bank]
+      action: [consists of, has, runs]
+
+    # Customer onboarding
+    - label: Identity verification
+      parent: [Customer onboarding]
+      action: [consists of, includes, has]
+    - label: KYC review
+      parent: [Customer onboarding]
+      action: [consists of, includes, has]
+    - label: Due diligence
+      parent: [Customer onboarding]
+      action: [consists of, includes, has]
+    - label: Account opening
+      parent: [Customer onboarding]
+      action: [consists of, includes, has]
+    - label: Document capture
+      parent: [Identity verification]
+      action: [includes, consists of, has]
+    - label: Passport
+      parent: [Document capture]
+      action: [accepts, uses, collects]
+    - label: Driving licence
+      parent: [Document capture]
+      action: [accepts, uses, collects]
+    - label: Customer risk rating
+      parent: [KYC review]
+      action: [consists of, includes, has]
+    - label: PEP screening
+      parent: [KYC review]
+      action: [consists of, includes, has]
+    - label: KYC risk score
+      parent: [Customer risk rating]
+      action: [produces, creates, generates]
+    - label: PEP flag
+      parent: [PEP screening]
+      action: [produces, creates, raises]
+    - label: Tiers
+      parent: [Due diligence]
+      action: [has, includes]
+    - label: Simplified due diligence
+      parent: [Tiers]
+      action: [includes, has]
+    - label: Enhanced due diligence
+      parent: [Tiers]
+      action: [includes, has]
+    - label: Source of wealth review
+      parent: [Enhanced due diligence]
+      action: [includes, consists of, has]
+    - label: EDD memo
+      parent: [Enhanced due diligence]
+      action: [produces, creates, generates]
+    - label: Product selection
+      parent: [Account opening]
+      action: [consists of, includes, has]
+    - label: Account set-up
+      parent: [Account opening]
+      action: [consists of, includes, has]
+    - label: Current account
+      parent: [Product selection]
+      action: [offers, includes, has]
+    - label: Savings account
+      parent: [Product selection]
+      action: [offers, includes, has]
+    - label: Packaged current account
+      parent: [Current account]
+      action: [is a, is a kind of, is a type of]
+    - label: Account agreement
+      parent: [Account set-up]
+      action: [produces, creates, generates]
+
+    # Lending
+    - label: Product lines
+      parent: [Lending]
+      action: [has, includes]
+    - label: Mortgage
+      parent: [Product lines]
+      action: [includes, has]
+    - label: Personal loan
+      parent: [Product lines]
+      action: [includes, has]
+    - label: Fixed-rate mortgage
+      parent: [Mortgage]
+      action: [is a, is a kind of, is a type of]
+    - label: Tracker mortgage
+      parent: [Mortgage]
+      action: [is a, is a kind of, is a type of]
+    - label: Loan origination
+      parent: [Lending]
+      action: [consists of, includes, has]
+    - label: Underwriting
+      parent: [Lending]
+      action: [consists of, includes, has]
+    - label: Loan servicing
+      parent: [Lending]
+      action: [consists of, includes, has]
+    - label: Arrears management
+      parent: [Lending]
+      action: [consists of, includes, has]
+    - label: Application capture
+      parent: [Loan origination]
+      action: [consists of, includes, has]
+    - label: Property valuation
+      parent: [Loan origination]
+      action: [consists of, includes, has]
+    - label: Loan application
+      parent: [Application capture]
+      action: [produces, creates, generates]
+    - label: Valuation report
+      parent: [Property valuation]
+      action: [produces, creates, generates]
+    - label: Credit scoring
+      parent: [Underwriting]
+      action: [consists of, includes, has]
+    - label: Affordability assessment
+      parent: [Underwriting]
+      action: [consists of, includes, has]
+    - label: Credit decisioning
+      parent: [Underwriting]
+      action: [consists of, includes, has]
+    - label: Credit score
+      parent: [Credit scoring]
+      action: [produces, creates, generates]
+    - label: Affordability result
+      parent: [Affordability assessment]
+      action: [produces, creates, generates]
+    - label: Credit decision
+      parent: [Credit decisioning]
+      action: [produces, creates, makes]
+    - label: Offer letter
+      parent: [Credit decisioning]
+      action: [produces, creates, issues]
+    - label: Repayment collection
+      parent: [Loan servicing]
+      action: [consists of, includes, has]
+    - label: Rate change processing
+      parent: [Loan servicing]
+      action: [consists of, includes, has]
+    - label: Direct debit mandate
+      parent: [Repayment collection]
+      action: [uses, relies on, requires]
+    - label: Rate change notice
+      parent: [Rate change processing]
+      action: [issues, produces, sends]
+    - label: Early arrears
+      parent: [Arrears management]
+      action: [consists of, includes, has]
+    - label: Collections
+      parent: [Arrears management]
+      action: [consists of, includes, has]
+    - label: Forbearance assessment
+      parent: [Early arrears]
+      action: [includes, consists of, has]
+    - label: Forbearance plan
+      parent: [Forbearance assessment]
+      action: [produces, creates, generates]
+    - label: Debt recovery
+      parent: [Collections]
+      action: [consists of, includes, has]
+    - label: Write-off
+      parent: [Collections]
+      action: [consists of, includes, has]
+    - label: Default notice
+      parent: [Debt recovery]
+      action: [issues, produces, sends]
+
+    # Payments
+    - label: Payment rails
+      parent: [Payments]
+      action: [has, includes]
+    - label: Card payment
+      parent: [Payment rails]
+      action: [includes, has]
+    - label: Bank transfer
+      parent: [Payment rails]
+      action: [includes, has]
+    - label: Instant payment
+      parent: [Payment rails]
+      action: [includes, has]
+    - label: Payment initiation
+      parent: [Payments]
+      action: [consists of, includes, has]
+    - label: Payment screening
+      parent: [Payments]
+      action: [consists of, includes, has]
+    - label: Clearing
+      parent: [Payments]
+      action: [consists of, includes, has]
+    - label: Settlement
+      parent: [Payments]
+      action: [consists of, includes, has]
+    - label: Payment order capture
+      parent: [Payment initiation]
+      action: [consists of, includes, has]
+    - label: Payment order
+      parent: [Payment order capture]
+      action: [produces, creates, generates]
+    - label: Sanctions screening
+      parent: [Payment screening]
+      action: [consists of, includes, has]
+    - label: Payment fraud scoring
+      parent: [Payment screening]
+      action: [consists of, includes, has]
+    - label: Sanctions alert
+      parent: [Sanctions screening]
+      action: [produces, raises, generates]
+    - label: Release decision
+      parent: [Sanctions alert]
+      action: [leads to, results in, produces]
+    - label: Fraud score
+      parent: [Payment fraud scoring]
+      action: [produces, creates, generates]
+    - label: Message formatting
+      parent: [Clearing]
+      action: [consists of, includes, has]
+    - label: Scheme submission
+      parent: [Clearing]
+      action: [consists of, includes, has]
+    - label: ISO 20022 message
+      parent: [Message formatting]
+      action: [produces, creates, generates]
+    - label: Net settlement
+      parent: [Settlement]
+      action: [consists of, includes, has]
+    - label: Nostro reconciliation
+      parent: [Settlement]
+      action: [consists of, includes, has]
+    - label: Settlement position
+      parent: [Net settlement]
+      action: [produces, creates, generates]
+    - label: Reconciliation break
+      parent: [Nostro reconciliation]
+      action: [identifies, produces, detects]
+    - label: Break investigation
+      parent: [Reconciliation break]
+      action: [triggers, starts, leads to]
+
+    # Risk
+    - label: Credit risk
+      parent: [Risk]
+      action: [consists of, includes, has]
+    - label: Fraud management
+      parent: [Risk]
+      action: [consists of, includes, has]
+    - label: AML transaction monitoring
+      parent: [Risk]
+      action: [consists of, includes, has]
+    - label: Operational risk
+      parent: [Risk]
+      action: [consists of, includes, has]
+    - label: Portfolio monitoring
+      parent: [Credit risk]
+      action: [consists of, includes, has]
+    - label: Provisioning
+      parent: [Credit risk]
+      action: [consists of, includes, has]
+    - label: Early warning indicator
+      parent: [Portfolio monitoring]
+      action: [produces, raises, generates]
+    - label: Expected credit loss calculation
+      parent: [Provisioning]
+      action: [includes, consists of, runs]
+    - label: Impairment provision
+      parent: [Expected credit loss calculation]
+      action: [produces, creates, generates]
+    - label: Fraud detection
+      parent: [Fraud management]
+      action: [consists of, includes, has]
+    - label: Fraud investigation
+      parent: [Fraud management]
+      action: [consists of, includes, has]
+    - label: Fraud alert
+      parent: [Fraud detection]
+      action: [raises, produces, generates]
+    - label: Fraud case
+      parent: [Fraud investigation]
+      action: [opens, creates, produces]
+    - label: Scenarios
+      parent: [AML transaction monitoring]
+      action: [has, includes]
+    - label: Structuring
+      parent: [Scenarios]
+      action: [includes, has]
+    - label: Rapid movement of funds
+      parent: [Scenarios]
+      action: [includes, has]
+    - label: High-risk jurisdiction transfers
+      parent: [Scenarios]
+      action: [includes, has]
+    - label: Alert generation
+      parent: [AML transaction monitoring]
+      action: [consists of, includes, has]
+    - label: Alert investigation
+      parent: [AML transaction monitoring]
+      action: [consists of, includes, has]
+    - label: AML alert
+      parent: [Alert generation]
+      action: [produces, raises, generates]
+    - label: AML case
+      parent: [Alert investigation]
+      action: [opens, creates, produces]
+    - label: Suspicious activity report
+      parent: [AML case]
+      action: [produces, leads to, results in]
+    - label: Risk and control self-assessment
+      parent: [Operational risk]
+      action: [consists of, includes, has]
+    - label: Loss event management
+      parent: [Operational risk]
+      action: [consists of, includes, has]
+    - label: Control test
+      parent: [Risk and control self-assessment]
+      action: [includes, consists of, has]
+  relations:
+    - from: Credit scoring
+      to: KYC risk score
+      action: [uses, reads]
+      inverse: [is used by]
+    - from: Early warning indicator
+      to: Forbearance assessment
+      action: [informs, feeds]
+      inverse: [is informed by]
+    - from: Account set-up
+      to: EDD memo
+      action: [waits for, requires, depends on]
+    - from: Sanctions screening
+      to: PEP screening
+      action: [shares its engine with, shares engine with, uses]
+    - from: Fraud score
+      to: Fraud detection
+      action: [feeds, informs]
+      inverse: [is fed by]
+    - from: Portfolio monitoring
+      to: Credit score
+      action: [uses, reads]
+      inverse: [is used by]
+    - from: Fraud detection
+      to: Instant payment
+      action: [monitors, screens, watches]
+      inverse: [is monitored by]
+    - from: Alert generation
+      to: Payment order
+      action: [reads, uses, monitors]
+      inverse: [is read by]
+    - from: Control test
+      to: Nostro reconciliation
+      action: [covers, tests]
+      inverse: [is covered by]
+    - from: Loss event management
+      to: Fraud case
+      action: [records, logs]
+      inverse: [is recorded by]
+optional:
+  - Operating model
+  - Payment rejection
+  - Chief Operating Officer
+  - Head of Customer Onboarding
+  - Head of Lending
+  - Head of Payments
+  - Chief Risk Officer
+  - Money Laundering Reporting Officer
+  - Chief Financial Officer
+  - Senior reviewer
+  - Underwriter
+  - Panel surveyor
+  - Treasury team
+  - Financial crime team
+  - Operating forum
+  - Executive committee
+  - Board risk committee
+  - Tidemark Core
+  - Harbour Onboard
+  - LendFlow
+  - Quayside Payments Hub
+  - Beacon Case Manager
+  - Integration catalogue
+  - Mobile app
+  - Selfie video
+  - Broker portal
+  - Card processor
+  - Correspondent bank
+  - Sanctions list
+  - Bureau data
+  - Payee name confirmation
+  - Key control
+  - Onboarding completion rate
+  - Time to decision
+  - Mortgage offer time
+  - Early arrears cure rate
+  - Instant payment availability
+  - False positive rate
+  - Fraud losses
+  - Open AML alerts
+  - Change log
+  - Readiness review
+  - Design principles

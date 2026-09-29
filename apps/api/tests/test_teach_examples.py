@@ -37,7 +37,7 @@ CONTRACT = json.loads(
         encoding="utf-8"
     )
 )
-# The bake-off material, once it sits beside the API.
+# The bake-off material beside the API.
 EVALS = Path(__file__).parents[1] / "evals"
 ALL_EXAMPLES = [*FIXED_EXAMPLES, *EXAMPLE_LIBRARY]
 
@@ -131,8 +131,9 @@ def test_no_example_comes_from_test_material() -> None:
     learn = set(SPLIT["learn"]["cases"])
     test = set(SPLIT["test"]["cases"])
     assert not learn & test
-    assert SPLIT["learn"]["benchmarks"] == ["goodrelations"]
-    assert "org" in SPLIT["test"]["benchmarks"]
+    assert SPLIT["learn"]["benchmarks"] == ["goodrelations", "prov-o", "dcat"]
+    assert SPLIT["test"]["benchmarks"] == ["org", "ssn", "time", "valueflows"]
+    assert not set(SPLIT["learn"]["benchmarks"]) & set(SPLIT["test"]["benchmarks"])
     for example in ALL_EXAMPLES:
         source = example["source"]
         if source["set"] == "benchmark":
@@ -145,7 +146,6 @@ def test_no_example_comes_from_test_material() -> None:
         assert marker not in text
 
 
-@pytest.mark.skipif(not EVALS.is_dir(), reason="the bake-off material is not in this tree")
 def test_no_example_shares_a_phrase_with_test_material() -> None:
     import yaml
 
@@ -159,7 +159,9 @@ def test_no_example_shares_a_phrase_with_test_material() -> None:
         document = EVALS / "documents" / f"{name}.md"
         if document.is_file():
             held_out.append(document.read_text(encoding="utf-8"))
-    held_out.append((EVALS / "benchmarks" / "org" / "org.md").read_text(encoding="utf-8"))
+    for benchmark in SPLIT["test"]["benchmarks"]:
+        for document in sorted((EVALS / "benchmarks" / benchmark).glob("*.md")):
+            held_out.append(document.read_text(encoding="utf-8"))
     held = set().union(*(_shingles(t) for t in held_out))
     for example in ALL_EXAMPLES:
         assert not _shingles(example["input"]["sentence"]) & held, example["id"]
