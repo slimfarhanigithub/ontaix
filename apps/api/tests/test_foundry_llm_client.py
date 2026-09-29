@@ -174,7 +174,7 @@ def test_the_strict_form_requires_every_property_and_keeps_the_answers_valid() -
     for node in objects(strict):
         assert node["required"] == list(node["properties"])
         assert node["additionalProperties"] is False
-    assert {"action", "rule", "domainKey", "segments", "segment", "source"} <= optional
+    assert {"action", "rule", "domainKey", "segments", "segment"} <= optional
     assert "kind" not in optional and "candidate" not in optional
     jsonschema.Draft202012Validator(strict).validate(
         json.loads(strict_answer("services_offerings"))

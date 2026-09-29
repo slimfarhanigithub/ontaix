@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     llm_calls_per_hour: int = Field(default=200, ge=0)
     # Read from ONTAIX_ANTHROPIC_API_KEY; never logged, never returned, never stored.
     anthropic_api_key: SecretStr | None = Field(default=None, repr=False)
-    # The Azure AI Foundry resource endpoint, for example https://<resource>.openai.azure.com.
+    # The Azure AI Foundry resource endpoint, for example https://<resource>.cognitiveservices.azure.com.
     # Authentication is Entra ID only (workload identity in the cluster, `az login` locally);
     # no key setting exists for this provider. Unset, the model step is `not_configured`.
     foundry_endpoint: str | None = Field(default=None, pattern=r"^https://[^\s/?#]+/?$")

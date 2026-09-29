@@ -133,7 +133,7 @@ OUTPUT_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["kind", "subject", "object", "confidence"],
+                "required": ["kind", "subject", "object", "confidence", "source"],
                 "properties": {
                     "kind": {"type": "string", "enum": ["rel", "spec"]},
                     "subject": {"$ref": "#/$defs/conceptRef"},
