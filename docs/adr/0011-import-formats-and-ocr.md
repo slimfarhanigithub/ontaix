@@ -1,6 +1,6 @@
 # ADR 0011: Import Formats And OCR
 
-Status: Accepted. The feature is an owner decision, final (decision row 110); the derived choices (rows 111 and 112) are approved under owner delegation (2026-09-29).
+Status: Accepted. The feature is an owner decision, final (decision row 110); the derived choices (rows 111 and 112, and rows 118 and 119 from the PR #21 review) are approved under owner delegation (2026-09-29).
 
 ## Context
 
@@ -44,7 +44,7 @@ Refused with `415`: macro-enabled OOXML (`docm`, `pptm`, `xlsm`, any `macroEnabl
 | Type | Limits and reading rules |
 |---|---|
 | Every type | At most 10 MiB uploaded, 2,000,000 extracted characters, 2,000 sentences of 13 to 399 characters; extraction in a child process with a wall-clock limit and a memory cap; past any limit `413` for the whole import, nothing stored |
-| DOCX, PPTX, XLSX | Every XML part read with no DTD and no entity expansion; at most 1,000 archive members; decompression stops at the extracted-text limit; embedded objects and images not read |
+| DOCX, PPTX, XLSX | Every XML part read with no DTD and no entity expansion; at most 1,000 archive members; decompression bounded in bytes, counted while streaming whatever the declared sizes say - each member at most 50 MiB uncompressed, the archive at most 200 MiB, and no member with a compression ratio above 100 - and also stopped at the extracted-text limit; the same bounds apply to XLSX hierarchies in ontology import (ADR 0012); embedded objects and images not read |
 | PDF | At most 2,000 pages; text layer per page; pages with fewer than 20 non-space characters are image-only and go to OCR; attachments and scripts never read or run |
 | PPTX | At most 500 slides; shape text and speaker notes in slide order; position `slide` |
 | XLSX | At most 50 sheets and 200,000 non-empty cells; each non-empty row is one sentence of its cell values joined by `, ` in sheet and row order; cached values only, formulas never evaluated, external links never followed; position `sheet` with `row` |
@@ -58,6 +58,7 @@ Image-only pages are sent to an OCR client in `apps/api/app/clients/`, behind a 
 
 - At most `ONTAIX_OCR_MAX_PAGES` image-only pages per import (default 100; more is `413`). One call per import with the page list, within `ONTAIX_OCR_TIMEOUT_SECONDS` (default 120, at most 300) wall clock, SDK retries 0.
 - Budget: one unit of the per-user or per-agent hourly `ocr` page budget per image-only page (`ONTAIX_OCR_PAGES_PER_HOUR`, default 600), charged before the call (`429 rate_limited`). `llmMonthlyTokenCap` 0 turns OCR off with every other model call, so a tenant's opt-out stops all egress.
+- Tenant ceiling: the setting `ocrMonthlyPageCap` (default 1,000 pages per UTC month, 0 to 1,000,000, `0` turns OCR off; `PATCH /settings`, audited) bounds OCR spend for the whole tenant, users and agents together, since page-priced calls barely touch the token cap. Before the call the import reserves its image-only page count in `llm_month_usage.ocr_pages` with the same conditional upsert as the token reservation, in its own short transaction; zero rows refuses the import with `503 unavailable`. After the call the reservation settles to the pages processed, on the reserved month. `LlmUsage.ocrPagesUsed` and `ocrPageCap` report it in `GET /cost`.
 - Cost: each call writes one `llm_call` row with purpose `document_ocr`, `pages` set (the new column, required for this purpose only), the provider's token counts (often 0), and `cost_eur` from the price table, whose entry for the OCR model is `{"eurPerPage": <number>}`. `LlmUsage.byPurpose` reports the pages.
 - Failure: when a PDF needs OCR and OCR is not configured, turned off, timed out or failing, the import is refused as a whole with `503 unavailable` and nothing is stored; an import never stores a document with pages silently missing.
 - `document_import.ocr_pages` records how many pages came from OCR (PDF only).

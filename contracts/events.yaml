@@ -11,7 +11,7 @@ info:
 
     Visibility: every channel declares `x-ontaix-visibility`, the permission (vocabulary in ADR 0003) a subscriber must hold to receive its events, and `x-ontaix-audience`, how the event's `companyIds` is filled. `companyIds` lists every company whose labels, names or artefact state the payload carries; bare ids do not count. An empty list means tenant-wide. A subscriber receives an event only if it holds the visibility permission in a scope that contains every listed company; with an empty list, the permission at any scope suffices. A cross-company event therefore reaches only readers of all its companies.
 
-    Audience values: `companies` - the writer fills `companyIds` from the artefacts in the payload; `tenant` - `companyIds` is always empty and the payload carries no company-specific labels. On a `companies` channel an event never mixes artefacts with different company sets: the writer partitions the artefacts by company set and emits one event per partition (for example `source.refreshed` per company, and a cascaded proposal whose companies are not all in the rejected proposal's set gets its own `proposal.rejected`), so a one-company reader never loses an event about something it can read.
+    Audience values: `companies` - the writer fills `companyIds` from the artefacts in the payload; `tenant` - `companyIds` is always empty and the payload carries no company-specific labels; `recipient` - the event goes to one user only, named by `outbox.recipient_user_id` and the header `Ontaix-Recipient`, who must also hold the visibility permission for every listed company. On a `companies` channel an event never mixes artefacts with different company sets: the writer partitions the artefacts by company set and emits one event per partition (for example `source.refreshed` per company, and a cascaded proposal whose companies are not all in the rejected proposal's set gets its own `proposal.rejected`), so a one-company reader never loses an event about something it can read.
 
     Transport: the outbox row stores `visibility`, `company_ids` and, for `audit.appended` only, `domain_key`; the relay copies them into the NATS headers `Ontaix-Visibility`, `Ontaix-Company-Ids` and `Ontaix-Domain-Key` (trait `Audience`), and the WebSocket hub filters on them without re-deriving them and forwards `companyIds` in the `Envelope`.
 
@@ -255,8 +255,8 @@ channels:
   extractionChanged:
     address: ontaix.{tenantId}.extraction.changed
     x-ontaix-visibility: model.read
-    x-ontaix-audience: companies
-    description: Progress and end of a whole-document extraction job (ADR 0010). The payload carries counts and states, never labels or document text; `companyIds` is the job's company. The Studio of the user who started the job follows it; everyone else ignores it.
+    x-ontaix-audience: recipient
+    description: Progress and end of a whole-document extraction job (ADR 0010), delivered only to the user who started the job (header `Ontaix-Recipient`), matching `GET /extractions/{extractionId}`, which answers `404` to everyone else. Administrators do not receive it either, since they cannot read the job; Cost management shows its spend through `llm_call`. The payload carries counts and states, never labels or document text; `companyIds` is the job's company.
     parameters:
       tenantId:
         $ref: '#/components/parameters/tenantId'
@@ -924,7 +924,7 @@ components:
                 type: boolean
               failureReason:
                 type: [string, 'null']
-                enum: [not_configured, budget_exhausted, rate_limited, job_timeout, no_drafts, import_expired, internal, null]
+                enum: [not_configured, budget_exhausted, rate_limited, job_timeout, no_drafts, import_expired, too_many_attempts, internal, null]
     SettingsChanged:
       name: SettingsChanged
       traits:
@@ -1080,6 +1080,10 @@ components:
           Ontaix-Domain-Key:
             type: string
             description: Present only on `audit.appended` events whose entry has a `domainKey`, copied from `outbox.domain_key`. A subscriber holding `audit.read` on the domain scope with this key also receives the event.
+          Ontaix-Recipient:
+            type: string
+            format: uuid
+            description: Present only on channels whose `x-ontaix-audience` is `recipient` (today `extraction.changed`), copied from `outbox.recipient_user_id`. The event is delivered to that user only, and only while the user still holds `Ontaix-Visibility` in a scope containing every listed company; no other subscriber receives it.
 
   schemas:
     Envelope:
@@ -1215,7 +1219,7 @@ components:
         openBelow:
           type: integer
           minimum: 0
-          description: Open proposals in this proposal's branch other than itself (ADR 0010), as in contracts/openapi.yaml.
+          description: Open proposals in the branch of a `concept` or `spec` proposal other than itself (ADR 0010), as in contracts/openapi.yaml; 0 or absent for other proposals.
         originDetail:
           description: Set exactly when `origin` is `document`; same shape as `OriginDetail` in contracts/openapi.yaml.
           oneOf:

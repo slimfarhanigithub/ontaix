@@ -1,6 +1,6 @@
 # ADR 0010: Whole-Document Extraction
 
-Status: Accepted. The feature is an owner decision, final (decision row 106); the removal of every depth limit is an owner decision, final (row 105); the derived choices (rows 107 to 109) are approved under owner delegation (2026-09-29).
+Status: Accepted. The feature is an owner decision, final (decision row 106); the removal of every depth limit is an owner decision, final (row 105); the derived choices (rows 107 to 109, and rows 116, 117 and 119 from the PR #21 review) are approved under owner delegation (2026-09-29).
 
 ## Context
 
@@ -15,18 +15,18 @@ This is a new ADR rather than an amendment of ADR 0008 because it adds an asynch
 ```mermaid
 stateDiagram-v2
   [*] --> queued: POST /import/{importId}/extraction (202)
-  queued --> running: runner claims (lease 5 min)
+  queued --> running: runner claims (lease 5 min, epoch + 1, attempts + 1)
   running --> running: one chunk done - progress, extraction.changed
   running --> succeeded: mapped, at least one draft
-  running --> failed: not_configured, budget_exhausted, rate_limited, job_timeout, no_drafts, import_expired, internal
+  running --> failed: not_configured, budget_exhausted, rate_limited, job_timeout, no_drafts, import_expired, too_many_attempts, internal
   queued --> cancelled: DELETE /extractions/{id}
   running --> cancelled: DELETE, stops before the next call
   succeeded --> [*]: result readable 24 h, submitted once
 ```
 
-The job is asynchronous: `POST /import/{importId}/extraction` answers `202` with a `DocumentExtraction` at once. The client follows it through the `extraction.changed` event (AsyncAPI channel `ontaix.{tenantId}.extraction.changed`, visibility `model.read`, audience the job's company, payload counts and states only, no labels and no document text) or by polling `GET /extractions/{extractionId}` every 5 seconds. `GET /extractions/{extractionId}/result` returns the outline and the draft tree of a `succeeded` job; `POST /extractions/{extractionId}/proposals` turns a selection of it into proposals; `DELETE /extractions/{extractionId}` cancels.
+The job is asynchronous: `POST /import/{importId}/extraction` answers `202` with a `DocumentExtraction` at once. The client follows it through the `extraction.changed` event (AsyncAPI channel `ontaix.{tenantId}.extraction.changed`, visibility `model.read`, audience `recipient`: delivered only to the user who started the job, as `GET /extractions/{extractionId}` is; no administrator receives it, since none can read the job; payload counts and states only, no labels and no document text) or by polling `GET /extractions/{extractionId}` every 5 seconds. `GET /extractions/{extractionId}/result` returns the outline and the draft tree of a `succeeded` job; `POST /extractions/{extractionId}/proposals` turns a selection of it into proposals; `DELETE /extractions/{extractionId}` cancels.
 
-A runner in `apps/api` claims queued or orphaned jobs from `document_extraction_job` with `FOR UPDATE SKIP LOCKED` and a 5-minute lease renewed after every chunk, so a job whose runner dies resumes at its next unfinished chunk. Progress, the outline so far and the settled token count are written after every chunk in a short transaction that also writes the `extraction.changed` outbox row. No transaction is open during a model call. The job reads the import's sentences while it runs; its result copies each draft's grounding sentence index, position, file name and media type, so it survives the import purge (`import_id` is set null). The result is readable and submittable for 24 hours after the job finished.
+A runner in `apps/api` claims queued or orphaned jobs from `document_extraction_job` with `FOR UPDATE SKIP LOCKED`, and in the same transaction sets `lease_owner` to its own id, increments `lease_epoch` and `attempts`, and sets a 5-minute `lease_until`. A job whose `attempts` would pass `ONTAIX_DOCUMENT_EXTRACTION_MAX_ATTEMPTS` (default 3) is failed instead, with `too_many_attempts`, so a job that keeps crashing its runner stops spending tokens. Fencing: every later write of the runner - lease renewal, progress, outline, token count, result, final state and the `extraction.changed` outbox row - is one `UPDATE ... WHERE id = $job AND lease_owner = $runner AND lease_epoch = $epoch AND lease_until > now()`; zero rows means the lease is lost, and the runner stops at once without writing anything more, settling only its own token reservation. The lease is renewed after every chunk, every 60 seconds while a model call is in flight, and during mapping. A job whose runner dies resumes at its next unfinished chunk under a new epoch; outline handles are assigned only by fenced writes, so they stay stable. Final states clear the lease. Progress, the outline so far and the settled token count are written after every chunk in a short fenced transaction that also writes the `extraction.changed` outbox row. No transaction is open during a model call. The job reads the import's sentences while it runs; its result copies each draft's grounding sentence index, position, file name and media type, so it survives the import purge (`import_id` is set null). The result is readable and submittable for 24 hours after the job finished.
 
 Rules at start: the import belongs to the caller's tenant and user (`404`), is not expired (`410 import_expired`) and holds at most `ONTAIX_DOCUMENT_EXTRACTION_MAX_CHARS` extracted characters (default 400,000, `413 payload_too_large` above); one job per import (`409 extraction_exists`); one queued or running job per user (`409 extraction_running`); `importDocs` on (`409 channel_disabled`); permission `proposal.create` in the company's scope through Owner or Builder (ADR 0003 check point 13; agents and `everyoneTeaches` Members get `403`); one unit of the hourly `extraction` budget (default 5 jobs per user per hour, `429` when empty). A model that is not configured or a tenant cap of 0 is not an error at start: the job ends `failed` with `not_configured` or `budget_exhausted`, and the Studio falls back to sentence-by-sentence teaching.
 
@@ -54,7 +54,7 @@ Chunking: the import's sentences in order, cut into chunks of at most `ONTAIX_DO
 
 Pass 1, outline. For each chunk in order the model receives the chunk's sentences with their indexes, the outline built so far, up to 200 existing concepts of the company as handles `c0` to `c199` (ranked as in ADR 0008, the root first), the company name and the domain templates. It returns new outline nodes, parents before children (`contracts/document-extraction.schema.json`, `outlineAnswer`): a key, a parent, a label, the birth action, an advisory role (`domain_area`, `process`, `subprocess`, `step`, `entity`, `group`), an optional domain key, a confidence, and the sentence index and quote the label comes from. Accepted nodes get outline handles `o1`, `o2` and so on, stable for the whole job.
 
-Pass 2, sections. For each chunk in order the model receives the chunk, the frozen outline and the candidates, and returns intents as in teach extraction (`sectionAnswer`: `rel` or `spec`, subject and object each an outline node, a candidate, a path or a new grounded label, an action, a confidence, a sentence index and a quote). These add the steps, entities and relations the outline did not hold, and the relations across branches.
+Pass 2, sections. For each chunk in order the model receives the chunk, the frozen outline and the candidates, and returns intents as in teach extraction (`sectionAnswer`: `rel` with a required action, or `spec` without one, subject and object each an outline node, a candidate, a path or a new grounded label, an action, a confidence, a sentence index and a quote). These add the steps, entities and relations the outline did not hold, and the relations across branches.
 
 Mapping. The server turns outline nodes into `ConceptDraft`s in outline order (born from their parent node, candidate or root, with the node's action) and section intents into drafts with the grammar's mapping table (ADR 0008, Output Contract), then orders the tree parents first, relations last. A label that matches an existing concept of the company (the grammar's `resolve`) reuses it; a label that repeats an outline node is that node; a restated fact produces no draft (row 97). Each draft's `DocumentDraftNote` carries the pass, confidence, explanation, role, depth, `requires` and the grounding sentence and span.
 
@@ -109,6 +109,9 @@ The document is untrusted input. Its sentences travel in delimited data fields w
 | `ONTAIX_DOCUMENT_EXTRACTION_TIMEOUT_SECONDS` | 180 | Per call, at most 300 |
 | `ONTAIX_DOCUMENT_EXTRACTION_JOB_TIMEOUT_MINUTES` | 60 | Per job |
 | `ONTAIX_DOCUMENT_EXTRACTION_JOBS_PER_HOUR` | 5 | The per-user hourly `extraction` budget |
+| `ONTAIX_DOCUMENT_EXTRACTION_MAX_ATTEMPTS` | 3 | Claims of one job before it fails with `too_many_attempts`, 1 to 10 |
+| `ONTAIX_BRANCH_APPROVE_BATCH` | 200 | Proposals per branch-approval transaction |
+| `ONTAIX_BRANCH_APPROVE_MAX_ROUNDS` | 50 | Batches per branch-approval call |
 
 The adapter, structured output, keyless authentication and price-table rule are those of ADR 0008.
 
@@ -118,7 +121,7 @@ The result arrives as one proposal tree:
 
 1. When the job succeeds, the Studio reads the result and submits every draft with `POST /extractions/{extractionId}/proposals` (one all-or-nothing call, drafts built by the server from what it stored, origin `document` with each draft's grounding sentence as `originDetail`). The endpoint accepts a subset closed under `requires`, for clients that preselect; the Studio does not.
 2. The proposals appear in the changes panel as today. Children wait for their parents through the existing `deps` and `after <waitFor>` rule, so the tree is approved top-down.
-3. Approve by branch: `POST /proposals/{proposalId}/approve-branch` approves the proposal and every open proposal of its branch (concepts born below it at any depth, and relations whose ends are all in the branch or approved), in rounds like Approve all, within the caller's approval scope; the skipped are counted in `remaining`. `Proposal.openBelow` tells a client how many open proposals sit in a branch.
+3. Approve by branch: `POST /proposals/{proposalId}/approve-branch` takes a `concept` or `spec` root only (`409 branch_root_invalid` otherwise). The branch is the open proposals that depend on a `concept` or `spec` root through proposal dependencies, transitively, plus relation proposals whose ends are all in the branch or approved; never `change`, `source`, `bind` or `attr` proposals, so no rename, deletion or edit of an existing concept is ever approved through it. Each proposal is approved only if the caller may approve it alone. Work is committed in batches of at most 200 proposals (`ONTAIX_BRANCH_APPROVE_BATCH`), parents first, each batch in its own transaction under the tenant decision lock, at most 50 batches per call (`ONTAIX_BRANCH_APPROVE_MAX_ROUNDS`). The result, `BranchResult`, reports `approved`, `skipped`, `remaining`, `batches` and `complete`; with `complete` false the client calls again on the same root, and committed batches stay committed. `Proposal.openBelow` tells a client how many open proposals sit in a branch.
 4. Reject by branch needs nothing new: rejecting a proposal already cascades to its descendants, as in the reference.
 5. Approve all and Reject all keep their meaning over everything open.
 

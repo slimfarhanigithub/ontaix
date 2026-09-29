@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:ontaix:contract:document-extraction:1.0.0",
   "title": "Whole-Document Extraction Output",
-  "description": "The only shapes the language model steps of a whole-document extraction job may return (ADR 0010): an outline answer (pass 1, one per chunk, outline carried forward) or a section answer (pass 2, one per chunk, against the frozen outline). The API sends a strict-compatible form of the one it asks for and validates against it. Handles are per job: cN are existing concepts of the import's company sent as candidates (c0 its root, at most 200 per call); oN are outline nodes, numbered by the API in the order they were accepted and stable for the whole job; kN are keys of new nodes inside one answer. There is no depth limit. A node or intent may attach under any node of the outline, at any depth, by handle, by an earlier key, or by a path of labels from the company root; the only ceilings are the job's total drafts (ONTAIX_DOCUMENT_EXTRACTION_MAX_NODES, default 2,000) and its token budget (ONTAIX_DOCUMENT_EXTRACTION_MAX_TOKENS). The maxItems below are the absolute contract bound per answer. Every free-text field refuses markup (< and >), C0 and C1 control characters, DEL, U+00A0, U+2028, U+2029 and every Unicode format character (category Cf) in the Basic Multilingual Plane, exactly as contracts/teach-extraction.schema.json does; the API's normalisation step also refuses every Cf character outside that plane. Grounding (ADR 0008 rule, unchanged): every new label - an outline node's label and every newLabel of an intent - must equal, after normalisation, a run of whole words of the sentence named by sentenceIndex, allowing singular or plural; the drafted label is sliced from the document text, never taken from the model. A label that fails is dropped (unresolved, reason ungrounded_label) and so are the nodes and intents that depend on it. The model chooses structure - parents, actions, domains - but never invents a label. Answer-invalidating API checks: unique keys; a key cited as a parent or end is defined earlier in the answer; every handle was sent; every normalised action (NFKC, whitespace runs collapsed to one space, trimmed, lower-cased) is neither is a nor equivalent to; sentenceIndex lies in the chunk; no node or intent joins a concept to itself. Any failure makes that chunk's answer invalid; the chunk is listed as unresolved (model_invalid_output) and the job continues. The answer is requested as compact JSON.",
+  "description": "The only shapes the language model steps of a whole-document extraction job may return (ADR 0010): an outline answer (pass 1, one per chunk, outline carried forward) or a section answer (pass 2, one per chunk, against the frozen outline). The API sends a strict-compatible form of the one it asks for and validates against it. Handles are per job: cN are existing concepts of the import's company sent as candidates (c0 its root, at most 200 per call); oN are outline nodes, numbered by the API in the order they were accepted and stable for the whole job; kN are keys of new nodes inside one answer. There is no depth limit. A node or intent may attach under any node of the outline, at any depth, by handle, by an earlier key, or by a path of labels from the company root; the only ceilings are the job's total drafts (ONTAIX_DOCUMENT_EXTRACTION_MAX_NODES, default 2,000) and its token budget (ONTAIX_DOCUMENT_EXTRACTION_MAX_TOKENS). The maxItems below are the absolute contract bound per answer. Every free-text field refuses markup (< and >), C0 and C1 control characters, DEL, U+00A0, U+2028, U+2029 and every Unicode format character (category Cf) in the Basic Multilingual Plane, exactly as contracts/teach-extraction.schema.json does; the API's normalisation step also refuses every Cf character outside that plane. Grounding (ADR 0008 rule, unchanged): every new label - an outline node's label and every newLabel of an intent - must equal, after normalisation, a run of whole words of the sentence named by sentenceIndex, allowing singular or plural; the drafted label is sliced from the document text, never taken from the model. A label that fails is dropped (unresolved, reason ungrounded_label) and so are the nodes and intents that depend on it. The model chooses structure - parents, actions, domains - but never invents a label. Answer-invalidating checks: a rel intent without an action, or a spec intent with one (schema); unique keys; a key cited as a parent or end is defined earlier in the answer; every handle was sent; every normalised action (NFKC, whitespace runs collapsed to one space, trimmed, lower-cased) is neither is a nor equivalent to; sentenceIndex lies in the chunk; no node or intent joins a concept to itself. Any failure makes that chunk's answer invalid; the chunk is listed as unresolved (model_invalid_output) and the job continues. The answer is requested as compact JSON.",
   "oneOf": [
     {
       "$ref": "#/$defs/outlineAnswer"
@@ -221,6 +221,34 @@
         "confidence",
         "sentenceIndex",
         "span"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "rel"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "action"
+            ],
+            "not": {
+              "required": [
+                "rule"
+              ]
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "action"
+              ]
+            }
+          }
+        }
       ],
       "properties": {
         "kind": {

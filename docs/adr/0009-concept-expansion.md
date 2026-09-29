@@ -1,6 +1,6 @@
 # ADR 0009: Concept Expansion
 
-Status: Accepted. The feature is an owner decision, final (decision row 99); the removal of every depth limit is an owner decision, final (row 105); the derived choices (rows 100 to 104) are approved under owner delegation (2026-09-29).
+Status: Accepted. The feature is an owner decision, final (decision row 99); the removal of every depth limit is an owner decision, final (row 105); the derived choices (rows 100 to 104, and row 119 from the PR #21 review) are approved under owner delegation (2026-09-29).
 
 ## Context
 

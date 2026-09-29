@@ -84,6 +84,9 @@ Concept expansion (ADR 0009) and whole-document extraction (ADR 0010) use the sa
 | `ONTAIX_DOCUMENT_EXTRACTION_TIMEOUT_SECONDS` | 180 | Per call; maximum 300 |
 | `ONTAIX_DOCUMENT_EXTRACTION_JOB_TIMEOUT_MINUTES` | 60 | Per job |
 | `ONTAIX_DOCUMENT_EXTRACTION_JOBS_PER_HOUR` | 5 | Per user |
+| `ONTAIX_DOCUMENT_EXTRACTION_MAX_ATTEMPTS` | 3 | Runner claims per job before it fails with `too_many_attempts`; 1 to 10 |
+| `ONTAIX_BRANCH_APPROVE_BATCH` | 200 | Proposals per branch-approval transaction |
+| `ONTAIX_BRANCH_APPROVE_MAX_ROUNDS` | 50 | Batches per branch-approval call |
 
 OCR of scanned PDF pages (ADR 0011) calls a Mistral document model deployed on the same Foundry resource as DataZoneStandard (EU), keyless like the teach deployment. The deployment and its role assignment for the API's workload identity are added in `infra/terraform/azure` before OCR is configured; until then a scanned PDF import answers `503 unavailable`. Ontology import (ADR 0012) calls no model.
 

@@ -591,7 +591,7 @@ paths:
       tags: [Concepts]
       summary: Ask the language model to suggest children for a concept
       description: |
-        Concept expansion (ADR 0009). The model suggests new concepts under the expanded concept - children and, with `depth` 2 or 3, grandchildren - and optional relations between them. Writes no ontology row and no proposal: it returns drafts with per-draft notes and stores them as one `concept_expansion` row for one hour, so that the caller can submit a selection with `POST /expansions/{expansionId}/proposals`, which records each proposal with the server-set origin `suggestion`. Every suggestion then still needs a human approval.
+        Concept expansion (ADR 0009). The model suggests new concepts under the expanded concept - children, and their children at any depth - and optional relations between them. Writes no ontology row and no proposal: it returns drafts with per-draft notes and stores them as one `concept_expansion` row for one hour, so that the caller can submit a selection with `POST /expansions/{expansionId}/proposals`, which records each proposal with the server-set origin `suggestion`. Every suggestion then still needs a human approval.
 
         Unlike teach extraction, expansion is not grounded in the caller's words; it is bounded instead. There is no depth limit: a suggestion may sit at any depth below the expanded concept. The only ceilings, for cost protection, are the total drafts per run (`ONTAIX_EXPAND_MAX_NODES`, default 200, at most 2,000, concepts and relations together) and the token budget. `depth` and `maxChildren` are optional steering from the caller, not caps. Labels are 1 to 60 characters with the label character rules of teach extraction (no markup, control or format characters, no bidirectional controls, no surrounding space, at least one letter), actions normalised (NFKC, whitespace collapsed, trimmed, lower-cased) and never `is a` or `equivalent to`, no specialisation drafts. Every draft is born under the expanded concept or under another draft of the same response, in the expanded concept's company; relation drafts join only the expanded concept and drafts of the same response. No other existing concept can be cited, because the model is given no handle for one. A suggestion whose label matches a live or pending concept of the company (case-insensitive, singular or plural), or repeats an earlier suggestion, is skipped with its descendants and reported in `skipped`.
 
@@ -1388,18 +1388,20 @@ paths:
       - $ref: '#/components/parameters/ProposalId'
     post:
       tags: [Proposals]
-      summary: Approve a proposal and every open proposal below it
+      summary: Approve a proposed concept and the proposals that depend on it
       description: |
-        Branch approval (ADR 0010). The branch of a proposal is the proposal itself, every open proposal whose concept descends from its concept through the parent chain at any depth, and every open relation or specialisation proposal whose ends are all in the branch or already approved. Approves every ready proposal of the branch the caller may approve under ADR 0003 check points 2 to 4, in rounds like `POST /proposals/approve-all`, until no proposal of the branch is ready; there is no depth or round limit other than the branch's own size. Proposals the caller may not approve, and `change` proposals waiting for a second approver, are skipped and counted in `remaining`. Events emitted carry `bulk` set to true. Rejecting a branch needs no new operation - `POST /proposals/{proposalId}/reject` already cascades to descendants. `409 proposal_decided` when the proposal is already decided.
+        Branch approval (ADR 0010, decision row 117). The root must be an open `concept` or `spec` proposal (`409 branch_root_invalid` otherwise, `409 proposal_decided` when decided). The branch is the root plus every open proposal that depends on it through proposal dependencies, transitively - the `concept` and `spec` proposals proposed under a pending concept of the branch (their `deps` or `waitFor` name it), and the `relation` proposals whose ends are all concepts of the branch or already approved. `change`, `source`, `bind` and `attr` proposals are never in a branch, so no rename, deletion or edit of an existing concept is approved through it. Each proposal is approved only if the caller may approve it alone (ADR 0003 check points 2 to 4); others are skipped and counted in `remaining`.
+
+        Work is bounded: proposals are approved in rounds, parents before children, in batches of at most `ONTAIX_BRANCH_APPROVE_BATCH` (default 200) per transaction; each batch takes the tenant decision lock, commits and releases it, so other decisions interleave. At most `ONTAIX_BRANCH_APPROVE_MAX_ROUNDS` (default 50) batches per call. The result is `BranchResult`: `approved` so far (committed batches stay committed), `remaining` open proposals of the branch, and `complete` false when the round limit stopped the call with ready proposals left; the client calls again on the same root to continue. A `503 busy` on a batch returns the progress so far with `complete` false instead of an error when at least one batch committed. Events emitted carry `bulk` set to true. Rejecting a branch needs no new operation - `POST /proposals/{proposalId}/reject` already cascades to descendants.
       operationId: approveProposalBranch
       x-ontaix-permission: proposal.approve
       responses:
         '200':
-          description: What was approved.
+          description: What was approved, possibly partial.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BulkResult'
+                $ref: '#/components/schemas/BranchResult'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1686,9 +1688,9 @@ paths:
 
         Sniffing - the server decides the type from the bytes, and the declared type must agree with it. `%PDF-` is PDF. A ZIP archive is OOXML only when `[Content_Types].xml` declares exactly one main part of DOCX, PPTX or XLSX; a macro-enabled main part (`docm`, `pptm`, `xlsm`, any `macroEnabled` content type) or a `vbaProject.bin` part is refused, as are legacy binary Office files and encrypted OOXML (both OLE compound files). HTML is text starting, after a byte order mark and whitespace, with `<!doctype html`, `<html`, `<head` or `<body`. Text types are UTF-8 (a UTF-16 byte order mark is converted).
 
-        Per type - every XML part is read with no DTD and no entity expansion; OOXML archives hold at most 1,000 members and decompression stops at the extracted-text limit. PDF at most 2,000 pages. PPTX at most 500 slides; slide text and speaker notes, in slide order; images are not read. XLSX at most 50 sheets and 200,000 non-empty cells; each non-empty row becomes one sentence of its cell values joined by `, `, in sheet and row order; formulas are never evaluated (cached values only) and external links never followed. HTML at most 5 MiB and nesting depth 512; parsed without running anything; `script`, `style`, `template`, `noscript`, `iframe`, `object`, `embed`, `svg` and `math` contents are dropped; no external resource is ever fetched (no image, stylesheet, frame, font, base URL or link); block elements end sentences.
+        Per type - every XML part is read with no DTD and no entity expansion; OOXML archives hold at most 1,000 members; decompression is bounded in bytes - each member at most 50 MiB and the archive at most 200 MiB uncompressed, counted while streaming whatever the declared sizes say, and a compression ratio above 100 for any member is refused - and also stops at the extracted-text limit. PDF at most 2,000 pages. PPTX at most 500 slides; slide text and speaker notes, in slide order; images are not read. XLSX at most 50 sheets and 200,000 non-empty cells; each non-empty row becomes one sentence of its cell values joined by `, `, in sheet and row order; formulas are never evaluated (cached values only) and external links never followed. HTML at most 5 MiB and nesting depth 512; parsed without running anything; `script`, `style`, `template`, `noscript`, `iframe`, `object`, `embed`, `svg` and `math` contents are dropped; no external resource is ever fetched (no image, stylesheet, frame, font, base URL or link); block elements end sentences.
 
-        Scanned PDF - a page whose text layer holds fewer than 20 non-space characters is image-only. When a PDF has image-only pages, those pages are sent to the OCR provider behind the API's OCR client (a Mistral document model on an EU DataZone deployment of Azure AI Foundry by default, `ONTAIX_OCR_*` configuration), at most `ONTAIX_OCR_MAX_PAGES` pages per import (default 100) and within `ONTAIX_OCR_TIMEOUT_SECONDS` (default 120) wall clock; the recognised text joins the text-layer pages in page order and is treated exactly like extracted text. Each image-only page spends one unit of the hourly `ocr` page budget, charged before the call (`429 rate_limited`); each OCR call writes one `llm_call` row with purpose `document_ocr` and its page count. When OCR is needed and not configured, turned off by `llmMonthlyTokenCap` 0, timed out or failing, the import is refused as a whole with `503 unavailable` and nothing is stored; more image-only pages than the cap is `413`.
+        Scanned PDF - a page whose text layer holds fewer than 20 non-space characters is image-only. When a PDF has image-only pages, those pages are sent to the OCR provider behind the API's OCR client (a Mistral document model on an EU DataZone deployment of Azure AI Foundry by default, `ONTAIX_OCR_*` configuration), at most `ONTAIX_OCR_MAX_PAGES` pages per import (default 100) and within `ONTAIX_OCR_TIMEOUT_SECONDS` (default 120) wall clock; the recognised text joins the text-layer pages in page order and is treated exactly like extracted text. Each image-only page spends one unit of the caller's hourly `ocr` page budget, charged before the call (`429 rate_limited`), and the pages are reserved against the tenant's `ocrMonthlyPageCap` (users and agents together; `503 unavailable` when it would be passed); each OCR call writes one `llm_call` row with purpose `document_ocr` and its page count. When OCR is needed and not configured, turned off by `llmMonthlyTokenCap` 0, timed out or failing, the import is refused as a whole with `503 unavailable` and nothing is stored; more image-only pages than the cap is `413`.
 
         Common limits - Splits on sentence punctuation or newlines and keeps sentences of 13 to 399 characters. At most 2,000,000 characters of extracted text and at most 2,000 sentences. Extraction runs in a child process with a wall-clock limit and a memory cap. Past any limit the import is refused as a whole with `413 payload_too_large` and nothing is stored. Rate limit - one import unit is charged from the per-user or per-agent import budget before the upload is read, and the call is refused with `429 rate_limited` when that budget is empty; the unit is spent even when extraction finds no sentence. After extraction one parse unit per sentence is charged, taken before anything is stored; when the parse budget cannot cover every sentence the import is refused as a whole with `429 rate_limited` and nothing is stored. The parse budget allows at least 2,000 units per hour, so the largest document fits. Proposals created from the sentences are charged per draft when they are created. Refused with `409 channel_disabled` when the `importDocs` setting is off, and with `422 validation_failed` when the file name, after its directory part is stripped, is empty, longer than 255 characters or 1020 bytes, or holds a refused character; a file name is refused, never rewritten. Stores one `document_import` row (tenant, actor, file name, media type, SHA-256 of the file, extracted sentences with their positions) that expires one hour after creation, and returns its `importId` and the sentences. The client teaches sentence by sentence, citing each as `importRef` (`importId`, `sentenceIndex`); the import is usable only by the actor that created it, in its tenant. Expired imports answer `410 import_expired` until the purge deletes them 24 hours after expiry, then `404`.
       operationId: importSentences
@@ -1948,7 +1950,7 @@ paths:
       description: |
         Ontology import (ADR 0012). Deterministic - no language model is called. Reads one OWL ontology (RDF/XML, Turtle, OWL/XML, JSON-LD or N-Triples, SKOS vocabularies included), one OBO file, or a CSV or XLSX hierarchy, maps it to one draft tree in `companyId` under `parentConceptId` (default the company root), stores the tree for 24 hours and returns it. Writes no ontology row and no proposal; `POST /ontology-imports/{ontologyImportId}/proposals` turns a selection into proposals with origin `ontology_import`, reviewed branch by branch like a whole-document tree (ADR 0010).
 
-        Mapping - named classes (`owl:Class`, `rdfs:Class`), SKOS concepts and OBO terms become concepts: `rdfs:subClassOf` and OBO `is_a` give the parent path as specialisation drafts, `skos:broader` gives a concept born from its broader concept with action `includes`; a class with no named parent in the file is born under `parentConceptId`; further named parents become `is a` relation drafts. Object properties with a domain and a range, `someValuesFrom` and `allValuesFrom` restrictions on a named property, and OBO `relationship` lines become relation drafts whose action is the property's label, normalised (camel case split, lower-cased, at most 60 characters) and refused when it normalises to `is a` or `equivalent to`. CSV and XLSX hierarchies use either `label` and `parent` columns (optional `id`, `action`, `domain`) or level columns `Level 1`, `Level 2` and so on, as many as the file has. Individuals become concepts under their class with action `has instance` when `individuals` is `as_concepts`, and are skipped otherwise. There is no depth limit.
+        Mapping - named classes (`owl:Class`, `rdfs:Class`), SKOS concepts and OBO terms become concepts: `rdfs:subClassOf` and OBO `is_a` give the parent path as specialisation drafts, `skos:broader` gives a concept born from its broader concept with action `includes`; a class with no named parent in the file is born under `parentConceptId`; further named parents become `is a` relation drafts. Object properties with a domain and a range, `someValuesFrom` and `allValuesFrom` restrictions on a named property, and OBO `relationship` lines become relation drafts whose action is the property's label, normalised (camel case split, lower-cased, at most 60 characters) and refused when it normalises to `is a` or `equivalent to`. CSV and XLSX hierarchies use either `label` and `parent` columns (optional `id`, `action`, `domain`) or level columns `Level 1`, `Level 2` and so on, as many as the file has; an `action` cell is normalised like a property verb and skipped as `forbidden_action` when it normalises to `is a` or `equivalent to` (the row is then born with `includes`), so specialisation comes only from `subClassOf` or `is_a`. XLSX files follow the OOXML sniffing and decompression bounds of `POST /import/sentences`. Individuals become concepts under their class with action `has instance` when `individuals` is `as_concepts`, and are skipped otherwise. There is no depth limit.
 
         Labels - chosen per item by `languages` preference: `skos:prefLabel`, then `rdfs:label`, then `skos:altLabel`, then the OBO `name`, then the IRI's local name split into words; within each, the first language of `languages`, then an untagged literal, then any other language in tag order. Labels meet every label rule of the API (1 to 120 characters, no markup, control or format characters) or the item is skipped (`invalid_label`).
 
@@ -2657,7 +2659,7 @@ paths:
     patch:
       tags: [Settings]
       summary: Change settings
-      description: Immediate; every changed key writes an audit entry `<key> enabled|disabled` (`llmMonthlyTokenCap set to <n>` for the token cap). `approvalRequired` and `readOnlyConnectors` are locked (`409 locked_setting`). Turning `crossCompany` off here is refused with `409 confirmation_required` when cross-company relations exist; use the dedicated disable endpoint.
+      description: Immediate; every changed key writes an audit entry `<key> enabled|disabled` (`llmMonthlyTokenCap set to <n>` for the token cap, `ocrMonthlyPageCap set to <n>` for the OCR page cap). `approvalRequired` and `readOnlyConnectors` are locked (`409 locked_setting`). Turning `crossCompany` off here is refused with `409 confirmation_required` when cross-company relations exist; use the dedicated disable endpoint.
       operationId: updateSettings
       x-ontaix-permission: settings.write
       requestBody:
@@ -3114,6 +3116,7 @@ components:
             - extraction_submitted
             - ontology_import_expired
             - ontology_import_submitted
+            - branch_root_invalid
             - unsupported_media_type
             - rate_limited
             - duplicate_attribute
@@ -4072,7 +4075,7 @@ components:
         openBelow:
           type: integer
           minimum: 0
-          description: Open proposals in this proposal's branch other than itself (see `POST /proposals/{proposalId}/approve-branch`), computed at read time; 0 or absent when nothing open depends on it. The Studio shows `Approve branch` when it is above 0.
+          description: For an open `concept` or `spec` proposal, the open proposals in its branch other than itself (the open proposals that depend on a `concept` or `spec` root through proposal dependencies, transitively, plus relation proposals whose ends are all in the branch or approved; never `change`, `source`, `bind` or `attr` proposals; see `POST /proposals/{proposalId}/approve-branch`), computed at read time; 0 or absent for every other proposal and when nothing open depends on it. The Studio shows `Approve branch` when it is above 0.
         createdAt:
           type: string
           format: date-time
@@ -4132,6 +4135,33 @@ components:
           $ref: '#/components/schemas/AuditEntry'
         caption:
           type: string
+
+    BranchResult:
+      type: object
+      additionalProperties: false
+      required: [rootId, approved, skipped, remaining, batches, complete]
+      properties:
+        rootId:
+          $ref: '#/components/schemas/Id'
+        approved:
+          type: integer
+          minimum: 0
+          description: Proposals approved by this call, across every committed batch.
+        skipped:
+          type: integer
+          minimum: 0
+          description: Branch proposals the caller may not approve alone (scope, second approver).
+        remaining:
+          type: integer
+          minimum: 0
+          description: Open proposals of the branch after this call, skipped and blocked ones included.
+        batches:
+          type: integer
+          minimum: 0
+          description: Batches committed, each in its own transaction under the decision lock.
+        complete:
+          type: boolean
+          description: False when the round limit or a `busy` lock stopped the call with ready proposals left; call again on the same root.
 
     BulkResult:
       type: object
@@ -4672,8 +4702,8 @@ components:
           description: True when the job succeeded without reading everything - a chunk failed, timed out or was invalid, or the job stopped at its token ceiling, the tenant cap or its node ceiling. The result's `unresolved` says where.
         failureReason:
           type: [string, 'null']
-          enum: [not_configured, budget_exhausted, rate_limited, job_timeout, no_drafts, import_expired, internal, null]
-          description: Set exactly when `state` is `failed`. `no_drafts` - the job ran but nothing grounded survived. `job_timeout` - the job ran longer than `ONTAIX_DOCUMENT_EXTRACTION_JOB_TIMEOUT_MINUTES` without a result.
+          enum: [not_configured, budget_exhausted, rate_limited, job_timeout, no_drafts, import_expired, too_many_attempts, internal, null]
+          description: Set exactly when `state` is `failed`. `no_drafts` - the job ran but nothing grounded survived. `job_timeout` - the job ran longer than `ONTAIX_DOCUMENT_EXTRACTION_JOB_TIMEOUT_MINUTES` without a result. `too_many_attempts` - runners claimed the job `ONTAIX_DOCUMENT_EXTRACTION_MAX_ATTEMPTS` times (default 3) without finishing it, for example after repeated crashes.
         cancelRequested:
           type: boolean
         createdAt:
@@ -4868,10 +4898,11 @@ components:
               source:
                 type: string
                 maxLength: 400
-                description: The item's IRI, OBO id or `row <n>`, as text.
+                description: The item's IRI, OBO id or `row <n>`. Cf, control, bidirectional and line-separator characters (the character set refused in labels) are percent-encoded as UTF-8 (for example U+202E as `%E2%80%AE`), so the text cannot reorder or hide itself in the panel; rendered as text.
               label:
                 type: string
                 maxLength: 120
+                description: The chosen label, only when it passed the label rules; absent for `invalid_label`, whose refused text is never echoed.
               reason:
                 type: string
                 enum: [already_known, reused_existing, invalid_label, duplicate_label, remote_import_not_fetched, unsupported_axiom, equivalence_not_imported, datatype_property, individual_skipped, forbidden_action, cycle, unknown_parent]
@@ -4885,7 +4916,7 @@ components:
         source:
           type: string
           maxLength: 400
-          description: The item's IRI, OBO id or `row <n>`.
+          description: The item's IRI, OBO id or `row <n>`. Cf, control, bidirectional and line-separator characters (the character set refused in labels) are percent-encoded as UTF-8 (for example U+202E as `%E2%80%AE`), so the text cannot reorder or hide itself in the panel; rendered as text. This sanitised form is what the proposal's `why` quotes.
         labelLanguage:
           type: [string, 'null']
           maxLength: 35
@@ -5179,6 +5210,14 @@ components:
           type: integer
           minimum: 0
           description: The tenant's `llmMonthlyTokenCap` setting.
+        ocrPagesUsed:
+          type: integer
+          minimum: 0
+          description: OCR pages counted against `ocrPageCap` this month, reservations of calls still running included.
+        ocrPageCap:
+          type: integer
+          minimum: 0
+          description: The tenant's `ocrMonthlyPageCap` setting.
         costEur:
           type: number
           minimum: 0
@@ -5206,7 +5245,7 @@ components:
 
     Settings:
       type: object
-      required: [voice, importDocs, liveTeaching, everyoneTeaches, approvalRequired, twoApprovers, autoAttrs, notifyOwners, multiCompany, crossCompany, animations, coverageDefault, legend, readOnlyConnectors, refresh, agentAccess, costCap, llmMonthlyTokenCap]
+      required: [voice, importDocs, liveTeaching, everyoneTeaches, approvalRequired, twoApprovers, autoAttrs, notifyOwners, multiCompany, crossCompany, animations, coverageDefault, legend, readOnlyConnectors, refresh, agentAccess, costCap, llmMonthlyTokenCap, ocrMonthlyPageCap]
       properties:
         voice:
           type: boolean
@@ -5249,6 +5288,8 @@ components:
           description: Stop agents at 100 percent of the euro allocation. Does not govern Ontaix's own language model calls, which `llmMonthlyTokenCap` bounds.
         llmMonthlyTokenCap:
           $ref: '#/components/schemas/LlmMonthlyTokenCap'
+        ocrMonthlyPageCap:
+          $ref: '#/components/schemas/OcrMonthlyPageCap'
         egressAllowlist:
           type: array
           maxItems: 200
@@ -5294,6 +5335,8 @@ components:
           type: boolean
         llmMonthlyTokenCap:
           $ref: '#/components/schemas/LlmMonthlyTokenCap'
+        ocrMonthlyPageCap:
+          $ref: '#/components/schemas/OcrMonthlyPageCap'
         egressAllowlist:
           type: array
           maxItems: 200
@@ -5307,6 +5350,13 @@ components:
       maximum: 1000000000
       default: 2000000
       description: Tokens (input plus output) Ontaix's own language model calls may use for the tenant per calendar month (UTC), enforced whatever `costCap` says. The default of 2,000,000 keeps the model step on for every tenant, so sentences that trigger it are sent to the configured provider; `0` turns the step off, which is how a tenant administrator opts out. When the cap is reached the teach parse still answers `200` with the grammar's result and `llmOutcome` `budget_exhausted`. A change writes the audit entry `llmMonthlyTokenCap set to <n>`.
+
+    OcrMonthlyPageCap:
+      type: integer
+      minimum: 0
+      maximum: 1000000
+      default: 1000
+      description: Pages of scanned PDFs Ontaix may send to OCR for the tenant per calendar month (UTC), for users and agents together. Each import reserves its image-only page count in `llm_month_usage.ocr_pages` before the OCR call and settles it after; when the reservation would pass the cap, the import is refused with `503 unavailable` and nothing is stored. `0` turns OCR off (text PDFs and every other type still import). OCR is also off whenever `llmMonthlyTokenCap` is 0. A change writes the audit entry `ocrMonthlyPageCap set to <n>`.
 
     Appearance:
       type: object

@@ -1,6 +1,6 @@
 # ADR 0012: Ontology Import
 
-Status: Accepted. The feature is an owner decision, final (decision row 113); the derived choices (rows 114 and 115) are approved under owner delegation (2026-09-29).
+Status: Accepted. The feature is an owner decision, final (decision row 113); the derived choices (rows 114 and 115, and row 119 from the PR #21 review) are approved under owner delegation (2026-09-29).
 
 ## Context
 
@@ -68,7 +68,7 @@ Deterministic, in file order after a stable sort by source identifier, so the sa
 | Datatype properties, annotations other than labels | Skipped, `datatype_property` or not reported |
 | Unions, intersections, cardinalities, property chains, other axioms | Skipped, `unsupported_axiom` |
 
-Verbs: the property's chosen label, or its local name split at camel case and underscores, lower-cased, whitespace collapsed, at most 60 characters, normalised as every action (NFKC); a verb that normalises to `is a` or `equivalent to` is skipped (`forbidden_action`). Domains: `domainKey` when given, else the parent's domain, else `production`; a hierarchy row's `domain` column, when it names a template key, wins. Cycles in the class hierarchy are broken at the first repeated class (`cycle`).
+Verbs: the property's chosen label, or its local name split at camel case and underscores, lower-cased, whitespace collapsed, at most 60 characters, normalised as every action (NFKC); a verb that normalises to `is a` or `equivalent to` is skipped (`forbidden_action`). The `action` column of a CSV or XLSX hierarchy goes through the same normalisation and check: a forbidden value is reported `forbidden_action` and the row is born with `includes`, so specialisation comes only from `subClassOf` or `is_a`. XLSX hierarchies are read with the OOXML sniffing and byte-bounded decompression of ADR 0011. Domains: `domainKey` when given, else the parent's domain, else `production`; a hierarchy row's `domain` column, when it names a template key, wins. Cycles in the class hierarchy are broken at the first repeated class (`cycle`).
 
 There is no depth limit (row 105 applies here too): paths are as deep as the file.
 
@@ -80,7 +80,7 @@ Per item, the first non-empty candidate of: `skos:prefLabel`, `rdfs:label`, `sko
 
 - An item whose chosen label matches a live or pending concept of the company (case-insensitive, singular or plural, the grammar's `resolve`) reuses that concept: no draft, reported `reused_existing`, and the item's children attach to it.
 - An item already in place - same label under the same parent - and a relation that already exists with the same normalised action are skipped as `already_known`.
-- Everything skipped is listed in `skipped` with its source (IRI, OBO id or `row <n>`) and reason.
+- Everything skipped is listed in `skipped` with its source (IRI, OBO id or `row <n>`) and reason. Sources come from the file and may hold any character an IRI or escape allows, so every `source` - in `skipped`, in `OntologyImportNote` and in the proposal's `why` - has its Cf, control, bidirectional and line-separator characters percent-encoded as UTF-8 before it is stored. A skipped item carries its `label` only when the label passed the label rules; an `invalid_label` skip never echoes the refused text.
 
 ### Limits And Isolation
 
@@ -96,6 +96,7 @@ Per item, the first non-empty candidate of: `skos:prefLabel`, `rdfs:label`, `sko
 - Permission `proposal.create` in the scope of the company (and of `parentConceptId`, which must be an approved live concept of that company: `404`, or `409 concept_pending`). Agents with that permission may import.
 - `409 channel_disabled` while `importDocs` is off; one unit of the import budget per call; one proposal unit per proposal at submit. At the default node ceiling a whole tree fits the default proposal budget of 5,000 per hour.
 - Origin `ontology_import` joins the enum everywhere (OpenAPI `Origin`, AsyncAPI `Proposal` and `AuditEntry`, SQL `proposal_origin`); set by the server only, `originDetail` null. Each proposal's `why` is `Imported from <file name> · <source>`, as text.
+- `languages` is stored one BCP 47 tag per array element (at most 10); the SQL CHECK refuses an element holding several tags.
 - Table `ontology_import` keeps the file's name, detected format and SHA-256 (not the file), the options, the drafts, notes and skipped items for 24 hours.
 
 ### Review And Studio

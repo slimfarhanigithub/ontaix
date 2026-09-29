@@ -81,11 +81,12 @@ CREATE TABLE tenant_settings (
   agent_access         boolean NOT NULL DEFAULT true,
   cost_cap             boolean NOT NULL DEFAULT true,
   llm_monthly_token_cap bigint NOT NULL DEFAULT 2000000 CHECK (llm_monthly_token_cap BETWEEN 0 AND 1000000000),
+  ocr_monthly_page_cap integer NOT NULL DEFAULT 1000 CHECK (ocr_monthly_page_cap BETWEEN 0 AND 1000000),
   egress_allowlist     text[] NOT NULL DEFAULT '{}',
   updated_at           timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT tenant_settings_colors_is_object CHECK (jsonb_typeof(colors) = 'object')
 );
-COMMENT ON TABLE tenant_settings IS 'The 22 tenant settings plus appearance, the connector egress allowlist and the monthly token cap of Ontaix''s own language model calls (default 2,000,000, so the teach extraction model step is on; 0 turns it off and is how an administrator opts out); the two locked settings are enforced by CHECK constraints.';
+COMMENT ON TABLE tenant_settings IS 'The 22 tenant settings plus appearance, the connector egress allowlist and the monthly token cap of Ontaix''s own language model calls (default 2,000,000, so the teach extraction model step is on; 0 turns it off and is how an administrator opts out) and the monthly OCR page cap (default 1,000 pages; 0 turns OCR of scanned pages off); the two locked settings are enforced by CHECK constraints.';
 
 CREATE TABLE tenant_view_state (
   tenant_id   uuid PRIMARY KEY REFERENCES tenant(id) ON DELETE CASCADE,
@@ -427,9 +428,10 @@ CREATE TABLE llm_month_usage (
   tenant_id  uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
   month      date NOT NULL CHECK (month = date_trunc('month', month)::date),
   tokens     bigint NOT NULL DEFAULT 0 CHECK (tokens >= 0),
+  ocr_pages  integer NOT NULL DEFAULT 0 CHECK (ocr_pages >= 0),
   PRIMARY KEY (tenant_id, month)
 );
-COMMENT ON TABLE llm_month_usage IS 'Tokens counted against tenant_settings.llm_monthly_token_cap per calendar month (UTC). Before a call the API reserves its upper bound (estimated input plus the maximum output tokens) with INSERT ... SELECT $reserve WHERE $reserve <= $cap ON CONFLICT (tenant_id, month) DO UPDATE SET tokens = llm_month_usage.tokens + EXCLUDED.tokens WHERE llm_month_usage.tokens + EXCLUDED.tokens <= $cap RETURNING tokens; zero rows returned means the cap is reached and the model step is skipped. The reservation commits in its own short transaction before the provider is called, never inside the request transaction, so no row lock is held during the call. After the call, in another short transaction, it settles with UPDATE ... SET tokens = greatest(tokens + $actual - $reserved, 0) WHERE tenant_id = $tenant AND month = $reserved_month, always the month the reservation was made in, even when the call ends in the next month. A call that times out or fails settles its actual count (0 when the provider reports none), which releases the rest of the reservation. A reservation whose process dies before settling stays counted until the month ends. Shared by every API replica.';
+COMMENT ON TABLE llm_month_usage IS 'Tokens counted against tenant_settings.llm_monthly_token_cap per calendar month (UTC). Before a call the API reserves its upper bound (estimated input plus the maximum output tokens) with INSERT ... SELECT $reserve WHERE $reserve <= $cap ON CONFLICT (tenant_id, month) DO UPDATE SET tokens = llm_month_usage.tokens + EXCLUDED.tokens WHERE llm_month_usage.tokens + EXCLUDED.tokens <= $cap RETURNING tokens; zero rows returned means the cap is reached and the model step is skipped. The reservation commits in its own short transaction before the provider is called, never inside the request transaction, so no row lock is held during the call. After the call, in another short transaction, it settles with UPDATE ... SET tokens = greatest(tokens + $actual - $reserved, 0) WHERE tenant_id = $tenant AND month = $reserved_month, always the month the reservation was made in, even when the call ends in the next month. A call that times out or fails settles its actual count (0 when the provider reports none), which releases the rest of the reservation. A reservation whose process dies before settling stays counted until the month ends. ocr_pages counts OCR pages against tenant_settings.ocr_monthly_page_cap the same way: before an OCR call the API reserves the image-only page count with INSERT ... SELECT $pages WHERE $pages <= $page_cap ON CONFLICT (tenant_id, month) DO UPDATE SET ocr_pages = llm_month_usage.ocr_pages + EXCLUDED.ocr_pages WHERE llm_month_usage.ocr_pages + EXCLUDED.ocr_pages <= $page_cap RETURNING ocr_pages in its own short transaction, zero rows refusing the import with 503 unavailable, and settles to the pages the provider processed after the call. Users and agents draw on the same caps. Shared by every API replica.';
 
 CREATE TABLE rate_budget_window (
   tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
@@ -499,7 +501,7 @@ CREATE TABLE document_import_sentence (
   PRIMARY KEY (tenant_id, import_id, sentence_index),
   FOREIGN KEY (tenant_id, import_id) REFERENCES document_import(tenant_id, id) ON DELETE CASCADE,
   CONSTRAINT document_import_sentence_position_pair CHECK ((position_unit IS NULL) = (position_index IS NULL)),
-  CONSTRAINT document_import_sentence_row_only_for_sheet CHECK (position_row IS NULL OR position_unit = 'sheet')
+  CONSTRAINT document_import_sentence_row_only_for_sheet CHECK (position_row IS NULL OR position_unit IS NOT DISTINCT FROM 'sheet')
 );
 COMMENT ON TABLE document_import_sentence IS 'Extracted sentences of an import in document order. parse_count caps teach parses per sentence at 3 and drafted_at marks the one proposal call allowed to cite the sentence; both are claimed with a conditional UPDATE ... RETURNING inside the calling transaction, and zero rows returned means the claim failed.';
 
@@ -583,9 +585,12 @@ CREATE TABLE document_extraction_job (
   unresolved           jsonb NOT NULL DEFAULT '[]'::jsonb,
   draft_count          integer NOT NULL DEFAULT 0 CHECK (draft_count BETWEEN 0 AND node_ceiling),
   degraded             boolean NOT NULL DEFAULT false,
-  failure_reason       text CHECK (failure_reason IN ('not_configured', 'budget_exhausted', 'rate_limited', 'job_timeout', 'no_drafts', 'import_expired', 'internal')),
+  failure_reason       text CHECK (failure_reason IN ('not_configured', 'budget_exhausted', 'rate_limited', 'job_timeout', 'no_drafts', 'import_expired', 'too_many_attempts', 'internal')),
   cancel_requested     boolean NOT NULL DEFAULT false,
+  lease_owner          uuid,
+  lease_epoch          integer NOT NULL DEFAULT 0 CHECK (lease_epoch >= 0),
   lease_until          timestamptz,
+  attempts             smallint NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 10),
   created_at           timestamptz NOT NULL DEFAULT now(),
   started_at           timestamptz,
   finished_at          timestamptz,
@@ -596,11 +601,15 @@ CREATE TABLE document_extraction_job (
   FOREIGN KEY (tenant_id, actor_user_id) REFERENCES app_user(tenant_id, id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, import_id) REFERENCES document_import(tenant_id, id) ON DELETE SET NULL (import_id),
   FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT document_extraction_job_lease_pair CHECK ((lease_owner IS NULL) = (lease_until IS NULL)),
+  CONSTRAINT document_extraction_job_no_lease_when_final CHECK (state IN ('queued', 'running') OR lease_owner IS NULL),
   CONSTRAINT document_extraction_job_phase_when_running CHECK ((state = 'running') = (phase IS NOT NULL)),
   CONSTRAINT document_extraction_job_failure_iff_failed CHECK ((state = 'failed') = (failure_reason IS NOT NULL)),
   CONSTRAINT document_extraction_job_finished_when_final CHECK ((state IN ('succeeded', 'failed', 'cancelled')) = (finished_at IS NOT NULL)),
   CONSTRAINT document_extraction_job_result_iff_succeeded CHECK (
-    (state = 'succeeded') = (drafts IS NOT NULL AND notes IS NOT NULL AND expires_at IS NOT NULL)
+    (state = 'succeeded') = (drafts IS NOT NULL)
+    AND (drafts IS NULL) = (notes IS NULL)
+    AND (drafts IS NULL) = (expires_at IS NULL)
   ),
   CONSTRAINT document_extraction_job_result_shape CHECK (
     drafts IS NULL OR COALESCE((
@@ -622,7 +631,7 @@ CREATE TABLE document_extraction_job (
 CREATE UNIQUE INDEX document_extraction_job_one_running_per_user ON document_extraction_job (tenant_id, actor_user_id) WHERE state IN ('queued', 'running');
 CREATE INDEX document_extraction_job_queue ON document_extraction_job (created_at) WHERE state IN ('queued', 'running');
 CREATE INDEX document_extraction_job_by_expiry ON document_extraction_job (expires_at) WHERE expires_at IS NOT NULL;
-COMMENT ON TABLE document_extraction_job IS 'One whole-document extraction job (POST /import/{importId}/extraction): two model passes over the chunked import, outline then sections, mapped by the server to one draft tree for company_id. At most one job per import (unique tenant_id, import_id) and one queued or running job per user (partial unique index). The runner in apps/api claims work with SELECT ... FROM document_extraction_job WHERE state IN (''queued'', ''running'') AND (lease_until IS NULL OR lease_until < now()) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1, sets lease_until = now() + 5 minutes and renews it after every chunk, so a job whose runner dies is picked up again and resumes at the next unfinished chunk. Progress, the outline and the settled token count are written after every chunk in a short transaction that also writes the extraction.changed outbox row; no transaction is open during a model call. Token reservation and settlement use llm_month_usage exactly as teach extraction; tokens_used stops the job at token_ceiling. drafts and notes hold the validated tree, each note carrying the grounding sentence index and the originDetail copied from the import, so proposals survive the import purge (import_id is set null by it). submitted_at marks the one successful POST /extractions/{extractionId}/proposals call, claimed with UPDATE ... WHERE submitted_at IS NULL AND state = ''succeeded'' AND expires_at > now() RETURNING id. It never holds a prompt, a raw model answer or a credential. A purge every 15 minutes deletes jobs whose expires_at is more than 24 hours old, and failed or cancelled jobs 48 hours after finished_at.';
+COMMENT ON TABLE document_extraction_job IS 'One whole-document extraction job (POST /import/{importId}/extraction): two model passes over the chunked import, outline then sections, mapped by the server to one draft tree for company_id. At most one job per import (unique tenant_id, import_id) and one queued or running job per user (partial unique index). The runner in apps/api claims work with SELECT ... FROM document_extraction_job WHERE state IN (''queued'', ''running'') AND (lease_until IS NULL OR lease_until < now()) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1, then in the same transaction UPDATE ... SET lease_owner = $runner, lease_epoch = lease_epoch + 1, lease_until = now() + interval ''5 minutes'', attempts = attempts + 1 RETURNING lease_epoch; a job whose attempts would pass the configured limit (ONTAIX_DOCUMENT_EXTRACTION_MAX_ATTEMPTS, default 3) is instead set failed with failure_reason too_many_attempts. Fencing: every later write by that runner - lease renewal (after every chunk, during every model call''s wait at most every 60 seconds, and during mapping), progress, outline, token count, final state - is UPDATE ... WHERE id = $job AND lease_owner = $runner AND lease_epoch = $epoch AND lease_until > now(); zero rows means the lease is lost, and the runner abandons the job at once without writing, settling only its own llm_month_usage reservation. The outbox row is written in the same fenced transaction. A job whose runner dies is picked up again and resumes at the next unfinished chunk. Progress, the outline and the settled token count are written after every chunk in a short transaction that also writes the extraction.changed outbox row; no transaction is open during a model call. Token reservation and settlement use llm_month_usage exactly as teach extraction; tokens_used stops the job at token_ceiling. drafts and notes hold the validated tree, each note carrying the grounding sentence index and the originDetail copied from the import, so proposals survive the import purge (import_id is set null by it). submitted_at marks the one successful POST /extractions/{extractionId}/proposals call, claimed with UPDATE ... WHERE submitted_at IS NULL AND state = ''succeeded'' AND expires_at > now() RETURNING id. It never holds a prompt, a raw model answer or a credential. A purge every 15 minutes deletes jobs whose expires_at is more than 24 hours old, and failed or cancelled jobs 48 hours after finished_at.';
 
 CREATE TABLE ontology_import (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -656,11 +665,12 @@ CREATE TABLE ontology_import (
   CONSTRAINT ontology_import_file_name CHECK (
     char_length(file_name) BETWEEN 1 AND 255
     AND octet_length(file_name) <= 1020
-    AND file_name !~ '[/\\:\x01-\x1f\x7f-\x9f​-‏  ‪-‮؜⁦-⁩﻿]'
+    AND file_name !~ '[/\\:\x01-\x1f\x7f-\x9f\u200b-\u200f\u2028\u2029\u202a-\u202e\u061c\u2066-\u2069\ufeff]'
   ),
   CONSTRAINT ontology_import_languages CHECK (
     cardinality(languages) <= 10 AND array_position(languages, NULL) IS NULL
     AND array_to_string(languages, ',') ~ '^([A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*(,[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*)*)?$'
+    AND coalesce(array_length(string_to_array(array_to_string(languages, ','), ','), 1), 0) = cardinality(languages)
   ),
   CONSTRAINT ontology_import_result_shape CHECK (
     jsonb_typeof(drafts) = 'array' AND jsonb_array_length(drafts) = draft_count
@@ -835,6 +845,7 @@ CREATE TABLE outbox (
   visibility    text NOT NULL CHECK (visibility IN ('model.read', 'audit.read', 'group.manage', 'agent.manage')),
   company_ids   uuid[] NOT NULL DEFAULT '{}',
   domain_key    text REFERENCES domain_template(key),
+  recipient_user_id uuid,
   actor_kind    actor_kind NOT NULL,
   actor_id      uuid,
   bulk          boolean NOT NULL DEFAULT false,
@@ -842,11 +853,12 @@ CREATE TABLE outbox (
   created_at    timestamptz NOT NULL DEFAULT now(),
   published_at  timestamptz,
   CHECK (array_position(company_ids, NULL) IS NULL),
-  CONSTRAINT outbox_domain_key_only_for_audit CHECK (domain_key IS NULL OR visibility = 'audit.read')
+  CONSTRAINT outbox_domain_key_only_for_audit CHECK (domain_key IS NULL OR visibility = 'audit.read'),
+  CONSTRAINT outbox_recipient_iff_extraction CHECK ((aggregate = 'extraction') = (recipient_user_id IS NOT NULL))
 );
 CREATE INDEX outbox_unpublished ON outbox (id) WHERE published_at IS NULL;
 CREATE INDEX outbox_by_tenant_sequence ON outbox (tenant_id, id);
-COMMENT ON TABLE outbox IS 'Events written in the same transaction as the state change they describe, with the permission and the company audience that make each visible; the relay publishes them to NATS in id order.';
+COMMENT ON TABLE outbox IS 'Events written in the same transaction as the state change they describe, with the permission and the company audience that make each visible; the relay publishes them to NATS in id order. recipient_user_id is set exactly on extraction events, whose audience is the one user who started the job (header Ontaix-Recipient); it is a plain uuid with no foreign key.';
 COMMENT ON COLUMN outbox.company_ids IS 'Audience: every company whose labels, names or artefact state the payload carries (bare ids do not count). Empty means tenant-wide. A subscriber receives the event only if it holds the visibility permission in a scope containing every listed company; an empty list needs the permission at any scope. Checked against the tenant''s companies on insert.';
 COMMENT ON COLUMN outbox.domain_key IS 'Set only on audit.appended events, equal to the entry''s audit_entry.domain_key; a holder of audit.read on the domain scope with this key also receives the event.';
 
