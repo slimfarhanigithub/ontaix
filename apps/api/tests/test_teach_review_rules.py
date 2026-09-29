@@ -372,3 +372,53 @@ async def test_a_relation_between_two_sent_candidates_may_cross_companies(
     r = await post(client, tenant, company_id, s)
     assert r["llmOutcome"] == "used"
     assert [d["type"] for d in r["drafts"]] == ["relation"]
+
+
+@pytest.mark.parametrize(
+    ("sentence", "fragment"),
+    [
+        ("these services cover résumés", "Sume"),
+        ("these services cover กิน", "ก"),
+        ("these services cover काम", "क"),
+        ("these services cover node.js", "Js"),
+        ("these services cover insight’s", "S"),
+    ],
+)
+async def test_a_fragment_of_one_word_never_grounds(
+    client, tenant: TenantFixture, sentence, fragment
+):
+    company_id, _ = await add_company(tenant, "Insight")
+    await configure(tenant)
+    seg = [{"index": 0, "start": 0, "end": len(sentence)}]
+    install(
+        lambda ctx: answer(
+            intent(C0, new(fragment), 0, len(sentence), "covers", segment=0), segments=seg
+        )
+    )
+    r = await post(client, tenant, company_id, sentence, "speech")
+    assert r["llmOutcome"] == "used"
+    assert r["drafts"] == []
+    assert [u["reason"] for u in r["unresolved"]] == ["ungrounded_label"]
+
+
+@pytest.mark.parametrize(
+    ("sentence", "label", "drafted"),
+    [
+        ("these services cover résumés", "Résumés", "Résumés"),
+        ("these services cover node.js", "Node.js", "Node.js"),
+        ("these services cover काम", "काम", "काम"),
+    ],
+)
+async def test_a_whole_word_with_marks_or_joiners_grounds(
+    client, tenant: TenantFixture, sentence, label, drafted
+):
+    company_id, _ = await add_company(tenant, "Insight")
+    await configure(tenant)
+    seg = [{"index": 0, "start": 0, "end": len(sentence)}]
+    install(
+        lambda ctx: answer(
+            intent(C0, new(label), 0, len(sentence), "covers", segment=0), segments=seg
+        )
+    )
+    r = await post(client, tenant, company_id, sentence, "speech")
+    assert [d["label"] for d in r["drafts"]] == [drafted]

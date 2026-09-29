@@ -67,7 +67,9 @@ DEFAULT_MEMBER_ACTION = "includes"
 REFUSED_ACTIONS = frozenset({"is a", "equivalent to"})
 
 _WORDS = re.compile(r"[a-z0-9][a-z0-9&'-]*")
-_ANY_WORD = re.compile(r"\w+(?:['-]\w+)*")
+# Characters that join two word characters into one word (the UAX 29 MidLetter and MidNumLet
+# joiners, and the hyphen, which is kept inside a word as a stricter rule).
+_WORD_JOINERS = frozenset("'\u2019.:\u00b7-")
 
 
 @dataclass
@@ -489,22 +491,52 @@ def _ground(label: str, text: str, source: tuple[int, int]) -> str | None:
     whitespace may separate them. The label is sliced from the original input and put through
     the casing rule and the label rules, never taken from the model's string."""
     start, end = source
-    words = list(_ANY_WORD.finditer(text))
-    if any(m.start() < start < m.end() or m.start() < end < m.end() for m in words):
+    words = _words(text)
+    if any(a < start < b or a < end < b for a, b in words):
         return None
-    inside = [m for m in words if m.start() >= start and m.end() <= end]
-    wanted = [_fold(w) for w in _ANY_WORD.findall(label)]
+    inside = [(a, b) for a, b in words if a >= start and b <= end]
+    label = unicodedata.normalize("NFC", label)
+    wanted = [_fold(label[a:b]) for a, b in _words(label)]
     n = len(wanted)
     for i in range(len(inside) - n + 1):
         run = inside[i : i + n]
-        if not n or [_fold(m.group(0)) for m in run] != wanted:
+        if not n or [_fold(text[a:b]) for a, b in run] != wanted:
             continue
-        if any(not text[x.end() : y.start()].isspace() for x, y in zip(run, run[1:], strict=False)):
+        if any(not text[x[1] : y[0]].isspace() for x, y in zip(run, run[1:], strict=False)):
             continue
-        candidate = title(unicodedata.normalize("NFKC", text[run[0].start() : run[-1].end()]))
+        candidate = title(unicodedata.normalize("NFKC", text[run[0][0] : run[-1][1]]))
         if _valid_label(candidate):
             return candidate
     return None
+
+
+def _words(text: str) -> list[tuple[int, int]]:
+    """Code-point ranges of the words of `text`, by the UAX 29 rules that matter here: letters,
+    digits, connector punctuation and combining marks (categories Mn, Mc, Me) belong to the word,
+    so an accent in decomposed text, a Thai or Devanagari vowel sign never ends it; `'`, `’`,
+    `.`, `:`, `·` and `-` between two word characters keep the word whole (`node.js`,
+    `insight’s`). Ranges index the text as given, so decomposed and precomposed input give the
+    same words over their own offsets."""
+    words: list[tuple[int, int]] = []
+    i, n = 0, len(text)
+    while i < n:
+        if not _word_char(text[i]):
+            i += 1
+            continue
+        start = i
+        while i < n:
+            if _word_char(text[i]):
+                i += 1
+            elif text[i] in _WORD_JOINERS and i + 1 < n and _word_char(text[i + 1]):
+                i += 1
+            else:
+                break
+        words.append((start, i))
+    return words
+
+
+def _word_char(c: str) -> bool:
+    return c.isalnum() or unicodedata.category(c)[0] in "MN" or unicodedata.category(c) == "Pc"
 
 
 def _valid_label(label: str) -> bool:
