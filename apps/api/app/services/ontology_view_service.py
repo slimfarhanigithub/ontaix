@@ -95,6 +95,27 @@ class OntologyView:
     def register_company(self, company: Company) -> None:
         self.companies[company.id] = company
 
+    def register_attribute(self, attribute: Attribute) -> None:
+        self.attributes.setdefault(attribute.concept_id, []).append(attribute)
+
+    def forget_attribute(self, attribute: Attribute) -> None:
+        kept = [a for a in self.attributes.get(attribute.concept_id, []) if a.id != attribute.id]
+        self.attributes[attribute.concept_id] = kept
+
+    def attribute(self, attribute_id: uuid.UUID | None) -> Attribute | None:
+        if attribute_id is None:
+            return None
+        return next(
+            (a for rows in self.attributes.values() for a in rows if a.id == attribute_id), None
+        )
+
+    def attribute_named(self, concept_id: uuid.UUID, name: str) -> Attribute | None:
+        """The concept's attribute of that name, compared case-insensitively."""
+        wanted = name.lower()
+        return next(
+            (a for a in self.attributes.get(concept_id, []) if a.name.lower() == wanted), None
+        )
+
     def register_approval(self, approval: ProposalApproval) -> None:
         self.approvals.setdefault(approval.proposal_id, []).append(approval)
 
@@ -432,7 +453,13 @@ class OntologyView:
             products.append(
                 self.domain_product_dto(self.domain_products[proposal.domain_product_id])
             )
-        return Artefacts(concepts=concepts, relations=relations, domain_products=products)
+        attribute = self.attribute(proposal.attribute_id)
+        return Artefacts(
+            concepts=concepts,
+            relations=relations,
+            attributes=[attribute_dto(attribute)] if attribute is not None else [],
+            domain_products=products,
+        )
 
     def _both_ends_approved(self, proposal: Proposal) -> bool:
         relation = self.relations.get(proposal.relation_id) if proposal.relation_id else None
@@ -451,6 +478,7 @@ def attribute_dto(attribute: Attribute) -> AttributeDto:
         type=attribute.type.value,
         col=attribute.col,
         fill=attribute.fill,
+        value=attribute.value,
         state=attribute.state.value,
     )
 

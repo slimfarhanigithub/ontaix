@@ -45,8 +45,9 @@ interface MAttr {
   sourceId: string | null;
   name: string;
   type: T.AttributeType;
-  col: string;
-  fill: number;
+  col: string | null;
+  fill: number | null;
+  value: string | null;
   state: 'proposed' | 'approved';
 }
 
@@ -796,7 +797,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   }
 
   function pAttr(n: MConcept, a: AttrSpec, sourceId: string | null): MProposal {
-    const attr: MAttr = { id: uuid(), conceptId: n.id, sourceId, name: a[0], type: a[1] as T.AttributeType, col: a[2], fill: a[3], state: 'proposed' };
+    const attr: MAttr = { id: uuid(), conceptId: n.id, sourceId, name: a[0], type: a[1] as T.AttributeType, col: a[2], fill: a[3], value: null, state: 'proposed' };
     n.attributes.push(attr);
     return newProposal({
       type: 'attr',
@@ -814,6 +815,43 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       why: `${a[3]} percent filled · in the data, not yet in the model`,
       caption: `${n.label}.${a[0]} is now part of the model, read from ${a[2]}.`,
       conceptId: n.id,
+      relationId: null,
+      relationIds: [],
+      sourceId: null,
+      bindingIds: [],
+      attributeId: attr.id,
+      apply() {
+        attr.state = 'approved';
+      },
+      onReject() {
+        const i = n.attributes.indexOf(attr);
+        if (i >= 0) n.attributes.splice(i, 1);
+      },
+    });
+  }
+
+  /** A taught attribute: a stated value, no column or fill; it waits for a pending concept. */
+  function pTaught(n: MConcept, name: string, type: T.AttributeType, value: string): MProposal {
+    const key = name.toLowerCase();
+    if (n.attributes.some((x) => x.name.toLowerCase() === key)) throw new Refusal(409, 'duplicate_attribute', `${n.label} already has ${key}`);
+    const attr: MAttr = { id: uuid(), conceptId: n.id, sourceId: null, name: key, type, col: null, fill: null, value, state: 'proposed' };
+    n.attributes.push(attr);
+    return newProposal({
+      type: 'attr',
+      changeKind: null,
+      title: `${n.label}.${key}`,
+      heading: KIND_HEADING.attr,
+      color: toConcept(n).color ?? NEUTRAL,
+      companyId: n.companyId,
+      domainId: null,
+      parentLabel: null,
+      deps: n.pending ? [n.label] : [],
+      ready: () => !n.pending,
+      waitFor: n.pending ? n.label : null,
+      html: `<b>${e(n.label)}</b> has <b>${e(key)}</b> <i>· ${e(type)} · ${e(value)}</i>`,
+      why: 'taught · not yet in the model',
+      caption: `${n.label} ${key}: ${value} is now part of the model.`,
+      conceptId: null,
       relationId: null,
       relationIds: [],
       sourceId: null,
@@ -869,7 +907,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
           const spec = ATTR[n.label] || generic(n.label);
           n.attributes = spec
             .filter((a) => a[4] !== 'new')
-            .map((a) => ({ id: uuid(), conceptId: n.id, sourceId: src.id, name: a[0], type: a[1] as T.AttributeType, col: a[2], fill: a[3], state: 'approved' as const }));
+            .map((a) => ({ id: uuid(), conceptId: n.id, sourceId: src.id, name: a[0], type: a[1] as T.AttributeType, col: a[2], fill: a[3], value: null, state: 'approved' as const }));
           for (const a of spec.filter((a) => a[4] === 'new')) {
             const q = pAttr(n, a, src.id);
             cascade.push(q);
@@ -1249,9 +1287,10 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         return pBind(src, targets, draft.caption, cascade);
       }
       case 'attr': {
-        const n = conceptById(draft.conceptId);
+        const n = conceptById(draft.conceptId) || (draft.conceptLabel && draft.companyId ? findConcept(draft.conceptLabel, draft.companyId) : null);
         if (!n) throw new Refusal(404, 'concept_not_found', 'concept does not exist');
-        return pAttr(n, [draft.name, draft.attributeType, draft.col, draft.fill, 'new'], draft.sourceId ?? null);
+        if (draft.value !== undefined) return pTaught(n, draft.name, draft.attributeType, draft.value);
+        return pAttr(n, [draft.name, draft.attributeType, draft.col ?? '', draft.fill ?? 0, 'new'], draft.sourceId ?? null);
       }
       case 'change':
         return pChange(draft);
@@ -1354,6 +1393,13 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
             reject(q, cascaded);
             cascaded.push(q);
           }
+        }
+      }
+      for (const q of open()) {
+        if (q.state !== 'pending' && q.state !== 'half_approved') continue;
+        if (q.type === 'attr' && c.attributes.some((a) => a.id === q.attributeId)) {
+          reject(q, cascaded);
+          cascaded.push(q);
         }
       }
     }

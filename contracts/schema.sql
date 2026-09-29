@@ -276,16 +276,22 @@ CREATE TABLE attribute (
   source_id   uuid,
   name        text NOT NULL,
   type        attribute_type NOT NULL,
-  col         text NOT NULL,
-  fill        smallint NOT NULL CHECK (fill BETWEEN 0 AND 100),
+  col         text,
+  fill        smallint CHECK (fill BETWEEN 0 AND 100),
+  value       text CHECK (char_length(value) BETWEEN 1 AND 200),
   state       attribute_state NOT NULL DEFAULT 'proposed',
   created_at  timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id, id),
   UNIQUE (concept_id, name),
   FOREIGN KEY (tenant_id, concept_id) REFERENCES concept(tenant_id, id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id, source_id) REFERENCES source(tenant_id, id) ON DELETE SET NULL (source_id)
+  FOREIGN KEY (tenant_id, source_id) REFERENCES source(tenant_id, id) ON DELETE SET NULL (source_id),
+  CONSTRAINT attribute_read_or_taught CHECK (
+    (value IS NULL) = (col IS NOT NULL)
+    AND (col IS NULL) = (fill IS NULL)
+    AND (value IS NULL OR (source_id IS NULL AND type IN ('text', 'number', 'date')))
+  )
 );
-COMMENT ON TABLE attribute IS 'An attribute read from a bound source: name, type, source column, fill percentage and whether it is approved or still proposed.';
+COMMENT ON TABLE attribute IS 'An attribute of a concept, approved or still proposed, of one of two kinds: read from a bound source (source column col and fill percentage, value null), or taught (value as a person stated it through teach extraction, col, fill and source_id null, type text, number or date).';
 
 -- ---------------------------------------------------------------------------
 -- Identity: users, groups, roles, agents, cost

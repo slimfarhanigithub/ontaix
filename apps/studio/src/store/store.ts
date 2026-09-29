@@ -12,6 +12,7 @@ import {
   isSource,
   type Appearance,
   type Artefacts,
+  type Attribute,
   type Binding,
   type ConnectorType,
   type Company as ApiCompany,
@@ -40,10 +41,15 @@ import {
   linkBySid,
   type SceneState,
 } from '../canvas/state';
-import type { Company, Domain, Link, Node } from '../canvas/types';
+import type { Attr, Company, Domain, Link, Node } from '../canvas/types';
 import { random } from '../runtime/rng';
 import { now } from '../runtime/clock';
 import type { CustomDialog, DialogEntry, DialogSpec } from '../shell/Dialog';
+
+/** An attribute as the canvas holds it: a taught one keeps its value and has no column or fill. */
+function toAttr(a: Attribute, state: Attr['state'] = a.state): Attr {
+  return { sid: a.id, name: a.name, type: a.type, col: a.col ?? '', fill: a.fill ?? 0, value: a.value ?? undefined, state };
+}
 
 /** 409 codes that mean the proposal changed under the caller, so the scene is reloaded. */
 const STALE_PROPOSAL_CODES = new Set(['proposal_decided', 'proposal_not_ready']);
@@ -248,7 +254,7 @@ class StudioStore {
         pinned: !!n.pinned,
       });
       node._rule = n.rule || undefined;
-      node.attrs = n.attributes.map((a) => ({ sid: a.id, name: a.name, type: a.type, col: a.col, fill: a.fill, state: a.state }));
+      node.attrs = n.attributes.map((a) => toAttr(a));
       node.alpha = 1;
       node.labelAlpha = 1;
     }
@@ -514,7 +520,7 @@ class StudioStore {
         for (const a of art.attributes || []) {
           const n = bySid(s, a.conceptId);
           if (!n || n.attrs.some((x) => x.sid === a.id)) continue;
-          n.attrs.push({ sid: a.id, name: a.name, type: a.type, col: a.col, fill: a.fill, state: 'proposed' });
+          n.attrs.push(toAttr(a, 'proposed'));
           if (this.ui.drawerNode === n) this.ui.drawerSeq++;
         }
         break;
@@ -594,10 +600,12 @@ class StudioStore {
       for (const id of p.bindingIds) dropLink(id);
       const src = bySid(s, p.sourceId);
       if (src && p.type === 'source') src.dying = { start: now(), color: RED };
-      if (p.type === 'attr' && node) {
-        const i = node.attrs.findIndex((a) => a.sid === p.attributeId);
-        if (i >= 0) node.attrs.splice(i, 1);
-        if (this.ui.drawerNode === node) this.ui.drawerSeq++;
+      // A taught attribute's proposal names no concept; its attribute is found on its holder.
+      const holder = p.type === 'attr' ? node || s.nodes.find((n) => n.attrs.some((a) => a.sid === p.attributeId)) : null;
+      if (holder) {
+        const i = holder.attrs.findIndex((a) => a.sid === p.attributeId);
+        if (i >= 0) holder.attrs.splice(i, 1);
+        if (this.ui.drawerNode === holder) this.ui.drawerSeq++;
       }
     };
     for (const q of payload.cascaded) apply(q);
@@ -621,7 +629,14 @@ class StudioStore {
         const source = bySid(s, c.bound.sourceId);
         if (source) n.bound = { source, records: c.bound.records, fresh: c.bound.fresh };
       } else if (!c.bound) n.bound = null;
-      n.attrs = c.attributes.map((a) => ({ sid: a.id, name: a.name, type: a.type, col: a.col, fill: a.fill, state: a.state }));
+      n.attrs = c.attributes.map((a) => toAttr(a));
+      if (this.ui.drawerNode === n) this.ui.drawerSeq++;
+    }
+    for (const a of art.attributes || []) {
+      const n = bySid(s, a.conceptId);
+      const i = n ? n.attrs.findIndex((x) => x.sid === a.id) : -1;
+      if (!n || i < 0) continue;
+      n.attrs[i] = toAttr(a);
       if (this.ui.drawerNode === n) this.ui.drawerSeq++;
     }
     for (const r of art.relations || []) {

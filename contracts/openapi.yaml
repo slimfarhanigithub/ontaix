@@ -3805,19 +3805,39 @@ components:
           type: string
           enum: [id, text, number, ref, date]
         col:
-          type: string
-          description: Source column path, for example `sap.mara.matnr`.
+          type: [string, 'null']
+          description: Source column path, for example `sap.mara.matnr`; null for a taught attribute.
         fill:
-          type: integer
+          type: [integer, 'null']
           minimum: 0
           maximum: 100
+          description: Null for a taught attribute.
+        value:
+          type: [string, 'null']
+          maxLength: 200
+          description: A taught attribute's value (decision row 130); null for an attribute read from a source. Rendered as text.
         state:
           type: string
           enum: [proposed, approved]
 
     AttributeDraft:
       type: object
-      required: [type, conceptId, name, attributeType, col, fill]
+      description: An attribute on a concept, of one of two kinds. Read from a bound source - `sourceId`, `col` and `fill`, as the reference proposes discovered attributes. Taught - a `value` stated by a person (teach extraction's `attr` intent, decision row 130), with no `col` or `fill`. The concept is given by id, or by `conceptLabel` and `companyId` when it is introduced by an earlier draft of the same batch.
+      required: [type, name, attributeType]
+      allOf:
+        - oneOf:
+            - required: [conceptId]
+            - required: [conceptLabel, companyId]
+        - oneOf:
+            - required: [col, fill]
+              not:
+                required: [value]
+            - required: [value]
+              not:
+                anyOf:
+                  - required: [col]
+                  - required: [fill]
+                  - required: [sourceId]
       properties:
         type:
           type: string
@@ -3828,6 +3848,13 @@ components:
           $ref: '#/components/schemas/ImportRef'
         conceptId:
           $ref: '#/components/schemas/Id'
+        conceptLabel:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Alternative to `conceptId` for a concept introduced by an earlier draft of the same batch.
+        companyId:
+          $ref: '#/components/schemas/Id'
         sourceId:
           $ref: '#/components/schemas/Id'
         name:
@@ -3837,6 +3864,7 @@ components:
         attributeType:
           type: string
           enum: [id, text, number, ref, date]
+          description: A taught attribute is `text`, `number` or `date`.
         col:
           type: string
           maxLength: 200
@@ -3844,6 +3872,11 @@ components:
           type: integer
           minimum: 0
           maximum: 100
+        value:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: A taught attribute's value as stated, for example `monthly` or `per day`. Plain text, HTML-escaped wherever the server interpolates it and rendered as text.
 
     ChangeDraft:
       type: object
@@ -4455,7 +4488,8 @@ components:
       properties:
         kind:
           type: string
-          enum: [spec, rel]
+          enum: [spec, rel, attr]
+          description: '`attr` (decision row 130) - `subject` is the concept, `predicate` the attribute name, `object` the value, `objectResolved` null.'
         subject:
           type: string
         predicate:
@@ -4538,8 +4572,8 @@ components:
           description: A substring of the sentence the server holds, or the whole sentence when the model step failed or was skipped. For a phrase the model reported, the server uses the matching substring of the sentence and the whole sentence when there is no exact match.
         reason:
           type: string
-          enum: [not_understood, ambiguous_reference, low_confidence, model_unavailable, model_invalid_output, too_many_drafts, not_a_statement, ungrounded_label, too_many_segments]
-          description: '`not_understood` - neither the grammar nor the model found an intent. `ambiguous_reference` - the model could not tell what a back-reference points to. `low_confidence` - the model reported a confidence below 0.4. `model_unavailable` - the model step was triggered and did not answer (`llmOutcome` `not_configured`, `rate_limited`, `budget_exhausted`, `timeout` or `provider_error`). `model_invalid_output` - the answer failed validation. `too_many_drafts` - the intents beyond the draft cap of `drafts`. `not_a_statement` - a transcript sentence the model read as talk rather than teaching (a question, an aside, a correction it could not apply). `ungrounded_label` - a new label the model proposed that does not appear in the caller''s own words inside the intent''s source range, so the intent was not drafted. `too_many_segments` - the part of a transcript past the 40th segment when the model step was degraded.'
+          enum: [not_understood, ambiguous_reference, low_confidence, model_unavailable, model_invalid_output, too_many_drafts, not_a_statement, ungrounded_label, too_many_segments, attribute_exists]
+          description: '`not_understood` - neither the grammar nor the model found an intent. `ambiguous_reference` - the model could not tell what a back-reference points to. `low_confidence` - the model reported a confidence below 0.4. `model_unavailable` - the model step was triggered and did not answer (`llmOutcome` `not_configured`, `rate_limited`, `budget_exhausted`, `timeout` or `provider_error`). `model_invalid_output` - the answer failed validation. `too_many_drafts` - the intents beyond the draft cap of `drafts`. `not_a_statement` - a transcript sentence the model read as talk rather than teaching (a question, an aside, a correction it could not apply). `ungrounded_label` - a new label the model proposed that does not appear in the caller''s own words inside the intent''s source range, so the intent was not drafted. `too_many_segments` - the part of a transcript past the 40th segment when the model step was degraded. `attribute_exists` - an `attr` intent whose concept already has an attribute of that name with another value; editing an attribute is not taught.'
 
     ExpansionRequest:
       type: object

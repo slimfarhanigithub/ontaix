@@ -153,6 +153,7 @@ async def create(
     bulk: bool,
     origin: ProposalOrigin,
     origin_detail: dict[str, Any] | None,
+    attribute_id: uuid.UUID | None = None,
 ) -> Proposal:
     proposal = Proposal(
         tenant_id=tenant_id,
@@ -172,6 +173,7 @@ async def create(
         concept_id=concept_id,
         relation_id=relation_id,
         relation_ids=relation_ids,
+        attribute_id=attribute_id,
         proposer_kind=proposer_kind,
         proposer_user_id=proposer_user_id,
         bulk=bulk,

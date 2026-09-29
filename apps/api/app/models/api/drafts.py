@@ -117,16 +117,46 @@ class BindingDraft(ApiModel):
     seed: Seed | None = None
 
 
+TAUGHT_ATTRIBUTE_TYPES = frozenset({"text", "number", "date"})
+
+
 class AttributeDraft(ApiModel):
+    """An attribute read from a bound source (`col` and `fill`), or taught (`value`). The concept
+    is given by id, or by label and company when an earlier draft of the same batch introduces
+    it."""
+
     type: Literal["attr"] = "attr"
     origin: InputOrigin | None = None
     import_ref: ImportRef | None = None
-    concept_id: uuid.UUID
+    concept_id: uuid.UUID | None = None
+    concept_label: str | None = Field(default=None, min_length=1, max_length=120)
+    company_id: uuid.UUID | None = None
     source_id: uuid.UUID | None = None
     name: str = Field(min_length=1, max_length=80)
     attribute_type: Literal["id", "text", "number", "ref", "date"]
-    col: str = Field(max_length=200)
-    fill: int = Field(ge=0, le=100)
+    col: str | None = Field(default=None, max_length=200)
+    fill: int | None = Field(default=None, ge=0, le=100)
+    value: str | None = Field(default=None, min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def _one_concept_and_one_kind(self) -> AttributeDraft:
+        by_label = self.concept_label is not None or self.company_id is not None
+        if (self.concept_id is None) == (not by_label):
+            raise ValueError("exactly one of conceptId or conceptLabel with companyId is required")
+        if by_label and (self.concept_label is None or self.company_id is None):
+            raise ValueError("conceptLabel and companyId go together")
+        if self.value is None:
+            if self.col is None or self.fill is None:
+                raise ValueError("an attribute has col and fill, or a value")
+        elif self.col is not None or self.fill is not None or self.source_id is not None:
+            raise ValueError("a taught attribute has a value and no col, fill or sourceId")
+        elif self.attribute_type not in TAUGHT_ATTRIBUTE_TYPES:
+            raise ValueError("a taught attribute is text, number or date")
+        return self
+
+    @property
+    def taught(self) -> bool:
+        return self.value is not None
 
 
 class ChangePayload(ApiModel):

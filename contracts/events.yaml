@@ -1525,9 +1525,15 @@ components:
           type: string
           enum: [id, text, number, ref, date]
         col:
-          type: string
+          type: [string, 'null']
+          description: Null for a taught attribute.
         fill:
-          type: integer
+          type: [integer, 'null']
+          description: Null for a taught attribute.
+        value:
+          type: [string, 'null']
+          maxLength: 200
+          description: A taught attribute's value (decision row 130); null for an attribute read from a source. Rendered as text.
         state:
           type: string
           enum: [proposed, approved]

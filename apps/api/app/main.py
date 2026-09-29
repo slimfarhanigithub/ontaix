@@ -16,7 +16,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.auth import DEV_USER_HEADER
 from app.clients.db_client import dispose_engine
-from app.clients.llm_client import check_llm_configuration
+from app.clients.llm_client import check_llm_configuration, warm_llm_clients
 from app.config import get_settings
 
 # Every ontology table has a foreign key to `tenant`; its mapping must be registered before the
@@ -60,9 +60,11 @@ HTTP_STATUS_CODES = {
 @asynccontextmanager
 async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Runs the expired-import purge, the retention purge and the whole-document extraction
-    runner for the life of the process and cancels them on shutdown."""
+    runner for the life of the process, warms the language model clients in the background, and
+    cancels them all on shutdown."""
     settings = get_settings()
-    purges = [
+    tasks = [
+        asyncio.create_task(warm_llm_clients(), name="llm-warm-up"),
         asyncio.create_task(
             purge_periodically(settings.import_purge_interval_seconds), name="import-purge"
         ),
@@ -80,11 +82,11 @@ async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        for purge in purges:
-            purge.cancel()
-        for purge in purges:
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
             with contextlib.suppress(asyncio.CancelledError):
-                await purge
+                await task
         await dispose_engine()
 
 

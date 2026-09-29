@@ -1,6 +1,6 @@
 """Expansion, whole-document extraction, import formats, OCR and ontology import.
 
-Brings a database of revision 0003 to the current `contracts/schema.sql`: the origin values
+Brings a database of revision 0004 to the current `contracts/schema.sql`: the origin values
 `suggestion` and `ontology_import`; `tenant_settings.ocr_monthly_page_cap`; the new `llm_call`
 purposes, outcome `refused`, the 300-second latency bound and `pages`; `llm_month_usage.ocr_pages`;
 the `expand`, `extraction` and `ocr` budgets; `document_import.ocr_pages` and the new media
@@ -11,8 +11,8 @@ statement is idempotent, so on a database revision 0001 already created from the
 contract this revision changes nothing. The DDL is the contract's text, so constraint names and
 definitions match a database loaded from it.
 
-Revision ID: 0004
-Revises: 0003
+Revision ID: 0005
+Revises: 0004
 Create Date: 2026-09-29
 """
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "0004"
-down_revision = "0003"
+revision = "0005"
+down_revision = "0004"
 branch_labels = None
 depends_on = None
 
@@ -277,4 +277,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise NotImplementedError("revision 0004 is one-way")
+    raise NotImplementedError("revision 0005 is one-way")

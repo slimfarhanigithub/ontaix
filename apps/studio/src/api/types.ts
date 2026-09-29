@@ -67,8 +67,12 @@ export interface Attribute {
   sourceId?: string | null;
   name: string;
   type: AttributeType;
-  col: string;
-  fill: number;
+  /** Source column path; null for a taught attribute. */
+  col: string | null;
+  /** Fill percentage; null for a taught attribute. */
+  fill: number | null;
+  /** A taught attribute's value as stated; null for an attribute read from a source. */
+  value?: string | null;
   state: 'proposed' | 'approved';
 }
 
@@ -272,14 +276,22 @@ export interface BindingDraft extends DraftOrigin {
   caption?: string;
 }
 
+/**
+ * An attribute read from a bound source (`col` and `fill`), or taught (`value`, type text,
+ * number or date). The concept is given by id, or by label and company when an earlier draft of
+ * the same batch introduces it.
+ */
 export interface AttributeDraft extends DraftOrigin {
   type: 'attr';
-  conceptId: string;
+  conceptId?: string;
+  conceptLabel?: string;
+  companyId?: string;
   sourceId?: string;
   name: string;
   attributeType: AttributeType;
-  col: string;
-  fill: number;
+  col?: string;
+  fill?: number;
+  value?: string;
 }
 
 export type ChangeKind =
@@ -454,8 +466,9 @@ export interface Scene {
   connectors: ConnectorType[];
 }
 
+/** For `attr`, the subject is the concept, the predicate the attribute name and the object the value. */
 export interface Intent {
-  kind: 'spec' | 'rel';
+  kind: 'spec' | 'rel' | 'attr';
   subject: string;
   predicate?: string;
   object: string;
@@ -495,7 +508,8 @@ export interface UnresolvedPhrase {
     | 'too_many_drafts'
     | 'not_a_statement'
     | 'ungrounded_label'
-    | 'too_many_segments';
+    | 'too_many_segments'
+    | 'attribute_exists';
 }
 
 export type LlmOutcome =
