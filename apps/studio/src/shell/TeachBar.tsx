@@ -2,13 +2,15 @@
  * The teach bar: company selector, sentence input, microphone and Teach. Markup from
  * reference/ontaix-studio-reference.html lines 202-208 without the Next button; behaviours from
  * lines 610-611, 885-886 and 1091-1095 (voice). Typed sentences are taught as `text`. The
- * microphone listens until the speaker stops (a pause, or a second press) and then sends the whole
- * transcript once as `speech`, never word by word; the words show in the input while listening.
+ * microphone listens until the speaker stops (a pause, or a second press) and queues each sentence
+ * the recogniser finishes as `speech` while the speaker goes on, so cells appear during speech;
+ * words still being recognised only show in the input. On stop, words never finished join the
+ * queue as the last sentence and the queue drains.
  */
 import { useEffect, useRef, useState } from 'react';
 
 import type { InputOrigin } from '../api/types';
-import { teach } from '../teach/teach';
+import { speechStream, teach } from '../teach/teach';
 import { useStore } from './dom';
 
 interface SpeechRecognitionLike {
@@ -39,6 +41,15 @@ export function TeachBar() {
   const rec = useRef<SpeechRecognitionLike | null>(null);
   const [errorPlaceholder, setErrorPlaceholder] = useState<string | null>(null);
   const mic = useRef<HTMLButtonElement>(null);
+  const silence = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(
+    () => () => {
+      clearTimeout(silence.current);
+      rec.current?.stop();
+    },
+    [],
+  );
 
   useEffect(() => {
     const el = mic.current;
@@ -59,33 +70,44 @@ export function TeachBar() {
     r.lang = /^fr/i.test(navigator.language) ? 'fr-FR' : 'en-GB';
     r.interimResults = true;
     r.continuous = true;
-    let heard = '';
-    let sent = false;
-    let silence: ReturnType<typeof setTimeout> | undefined;
+    const stream = speechStream();
+    // Results before this index are final and already sent; the rest are still being recognised.
+    let finished = 0;
+    let pending = '';
+    let heard = false;
+    let ended = false;
     r.onstart = () => {
       st.ui.listening = true;
       st.bump();
     };
     r.onresult = (ev) => {
       let s = '';
-      for (let i = 0; i < ev.results.length; i++) s += ev.results[i][0].transcript;
-      heard = s;
+      pending = '';
+      for (let i = 0; i < ev.results.length; i++) {
+        const words = ev.results[i][0].transcript;
+        s += words;
+        if (i < finished) continue;
+        if (ev.results[i].isFinal && i === finished) {
+          stream.sentence(words);
+          finished++;
+        } else pending += words;
+      }
+      heard = true;
       st.setSay(s);
-      clearTimeout(silence);
-      silence = setTimeout(() => r.stop(), SILENCE_MS);
+      clearTimeout(silence.current);
+      silence.current = setTimeout(() => r.stop(), SILENCE_MS);
     };
     r.onerror = () => {
       setErrorPlaceholder('The microphone did not respond. Type instead, the show goes on.');
     };
     r.onend = () => {
-      clearTimeout(silence);
+      clearTimeout(silence.current);
       st.ui.listening = false;
       st.bump();
-      if (!sent && heard.trim()) {
-        sent = true;
-        submit(heard, 'speech');
-        st.setSay('');
-      }
+      if (ended) return;
+      ended = true;
+      if (pending.trim()) stream.sentence(pending);
+      if (heard) st.setSay('');
     };
     r.start();
   };

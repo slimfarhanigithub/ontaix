@@ -25,7 +25,7 @@ flowchart TD
   step_on -->|yes| available
   step_on -->|no| rules[Rule-based grammar]
   rules --> result_rules[Grammar result - llmOutcome not_triggered, or the reason the step is off]
-  route -->|speech, whole transcript up to 4000 chars| available
+  route -->|speech, one or more finished sentences up to 4000 chars| available
   route -->|document, cited sentence plus 2 neighbours each side| available
   available{Model configured, cap above 0, caller llm budget, tokens reserved in own short transaction?}
   available -->|no| fallback[Grammar result, degraded, sentence in unresolved - a transcript is split into segments first]
@@ -55,14 +55,14 @@ flowchart TD
 | Origin | First extractor | Model input | When the model is off, out of budget, failing or invalid |
 |---|---|---|---|
 | `text` (typed, at most 400 characters) | Model, while the step is on (row 120) | The sentence | Grammar result; `degraded` true only when a fallback trigger below fired |
-| `speech` (whole transcript, at most 4,000 characters) | Model | The whole transcript as one request | Grammar on the transcript split into segments on sentence punctuation and newlines (a segment over 400 code points is cut at its last space before 400, or at exactly 400 when it has none; at most 40 segments are kept and the rest of the transcript is listed as one `unresolved` entry with reason `too_many_segments`); `degraded` true |
+| `speech` (one or more finished sentences of a recording, at most 4,000 characters) | Model | The request's text as one request; earlier requests of the recording reach it through the session | Grammar on the transcript split into segments on sentence punctuation and newlines (a segment over 400 code points is cut at its last space before 400, or at exactly 400 when it has none; at most 40 segments are kept and the rest of the transcript is listed as one `unresolved` entry with reason `too_many_segments`); `degraded` true |
 | `document` (`importRef`) | Model | The cited sentence, plus up to two sentences before and two after it from the same stored import as context, read by the server | Grammar on the cited sentence; `degraded` true |
 
 For every origin, a valid model answer is the result (`extractor` `llm`); the grammar does not run. The model step is on when a provider is configured and `llmMonthlyTokenCap` is above 0. When it is off, or does not answer (budget, timeout, error, invalid answer), typed text falls back to the grammar and the fallback triggers below decide only whether the result is marked `degraded`.
 
 ### Speech Transcripts
 
-A `speech` request carries the whole final transcript of one recording as `text`, at most 4,000 characters, and spends one parse unit per started 400 characters. The model:
+A `speech` request carries one or more finished sentences of a recording as `text`, at most 4,000 characters, and spends one parse unit per started 400 characters. While recording, the Studio sends each finished sentence as its own request, one at a time, in the recording's `sessionId` (decision row 127); the session turns link the requests, so a back-reference resolves to what an earlier request of the same recording said. Each request spends its own parse units and, when the model runs, one unit of the caller's hourly `llm` budget, so a recording sent sentence by sentence spends one parse unit and one `llm` unit per sentence request and uses the hourly `llm` budget faster than one whole transcript did. The rules below for a transcript apply to whatever text one request carries. The model:
 
 - segments the transcript into sentences and returns each as a code-point range; fillers, false starts, repeated words and self-corrections it applied stay outside every segment;
 - resolves back-references with the session's turns and with earlier segments of the same transcript;
