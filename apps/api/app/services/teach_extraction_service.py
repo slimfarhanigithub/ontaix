@@ -61,6 +61,7 @@ from app.services.teach_draft_service import Drafter, End, PlannedIntent, phrase
 from app.utilities.action_text import has_refused_character, normalise_action
 from app.utilities.example_selection import most_similar, within_budget
 from app.utilities.permissions import can_read
+from app.utilities.sound_alike import sounds_alike
 from app.utilities.teach_parser import singular, title
 
 logger = logging.getLogger(__name__)
@@ -457,6 +458,13 @@ def _interpret(
         # ungrounded subject or object sinks the intent; an ungrounded member is left out alone.
         raw = [intent.subject, intent.object, *(intent.members or [])]
         placed = [_end(ref, handles, sent, drafter, text, source, earlier) for ref in raw]
+        # Speech recognition mishears names: a new label that sounds like one of the company's
+        # concepts is never drafted as a new concept beside it; the phrase is listed instead.
+        misheard = reading.speech and any(
+            _misheard(end, drafter) for end in placed if end is not None
+        )
+        if misheard:
+            placed = [None if end and _misheard(end, drafter) else end for end in placed]
         grounded = placed[0] is not None and placed[1] is not None
         dropped = sum(1 for end in placed[2:] if end is None)
         ends = [end for end in placed if end is not None]
@@ -506,6 +514,7 @@ def _interpret(
                 source,
                 grounded,
                 dropped,
+                misheard,
             )
         )
 
@@ -528,14 +537,15 @@ def _interpret(
                 stated.setdefault(intent.list_id, intent.stated_count)
         span = (c.source[0] + offset, c.source[1] + offset)
         where = sentence[span[0] : span[1]][:400]
+        missing = "ambiguous_reference" if c.misheard else "ungrounded_label"
         if not c.grounded or c.subject is None or c.obj is None:
-            step.unresolved.append(UnresolvedPhrase(text=where, reason="ungrounded_label"))
+            step.unresolved.append(UnresolvedPhrase(text=where, reason=missing))
             continue
         if intent.confidence < MIN_CONFIDENCE:
             step.unresolved.append(UnresolvedPhrase(text=where, reason="low_confidence"))
             continue
         if c.dropped:
-            step.unresolved.append(UnresolvedPhrase(text=where, reason="ungrounded_label"))
+            step.unresolved.append(UnresolvedPhrase(text=where, reason=missing))
             if not c.members:
                 # A group whose every member is ungrounded is not drafted empty.
                 continue
@@ -595,8 +605,10 @@ class _Checked:
     segment: int
     source: tuple[int, int]
     grounded: bool
-    # Members of a grouping intent left out as ungrounded.
+    # Members of a grouping intent left out as ungrounded or misheard.
     dropped: int = 0
+    # An end was left out because it sounds like an existing concept of another spelling.
+    misheard: bool = False
 
 
 def _ranges(
@@ -931,6 +943,14 @@ def _end(
     if spoken is None:
         return None
     return End(drafter.resolve(spoken), spoken, spoken, cited_new=True)
+
+
+def _misheard(end: End, drafter: Drafter) -> bool:
+    """True when `end` is a new concept whose label sounds like, but is not, the label of one
+    of the company's concepts (`Ahmedabus` beside `Amdaris`)."""
+    if end.concept is not None:
+        return False
+    return any(sounds_alike(end.label, c.label) for c in drafter.mine)
 
 
 def _grounded_labels(
