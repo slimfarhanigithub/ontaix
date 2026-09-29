@@ -3,7 +3,9 @@
 Extraction is CPU-bound and its cost depends on the uploaded bytes, so it never runs on the
 event loop: each job starts a fresh process, the request waits for it in a thread, and a job
 still running at the limit is terminated and answered as too large. A crash of the child is
-answered as an unreadable document.
+answered as an unreadable document. At most `extraction_concurrency` children run at once in a
+process; a job arriving while every slot is taken is refused at once with `503 busy`, and each
+child's address space is capped on Linux.
 """
 
 from __future__ import annotations
@@ -11,37 +13,67 @@ from __future__ import annotations
 import asyncio
 import logging
 import multiprocessing
+import sys
 from multiprocessing.connection import Connection
 
+from app.config import get_settings
 from app.utilities.document_text import (
     DocumentTooLargeError,
     DocumentUnreadableError,
     Sentence,
     extract_sentences,
 )
+from app.utilities.problems import ProblemError
 
 logger = logging.getLogger(__name__)
 
 EXTRACTION_TIMEOUT_SECONDS = 20.0
+BUSY_RETRY_AFTER_SECONDS = 5
 
 _TOO_LARGE = "too_large"
 _UNREADABLE = "unreadable"
 _OK = "ok"
+
+_slots: tuple[int, asyncio.Semaphore] | None = None
 
 
 async def extract(data: bytes, media_type: str) -> tuple[list[Sentence], int]:
     """The sentences of a document and its extracted characters, read in a child process.
 
     Raises `DocumentTooLargeError` past a limit or past `EXTRACTION_TIMEOUT_SECONDS`, and
-    `DocumentUnreadableError` when the document cannot be read.
+    `DocumentUnreadableError` when the document cannot be read, and `503 busy` when every
+    extraction slot is taken.
     """
-    return await asyncio.to_thread(_run, data, media_type, EXTRACTION_TIMEOUT_SECONDS)
+    slots = _semaphore()
+    if slots.locked():
+        raise ProblemError(
+            503,
+            "busy",
+            "every document extraction slot is in use; try again shortly",
+            headers={"Retry-After": str(BUSY_RETRY_AFTER_SECONDS)},
+        )
+    async with slots:
+        memory = get_settings().extraction_memory_limit_bytes
+        return await asyncio.to_thread(_run, data, media_type, EXTRACTION_TIMEOUT_SECONDS, memory)
 
 
-def _run(data: bytes, media_type: str, timeout: float) -> tuple[list[Sentence], int]:
+def _semaphore() -> asyncio.Semaphore:
+    """The process-wide extraction slots, rebuilt when the configured limit changes."""
+    global _slots
+    limit = get_settings().extraction_slots()
+    if _slots is None or _slots[0] != limit:
+        _slots = (limit, asyncio.Semaphore(limit))
+    return _slots[1]
+
+
+def _run(
+    data: bytes, media_type: str, timeout: float, memory_limit: int
+) -> tuple[list[Sentence], int]:
     context = multiprocessing.get_context("spawn")
     receiver, sender = context.Pipe(duplex=False)
-    process = context.Process(target=_child, args=(sender, data, media_type), daemon=True)
+    process = context.Process(
+        target=_child, args=(sender, data, media_type, memory_limit), daemon=True
+    )
     process.start()
     sender.close()
     try:
@@ -57,6 +89,10 @@ def _run(data: bytes, media_type: str, timeout: float) -> tuple[list[Sentence], 
         if process.is_alive():
             process.terminate()
         process.join(5)
+        if process.is_alive():
+            process.kill()
+            process.join()
+        process.close()
     if status == _TOO_LARGE:
         raise DocumentTooLargeError(payload)
     if status == _UNREADABLE:
@@ -65,8 +101,9 @@ def _run(data: bytes, media_type: str, timeout: float) -> tuple[list[Sentence], 
     return [Sentence(*s) for s in sentences], extracted
 
 
-def _child(sender: Connection, data: bytes, media_type: str) -> None:
-    """Child process entry: extract and send one result tuple back."""
+def _child(sender: Connection, data: bytes, media_type: str, memory_limit: int) -> None:
+    """Child process entry: cap the address space, extract, and send one result tuple back."""
+    _limit_memory(memory_limit)
     try:
         sentences, extracted = extract_sentences(data, media_type)
         sender.send((_OK, ([(s.text, s.unit, s.index) for s in sentences], extracted)))
@@ -78,3 +115,14 @@ def _child(sender: Connection, data: bytes, media_type: str) -> None:
         sender.send((_UNREADABLE, "the document could not be read"))
     finally:
         sender.close()
+
+
+def _limit_memory(limit: int) -> None:
+    """Cap the child's address space so one document cannot exhaust the host's memory; past
+    it an allocation fails and the document is answered as unreadable. Windows has no
+    `RLIMIT_AS`, so there the cap is skipped and only the time limit and slot count apply."""
+    if sys.platform == "win32" or limit <= 0:
+        return
+    import resource
+
+    resource.setrlimit(resource.RLIMIT_AS, (limit, limit))

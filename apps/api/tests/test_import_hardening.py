@@ -277,3 +277,29 @@ async def test_the_app_lifespan_purges_expired_imports_on_a_schedule(
     assert await gone()
     assert tasks[0].cancelled()
     db_client.configure_engine(get_settings().database_url or "")
+
+
+async def test_extractions_past_the_slot_limit_answer_503_busy_and_the_api_stays_responsive(
+    client: httpx.AsyncClient, tenant: TenantFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each import used to start its own child with no bound, across every user."""
+    monkeypatch.setattr(get_settings(), "extraction_concurrency", 2)
+    monkeypatch.setattr(extraction_service, "EXTRACTION_TIMEOUT_SECONDS", 3.0)
+    slow = pdf_with_stream(b"BT /F1 12 Tf 72 720 Td (Machines have sensors.) Tj ET\n" * 400_000)
+    imports = [
+        asyncio.create_task(upload(client, tenant.builder, f"slow{i}.pdf", slow)) for i in range(5)
+    ]
+    await asyncio.sleep(0.5)
+    health_times = []
+    while not all(t.done() for t in imports):
+        started = time.monotonic()
+        assert (await client.get("/healthz")).status_code == 200
+        health_times.append(time.monotonic() - started)
+        await asyncio.sleep(0.2)
+    responses = [await t for t in imports]
+    statuses = sorted(r.status_code for r in responses)
+    assert statuses == [413, 413, 503, 503, 503], [r.text for r in responses]
+    for busy in (r for r in responses if r.status_code == 503):
+        assert busy.json()["code"] == "busy"
+        assert int(busy.headers["Retry-After"]) > 0
+    assert health_times and max(health_times) < 1.0
