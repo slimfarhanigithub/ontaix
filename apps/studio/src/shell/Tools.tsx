@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react';
 
 import { importDocument } from '../teach/teach';
 import { openAddCompany } from './AddCompany';
+import { useDelayed } from './busy';
 import { IMPORT_ACCEPT, ImportModePill, importMode } from './ImportMode';
 import { useStore } from './dom';
 
@@ -15,6 +16,7 @@ export function Tools() {
   const st = useStore();
   const settings = st.ui.settings;
   const file = useRef<HTMLInputElement>(null);
+  const importWait = useDelayed(st.ui.importing);
 
   useEffect(() => {
     const over = (e: DragEvent) => e.preventDefault();
@@ -51,11 +53,16 @@ export function Tools() {
         title="Import a document and detect concepts and relations (I)"
         style={{ display: settings && !settings.importDocs ? 'none' : undefined }}
         disabled={st.ui.importing}
+        aria-busy={importWait ? 'true' : undefined}
         onClick={() => file.current?.click()}
       >
-        <svg viewBox="0 0 16 16">
-          <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10" />
-        </svg>
+        {importWait ? (
+          <span className="spin"></span>
+        ) : (
+          <svg viewBox="0 0 16 16">
+            <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10" />
+          </svg>
+        )}
         {st.ui.importing ? 'Importing…' : 'Import'}
       </button>
       <input

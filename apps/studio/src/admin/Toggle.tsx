@@ -5,22 +5,33 @@
 import type { ButtonHTMLAttributes } from 'react';
 
 import type { Settings } from '../api/types';
+import { useBusyAction } from '../shell/busy';
 import { useStore } from '../shell/dom';
 import { changeSetting } from './actions';
 
-type TgProps = { on: boolean; locked?: boolean } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'disabled' | 'title'>;
+type TgProps = { on: boolean; locked?: boolean; onClick?: () => unknown } & Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'className' | 'disabled' | 'title' | 'onClick'
+>;
 
-/** Shows `Disable` with a green dot when on, `Enable` when off; a locked toggle is disabled and reads `Always on`. */
-export function Tg({ on, locked, ...rest }: TgProps) {
+/**
+ * Shows `Disable` with a green dot when on, `Enable` when off; a locked toggle is disabled and
+ * reads `Always on`. While an awaited click is pending past the busy delay, the spinner stands
+ * in the dot's place so the label keeps the toggle's fixed width.
+ */
+export function Tg({ on, locked, onClick, ...rest }: TgProps) {
+  const { shown, run } = useBusyAction();
   return (
     <button
       className={`tg${on ? '' : ' off'}`}
       {...rest}
-      disabled={locked || undefined}
+      disabled={locked || shown || undefined}
+      aria-busy={shown ? 'true' : undefined}
       title={locked ? 'Always on' : undefined}
       aria-pressed={on ? 'true' : 'false'}
+      onClick={onClick ? () => run(onClick) : undefined}
     >
-      <i></i>
+      {shown ? <span className="spin"></span> : <i></i>}
       {on ? 'Disable' : 'Enable'}
     </button>
   );

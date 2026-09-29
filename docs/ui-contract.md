@@ -63,6 +63,8 @@ screen by screen with the owner; every rule below was a decision taken while bui
 - Keyboard: P panel, D domains card, L legend, G admin, A arrange, I import, C coverage, S skip animation, F full screen, Escape; no Space, ArrowRight or R (story shortcuts, removed by decision row 62).
 - Content enters as speech (teach bar microphone, transcribed to text), text (teach bar), documents (import, extracted by the API, sentence by sentence or as a whole) or ontology files (import, mapped by the API); each becomes proposals.
 - Everything persists (state survives reload and full-screen).
+- An awaited click shows `.spin` before the label after 250 ms, and the button is disabled until it settles (decision row 132). On the `.tg` toggle and the Import tool button the spinner takes the dot's or icon's place. While Expand suggestions load, the dialog body reads `<span class="spin"></span>Expanding <b>{concept}</b>…` and the drawer's Expand button spins.
+- While a teach bar parse is pending (typed, spoken or imported), the caption kicker `#captionKicker` reads `<span class="spin"></span>Processing` after 250 ms, until the parses settle; typing and listening stay available (decision row 132).
 
 ## Porting rule
 The canvas renderer (cells, division, hulls, links, labels, arrange, focus, lineage) is ported
