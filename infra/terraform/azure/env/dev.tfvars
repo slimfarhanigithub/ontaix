@@ -24,3 +24,17 @@ foundry_deployment_name               = "gpt-6-sol"
 foundry_model_version                 = "2026-09-22"
 foundry_deployment_sku                = "DataZoneStandard"
 foundry_deployment_capacity           = 100
+
+# Teach extraction models: Claude, GlobalStandard in Sweden Central (not EU data zone).
+# Versions as listed by `az cognitiveservices model list --location swedencentral` on 2026-09-29.
+foundry_claude_location = "swedencentral"
+foundry_claude_organization = {
+  name         = "Insight"
+  country_code = "FR"
+  industry     = "technology"
+}
+foundry_claude_deployments = {
+  "claude-fable-5-1"  = { model_version = "1", capacity = 50 }
+  "claude-sonnet-5-5" = { model_version = "2", capacity = 50 }
+  "claude-sonnet-5"   = { model_version = "2", capacity = 50 }
+}

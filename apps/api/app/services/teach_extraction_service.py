@@ -35,7 +35,7 @@ from app.clients.llm_client import (
     LlmTimeout,
     get_llm_client,
 )
-from app.config import get_settings
+from app.config import LlmProfile, get_settings
 from app.models.api.settings import DEFAULT_LLM_MONTHLY_TOKEN_CAP
 from app.models.api.teach import DraftNote, LlmOutcome, SourceSpan, UnresolvedPhrase
 from app.models.llm.teach_extraction_answer import (
@@ -137,10 +137,11 @@ class Reading:
         return self.mode != "sentence"
 
 
-def enabled(view: OntologyView) -> bool:
-    """True when the step can be tried: a provider is configured and the tenant's monthly token
-    cap is above 0. Budgets and the provider's answer are checked when the step runs."""
-    if get_llm_client() is None:
+def enabled(view: OntologyView, profile: LlmProfile) -> bool:
+    """True when the step can be tried on `profile`: its provider is configured and the tenant's
+    monthly token cap is above 0. Budgets and the provider's answer are checked when the step
+    runs."""
+    if get_llm_client(profile) is None:
         return False
     settings = view.settings
     return (settings.llm_monthly_token_cap if settings else DEFAULT_LLM_MONTHLY_TOKEN_CAP) > 0
@@ -153,10 +154,13 @@ async def run(
     text: str,
     turns: list[StoredTurn],
     reading: Reading | None = None,
+    *,
+    profile: LlmProfile,
 ) -> ModelStep:
-    """The model step for `sentence` (`text` is the sentence after its domain prefix)."""
+    """The model step for `sentence` (`text` is the sentence after its domain prefix), on the
+    caller's model profile. Budgets and the monthly cap are the same for every profile."""
     try:
-        return await _run(caller, drafter, sentence, text, turns, reading or Reading())
+        return await _run(caller, drafter, sentence, text, turns, reading or Reading(), profile)
     except Exception:
         logger.exception("the teach extraction step failed; the grammar's result stands")
         return ModelStep("provider_error")
@@ -169,8 +173,9 @@ async def _run(
     text: str,
     turns: list[StoredTurn],
     reading: Reading,
+    profile: LlmProfile,
 ) -> ModelStep:
-    client = get_llm_client()
+    client = get_llm_client(profile)
     if client is None:
         return ModelStep("not_configured")
     settings = drafter.view.settings
@@ -182,6 +187,7 @@ async def _run(
         return ModelStep("rate_limited")
     handles = _candidates(caller, drafter, text, turns)
     config = get_settings()
+    allowance = config.llm_profile(profile).reasoning_allowance_tokens
     request = LlmRequest(
         system=SYSTEM_PROMPT,
         user=_context(drafter, text, turns, handles, reading),
@@ -189,7 +195,7 @@ async def _run(
         # The answer bound plus the reasoning allowance: a provider's output bound counts
         # reasoning tokens too. The answer's own size is bounded by its validation.
         max_output_tokens=(SPEECH_MAX_OUTPUT_TOKENS if reading.speech else MAX_OUTPUT_TOKENS)
-        + config.llm_reasoning_allowance_tokens,
+        + allowance,
         timeout_seconds=(
             config.llm_speech_timeout_seconds if reading.speech else config.llm_timeout_seconds
         ),
