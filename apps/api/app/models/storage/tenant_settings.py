@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Text, Uuid, text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Text, Uuid, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -44,6 +44,7 @@ class TenantSettings(Base):
     )
     agent_access: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     cost_cap: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    llm_monthly_token_cap: Mapped[int] = mapped_column(BigInteger, server_default=text("2000000"))
     egress_allowlist: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")

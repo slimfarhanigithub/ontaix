@@ -60,13 +60,13 @@ async def get_caller(request: Request, session: SessionDependency) -> Caller:
     """FastAPI dependency: the caller, or 401 when no accepted credential identifies a user."""
     settings = get_settings()
     if not settings.is_dev:
-        raise unauthorized("bearer authentication is not configured")
+        raise unauthorized("Bearer authentication is not configured")
     subject = request.headers.get(DEV_USER_HEADER)
     if not subject:
-        raise unauthorized(f"missing {DEV_USER_HEADER} header")
+        raise unauthorized(f"Missing {DEV_USER_HEADER} header")
     user = await app_user_repository.get_by_identity(session, DEV_ISSUER, subject)
     if user is None:
-        raise unauthorized("unknown user")
+        raise unauthorized("Unknown user")
     assignments = await group_role_repository.list_for_user(
         session, user.tenant_id, user.id, get_clock().now()
     )

@@ -75,7 +75,7 @@ async function call<R>(method: string, path: string, body?: unknown): Promise<R>
     res = await send(method, path, body);
     problem = res.ok ? null : await problemOf(res);
   }
-  if (problem) throw new ApiError(res.status, problem);
+  if (problem) throw new ApiError(res.status, problem, retryAfterSeconds(res.headers.get('Retry-After')));
   if (res.status === 204) return undefined as R;
   return (await res.json()) as R;
 }
@@ -92,6 +92,11 @@ function send(method: string, path: string, body: unknown): Promise<Response> {
 
 async function problemOf(res: Response): Promise<Problem> {
   return res.json().catch(() => ({ title: res.statusText, status: res.status, code: 'unknown' }));
+}
+
+function retryAfterSeconds(value: string | null): number | null {
+  const seconds = Number(value);
+  return value && Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
 /** `Retry-After` in seconds as a delay, capped at 3 s; a missing or unreadable value waits 1 s. */

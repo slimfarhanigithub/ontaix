@@ -1,0 +1,33 @@
+{
+  "intents": [
+    {
+      "kind": "rel",
+      "subject": {
+        "candidate": "c1"
+      },
+      "object": {
+        "newLabel": "Offerings"
+      },
+      "action": "has",
+      "members": [
+        {
+          "newLabel": "APPS"
+        },
+        {
+          "newLabel": "Data"
+        },
+        {
+          "newLabel": "AI"
+        }
+      ],
+      "memberAction": "includes",
+      "statedCount": 2,
+      "confidence": 0.9,
+      "source": {
+        "start": 0,
+        "end": 43
+      }
+    }
+  ],
+  "unresolved": []
+}

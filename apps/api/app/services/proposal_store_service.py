@@ -88,7 +88,7 @@ async def ensure_label_free(
 
 def ensure_can_propose(caller: Caller, scope: Scope) -> None:
     if not can_propose(caller.grants, scope, caller.everyone_teaches):
-        raise forbidden("your roles do not allow proposing in this scope")
+        raise forbidden("Your roles do not allow proposing in this scope")
 
 
 async def store(

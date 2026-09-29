@@ -1,0 +1,20 @@
+{
+  "intents": [
+    {
+      "kind": "rel",
+      "subject": {
+        "candidate": "c0"
+      },
+      "object": {
+        "newLabel": "<script>alert(1)</script>"
+      },
+      "action": "sells",
+      "confidence": 1,
+      "source": {
+        "start": 0,
+        "end": 79
+      }
+    }
+  ],
+  "unresolved": []
+}

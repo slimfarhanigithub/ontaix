@@ -301,12 +301,8 @@ async def test_the_import_budget_is_charged_before_the_upload_is_read(
     client: httpx.AsyncClient, tenant: TenantFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setitem(rate_limit_service.UNITS_PER_WINDOW, Budget.IMPORT, 1)
-    rate_limit_service.reset()
-    try:
-        empty = await upload(client, tenant.builder, "empty.txt", b"no")
-        refused = await upload(client, tenant.builder, "a.txt", TXT)
-    finally:
-        rate_limit_service.reset()
+    empty = await upload(client, tenant.builder, "empty.txt", b"no")
+    refused = await upload(client, tenant.builder, "a.txt", TXT)
 
     assert empty.status_code == 200 and empty.json()["sentences"] == []
     assert refused.status_code == 429
@@ -318,11 +314,7 @@ async def test_the_parse_budget_must_cover_every_sentence(
     client: httpx.AsyncClient, tenant: TenantFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setitem(rate_limit_service.UNITS_PER_WINDOW, Budget.PARSE, 1)
-    rate_limit_service.reset()
-    try:
-        refused = await upload(client, tenant.builder, "a.txt", TXT)
-    finally:
-        rate_limit_service.reset()
+    refused = await upload(client, tenant.builder, "a.txt", TXT)
 
     assert refused.status_code == 429
     async with db_client.get_session_factory()() as s:

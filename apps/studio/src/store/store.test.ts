@@ -35,6 +35,24 @@ describe('decision refusals', () => {
     expect(store.ui.toasts.map((t) => [t.strong, t.text])).toEqual([['Refused', `${code} detail`]]);
   });
 
+  it('a 403 shows the refusal reason the API gives, as text', async () => {
+    const forbidden = new ApiError(403, { title: 'Forbidden', status: 403, code: 'forbidden', detail: 'Only a Governor or Owner can approve' });
+    vi.spyOn(api, 'approve').mockRejectedValue(forbidden);
+
+    await store.approve(proposal);
+
+    expect(store.ui.toasts.map((t) => [t.strong, t.text])).toEqual([['Refused', 'Only a Governor or Owner can approve']]);
+  });
+
+  it('a refusal without a detail shows its title', async () => {
+    vi.spyOn(api, 'approve').mockRejectedValue(new ApiError(409, { title: 'Same approver', status: 409, code: 'same_approver' }));
+    vi.spyOn(store, 'reloadScene').mockResolvedValue();
+
+    await store.approve(proposal);
+
+    expect(store.ui.toasts.map((t) => [t.strong, t.text])).toEqual([['Refused', 'Same approver']]);
+  });
+
   it('a decision still busy after the client retry shows the toast', async () => {
     vi.spyOn(api, 'approve').mockRejectedValue(refusal(503, 'busy'));
     const reload = vi.spyOn(store, 'reloadScene').mockResolvedValue();

@@ -410,6 +410,8 @@ export interface Settings {
   refresh: RefreshInterval;
   agentAccess: boolean;
   costCap: boolean;
+  /** Tokens Ontaix's own language model calls may use per UTC month; 0 turns the step off. */
+  llmMonthlyTokenCap: number;
 }
 
 export type SettingsPatch = Partial<Omit<Settings, 'approvalRequired' | 'readOnlyConnectors'>>;
@@ -458,6 +460,50 @@ export interface Intent {
   objectResolved: string | null;
 }
 
+/** A half-open range [start, end) of Unicode code points of the request's text. */
+export interface SourceSpan {
+  start: number;
+  end: number;
+}
+
+export interface SourceSegment {
+  index: number;
+  span: SourceSpan;
+}
+
+/** Advisory notes on one draft for the reviewer; never submitted with the draft. */
+export interface DraftNote {
+  extractor: 'rules' | 'llm';
+  confidence: number;
+  explanation?: string;
+  segment?: number;
+  sourceSpan?: SourceSpan;
+}
+
+export interface UnresolvedPhrase {
+  text: string;
+  reason:
+    | 'not_understood'
+    | 'ambiguous_reference'
+    | 'low_confidence'
+    | 'model_unavailable'
+    | 'model_invalid_output'
+    | 'too_many_drafts'
+    | 'not_a_statement'
+    | 'ungrounded_label'
+    | 'too_many_segments';
+}
+
+export type LlmOutcome =
+  | 'not_triggered'
+  | 'used'
+  | 'not_configured'
+  | 'rate_limited'
+  | 'budget_exhausted'
+  | 'timeout'
+  | 'provider_error'
+  | 'invalid_output';
+
 export interface TeachResult {
   outcome: 'understood' | 'partly_understood' | 'not_understood';
   domainKey: DomainKey | null;
@@ -467,6 +513,14 @@ export interface TeachResult {
   caption: string;
   origin: Origin;
   originDetail: OriginDetail | null;
+  extractor: 'rules' | 'llm' | 'rules+llm';
+  degraded: boolean;
+  llmOutcome: LlmOutcome;
+  /** One per draft, same order. */
+  draftNotes: DraftNote[];
+  unresolved: UnresolvedPhrase[];
+  /** The sentences the request was split into; one for typed text and documents. */
+  segments: SourceSegment[];
 }
 
 /** `POST /teach/parse`: typed text or a speech transcript, or a cited import sentence. */
@@ -475,6 +529,8 @@ export interface TeachRequest {
   text?: string;
   origin?: InputOrigin;
   importRef?: ImportRef;
+  /** One per teach bar session and company, so the model step can resolve back-references. */
+  sessionId?: string;
 }
 
 export interface Page {
@@ -495,6 +551,8 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly problem: Problem,
+    /** Seconds from the `Retry-After` header, when the API sent one. */
+    public readonly retryAfter: number | null = null,
   ) {
     super(problem.detail || problem.title);
     this.name = 'ApiError';
@@ -599,6 +657,18 @@ export interface CostSummary {
   agentsWithAccess: number;
   reads: number;
   byPlatform: { platform: string; agentsWithAccess: number; costEur: number; sharePercent: number }[];
+  /** Ontaix's own language model calls this month; separate from the agent figures. */
+  llm?: LlmUsage;
+}
+
+export interface LlmUsage {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  tokensUsed: number;
+  tokenCap: number;
+  costEur: number;
+  byPurpose: { purpose: 'teach_extraction'; calls: number; costEur: number }[];
 }
 
 export interface CrossCompanyDisabled {

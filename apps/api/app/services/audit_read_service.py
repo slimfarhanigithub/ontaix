@@ -32,7 +32,7 @@ async def list_audit(
     session: AsyncSession, caller: Caller, query: ListQuery
 ) -> PageOf[AuditEntryDto]:
     if not can_read_audit(caller.grants):
-        raise forbidden("reading the audit log requires Administrator, Governor or Auditor")
+        raise forbidden("Reading the audit log requires Administrator, Governor or Auditor")
     entries = await audit_repository.list_for_tenant(session, caller.tenant_id)
     names = audit_service.user_names(
         await app_user_repository.list_for_tenant(session, caller.tenant_id)

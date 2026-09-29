@@ -13,8 +13,26 @@ import { store } from '../store/store';
 
 /** Pause between two imported sentences, as in the reference. */
 const IMPORT_PACE_MS = 450;
-/** Pause between two concepts proposed from a partly understood sentence, as in the reference. */
-const PARTLY_PACE_MS = 850;
+/** The longest `Retry-After` a refused batch is retried after; a longer wait is shown as refused. */
+const BATCH_RETRY_MAX_S = 60;
+
+/** The teach bar session: a new one when the Studio loads and whenever the taught company changes. */
+let session: { companyId: string; id: string } | null = null;
+
+/** The session id for sentences taught to `companyId`, so the API can resolve back-references. */
+export function teachSessionId(companyId: string): string {
+  if (!session || session.companyId !== companyId) session = { companyId, id: uuid4() };
+  return session.id;
+}
+
+/** A random version 4 uuid from the platform's crypto source; never the seeded canvas stream. */
+function uuid4(): string {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
 
 /** Waits, or returns at once while animations are skipped. */
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, store.s.SKIP ? 0 : ms));
@@ -39,14 +57,14 @@ export async function teach(text: string, origin: InputOrigin = 'text'): Promise
   text = text.trim();
   const co = store.s.activeCompany;
   if (!text || !co || !co.sid) return;
-  await parseAndPropose({ companyId: co.sid, text, origin });
+  await parseAndPropose({ companyId: co.sid, text, origin, sessionId: teachSessionId(co.sid) });
 }
 
 /** Teaches the active company one stored sentence of a document import. */
 async function teachSentence(importRef: ImportRef): Promise<void> {
   const co = store.s.activeCompany;
   if (!co || !co.sid) return;
-  await parseAndPropose({ companyId: co.sid, importRef });
+  await parseAndPropose({ companyId: co.sid, importRef, sessionId: teachSessionId(co.sid) });
 }
 
 async function parseAndPropose(request: TeachRequest): Promise<void> {
@@ -57,20 +75,34 @@ async function parseAndPropose(request: TeachRequest): Promise<void> {
     store.refused(err);
     return;
   }
+  // All drafts of one parse leave as one all-or-nothing batch.
+  if (result.drafts.length) await submitBatch(result.drafts.map(withSeed));
   if (result.outcome === 'understood') {
-    await api.createProposalBatch(result.drafts.map(withSeed)).catch((err) => store.refused(err));
     const n = result.statements?.length ?? result.drafts.length;
     store.caption(`Understood ${n === 1 ? 'one statement' : n + ' statements'}`, result.caption);
     return;
   }
   if (result.outcome === 'partly_understood') {
-    // A cited import sentence may be drafted by one call only, so its drafts leave together.
-    if (request.importRef) void api.createProposalBatch(result.drafts.map(withSeed)).catch((err) => store.refused(err));
-    else result.drafts.forEach((d, i) => setTimeout(() => void store.propose(withSeed(d)), i * PARTLY_PACE_MS));
     store.caption('Partly understood', result.caption);
     return;
   }
   store.caption('Not understood', result.caption);
+}
+
+/** Submits one parse's drafts; a batch refused for the proposal budget is retried whole once
+ * after its `Retry-After` when that is short, never split. */
+async function submitBatch(drafts: ProposalDraft[]): Promise<void> {
+  try {
+    await api.createProposalBatch(drafts);
+  } catch (err) {
+    const wait = err instanceof ApiError && err.status === 429 ? err.retryAfter : null;
+    if (wait === null || wait > BATCH_RETRY_MAX_S) {
+      store.refused(err);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, wait * 1000));
+    await api.createProposalBatch(drafts).catch((e) => store.refused(e));
+  }
 }
 
 /** Uploads a document to the API, which extracts and stores its sentences; each is then taught like a spoken one. */

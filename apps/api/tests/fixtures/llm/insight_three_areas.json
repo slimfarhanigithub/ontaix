@@ -1,0 +1,56 @@
+{
+  "intents": [
+    {
+      "kind": "rel",
+      "subject": {
+        "candidate": "c1"
+      },
+      "object": {
+        "newLabel": "App"
+      },
+      "action": "focuses on",
+      "confidence": 0.88,
+      "explanation": "these services refers to Services from the previous sentence",
+      "span": "app",
+      "source": {
+        "start": 0,
+        "end": 63
+      }
+    },
+    {
+      "kind": "rel",
+      "subject": {
+        "candidate": "c1"
+      },
+      "object": {
+        "newLabel": "Data"
+      },
+      "action": "focuses on",
+      "confidence": 0.88,
+      "explanation": "these services refers to Services from the previous sentence",
+      "span": "data",
+      "source": {
+        "start": 0,
+        "end": 63
+      }
+    },
+    {
+      "kind": "rel",
+      "subject": {
+        "candidate": "c1"
+      },
+      "object": {
+        "newLabel": "AI"
+      },
+      "action": "focuses on",
+      "confidence": 0.88,
+      "explanation": "these services refers to Services from the previous sentence",
+      "span": "AI",
+      "source": {
+        "start": 0,
+        "end": 63
+      }
+    }
+  ],
+  "unresolved": []
+}

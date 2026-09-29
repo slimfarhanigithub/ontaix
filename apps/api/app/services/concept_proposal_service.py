@@ -28,6 +28,7 @@ from app.services.proposal_store_service import (
     esc,
     store,
 )
+from app.utilities.action_text import normalise_action
 from app.utilities.clock import get_clock
 from app.utilities.layout import birth_position, company_centre, domain_centre, rest_length
 from app.utilities.permissions import Scope
@@ -55,7 +56,9 @@ async def propose_concept(
     await ensure_label_free(session, view, company.id, draft.label)
     await ensure_still_live(session, view, parent)
     template = view.templates[product.template_key]
-    action = draft.action.strip().lower()
+    action = normalise_action(draft.action)
+    if not action:
+        raise validation_failed("action", "an action needs at least one word")
     concept, relation = await _divide(
         session,
         view,

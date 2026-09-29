@@ -96,7 +96,7 @@ async def reject(
     proposal = await _load_decidable(session, caller, proposal_id)
     proposals = await proposal_repository.list_open(session, caller.tenant_id)
     view = await load_view(session, caller.tenant_id, proposals)
-    _ensure_can_approve(caller, view, proposal)
+    _ensure_can_approve(caller, view, proposal, "reject")
     outcome = await reject_one(session, caller, view, proposal, proposals, reason, False)
     return _result(caller, view, proposal, outcome, proposals)
 
@@ -119,7 +119,7 @@ async def approve_all(session: AsyncSession, caller: Caller) -> BulkResult:
 
 async def reject_all(session: AsyncSession, caller: Caller) -> BulkResult:
     """Reject every open proposal the caller may reject; the others are counted in `remaining`."""
-    _ensure_holds_approving_role(caller)
+    _ensure_holds_approving_role(caller, "reject")
     proposals = await _lock_open(session, caller)
     view = await load_view(session, caller.tenant_id, proposals)
     rejected = 0
@@ -166,14 +166,18 @@ def _may_approve(caller: Caller, view: OntologyView, proposal: Proposal) -> bool
     return can_approve(caller.grants, _scope_of(view, proposal))
 
 
-def _ensure_can_approve(caller: Caller, view: OntologyView, proposal: Proposal) -> None:
-    if not _may_approve(caller, view, proposal):
-        raise forbidden("your roles do not allow deciding this proposal")
-
-
-def _ensure_holds_approving_role(caller: Caller) -> None:
+def _ensure_can_approve(
+    caller: Caller, view: OntologyView, proposal: Proposal, verb: str = "approve"
+) -> None:
     if not holds_approving_role(caller.grants):
-        raise forbidden("deciding proposals requires Owner or Governor")
+        raise forbidden(f"Only a Governor or Owner can {verb}")
+    if not _may_approve(caller, view, proposal):
+        raise forbidden(f"Your roles do not let you {verb} proposals in this scope")
+
+
+def _ensure_holds_approving_role(caller: Caller, verb: str = "approve") -> None:
+    if not holds_approving_role(caller.grants):
+        raise forbidden(f"Only a Governor or Owner can {verb}")
 
 
 def _needs_second_approval(view: OntologyView, proposal: Proposal) -> bool:
@@ -228,7 +232,7 @@ async def _complete_approval(
     bulk: bool,
 ) -> DecisionOutcome:
     if ordinal == 2 and _first_approver(view, proposal) == caller.user_id:
-        raise conflict("same_approver", "the second approver must be a different user")
+        raise conflict("same_approver", "The same person cannot give both approvals")
     approval = await proposal_approval_repository.create(
         session, caller.tenant_id, proposal.id, ordinal, caller.user_id
     )

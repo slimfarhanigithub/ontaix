@@ -146,6 +146,7 @@ async def test_builder_cannot_approve(client: httpx.AsyncClient, tenant: TenantF
     assert response.headers["content-type"].startswith("application/problem+json")
     assert response.json()["code"] == "forbidden"
     assert response.json()["type"] == "urn:ontaix:problem:forbidden"
+    assert response.json()["detail"] == "Only a Governor or Owner can approve"
 
 
 async def test_owner_in_company_scope_can_approve(
@@ -279,6 +280,7 @@ async def test_second_approver_must_differ(
         )
         assert same.status_code == 409
         assert same.json()["code"] == "same_approver"
+        assert same.json()["detail"] == "The same person cannot give both approvals"
 
         other = await client.post(
             f"/proposals/{change_id}/second-approve", headers=tenant.second_governor.headers

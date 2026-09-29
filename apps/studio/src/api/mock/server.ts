@@ -248,6 +248,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     refresh: '15 min',
     agentAccess: true,
     costCap: true,
+    llmMonthlyTokenCap: 2_000_000,
   };
   const appearance = { theme: 'dark' as 'dark' | 'light', colors: {} as Record<string, string>, accent: '#3fb8a9', source: DEFAULT_BRASS };
   const directory = createDirectory({
@@ -1550,6 +1551,12 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         caption: made.join(' · ') + '. Waiting for your approval on the right.',
         origin,
         originDetail,
+        extractor: 'rules',
+        degraded: false,
+        llmOutcome: 'not_triggered',
+        draftNotes: drafts.map(() => ({ extractor: 'rules', confidence: 1 })),
+        unresolved: [],
+        segments: [{ index: 0, span: { start: 0, end: Array.from(text0).length } }],
       };
     // nothing parsed: fall back to naming the concepts mentioned
     const words = contentWords(text);
@@ -1566,6 +1573,12 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         caption: 'Try “<subject> <action> <object>”, “A is a B”, or “A that … is a B”. Start with “In quality, …” to choose the domain product.',
         origin,
         originDetail,
+        extractor: 'rules',
+        degraded: false,
+        llmOutcome: 'not_triggered',
+        draftNotes: [],
+        unresolved: [],
+        segments: [{ index: 0, span: { start: 0, end: Array.from(text0).length } }],
       };
     return {
       outcome: 'partly_understood',
@@ -1578,6 +1591,12 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       caption: `No action found; ${fresh.map(title).join(', ')} proposed from ${host.label} with “relates to”. Click the line to give it the right action.`,
       origin,
       originDetail,
+      extractor: 'rules',
+      degraded: false,
+      llmOutcome: 'not_triggered',
+      draftNotes: fresh.map(() => ({ extractor: 'rules', confidence: 1 })),
+      unresolved: [],
+      segments: [{ index: 0, span: { start: 0, end: Array.from(text0).length } }],
     };
   }
 
@@ -1866,7 +1885,11 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     if (is('GET', 'scopes')) return json(200, directory.listScopes());
     if (is('GET', 'agents')) return json(200, directory.listAgents(search));
     if (is('PATCH', 'agents', null)) return json(200, directory.updateAgent(seg[1], body as { access?: unknown }));
-    if (is('GET', 'cost')) return json(200, directory.cost(`${iso().slice(0, 7)}-01`));
+    if (is('GET', 'cost'))
+      return json(200, {
+        ...directory.cost(`${iso().slice(0, 7)}-01`),
+        llm: { calls: 0, inputTokens: 0, outputTokens: 0, tokensUsed: 0, tokenCap: settings.llmMonthlyTokenCap, costEur: 0, byPurpose: [] },
+      });
     return null;
   }
 
@@ -1946,6 +1969,14 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         if (k === 'refresh') {
           settings.refresh = patch.refresh as T.RefreshInterval;
           addAudit('setting', `refresh interval ${patch.refresh}`, true);
+          continue;
+        }
+        if (k === 'llmMonthlyTokenCap') {
+          const cap = patch.llmMonthlyTokenCap;
+          if (typeof cap !== 'number' || !Number.isInteger(cap) || cap < 0 || cap > 1_000_000_000)
+            throw new Refusal(422, 'validation_failed', 'llmMonthlyTokenCap is a whole number from 0 to 1,000,000,000');
+          settings.llmMonthlyTokenCap = cap;
+          addAudit('setting', `llmMonthlyTokenCap set to ${cap}`, true);
           continue;
         }
         if (typeof patch[k] === 'boolean') (settings as unknown as Record<string, boolean>)[k] = patch[k] as boolean;

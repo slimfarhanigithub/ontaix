@@ -4,6 +4,12 @@ The sentence is typed text, a speech transcript, or a stored import sentence cit
 `importRef`, whose text is read from the import. Every path runs the same grammar and resolves
 the names it finds against the company's current concepts, pending ones included; a name that
 resolves to nothing becomes a proposed new cell, never a silent creation.
+
+When a fallback trigger holds, the language model step runs after the grammar. A valid answer
+replaces the grammar's intents, or is merged into them when only `partly_understood` triggered
+the step; any other end of the step leaves the grammar's result standing, marked `degraded`,
+with the whole sentence listed as unresolved. The sentence is then stored as a turn of the
+caller's teach session.
 """
 
 from __future__ import annotations
@@ -17,11 +23,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
 from app.models.api.origin import ImportRef
-from app.models.api.teach import Intent, TeachRequest, TeachResult
-from app.models.storage.concept import Concept
-from app.services import import_service
+from app.models.api.teach import (
+    SourceSegment,
+    SourceSpan,
+    TeachRequest,
+    TeachResult,
+    UnresolvedPhrase,
+)
+from app.services import import_service, teach_extraction_service, teach_session_service
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.rate_limit_service import Budget, charge
+from app.services.teach_draft_service import (
+    MAX_INTENTS,
+    MAX_TRANSCRIPT_INTENTS,
+    MAX_TRANSCRIPT_UNRESOLVED,
+    MAX_UNRESOLVED,
+    NOT_UNDERSTOOD,
+    Assembled,
+    Drafter,
+    GrammarPlan,
+    PlannedIntent,
+    add_unresolved,
+    assemble,
+    new_labels,
+    phrase_in,
+    plan_grammar,
+)
+from app.services.teach_extraction_service import Reading
 from app.utilities.channels import (
     ensure_import_allowed,
     ensure_live_teaching_allowed,
@@ -29,15 +57,15 @@ from app.utilities.channels import (
 )
 from app.utilities.permissions import can_propose_anywhere, can_read
 from app.utilities.problems import forbidden, not_found
-from app.utilities.teach_parser import content_words, domain_prefix, singular, title, understand
+from app.utilities.teach_parser import domain_prefix
+from app.utilities.teach_triggers import fallback_triggers, replaces_grammar
+from app.utilities.transcript import MAX_SEGMENTS, split_transcript
 
 logger = logging.getLogger(__name__)
 
-NOT_UNDERSTOOD = (
-    "Try “<subject> <action> <object>”, “A is a B”, or “A that … is a B”. "
-    "Start with “In quality, …” to choose the domain product."
-)
-DEFAULT_DOMAIN = "production"
+WAITING = ". Waiting for your approval on the right."
+PARSE_UNIT_CHARS = 400
+DOCUMENT_CONTEXT_SENTENCES = 2
 
 
 @dataclass(frozen=True)
@@ -46,6 +74,7 @@ class _Source:
     origin: str
     origin_detail: dict[str, Any] | None
     draft_extras: dict[str, Any]
+    reading: Reading = Reading()
 
 
 async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> TeachResult:
@@ -54,9 +83,53 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
     if company is None or not can_read(caller.grants, company.id):
         raise not_found("company")
     if not can_propose_anywhere(caller.grants, caller.everyone_teaches):
-        raise forbidden("your roles do not allow proposing")
+        raise forbidden("Your roles do not allow proposing")
     source = await _source(session, caller, view, body)
-    return _parse(view, company.id, source)
+    key = (
+        teach_session_service.session_key(caller, company.id, body.session_id)
+        if body.session_id
+        else None
+    )
+    sentence = source.text.strip()
+    speech = source.reading.speech
+    root = view.root_of(company.id)
+    if root is None:
+        empty = Assembled([], [], [], [], [], [], [])
+        result = _result("rules", "not_triggered", empty, None, NOT_UNDERSTOOD, source, [])
+        await teach_session_service.store_turn(key, sentence, "rules", [], [])
+        return result
+    dom_key, text = domain_prefix(sentence)
+    drafter = Drafter(view, company.id, root, dom_key, source.draft_extras)
+    whole = [(0, len(sentence))]
+    grammar: GrammarPlan | None = None
+    triggers: set = set()
+    if not source.reading.model_first:
+        grammar = plan_grammar(drafter, text)
+        triggers = fallback_triggers(text, grammar.outcome)
+    if grammar is not None and not triggers:
+        kept = assemble(grammar.planned, sentence)
+        caption = grammar.caption
+        result = _result("rules", "not_triggered", kept, dom_key, caption, source, whole)
+    else:
+        # The request's own transaction ends here, so it holds no lock during the model call.
+        await session.commit()
+        turns = await teach_session_service.recent_turns(key)
+        step = await teach_extraction_service.run(
+            caller, drafter, sentence, text, turns, source.reading
+        )
+        if step.outcome != "used":
+            if speech:
+                grammar, segments = _grammar_by_segment(drafter, sentence)
+            else:
+                grammar, segments = grammar or plan_grammar(drafter, text), whole
+            result, kept = _degraded(grammar, step, segments, sentence, dom_key, source)
+        else:
+            replace = source.reading.model_first or replaces_grammar(triggers)
+            segments = step.segments or whole
+            result, kept = _with_model(grammar, step, replace, sentence, dom_key, source, segments)
+    for segment, ids, labels in _turns(sentence, result, kept):
+        await teach_session_service.store_turn(key, segment, result.extractor, ids, labels)
+    return result
 
 
 async def _source(
@@ -70,268 +143,172 @@ async def _source(
     origin = body.origin or "text"
     if origin == "speech":
         ensure_speech_allowed(view.settings)
-    charge(Budget.PARSE, caller.tenant_id, caller.actor_kind.value, caller.user_id)
     assert body.text is not None
-    return _Source(body.text, origin, None, {"origin": origin})
+    # One parse unit per started 400 characters: one for a typed sentence, up to 10 for a
+    # transcript.
+    units = max(1, -(-len(body.text) // PARSE_UNIT_CHARS))
+    await charge(Budget.PARSE, caller.tenant_id, caller.actor_kind.value, caller.user_id, units)
+    reading = Reading("speech") if origin == "speech" else Reading()
+    return _Source(body.text, origin, None, {"origin": origin}, reading)
 
 
 async def _cited_sentence(session: AsyncSession, caller: Caller, ref: ImportRef) -> _Source:
     """A stored sentence: its parse is counted, and paid for when the import was made."""
     row = await import_service.owned_import(session, caller, ref.import_id)
     sentence = await import_service.claim_parse(session, caller, row, ref.sentence_index)
+    before, after = await import_service.neighbours(
+        session, row, ref.sentence_index, DOCUMENT_CONTEXT_SENTENCES
+    )
     return _Source(
         sentence.text,
         "document",
         import_service.origin_detail(row, ref.sentence_index, sentence),
         {"importRef": ref.model_dump(mode="json", by_alias=True)},
+        Reading("document", before, after),
     )
 
 
-def _parse(view: OntologyView, company_id: uuid.UUID, source: _Source) -> TeachResult:
-    root = view.root_of(company_id)
-    mine = sorted(
-        (c for c in view.live_concepts() if c.company_id == company_id),
-        key=lambda c: (c.born_at, str(c.id)),
-    )
-    if root is None:
-        return _not_understood(None, [], source)
-    company = str(company_id)
-    root_id = str(root.id)
+def _degraded(
+    grammar: GrammarPlan,
+    step: teach_extraction_service.ModelStep,
+    segments: list[tuple[int, int]],
+    sentence: str,
+    dom_key: str | None,
+    source: _Source,
+) -> tuple[TeachResult, Assembled]:
+    """The grammar's result when the model step did not contribute; every segment of the
+    sentence is listed as unresolved with the reason."""
+    speech = source.reading.speech
+    rules = assemble(grammar.planned, sentence, _cap(speech))
+    reason = "model_invalid_output" if step.outcome == "invalid_output" else "model_unavailable"
+    # The phrase for the rest of a long transcript always keeps its place under the cap.
+    room = _unresolved_cap(speech) - (1 if grammar.beyond else 0)
+    for start, end in segments:
+        phrase = UnresolvedPhrase(text=sentence[start:end][:400], reason=reason)
+        add_unresolved(rules.unresolved, phrase, room)
+    if grammar.beyond:
+        phrase = UnresolvedPhrase(text=grammar.beyond, reason="too_many_segments")
+        add_unresolved(rules.unresolved, phrase, _unresolved_cap(speech))
+    result = _result("rules", step.outcome, rules, dom_key, grammar.caption, source, segments, True)
+    return result, rules
 
-    def by_label(label: str) -> Concept | None:
-        wanted = label.lower()
-        return next((n for n in mine if n.label.lower() == wanted), None)
 
-    def resolve(np: str) -> Concept | None:
-        if not np:
-            return None
-        lower = np.lower()
-        return by_label(title(np)) or next(
-            (
-                n
-                for n in mine
-                if n.label.lower() == singular(lower) or singular(n.label.lower()) == lower
-            ),
-            None,
+def _with_model(
+    grammar: GrammarPlan | None,
+    step: teach_extraction_service.ModelStep,
+    replace: bool,
+    sentence: str,
+    dom_key: str | None,
+    source: _Source,
+    segments: list[tuple[int, int]],
+) -> tuple[TeachResult, Assembled]:
+    if replace or grammar is None:
+        planned, extractor = step.planned, "llm"
+    else:
+        known = {p.identity for p in grammar.planned}
+        added: list[PlannedIntent] = []
+        for p in step.planned:
+            if p.identity not in known:
+                known.add(p.identity)
+                added.append(p)
+        planned = [*grammar.planned, *added]
+        extractor = "rules+llm" if added else "rules"
+    speech = source.reading.speech
+    merged = assemble(planned, sentence, _cap(speech))
+    for phrase in step.unresolved:
+        add_unresolved(merged.unresolved, phrase, _unresolved_cap(speech))
+    if not merged.intents and not merged.unresolved:
+        whole = UnresolvedPhrase(text=phrase_in(sentence, None), reason="not_understood")
+        add_unresolved(merged.unresolved, whole, _unresolved_cap(speech))
+    if extractor == "rules" and grammar is not None:
+        caption = grammar.caption
+    elif merged.statements:
+        caption = " · ".join(merged.statements) + WAITING
+    else:
+        caption = NOT_UNDERSTOOD
+    return _result(extractor, "used", merged, dom_key, caption, source, segments), merged
+
+
+def _grammar_by_segment(
+    drafter: Drafter, sentence: str
+) -> tuple[GrammarPlan, list[tuple[int, int]]]:
+    """The grammar over a transcript split into segments, each parsed on its own."""
+    segments = split_transcript(sentence)
+    kept, rest = segments[:MAX_SEGMENTS], segments[MAX_SEGMENTS:]
+    segments = kept
+    planned: list[PlannedIntent] = []
+    for i, (start, end) in enumerate(segments):
+        dom_key, text = domain_prefix(sentence[start:end])
+        segment_drafter = Drafter(
+            drafter.view, drafter.company_id, drafter.root, dom_key, drafter.extras
         )
-
-    dom_key, text = domain_prefix(source.text.strip())
-
-    def key(fallback: str | None) -> str:
-        return dom_key or fallback or DEFAULT_DOMAIN
-
-    def key_of(n: Concept) -> str | None:
-        return view.domain_key(n)
-
-    def sid(n: Concept | None) -> str | None:
-        return str(n.id) if n else None
-
-    intents: list[Intent] = []
-    drafts: list[dict[str, Any]] = []
-    made: list[str] = []
-
-    def draft(**fields: Any) -> None:
-        drafts.append({**source.draft_extras, **fields})
-
-    for it in understand(text):
-        if it.kind == "spec":
-            parent, child = resolve(it.obj), resolve(it.subj)
-            intents.append(
-                Intent(
-                    kind="spec",
-                    subject=it.subj,
-                    object=it.obj,
-                    rule=it.rule,
-                    subject_resolved=child.id if child else None,
-                    object_resolved=parent.id if parent else None,
-                )
-            )
-            if parent and not child:
-                plus = ", plus the rule you gave" if it.rule else ""
-                draft(
-                    type="spec",
-                    companyId=company,
-                    parentId=sid(parent),
-                    label=title(it.subj),
-                    rule=it.rule or "",
-                    domainKey=key(key_of(parent)),
-                    caption=(
-                        f"{parent.label} divides: {title(it.subj)} inherits everything "
-                        f"{parent.label} is{plus}."
-                    ),
-                )
-                made.append(f"{title(it.subj)} is a {parent.label}")
-            elif parent and child:
-                draft(
-                    type="relation",
-                    aId=sid(child),
-                    bId=sid(parent),
-                    action="is a",
-                    caption=(
-                        f"{child.label} is a {parent.label}: it inherits everything "
-                        f"{parent.label} is."
-                    ),
-                )
-                made.append(f"{child.label} is a {parent.label}")
-            elif child:
-                draft(
-                    type="concept",
-                    companyId=company,
-                    parentId=sid(child),
-                    label=title(it.obj),
-                    domainKey=key(key_of(child)),
-                    action="is a kind of",
-                    reverse=True,
-                )
-                made.append(f"{child.label} is a kind of {title(it.obj)} (new)")
-            else:
-                draft(
-                    type="concept",
-                    companyId=company,
-                    parentId=root_id,
-                    label=title(it.obj),
-                    domainKey=key(None),
-                    action="has",
-                )
-                draft(
-                    type="spec",
-                    companyId=company,
-                    parentLabel=title(it.obj),
-                    label=title(it.subj),
-                    rule=it.rule or "",
-                    domainKey=key(None),
-                )
-                made.append(f"{title(it.subj)} is a {title(it.obj)} (both new)")
-            continue
-        a, b = resolve(it.subj), resolve(it.obj)
-        pred = it.pred or "relates to"
-        intents.append(
-            Intent(
-                kind="rel",
-                subject=it.subj,
-                predicate=pred,
-                object=it.obj,
-                subject_resolved=a.id if a else None,
-                object_resolved=b.id if b else None,
-            )
-        )
-        if a and b:
-            if a.id == b.id:
-                continue
-            draft(
-                type="relation",
-                aId=sid(a),
-                bId=sid(b),
-                action=pred,
-                caption=(
-                    f"{a.label} {pred} {b.label}: from {a.label} to {b.label}, "
-                    "the action on the line."
-                ),
-            )
-            made.append(f"{a.label} {pred} {b.label}")
-        elif a:
-            draft(
-                type="concept",
-                companyId=company,
-                parentId=sid(a),
-                label=title(it.obj),
-                domainKey=key(key_of(a)),
-                action=pred,
-                caption=f"{title(it.obj)} is kept. {a.label} {pred} {title(it.obj)}.",
-            )
-            made.append(f"{a.label} {pred} {title(it.obj)} (new)")
-        elif b:
-            draft(
-                type="concept",
-                companyId=company,
-                parentId=sid(b),
-                label=title(it.subj),
-                domainKey=key(key_of(b)),
-                action=pred,
-                reverse=True,
-                caption=f"{title(it.subj)} is kept. {title(it.subj)} {pred} {b.label}.",
-            )
-            made.append(f"{title(it.subj)} (new) {pred} {b.label}")
-        else:
-            draft(
-                type="concept",
-                companyId=company,
-                parentId=root_id,
-                label=title(it.subj),
-                domainKey=key(None),
-                action="has",
-            )
-            draft(
-                type="concept",
-                companyId=company,
-                parentLabel=title(it.subj),
-                label=title(it.obj),
-                domainKey=key(None),
-                action=pred,
-            )
-            made.append(f"{title(it.subj)} {pred} {title(it.obj)} (both new)")
-
-    if made:
-        return _result(
-            "understood",
-            dom_key,
-            intents,
-            drafts,
-            made,
-            " · ".join(made) + ". Waiting for your approval on the right.",
-            source,
-        )
-
-    # Nothing parsed: propose the unknown words mentioned next to a concept the sentence names.
-    words = content_words(text)
-    named = [n for n in mine if n.label.lower() in words]
-    host = named[0] if named else root
-    fresh = [w for w in dict.fromkeys(words) if not by_label(title(w))][:3]
-    if not fresh or not named:
-        return _not_understood(dom_key, intents, source)
-    for w in fresh:
-        draft(
-            type="concept",
-            companyId=company,
-            parentId=str(host.id),
-            label=title(w),
-            domainKey=key(key_of(host)),
-            action="relates to",
-            caption=f"{title(w)} is kept.",
-        )
-    names = ", ".join(title(w) for w in fresh)
-    return _result(
-        "partly_understood",
-        dom_key,
-        intents,
-        drafts,
-        [],
-        f"No action found; {names} proposed from {host.label} with “relates to”. "
-        "Click the line to give it the right action.",
-        source,
-    )
+        for p in plan_grammar(segment_drafter, text).planned:
+            p.segment = i
+            p.note = p.note.model_copy(update={"segment": i})
+            planned.append(p)
+    statements = [line for p in planned for line in p.statements]
+    beyond = sentence[rest[0][0] :][:400] if rest else None
+    if statements:
+        caption = " · ".join(statements) + WAITING
+        return GrammarPlan(planned, "understood", caption, beyond), segments
+    return GrammarPlan(planned, "not_understood", NOT_UNDERSTOOD, beyond), segments
 
 
-def _not_understood(dom_key: str | None, intents: list[Intent], source: _Source) -> TeachResult:
-    return _result("not_understood", dom_key, intents, [], [], NOT_UNDERSTOOD, source)
+def _cap(speech: bool) -> int:
+    return MAX_TRANSCRIPT_INTENTS if speech else MAX_INTENTS
+
+
+def _unresolved_cap(speech: bool) -> int:
+    return MAX_TRANSCRIPT_UNRESOLVED if speech else MAX_UNRESOLVED
 
 
 def _result(
-    outcome: str,
+    extractor: str,
+    llm_outcome: str,
+    assembled: Assembled,
     dom_key: str | None,
-    intents: list[Intent],
-    drafts: list[dict[str, Any]],
-    statements: list[str],
     caption: str,
     source: _Source,
+    segments: list[tuple[int, int]],
+    degraded: bool = False,
 ) -> TeachResult:
+    if not assembled.intents:
+        outcome = "not_understood"
+    elif assembled.unresolved:
+        outcome = "partly_understood"
+    else:
+        outcome = "understood"
     return TeachResult(
         outcome=outcome,
         domain_key=dom_key,
-        intents=intents,
-        drafts=drafts,
-        statements=statements,
+        intents=assembled.intents,
+        drafts=assembled.drafts,
+        statements=assembled.statements,
         caption=caption,
         origin=source.origin,
         origin_detail=source.origin_detail,
+        extractor=extractor,
+        degraded=degraded,
+        llm_outcome=llm_outcome,
+        draft_notes=assembled.notes,
+        unresolved=assembled.unresolved,
+        segments=[
+            SourceSegment(index=i, span=SourceSpan(start=start, end=end))
+            for i, (start, end) in enumerate(segments)
+        ],
     )
+
+
+def _turns(
+    sentence: str, result: TeachResult, assembled: Assembled
+) -> list[tuple[str, list[uuid.UUID], list[str]]]:
+    """The session turns a parse stores: one per segment, in order, each with the concepts it
+    referenced and the labels it introduced."""
+    turns: list[tuple[str, list[uuid.UUID], list[str]]] = [
+        (sentence[s.span.start : s.span.end], [], []) for s in result.segments
+    ] or [(sentence, [], [])]
+    for planned in assembled.kept:
+        _, ids, labels = turns[min(planned.segment, len(turns) - 1)]
+        ids.extend(i for i in planned.concept_ids if i not in ids)
+        labels.extend(label for label in new_labels(planned.drafts) if label not in labels)
+    return turns

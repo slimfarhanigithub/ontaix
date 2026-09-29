@@ -1,0 +1,548 @@
+"""The language model step of a teach parse: context, budgets, the call, validation, mapping.
+
+The step runs behind the grammar, only when a fallback trigger holds. In order: a provider must
+be configured and the tenant's monthly token cap above 0; the caller's hourly `llm` budget is
+charged; the call's upper bound is reserved against the monthly cap and committed; the adapter
+calls the model with nothing but the sentence, the session's recent turns, the company name, up
+to 200 candidate concepts as per-call handles (`c0` is the company root), the domain templates
+and the action guidance. The reservation is settled and a cost record stored whatever happens.
+A valid answer is mapped to drafts with the grammar's mapping; anything else leaves the
+grammar's result standing and the step reports why. The step never raises.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+import unicodedata
+import uuid
+from dataclasses import dataclass, field
+from typing import Any, Literal
+
+from pydantic import ValidationError
+
+from app.ai.prompts.teach_extraction import (
+    MAX_OUTPUT_TOKENS,
+    OUTPUT_SCHEMA,
+    SPEECH_MAX_OUTPUT_TOKENS,
+    SYSTEM_PROMPT,
+)
+from app.auth import Caller
+from app.clients.llm_client import (
+    LlmCallError,
+    LlmRequest,
+    LlmTimeout,
+    get_llm_client,
+)
+from app.config import get_settings
+from app.models.api.settings import DEFAULT_LLM_MONTHLY_TOKEN_CAP
+from app.models.api.teach import DraftNote, LlmOutcome, SourceSpan, UnresolvedPhrase
+from app.models.llm.teach_extraction_answer import (
+    AnswerIntent,
+    CandidateRef,
+    TeachExtractionAnswer,
+)
+from app.models.storage.concept import Concept
+from app.repositories.llm_call_repository import CallRecord
+from app.repositories.teach_session_turn_repository import StoredTurn
+from app.services import llm_usage_service
+from app.services.rate_limit_service import Budget, try_charge
+from app.services.teach_draft_service import Drafter, End, PlannedIntent, phrase_in
+from app.utilities.action_text import normalise_action
+from app.utilities.permissions import can_read
+from app.utilities.teach_parser import singular, title
+
+logger = logging.getLogger(__name__)
+
+MAX_CANDIDATES = 200
+MAX_OTHER_COMPANY_CANDIDATES = 50
+MIN_CONFIDENCE = 0.4
+MAX_SENTENCE_INTENTS = 20
+MAX_SENTENCE_PHRASES = 10
+MAX_SEGMENT_CHARS = 400
+MAX_EXPLANATION = 300
+DEFAULT_MEMBER_ACTION = "includes"
+REFUSED_ACTIONS = frozenset({"is a", "equivalent to"})
+
+_WORDS = re.compile(r"[a-z0-9][a-z0-9&'-]*")
+_ANY_WORD = re.compile(r"\w+(?:['-]\w+)*")
+
+
+@dataclass
+class ModelStep:
+    outcome: LlmOutcome
+    planned: list[PlannedIntent] = field(default_factory=list)
+    unresolved: list[UnresolvedPhrase] = field(default_factory=list)
+    # The sentences the model found, as code-point ranges of the request's text, in order.
+    segments: list[tuple[int, int]] = field(default_factory=list)
+
+
+class _InvalidAnswer(Exception):
+    """The answer failed the schema or a check the schema cannot express."""
+
+
+@dataclass(frozen=True)
+class Reading:
+    """How the model reads the input: one typed sentence, a whole speech transcript, or one
+    document sentence with its neighbours as context."""
+
+    mode: Literal["sentence", "speech", "document"] = "sentence"
+    before: tuple[str, ...] = ()
+    after: tuple[str, ...] = ()
+
+    @property
+    def speech(self) -> bool:
+        return self.mode == "speech"
+
+    @property
+    def model_first(self) -> bool:
+        """Speech and document sentences go to the model first; typed text to the grammar."""
+        return self.mode != "sentence"
+
+
+async def run(
+    caller: Caller,
+    drafter: Drafter,
+    sentence: str,
+    text: str,
+    turns: list[StoredTurn],
+    reading: Reading | None = None,
+) -> ModelStep:
+    """The model step for `sentence` (`text` is the sentence after its domain prefix)."""
+    try:
+        return await _run(caller, drafter, sentence, text, turns, reading or Reading())
+    except Exception:
+        logger.exception("the teach extraction step failed; the grammar's result stands")
+        return ModelStep("provider_error")
+
+
+async def _run(
+    caller: Caller,
+    drafter: Drafter,
+    sentence: str,
+    text: str,
+    turns: list[StoredTurn],
+    reading: Reading,
+) -> ModelStep:
+    client = get_llm_client()
+    if client is None:
+        return ModelStep("not_configured")
+    settings = drafter.view.settings
+    cap = settings.llm_monthly_token_cap if settings else DEFAULT_LLM_MONTHLY_TOKEN_CAP
+    if cap <= 0:
+        return ModelStep("budget_exhausted")
+    actor_kind = caller.actor_kind.value
+    if not await try_charge(Budget.LLM, caller.tenant_id, actor_kind, caller.user_id):
+        return ModelStep("rate_limited")
+    handles = _candidates(caller, drafter, text, turns)
+    config = get_settings()
+    request = LlmRequest(
+        system=SYSTEM_PROMPT,
+        user=_context(drafter, text, turns, handles, reading),
+        output_schema=OUTPUT_SCHEMA,
+        max_output_tokens=SPEECH_MAX_OUTPUT_TOKENS if reading.speech else MAX_OUTPUT_TOKENS,
+        timeout_seconds=(
+            config.llm_speech_timeout_seconds if reading.speech else config.llm_timeout_seconds
+        ),
+    )
+    upper_bound = client.estimate_input_tokens(request) + request.max_output_tokens
+    reservation = await llm_usage_service.reserve(caller.tenant_id, upper_bound, cap)
+    if reservation is None:
+        return ModelStep("budget_exhausted")
+
+    def record(outcome: str, tokens_in: int, tokens_out: int, cost: float, ms: int) -> CallRecord:
+        return CallRecord(
+            tenant_id=caller.tenant_id,
+            actor_kind=actor_kind,
+            actor_id=caller.user_id,
+            company_id=drafter.company_id,
+            purpose=llm_usage_service.TEACH_EXTRACTION,
+            provider=client.provider,
+            model=client.model,
+            input_tokens=tokens_in,
+            output_tokens=tokens_out,
+            cost_eur=cost,
+            latency_ms=ms,
+            outcome=outcome,
+        )
+
+    try:
+        answer = await client.complete(request)
+    except LlmCallError as exc:
+        outcome = "timeout" if isinstance(exc, LlmTimeout) else "provider_error"
+        await _settle(
+            reservation,
+            record(outcome, exc.input_tokens, exc.output_tokens, exc.cost_eur, exc.latency_ms),
+        )
+        return ModelStep(outcome)
+    except Exception:
+        logger.exception("the language model adapter failed unexpectedly")
+        await _settle(reservation, record("provider_error", 0, 0, 0.0, 0))
+        return ModelStep("provider_error")
+    usage = (answer.input_tokens, answer.output_tokens, answer.cost_eur, answer.latency_ms)
+    try:
+        step = _interpret(answer.text, handles, drafter, sentence, text, reading)
+    except _InvalidAnswer as exc:
+        logger.info("the teach extraction answer was refused: %s", exc)
+        await _settle(reservation, record("invalid_output", *usage))
+        return ModelStep("invalid_output")
+    await _settle(reservation, record("used", *usage))
+    return step
+
+
+async def _settle(reservation: llm_usage_service.Reservation, record: CallRecord) -> None:
+    try:
+        await llm_usage_service.settle(reservation, record)
+    except Exception:
+        logger.exception("settling a language model call failed; its reservation stays counted")
+
+
+def _candidates(
+    caller: Caller, drafter: Drafter, text: str, turns: list[StoredTurn]
+) -> list[Concept]:
+    """Up to 200 concepts for the model, the company root first, then by relevance."""
+    view = drafter.view
+    company_id = drafter.company_id
+    cross = bool(view.settings and view.settings.cross_company)
+    phrases = _phrases(text)
+
+    def allowed(c: Concept | None) -> bool:
+        if c is None or c.dying_at is not None or c.id not in view.concepts:
+            return False
+        if c.company_id == company_id:
+            return True
+        return cross and c.company_id in view.companies and can_read(caller.grants, c.company_id)
+
+    chosen: list[Concept] = []
+    seen: set[uuid.UUID] = set()
+    others = 0
+
+    def take(c: Concept | None) -> None:
+        nonlocal others
+        if c is None or len(chosen) >= MAX_CANDIDATES or c.id in seen or not allowed(c):
+            return
+        foreign = c.company_id != company_id
+        if foreign and others >= MAX_OTHER_COMPANY_CANDIDATES:
+            return
+        others += foreign
+        seen.add(c.id)
+        chosen.append(c)
+
+    take(drafter.root)
+    referenced: list[Concept | None] = []
+    for turn in reversed(turns):
+        referenced.extend(view.concepts.get(concept_id) for concept_id in turn.concept_ids)
+        referenced.extend(drafter.resolve(label) for label in turn.new_labels)
+    for c in referenced:
+        take(c)
+    matched = [c for c in drafter.mine if _matches(c.label, phrases)]
+    for c in matched:
+        take(c)
+    for c in [*referenced, *matched]:
+        if c is None or c.company_id != company_id:
+            continue
+        take(view.concepts.get(c.parent_id) if c.parent_id else None)
+        for child in view.children_of(c.id):
+            take(child)
+    if cross:
+        foreign = [
+            c
+            for c in view.live_concepts()
+            if c.company_id != company_id and _matches(c.label, phrases)
+        ]
+        for c in sorted(foreign, key=lambda c: (c.born_at, str(c.id))):
+            take(c)
+    if drafter.dom_key:
+        for c in drafter.mine:
+            if view.domain_key(c) == drafter.dom_key:
+                take(c)
+    for c in sorted(drafter.mine, key=lambda c: (c.born_at, str(c.id)), reverse=True):
+        take(c)
+    return chosen
+
+
+def _context(
+    drafter: Drafter,
+    text: str,
+    turns: list[StoredTurn],
+    handles: list[Concept],
+    reading: Reading,
+) -> str:
+    """The user message: the call's data as JSON, with handles in place of every id."""
+    view = drafter.view
+    handle_of = {c.id: f"c{i}" for i, c in enumerate(handles)}
+
+    def ref(concept: Concept | None, label: str) -> str:
+        return handle_of.get(concept.id, label) if concept else label
+
+    candidates: list[dict[str, Any]] = []
+    for c in handles:
+        entry: dict[str, Any] = {
+            "handle": handle_of[c.id],
+            "label": c.label,
+            "domain": view.domain_key(c),
+            "parent": handle_of.get(c.parent_id) if c.parent_id else None,
+            "pending": bool(c.pending),
+        }
+        if c.company_id != drafter.company_id:
+            entry["company"] = view.companies[c.company_id].name
+        candidates.append(entry)
+    data: dict[str, Any] = {
+        "mode": reading.mode,
+        "sentence": text,
+        "domainPrefix": drafter.dom_key,
+        "company": view.companies[drafter.company_id].name,
+        "sessionTurns": [
+            {
+                "sentence": t.sentence,
+                "referenced": [handle_of[i] for i in t.concept_ids if i in handle_of],
+                "introduced": [ref(drafter.resolve(label), label) for label in t.new_labels],
+            }
+            for t in turns
+        ],
+        "candidates": candidates,
+        "domainTemplates": [
+            {"key": key, "name": t.name}
+            for key, t in sorted(view.templates.items(), key=lambda kv: kv[1].position)
+        ],
+    }
+    if reading.mode == "document":
+        data["neighbours"] = {"before": list(reading.before), "after": list(reading.after)}
+    return json.dumps(data, ensure_ascii=False)
+
+
+def _interpret(
+    raw: str,
+    handles: list[Concept],
+    drafter: Drafter,
+    sentence: str,
+    text: str,
+    reading: Reading,
+) -> ModelStep:
+    """Validates the whole answer, then maps each confident intent to drafts."""
+    try:
+        answer = TeachExtractionAnswer.model_validate_json(raw)
+    except ValidationError as exc:
+        raise _InvalidAnswer(f"{exc.error_count()} schema errors") from None
+    if not reading.speech and (
+        len(answer.intents) > MAX_SENTENCE_INTENTS or len(answer.unresolved) > MAX_SENTENCE_PHRASES
+    ):
+        raise _InvalidAnswer("too many intents or phrases for one sentence")
+    segments = _segments(answer, text)
+    sent = {c.id for c in handles}
+    checked: list[_Checked] = []
+    for intent in answer.intents:
+        if reading.speech and intent.segment is None:
+            raise _InvalidAnswer("a transcript intent names no segment")
+        index = intent.segment if intent.segment is not None else 0
+        if index >= len(segments):
+            raise _InvalidAnswer("an intent names a segment that was not given")
+        if reading.speech and intent.explanation and len(intent.explanation) > 120:
+            raise _InvalidAnswer("a transcript explanation is longer than 120 characters")
+        seg_start, seg_end = segments[index]
+        if not seg_start <= intent.source.start < intent.source.end <= seg_end:
+            raise _InvalidAnswer("an intent's source lies outside its segment")
+        source = (intent.source.start, intent.source.end)
+        # Each new label is reused as a candidate sent in this call, or grounded in the
+        # caller's words inside the source range; the self-join checks run after that.
+        raw = [intent.subject, intent.object, *(intent.members or [])]
+        placed = [_end(ref, handles, sent, drafter, text, source) for ref in raw]
+        grounded = all(end is not None for end in placed)
+        ends = [end for end in placed if end is not None]
+        if grounded and any(_same(a, b) for i, a in enumerate(ends) for b in ends[i + 1 :]):
+            raise _InvalidAnswer("an intent joins a concept to itself or repeats a member")
+        if intent.kind == "spec" or intent.members:
+            for end in ends:
+                if end.concept is not None and end.concept.company_id != drafter.company_id:
+                    raise _InvalidAnswer("a spec or grouping intent leaves the taught company")
+        action = member_action = None
+        if intent.kind == "rel":
+            assert intent.action is not None
+            action = _action(intent.action)
+            if intent.members:
+                member_action = _action(intent.member_action or DEFAULT_MEMBER_ACTION)
+        subject, obj, *members = placed if grounded else [placed[0], placed[1]]
+        checked.append(
+            _Checked(intent, subject, obj, members, action, member_action, index, source, grounded)
+        )
+
+    offset = len(sentence) - len(text)
+    step = ModelStep("used", segments=[(start + offset, end + offset) for start, end in segments])
+    lists: dict[int, list[PlannedIntent]] = {}
+    list_sizes: dict[int, int] = {}
+    stated: dict[int, int] = {}
+    for c in checked:
+        intent = c.intent
+        if intent.list_id is not None:
+            list_sizes[intent.list_id] = list_sizes.get(intent.list_id, 0) + 1
+            if intent.stated_count is not None:
+                stated.setdefault(intent.list_id, intent.stated_count)
+        span = (c.source[0] + offset, c.source[1] + offset)
+        where = sentence[span[0] : span[1]][:400]
+        if not c.grounded or c.subject is None or c.obj is None:
+            step.unresolved.append(UnresolvedPhrase(text=where, reason="ungrounded_label"))
+            continue
+        if intent.confidence < MIN_CONFIDENCE:
+            step.unresolved.append(UnresolvedPhrase(text=where, reason="low_confidence"))
+            continue
+        note = DraftNote(
+            extractor="llm",
+            confidence=intent.confidence,
+            explanation=intent.explanation,
+            segment=c.segment,
+            source_span=SourceSpan(start=span[0], end=span[1]),
+        )
+        if intent.kind == "rel":
+            assert c.action is not None
+            planned = drafter.model_rel(c.subject, c.obj, c.action, note, intent.domain_key)
+            for member in c.members:
+                assert c.member_action is not None and member is not None
+                group = End(c.obj.concept, c.obj.label, c.obj.text)
+                joined = drafter.model_rel(group, member, c.member_action, note, intent.domain_key)
+                planned.drafts.extend(joined.drafts)
+                planned.statements.extend(joined.statements)
+                planned.concept_ids.extend(
+                    i for i in joined.concept_ids if i not in planned.concept_ids
+                )
+            if c.members and intent.stated_count is not None:
+                _note_count(planned, intent.stated_count, len(c.members))
+        else:
+            planned = drafter.model_spec(c.subject, c.obj, intent.rule, note, intent.domain_key)
+        planned.span = intent.span
+        planned.segment = c.segment
+        step.planned.append(planned)
+        if intent.list_id is not None:
+            lists.setdefault(intent.list_id, []).append(planned)
+    for list_id, planned_list in lists.items():
+        if list_id in stated and stated[list_id] != list_sizes[list_id]:
+            for planned in planned_list:
+                _note_count(planned, stated[list_id], list_sizes[list_id])
+    for phrase in answer.unresolved:
+        where = None
+        if phrase.source is not None and phrase.source.start < phrase.source.end <= len(text):
+            where = sentence[phrase.source.start + offset : phrase.source.end + offset]
+        step.unresolved.append(
+            UnresolvedPhrase(
+                text=(where or phrase_in(sentence, phrase.text))[:400], reason=phrase.reason
+            )
+        )
+    return step
+
+
+@dataclass(frozen=True)
+class _Checked:
+    intent: AnswerIntent
+    subject: End | None
+    obj: End | None
+    members: list[End | None]
+    action: str | None
+    member_action: str | None
+    segment: int
+    source: tuple[int, int]
+    grounded: bool
+
+
+def _segments(answer: TeachExtractionAnswer, text: str) -> list[tuple[int, int]]:
+    """The answer's segments in order; one covering the text when it gives none."""
+    if not answer.segments:
+        return [(0, len(text))]
+    out: list[tuple[int, int]] = []
+    last_end = 0
+    for i, seg in enumerate(answer.segments):
+        if seg.index != i or seg.end > len(text):
+            raise _InvalidAnswer("a segment is out of order or outside the text")
+        if seg.start < last_end or seg.end - seg.start > MAX_SEGMENT_CHARS:
+            raise _InvalidAnswer("segments overlap, go backwards or are too long")
+        out.append((seg.start, seg.end))
+        last_end = seg.end
+    return out
+
+
+def _ground(label: str, text: str, source: tuple[int, int]) -> str | None:
+    """The caller's own words in `text[source]` that `label` names, as a label, or None.
+
+    Whole words only, each input word normalised on its own (NFKC, case folded, singular), so
+    the matched run maps back to the original words; the label is sliced from the original
+    input and put through the casing rule, never taken from the model's string."""
+    wanted = [_fold(w) for w in _ANY_WORD.findall(label)]
+    words = [
+        (_fold(m.group(0)), m.start() + source[0], m.end() + source[0])
+        for m in _ANY_WORD.finditer(text[source[0] : source[1]])
+    ]
+    n = len(wanted)
+    for i in range(len(words) - n + 1):
+        run = words[i : i + n]
+        if n and [w for w, _, _ in run] == wanted:
+            return title(unicodedata.normalize("NFKC", text[run[0][1] : run[-1][2]]))
+    return None
+
+
+def _fold(word: str) -> str:
+    return singular(unicodedata.normalize("NFKC", word).casefold())
+
+
+def _action(raw: str) -> str:
+    action = normalise_action(raw)
+    if not action or action in REFUSED_ACTIONS:
+        raise _InvalidAnswer("a rel action is is a or equivalent to")
+    return action
+
+
+def _note_count(planned: PlannedIntent, stated: int, listed: int) -> None:
+    """Drafts follow the list; the reviewer learns that the stated number differed."""
+    remark = f"stated {stated}, listed {listed}"
+    current = planned.note.explanation
+    text = f"{current} {remark}" if current else remark
+    if len(text) > MAX_EXPLANATION:
+        text = f"{current[: MAX_EXPLANATION - len(remark) - 1]} {remark}" if current else remark
+    planned.note = planned.note.model_copy(update={"explanation": text})
+
+
+def _end(
+    ref: Any,
+    handles: list[Concept],
+    sent: set[uuid.UUID],
+    drafter: Drafter,
+    text: str,
+    source: tuple[int, int],
+) -> End | None:
+    """An intent end: a cited candidate; a new label naming a candidate sent in this call,
+    reused as is; or a new label grounded in the caller's words (then resolved to an existing
+    concept of the company when one has that label). None when a new label is ungrounded."""
+    if isinstance(ref, CandidateRef):
+        index = int(ref.candidate[1:])
+        if index >= len(handles):
+            raise _InvalidAnswer("a cited candidate was not sent")
+        concept = handles[index]
+        return End(concept, concept.label, concept.label)
+    label = title(unicodedata.normalize("NFKC", ref.new_label))
+    reused = drafter.resolve(label)
+    if reused is not None and reused.id in sent:
+        return End(reused, reused.label, reused.label)
+    spoken = _ground(label, text, source)
+    if spoken is None:
+        return None
+    return End(drafter.resolve(spoken), spoken, spoken, cited_new=True)
+
+
+def _same(a: End, b: End) -> bool:
+    if a.concept is not None or b.concept is not None:
+        return a.concept is not None and b.concept is not None and a.concept.id == b.concept.id
+    return a.label.lower() == b.label.lower()
+
+
+def _phrases(text: str) -> set[str]:
+    words = _WORDS.findall(text.lower())
+    out: set[str] = set()
+    for n in (1, 2, 3):
+        for i in range(len(words) - n + 1):
+            gram = " ".join(words[i : i + n])
+            out.add(gram)
+            out.add(" ".join([*words[i : i + n - 1], singular(words[i + n - 1])]))
+    return out
+
+
+def _matches(label: str, phrases: set[str]) -> bool:
+    lower = label.lower()
+    return lower in phrases or singular(lower) in phrases

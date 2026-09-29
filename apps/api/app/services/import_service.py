@@ -49,9 +49,9 @@ PURGE_AFTER_EXPIRY = timedelta(hours=24)
 async def admit_import(session: AsyncSession, caller: Caller) -> None:
     """The checks that run before the upload is read: permission, setting, one import unit."""
     if not can_propose_anywhere(caller.grants, caller.everyone_teaches):
-        raise forbidden("your roles do not allow proposing")
+        raise forbidden("Your roles do not allow proposing")
     ensure_import_allowed(await tenant_settings_repository.get(session, caller.tenant_id))
-    charge(Budget.IMPORT, caller.tenant_id, caller.actor_kind.value, caller.user_id)
+    await charge(Budget.IMPORT, caller.tenant_id, caller.actor_kind.value, caller.user_id)
 
 
 async def import_sentences(
@@ -81,7 +81,9 @@ async def import_sentences(
         raise _too_large(str(exc)) from exc
     except DocumentUnreadableError as exc:
         raise validation_failed("file", str(exc)) from exc
-    charge(Budget.PARSE, caller.tenant_id, caller.actor_kind.value, caller.user_id, len(sentences))
+    await charge(
+        Budget.PARSE, caller.tenant_id, caller.actor_kind.value, caller.user_id, len(sentences)
+    )
     row = await document_import_repository.create(
         session,
         tenant_id=caller.tenant_id,
@@ -132,6 +134,20 @@ async def claim_parse(
     if claimed is None:
         raise await _claim_refusal(session, caller, row, sentence_index, "parsed three times")
     return claimed
+
+
+async def neighbours(
+    session: AsyncSession, row: DocumentImport, sentence_index: int, count: int
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Up to `count` stored sentences just before and just after a stored sentence, in order."""
+    texts = await document_import_sentence_repository.texts_between(
+        session, row.tenant_id, row.id, sentence_index - count, sentence_index + count
+    )
+    before = tuple(texts[i] for i in range(sentence_index - count, sentence_index) if i in texts)
+    after = tuple(
+        texts[i] for i in range(sentence_index + 1, sentence_index + count + 1) if i in texts
+    )
+    return before, after
 
 
 async def claim_draft(

@@ -29,6 +29,7 @@ from app.services.proposal_store_service import (
     esc,
     store,
 )
+from app.utilities.action_text import normalise_action
 from app.utilities.layout import CONFLICT_COLOR, NEUTRAL_COLOR
 from app.utilities.permissions import Scope
 from app.utilities.problems import ProblemError, conflict, not_found, validation_failed
@@ -180,17 +181,23 @@ async def _propose_edit_relation(
     relation = _payload_relation(view, draft.payload.relation_id)
     a, b = view.concepts[relation.a_id], view.concepts[relation.b_id]
     reverse = bool(draft.payload.reverse)
-    action = (draft.payload.action or relation.label).strip().lower()
-    if action == relation.label and not reverse:
+    action = normalise_action(draft.payload.action or relation.label)
+    if not action:
+        raise validation_failed("payload.action", "an action needs at least one word")
+    current = normalise_action(relation.label)
+    if action == current and not reverse:
         raise validation_failed("payload", "nothing changes: same action and same direction")
-    if action != relation.label and relation.kind in STRUCTURAL_KINDS:
+    if action != current and relation.kind in STRUCTURAL_KINDS:
         raise conflict("structural_relation", f"a {relation.label} relation cannot be relabelled")
     if enforce:
         _ensure_can_propose_on_ends(caller, view, a, b)
     await ensure_relation_still_live(session, view, relation)
     frm, to = (b, a) if reverse else (a, b)
     if any(
-        r.id != relation.id and r.a_id == frm.id and r.b_id == to.id and r.label.lower() == action
+        r.id != relation.id
+        and r.a_id == frm.id
+        and r.b_id == to.id
+        and normalise_action(r.label) == action
         for r in view.live_relations()
     ):
         raise conflict(

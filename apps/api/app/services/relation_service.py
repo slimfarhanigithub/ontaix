@@ -76,7 +76,7 @@ async def list_equivalences(session: AsyncSession, caller: Caller) -> list[Relat
 async def propose_relation(
     session: AsyncSession, caller: Caller, draft: RelationDraft
 ) -> ProposalDto:
-    charge_proposals(caller)
+    await charge_proposals(caller)
     view = await load_view(session, caller.tenant_id)
     proposal = await proposal_service.create(session, caller, view, draft)
     return readable_proposal(
@@ -91,7 +91,7 @@ async def propose_equivalence(
     b_id: uuid.UUID,
     caption: str | None,
 ) -> ProposalDto:
-    charge_proposals(caller)
+    await charge_proposals(caller)
     view = await load_view(session, caller.tenant_id)
     proposal = await proposal_service.propose_equivalence(
         session, caller, view, a_id, b_id, caption
@@ -104,7 +104,7 @@ async def propose_equivalence(
 async def propose_edit(
     session: AsyncSession, caller: Caller, relation_id: uuid.UUID, edit: RelationEdit
 ) -> ProposalDto:
-    charge_proposals(caller)
+    await charge_proposals(caller)
     view = await load_view(session, caller.tenant_id)
     _readable_relation(caller, view, relation_id)
     draft = ChangeDraft(
@@ -120,7 +120,7 @@ async def propose_edit(
 async def propose_remove(
     session: AsyncSession, caller: Caller, relation_id: uuid.UUID
 ) -> ProposalDto:
-    charge_proposals(caller)
+    await charge_proposals(caller)
     view = await load_view(session, caller.tenant_id)
     _readable_relation(caller, view, relation_id)
     draft = ChangeDraft(

@@ -29,6 +29,7 @@ from app.services.proposal_store_service import (
     esc,
     store,
 )
+from app.utilities.action_text import normalise_action
 from app.utilities.layout import NEUTRAL_COLOR, rest_length
 from app.utilities.permissions import Scope
 from app.utilities.problems import conflict, not_found, validation_failed
@@ -51,7 +52,9 @@ async def propose_relation(
     b = _resolve_end(view, draft.b_id, draft.b_label, draft.company_id)
     if a.id == b.id:
         raise validation_failed("bId", "a relation needs two different concepts")
-    action = draft.action.strip().lower()
+    action = normalise_action(draft.action)
+    if not action:
+        raise validation_failed("action", "an action needs at least one word")
     cross_company = a.company_id != b.company_id
     if cross_company and not (view.settings and view.settings.cross_company):
         raise conflict(
@@ -62,7 +65,7 @@ async def propose_relation(
         if cross_company:
             ensure_can_propose(caller, Scope(b.company_id, view.domain_key(b)))
     if any(
-        r.a_id == a.id and r.b_id == b.id and r.label.lower() == action
+        r.a_id == a.id and r.b_id == b.id and normalise_action(r.label) == action
         for r in view.live_relations()
     ):
         raise conflict(

@@ -29,6 +29,7 @@ const settings = {
   refresh: '15 min' as const,
   agentAccess: true,
   costCap: true,
+  llmMonthlyTokenCap: 2_000_000,
 };
 
 function hostileModel() {

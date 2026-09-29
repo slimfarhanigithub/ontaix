@@ -8,6 +8,7 @@ constraints, indexes, enum labels, triggers, functions and comments.
 
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -20,7 +21,9 @@ from alembic.config import Config
 from app.migrations.runner import API_ROOT
 
 OLD_SCHEMA = Path(__file__).parent / "fixtures" / "schema_0001.sql"
-CONTRACT = API_ROOT.parents[1] / "contracts" / "schema.sql"
+# ONTAIX_CONTRACTS_DIR points at another copy of the contracts, for example a branch's.
+CONTRACTS = Path(os.environ.get("ONTAIX_CONTRACTS_DIR") or API_ROOT.parents[1] / "contracts")
+CONTRACT = CONTRACTS / "schema.sql"
 
 CATALOG_QUERIES: dict[str, str] = {
     "columns": """

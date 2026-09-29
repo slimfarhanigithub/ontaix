@@ -1,8 +1,9 @@
 /**
  * The teach bar: company selector, sentence input, microphone and Teach. Markup from
  * reference/ontaix-studio-reference.html lines 202-208 without the Next button; behaviours from
- * lines 610-611, 885-886 and 1091-1095 (voice). Typed sentences are taught as `text`, the
- * microphone's final transcript as `speech`.
+ * lines 610-611, 885-886 and 1091-1095 (voice). Typed sentences are taught as `text`. The
+ * microphone listens until the speaker stops (a pause, or a second press) and then sends the whole
+ * transcript once as `speech`, never word by word; the words show in the input while listening.
  */
 import { useEffect, useRef, useState } from 'react';
 
@@ -23,6 +24,9 @@ interface SpeechRecognitionLike {
 }
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+/** Silence after the last recognised words that ends a recording. */
+const SILENCE_MS = 1500;
 
 const SR: SpeechRecognitionCtor | undefined =
   (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition ||
@@ -54,7 +58,10 @@ export function TeachBar() {
     rec.current = r;
     r.lang = /^fr/i.test(navigator.language) ? 'fr-FR' : 'en-GB';
     r.interimResults = true;
-    r.continuous = false;
+    r.continuous = true;
+    let heard = '';
+    let sent = false;
+    let silence: ReturnType<typeof setTimeout> | undefined;
     r.onstart = () => {
       st.ui.listening = true;
       st.bump();
@@ -62,18 +69,23 @@ export function TeachBar() {
     r.onresult = (ev) => {
       let s = '';
       for (let i = 0; i < ev.results.length; i++) s += ev.results[i][0].transcript;
+      heard = s;
       st.setSay(s);
-      if (ev.results[ev.results.length - 1].isFinal) {
-        submit(s, 'speech');
-        st.setSay('');
-      }
+      clearTimeout(silence);
+      silence = setTimeout(() => r.stop(), SILENCE_MS);
     };
     r.onerror = () => {
       setErrorPlaceholder('The microphone did not respond. Type instead, the show goes on.');
     };
     r.onend = () => {
+      clearTimeout(silence);
       st.ui.listening = false;
       st.bump();
+      if (!sent && heard.trim()) {
+        sent = true;
+        submit(heard, 'speech');
+        st.setSay('');
+      }
     };
     r.start();
   };

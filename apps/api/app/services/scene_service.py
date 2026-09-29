@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import Caller
 from app.models.api.connector import ConnectorType as ConnectorTypeDto
 from app.models.api.scene import Scene
-from app.models.api.settings import Appearance, AppearanceDefaults, Settings
+from app.models.api.settings import (
+    DEFAULT_LLM_MONTHLY_TOKEN_CAP,
+    Appearance,
+    AppearanceDefaults,
+    Settings,
+)
 from app.models.api.view_state import ViewState
 from app.models.storage.tenant_settings import TenantSettings
 from app.repositories import (
@@ -34,7 +39,7 @@ DEFAULT_SOURCE_COLOUR = "#d6bd8a"
 
 async def get_scene(session: AsyncSession, caller: Caller) -> Scene:
     if not can_read_tenant(caller.grants):
-        raise forbidden("no role grants you access to the model")
+        raise forbidden("No role grants you access to the model")
     open_proposals = await proposal_repository.list_open(session, caller.tenant_id)
     view = await load_view(session, caller.tenant_id, open_proposals)
     companies = readable_companies(caller, view)
@@ -92,6 +97,7 @@ def settings_dto(settings: TenantSettings | None) -> Settings:
             refresh="15 min",
             agent_access=True,
             cost_cap=True,
+            llm_monthly_token_cap=DEFAULT_LLM_MONTHLY_TOKEN_CAP,
         )
     return Settings(
         voice=settings.voice,
@@ -111,6 +117,7 @@ def settings_dto(settings: TenantSettings | None) -> Settings:
         refresh=settings.refresh.value,
         agent_access=settings.agent_access,
         cost_cap=settings.cost_cap,
+        llm_monthly_token_cap=settings.llm_monthly_token_cap,
         egress_allowlist=list(settings.egress_allowlist or []),
     )
 
