@@ -22,6 +22,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
+from app.config import LlmProfile
 from app.models.api.origin import ImportRef
 from app.models.api.teach import (
     SourceSegment,
@@ -75,6 +76,8 @@ class _Source:
     origin_detail: dict[str, Any] | None
     draft_extras: dict[str, Any]
     reading: Reading = Reading()
+    # Typed text and speech run on the `live` model profile; document sentences on `deep`.
+    profile: LlmProfile = "live"
 
 
 async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> TeachResult:
@@ -105,7 +108,9 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
     triggers: set = set()
     # Every origin goes to the model first while the step is on; typed text keeps the grammar
     # and its fallback triggers for when the step is off or does not answer.
-    model_first = source.reading.model_first or teach_extraction_service.enabled(view)
+    model_first = source.reading.model_first or teach_extraction_service.enabled(
+        view, source.profile
+    )
     if not source.reading.model_first:
         grammar = plan_grammar(drafter, text)
         triggers = fallback_triggers(text, grammar.outcome)
@@ -118,7 +123,7 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
         await session.commit()
         turns = await teach_session_service.recent_turns(key)
         step = await teach_extraction_service.run(
-            caller, drafter, sentence, text, turns, source.reading
+            caller, drafter, sentence, text, turns, source.reading, profile=source.profile
         )
         if step.outcome != "used":
             if speech:
@@ -158,7 +163,7 @@ async def _source(
     units = max(1, -(-len(body.text) // PARSE_UNIT_CHARS))
     await charge(Budget.PARSE, caller.tenant_id, caller.actor_kind.value, caller.user_id, units)
     reading = Reading("speech") if origin == "speech" else Reading()
-    return _Source(body.text, origin, None, {"origin": origin}, reading)
+    return _Source(body.text, origin, None, {"origin": origin}, reading, "live")
 
 
 async def _cited_sentence(session: AsyncSession, caller: Caller, ref: ImportRef) -> _Source:
@@ -174,6 +179,7 @@ async def _cited_sentence(session: AsyncSession, caller: Caller, ref: ImportRef)
         import_service.origin_detail(row, ref.sentence_index, sentence),
         {"importRef": ref.model_dump(mode="json", by_alias=True)},
         Reading("document", before, after),
+        "deep",
     )
 
 
