@@ -12,13 +12,19 @@
  *   ONTAIX_SEED            empty (default here: the demo tenant and its users, no company) or
  *                          fixture (the Northwind and Aurora example)
  *   VITE_ONTAIX_DEV_USER   dev identity the Studio sends (default: the seed's full-access demo user)
+ *   ONTAIX_PGDATA          folder of the embedded database (default: %LOCALAPPDATA%\Ontaix\pgdata on
+ *                          Windows, ~/.local/share/ontaix/pgdata elsewhere); `ephemeral` uses a
+ *                          temporary folder deleted on exit, as the end-to-end tests do
  *
- * The embedded database lives in a temporary directory and is deleted on exit, so every run
- * starts from the seed. The stack stops on Ctrl+C, SIGTERM, or, when started by another Node
+ *   pnpm dev:stack -- --reset        # delete the embedded database first, then seed afresh
+ *
+ * The embedded database keeps its data between runs; the seed never changes an existing tenant,
+ * so ONTAIX_SEED only matters for a new or reset database. The stack stops on Ctrl+C, SIGTERM, or, when started by another Node
  * process with an IPC channel, on the message `stop` or when that parent goes away.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { createConnection } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -34,12 +40,20 @@ const studioPort = Number(process.env.ONTAIX_STUDIO_PORT || 5173);
 const apiUrl = `http://127.0.0.1:${apiPort}`;
 const studioUrl = `http://127.0.0.1:${studioPort}`;
 
-/** Holds pgserver open until stdin closes, then stops the server and deletes its directory. */
+/**
+ * Holds pgserver open until stdin closes, then stops the server. Its folder is argv[1], or a
+ * temporary folder deleted on exit when argv[1] is `ephemeral`.
+ */
 const EMBEDDED_POSTGRES = `
 import pathlib, sys, tempfile
 import pgserver
-pgdata = pathlib.Path(tempfile.mkdtemp(prefix="ontaix-dev-pg-")) / "pgdata"
-server = pgserver.get_server(pgdata, cleanup_mode="delete")
+if sys.argv[1] == "ephemeral":
+    pgdata = pathlib.Path(tempfile.mkdtemp(prefix="ontaix-dev-pg-")) / "pgdata"
+    server = pgserver.get_server(pgdata, cleanup_mode="delete")
+else:
+    pgdata = pathlib.Path(sys.argv[1])
+    pgdata.parent.mkdir(parents=True, exist_ok=True)
+    server = pgserver.get_server(pgdata, cleanup_mode="stop")
 print(server.get_uri(), flush=True)
 try:
     sys.stdin.read()
@@ -48,6 +62,13 @@ except KeyboardInterrupt:
 finally:
     server.cleanup()
 `;
+
+const pgdata =
+  process.env.ONTAIX_PGDATA ||
+  (isWindows
+    ? join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'Ontaix', 'pgdata')
+    : join(homedir(), '.local', 'share', 'ontaix', 'pgdata'));
+const reset = process.argv.includes('--reset');
 
 const children = [];
 let postgres = null;
@@ -88,7 +109,12 @@ function start(name, command, args, options) {
 }
 
 async function startPostgres(py) {
-  const child = spawn(py, ['-c', EMBEDDED_POSTGRES], { cwd: apiDir, stdio: ['pipe', 'pipe', 'pipe'] });
+  if (pgdata !== 'ephemeral' && reset && existsSync(pgdata)) {
+    log(`--reset: deleting ${pgdata}`);
+    rmSync(pgdata, { recursive: true, force: true });
+  }
+  if (pgdata !== 'ephemeral') log(`embedded PostgreSQL data in ${pgdata}`);
+  const child = spawn(py, ['-c', EMBEDDED_POSTGRES, pgdata], { cwd: apiDir, stdio: ['pipe', 'pipe', 'pipe'] });
   postgres = child;
   createInterface({ input: child.stderr }).on('line', (line) => process.stdout.write(`[postgres] ${line}\n`));
   const uri = await new Promise((ok, fail) => {

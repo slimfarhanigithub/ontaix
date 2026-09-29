@@ -67,8 +67,8 @@ cd packages/connectors && uv sync && uv run pytest
 
 `pnpm dev:stack` (from the repository root, after `pnpm install`; it runs `uv sync` in `apps/api` when the virtualenv is missing) starts the whole stack without Docker:
 
-1. an embedded PostgreSQL 16 from the api's `pgserver` dev dependency, in a temporary directory deleted on exit (set `ONTAIX_DATABASE_URL` to use another server instead);
-2. `python -m app.seed`: migrations, then an empty demo tenant: its settings and seeded users, the domain templates and the connector catalogue, and no company. The first company you add with "+ Company" becomes the home company. To load the Northwind Industries and Aurora Valves example instead, run `ONTAIX_SEED=fixture pnpm dev:stack`; an `ONTAIX_SEED` already set always wins;
+1. an embedded PostgreSQL 16 from the api's `pgserver` dev dependency, whose data persists between runs in `%LOCALAPPDATA%\Ontaix\pgdata` on Windows (`~/.local/share/ontaix/pgdata` elsewhere; override with `ONTAIX_PGDATA`, or `ONTAIX_PGDATA=ephemeral` for a temporary database deleted on exit). `pnpm dev:stack -- --reset` deletes the data first for a clean start. Set `ONTAIX_DATABASE_URL` to use another server instead;
+2. `python -m app.seed`: migrations, then an empty demo tenant: its settings and seeded users, the domain templates and the connector catalogue, and no company. The first company you add with "+ Company" becomes the home company. To load the Northwind Industries and Aurora Valves example instead, run `ONTAIX_SEED=fixture pnpm dev:stack`; an `ONTAIX_SEED` already set always wins, and it only matters for a new or reset database;
 3. the API under uvicorn on http://127.0.0.1:8000 with `ONTAIX_ENVIRONMENT=dev` (selector event loop on Windows);
 4. the Studio's Vite dev server on http://127.0.0.1:5173 with `VITE_ONTAIX_API_URL=/api/v1`, proxying `/api` to the API.
 
