@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.storage.audit_entry import AuditEntry
-from app.models.storage.base import ActorKind
+from app.models.storage.base import ActorKind, ProposalOrigin
 
 
 async def list_for_tenant(session: AsyncSession, tenant_id: uuid.UUID) -> list[AuditEntry]:
@@ -30,6 +30,7 @@ async def create(
     proposal_id: uuid.UUID | None,
     company_ids: list[uuid.UUID],
     domain_key: str | None,
+    origin: ProposalOrigin | None = None,
 ) -> AuditEntry:
     entry = AuditEntry(
         tenant_id=tenant_id,
@@ -39,6 +40,7 @@ async def create(
         what=what,
         ok=ok,
         proposal_id=proposal_id,
+        origin=origin,
         company_ids=company_ids,
         domain_key=domain_key,
     )

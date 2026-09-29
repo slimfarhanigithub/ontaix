@@ -1,11 +1,11 @@
 /**
  * The tool row above the teach bar. Markup from reference/ontaix-studio-reference.html lines
- * 194-201; behaviours from lines 548-565 (arrange, coverage, finalise, skip), 616 (add a
- * company) and 904-906 (import, drag and drop).
+ * 194-201 without the Finalise all button; behaviours from lines 548-565 (arrange, coverage,
+ * skip), 616 (add a company) and 904-906 (import, drag and drop).
  */
 import { useEffect, useRef } from 'react';
 
-import { finaliseAll, importDocument } from '../demo/story';
+import { importDocument } from '../teach/teach';
 import { openAddCompany } from './AddCompany';
 import { useStore } from './dom';
 
@@ -89,18 +89,6 @@ export function Tools() {
           <path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" stroke="none" opacity=".6" />
         </svg>
         Coverage
-      </button>
-      <button
-        type="button"
-        id="finalise"
-        title="Play every scene and approve everything, instantly"
-        disabled={st.ui.finalising}
-        onClick={() => void finaliseAll()}
-      >
-        <svg viewBox="0 0 16 16">
-          <path d="M2 8.5l4 4 8-9" />
-        </svg>
-        {st.ui.finalising ? 'Building…' : 'Finalise all'}
       </button>
       <button type="button" id="skip" title="Skip animations (S)" aria-pressed={st.s.SKIP} onClick={() => st.toggleSkip()}>
         <svg viewBox="0 0 16 16">

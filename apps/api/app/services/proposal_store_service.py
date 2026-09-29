@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
 from app.models.api.actor import Actor
+from app.models.proposals.provenance import TYPED_TEXT, Provenance
 from app.models.storage.base import ActorKind, ChangeKind, ProposalType
 from app.models.storage.company import Company
 from app.models.storage.concept import Concept
@@ -112,11 +113,13 @@ async def store(
     concept_id: uuid.UUID | None,
     relation_id: uuid.UUID | None,
     bulk: bool,
+    provenance: Provenance = TYPED_TEXT,
 ) -> Proposal:
     """Write the proposal row and its `proposal.created` event.
 
     `touched_company_ids` is recorded in `payload.companyIds`: read access to the proposal is
-    decided from it, also after the rows it points at are gone.
+    decided from it, also after the rows it points at are gone. `provenance` is the origin the
+    proposal records, with the document detail when it cites an import.
     """
     unique_ids = list(dict.fromkeys(touched_company_ids))
     proposal = await proposal_repository.create(
@@ -141,6 +144,8 @@ async def store(
         proposer_kind=ActorKind(proposer.kind),
         proposer_user_id=proposer.id if proposer.kind == "user" else None,
         bulk=bulk,
+        origin=provenance.origin,
+        origin_detail=provenance.detail,
     )
     dto = view.proposal_dto(proposal, view.proposal_artefacts(proposal))
     await outbox_service.emit(

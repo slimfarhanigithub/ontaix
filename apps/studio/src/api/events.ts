@@ -10,7 +10,6 @@ export type EventType =
   | 'proposal.half_approved'
   | 'proposal.approved'
   | 'proposal.rejected'
-  | 'proposal.finalised'
   | 'concept.born'
   | 'concept.changed'
   | 'concept.dying'
@@ -31,7 +30,6 @@ export type EventType =
   | 'settings.changed'
   | 'appearance.changed'
   | 'view_state.changed'
-  | 'demo.scene_played'
   /** Control message: the client's state is behind and must reload `GET /scene`. */
   | 'snapshot.required';
 

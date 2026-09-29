@@ -6,9 +6,12 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.14",
+    "defusedxml==0.7.1",
     "fastapi>=0.115",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.6",
+    "pypdf==6.1.1",
+    "python-multipart==0.0.20",
     "sqlalchemy[asyncio]>=2.0",
     "uvicorn[standard]>=0.32",
 ]
@@ -48,6 +51,8 @@ select = ["E", "F", "I", "UP", "B", "TID"]
 [tool.ruff.lint.per-file-ignores]
 # Seed captions are verbatim reference copy and must not be wrapped.
 "app/seed/*.py" = ["E501"]
+# Migration DDL is the schema contract's text, verbatim.
+"app/migrations/versions/*.py" = ["E501"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

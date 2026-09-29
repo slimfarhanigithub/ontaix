@@ -521,18 +521,6 @@ async def test_reject_cascades_to_relations_touching_the_concept(
     assert await session.get(Concept, uuid.UUID(anchor["id"])) is not None
 
 
-async def test_finalise_all_reports_counts(
-    client: httpx.AsyncClient, tenant: TenantFixture
-) -> None:
-    response = await client.post("/proposals/finalise-all", headers=tenant.governor.headers)
-
-    assert response.status_code == 200, response.text
-    result = response.json()
-    assert result["companies"] == 1
-    assert result["scenesPlayed"] == 0
-    assert result["caption"].endswith("Everything approved.")
-
-
 async def test_unknown_user_is_unauthorized(client: httpx.AsyncClient) -> None:
     response = await client.get("/scene", headers={"X-Ontaix-User": "nobody@nowhere.test"})
 

@@ -168,7 +168,56 @@ export interface DraftSeed {
   seed?: number;
 }
 
-export interface ConceptDraft extends DraftSeed {
+/** How a proposal's content entered Ontaix; `document` is set by the server only. */
+export type Origin = 'text' | 'speech' | 'document';
+/** The origin a client declares on a draft or a teach parse. */
+export type InputOrigin = 'text' | 'speech';
+
+/** Cites one stored sentence of a document import. */
+export interface ImportRef {
+  importId: string;
+  sentenceIndex: number;
+}
+
+export interface DocumentPosition {
+  unit: 'page' | 'paragraph';
+  index: number;
+}
+
+export type ImportMediaType =
+  | 'text/plain'
+  | 'text/markdown'
+  | 'text/csv'
+  | 'application/json'
+  | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  | 'application/pdf';
+
+/** Where a `document` proposal came from, copied by the server from the stored import. */
+export interface OriginDetail {
+  fileName: string;
+  mediaType: ImportMediaType;
+  sentenceIndex: number;
+  position?: DocumentPosition;
+}
+
+/** Provenance fields every draft may carry. */
+export interface DraftOrigin {
+  origin?: InputOrigin;
+  importRef?: ImportRef;
+}
+
+/** `POST /import/sentences`: the stored import and its sentences. */
+export interface ImportResult {
+  importId: string;
+  expiresAt: string;
+  fileName: string;
+  origin: 'document';
+  originDetail: { fileName: string; mediaType: ImportMediaType };
+  sentences: string[];
+  positions?: (DocumentPosition | null)[];
+}
+
+export interface ConceptDraft extends DraftSeed, DraftOrigin {
   type: 'concept';
   companyId: string;
   parentId: string;
@@ -180,7 +229,7 @@ export interface ConceptDraft extends DraftSeed {
   caption?: string;
 }
 
-export interface SpecDraft extends DraftSeed {
+export interface SpecDraft extends DraftSeed, DraftOrigin {
   type: 'spec';
   companyId: string;
   parentId: string;
@@ -191,7 +240,7 @@ export interface SpecDraft extends DraftSeed {
   caption?: string;
 }
 
-export interface RelationDraft extends DraftSeed {
+export interface RelationDraft extends DraftSeed, DraftOrigin {
   type: 'relation';
   aId: string;
   bId: string;
@@ -201,7 +250,7 @@ export interface RelationDraft extends DraftSeed {
   caption?: string;
 }
 
-export interface SourceDraft {
+export interface SourceDraft extends DraftOrigin {
   type: 'source';
   companyId: string;
   label: string;
@@ -214,14 +263,14 @@ export interface SourceDraft {
   caption?: string;
 }
 
-export interface BindingDraft {
+export interface BindingDraft extends DraftOrigin {
   type: 'bind';
   sourceId: string;
   conceptIds: string[];
   caption?: string;
 }
 
-export interface AttributeDraft {
+export interface AttributeDraft extends DraftOrigin {
   type: 'attr';
   conceptId: string;
   sourceId?: string;
@@ -242,7 +291,7 @@ export type ChangeKind =
   | 'rename_source'
   | 'resolve_conflict';
 
-export interface ChangeDraft {
+export interface ChangeDraft extends DraftOrigin {
   type: 'change';
   changeKind: ChangeKind;
   payload: {
@@ -305,6 +354,8 @@ export interface Proposal {
   bindingIds: string[];
   attributeId?: string | null;
   proposer: Actor;
+  origin: Origin;
+  originDetail: OriginDetail | null;
   approvals: { ordinal: 1 | 2; userId: string; userName?: string; approvedAt: string }[];
   bulk?: boolean;
   createdAt: string;
@@ -320,6 +371,7 @@ export interface AuditEntry {
   what: string;
   ok: boolean;
   proposalId?: string | null;
+  origin: Origin | null;
   companyIds: string[];
   domainKey?: DomainKey | null;
 }
@@ -337,16 +389,6 @@ export interface BulkResult {
   rejected: number;
   rounds: number;
   remaining: number;
-  caption?: string;
-}
-
-export interface FinaliseResult {
-  companies: number;
-  concepts: number;
-  bound: number;
-  equivalences: number;
-  approved: number;
-  scenesPlayed: number;
   caption?: string;
 }
 
@@ -368,7 +410,6 @@ export interface Settings {
   refresh: RefreshInterval;
   agentAccess: boolean;
   costCap: boolean;
-  demoStory: boolean;
 }
 
 export type SettingsPatch = Partial<Omit<Settings, 'approvalRequired' | 'readOnlyConnectors'>>;
@@ -385,7 +426,6 @@ export type AppearancePatch = Partial<Pick<Appearance, 'theme' | 'colors' | 'acc
 
 export interface ViewState {
   coverage: boolean;
-  sceneIdx: number;
 }
 
 export interface ConnectorType {
@@ -406,7 +446,6 @@ export interface Scene {
   appearance: Appearance;
   viewState: ViewState;
   connectors: ConnectorType[];
-  demoStory: { enabled: boolean; sceneIdx?: number; sceneCount?: number };
 }
 
 export interface Intent {
@@ -420,31 +459,22 @@ export interface Intent {
 }
 
 export interface TeachResult {
-  outcome: 'understood' | 'partly_understood' | 'not_understood' | 'scene';
+  outcome: 'understood' | 'partly_understood' | 'not_understood';
   domainKey: DomainKey | null;
   intents: Intent[];
   drafts: ProposalDraft[];
   statements?: string[];
   caption: string;
-  scene?: DemoScene | null;
+  origin: Origin;
+  originDetail: OriginDetail | null;
 }
 
-export interface DemoScene {
-  index: number;
-  name: string;
-  say: string;
-  match: string;
-}
-
-export interface DemoScenes {
-  sceneIdx: number;
-  scenes: DemoScene[];
-}
-
-export interface DemoNext {
-  sceneIdx: number;
-  scene: DemoScene;
-  proposals: Proposal[];
+/** `POST /teach/parse`: typed text or a speech transcript, or a cited import sentence. */
+export interface TeachRequest {
+  companyId: string;
+  text?: string;
+  origin?: InputOrigin;
+  importRef?: ImportRef;
 }
 
 export interface Page {

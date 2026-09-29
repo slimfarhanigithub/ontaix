@@ -15,12 +15,6 @@ from app.models.api.settings import Appearance, Settings
 from app.models.api.view_state import ViewState
 
 
-class DemoStoryInfo(ApiModel):
-    enabled: bool
-    scene_idx: int | None = None
-    scene_count: int | None = None
-
-
 class Scene(ApiModel):
     sequence: int
     server_time: datetime
@@ -32,4 +26,3 @@ class Scene(ApiModel):
     appearance: Appearance
     view_state: ViewState
     connectors: list[ConnectorType]
-    demo_story: DemoStoryInfo

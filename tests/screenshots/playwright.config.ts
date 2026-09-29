@@ -12,10 +12,12 @@ export const STUDIO_PORT = 4787;
 export default defineConfig({
   testDir: here,
   outputDir: resolve(here, 'output/test-results'),
-  fullyParallel: false,
+  // Each test opens its own pages, so CI shards the suite test by test (`--shard`); one worker per machine.
+  fullyParallel: true,
   workers: 1,
   retries: 0,
-  timeout: 180_000,
+  // The longest scenes teach, add a company, relate and open the portal on both pages.
+  timeout: 360_000,
   reporter: [['list'], ['html', { outputFolder: resolve(here, 'output/report'), open: 'never' }]],
   use: {
     browserName: 'chromium',

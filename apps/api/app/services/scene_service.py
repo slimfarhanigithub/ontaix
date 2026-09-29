@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
 from app.models.api.connector import ConnectorType as ConnectorTypeDto
-from app.models.api.scene import DemoStoryInfo, Scene
+from app.models.api.scene import Scene
 from app.models.api.settings import Appearance, AppearanceDefaults, Settings
 from app.models.api.view_state import ViewState
 from app.models.storage.tenant_settings import TenantSettings
@@ -28,7 +28,6 @@ from app.utilities.proposal_scope import proposal_company_ids
 
 logger = logging.getLogger(__name__)
 
-SCENE_COUNT = 15
 DEFAULT_ACCENT = "#3fb8a9"
 DEFAULT_SOURCE_COLOUR = "#d6bd8a"
 
@@ -65,17 +64,11 @@ async def get_scene(session: AsyncSession, caller: Caller) -> Scene:
         appearance=appearance_dto(view, settings),
         view_state=ViewState(
             coverage=view_state.coverage if view_state else False,
-            scene_idx=view_state.scene_idx if view_state else 0,
         ),
         connectors=[
             ConnectorTypeDto(code=c.code, name=c.name, category=c.category, scope_text=c.scope_text)
             for c in connectors
         ],
-        demo_story=DemoStoryInfo(
-            enabled=bool(settings and settings.demo_story),
-            scene_idx=view_state.scene_idx if view_state else 0,
-            scene_count=SCENE_COUNT,
-        ),
     )
 
 
@@ -99,7 +92,6 @@ def settings_dto(settings: TenantSettings | None) -> Settings:
             refresh="15 min",
             agent_access=True,
             cost_cap=True,
-            demo_story=False,
         )
     return Settings(
         voice=settings.voice,
@@ -119,7 +111,6 @@ def settings_dto(settings: TenantSettings | None) -> Settings:
         refresh=settings.refresh.value,
         agent_access=settings.agent_access,
         cost_cap=settings.cost_cap,
-        demo_story=settings.demo_story,
         egress_allowlist=list(settings.egress_allowlist or []),
     )
 

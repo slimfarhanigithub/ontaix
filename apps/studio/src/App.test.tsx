@@ -19,6 +19,9 @@ describe('App', () => {
     expect(screen.getByLabelText('Living ontology visualisation')).toBeInTheDocument();
     expect(screen.getByText('Proposed changes')).toBeInTheDocument();
     expect(screen.getByLabelText('How to read the lines')).toBeInTheDocument();
-    expect(await screen.findByText('Northwind Industries, before it knows itself')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText('Teach Northwind Industries…')).toBeInTheDocument();
+    expect(document.getElementById('next')).toBeNull();
+    expect(document.getElementById('finalise')).toBeNull();
+    expect(document.getElementById('sceneNum')).toBeNull();
   });
 });

@@ -19,6 +19,7 @@ from app.repositories import company_repository, concept_repository, domain_prod
 from app.seed.starter_vocabulary import STARTER_VOCABULARY
 from app.services import audit_service, outbox_service, proposal_service
 from app.services.ontology_view_service import OntologyView, load_view
+from app.services.rate_limit_service import charge_proposals
 from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.clock import get_clock
 from app.utilities.layout import company_centre
@@ -64,6 +65,8 @@ async def create_company(
     """Immediate and audited: the company, its domain products, its root, then starter proposals."""
     if not can_manage(caller.grants):
         raise forbidden("adding a company requires Administrator")
+    if body.start == "starter_vocabulary":
+        charge_proposals(caller, len(STARTER_VOCABULARY))
     view = await load_view(session, caller.tenant_id)
     key = company_key(body.name)
     if any(c.key == key for c in view.companies.values()):
@@ -172,6 +175,7 @@ async def propose_starter_vocabulary(
 async def propose_remove_company(
     session: AsyncSession, caller: Caller, company_id: uuid.UUID
 ) -> ProposalDto:
+    charge_proposals(caller)
     view = await load_view(session, caller.tenant_id)
     company = view.companies.get(company_id)
     if company is None or company.dying_at is not None:

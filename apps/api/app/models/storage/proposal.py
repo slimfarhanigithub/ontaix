@@ -14,6 +14,7 @@ from app.models.storage.base import (
     ActorKind,
     Base,
     ChangeKind,
+    ProposalOrigin,
     ProposalState,
     ProposalType,
     pg_enum,
@@ -74,6 +75,10 @@ class Proposal(Base):
     proposer_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     proposer_agent_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     bulk: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    origin: Mapped[ProposalOrigin] = mapped_column(
+        pg_enum(ProposalOrigin, "proposal_origin"), server_default=text("'text'")
+    )
+    origin_detail: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )

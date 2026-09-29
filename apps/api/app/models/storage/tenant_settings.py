@@ -44,7 +44,6 @@ class TenantSettings(Base):
     )
     agent_access: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     cost_cap: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
-    demo_story: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     egress_allowlist: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")

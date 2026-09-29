@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { DomainKey } from '../api/types';
 import { domainOf, find } from '../canvas/state';
-import { withSeed } from '../demo/story';
+import { withSeed } from '../teach/teach';
 import { suggestAction } from '../nl/suggest';
 import { refStyle, titleCase, useStore } from './dom';
 

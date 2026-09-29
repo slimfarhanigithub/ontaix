@@ -18,9 +18,9 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
-from app.models.api.proposal import BulkResult, DecisionResult, FinaliseResult
+from app.models.api.proposal import BulkResult, DecisionResult
 from app.models.decisions.decision_outcome import DecisionOutcome
-from app.models.storage.base import NodeKind, ProposalState, ProposalType, RelationKind
+from app.models.storage.base import ProposalState, ProposalType
 from app.models.storage.proposal import Proposal
 from app.repositories import (
     concept_repository,
@@ -30,7 +30,7 @@ from app.repositories import (
     relation_repository,
 )
 from app.services import audit_service, decision_lock_service, outbox_service
-from app.services.decision_event_service import emit_finalised, emit_proposal_event
+from app.services.decision_event_service import emit_proposal_event
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.proposal_apply_service import apply, delete_removed_company
 from app.services.rejection_service import OPEN_STATES, reject_one
@@ -39,7 +39,6 @@ from app.utilities.clock import get_clock
 from app.utilities.permissions import (
     Scope,
     can_approve,
-    can_finalise,
     can_read_proposal,
     holds_approving_role,
 )
@@ -52,7 +51,6 @@ logger = logging.getLogger(__name__)
 SECOND_APPROVAL_WHY = "1 of 2 approvals · a Governor must approve too"
 APPROVE_ALL_CAPTION = "All pending proposals are now part of the model."
 REJECT_ALL_CAPTION = "All pending proposals were discarded."
-FINALISE_AUDIT_WHAT = "finalised all scenes"
 MAX_BULK_ROUNDS = 200
 
 
@@ -110,15 +108,13 @@ async def approve_all(session: AsyncSession, caller: Caller) -> BulkResult:
     view = await load_view(session, caller.tenant_id, proposals)
     approved, rounds = await _approve_rounds(session, caller, view, proposals)
     remaining = sum(1 for p in proposals if p.state in OPEN_STATES)
-    result = BulkResult(
+    return BulkResult(
         approved=approved,
         rejected=0,
         rounds=rounds,
         remaining=remaining,
         caption=APPROVE_ALL_CAPTION,
     )
-    await emit_finalised(session, caller, view, result)
-    return result
 
 
 async def reject_all(session: AsyncSession, caller: Caller) -> BulkResult:
@@ -137,44 +133,6 @@ async def reject_all(session: AsyncSession, caller: Caller) -> BulkResult:
     remaining = sum(1 for p in proposals if p.state in OPEN_STATES)
     return BulkResult(
         approved=0, rejected=rejected, rounds=1, remaining=remaining, caption=REJECT_ALL_CAPTION
-    )
-
-
-async def finalise_all(session: AsyncSession, caller: Caller) -> FinaliseResult:
-    """Approve everything that is ready; with the story layer off no scene is played."""
-    if not can_finalise(caller.grants):
-        raise forbidden("finalising requires Governor at tenant scope")
-    proposals = await _lock_open(session, caller)
-    view = await load_view(session, caller.tenant_id, proposals)
-    approved, rounds = await _approve_rounds(session, caller, view, proposals)
-    companies = len(view.companies)
-    concepts = sum(1 for c in view.live_concepts() if c.kind is NodeKind.CONCEPT)
-    equivalences = sum(1 for r in view.live_relations() if r.kind is RelationKind.SAME)
-    plural = "y" if companies == 1 else "ies"
-    caption = (
-        f"{companies} compan{plural}, {concepts} concepts, 0 bound to data, "
-        f"{equivalences} equivalences. Everything approved."
-    )
-    await audit_service.record(
-        session, caller.tenant_id, caller.actor, "demo", FINALISE_AUDIT_WHAT, True, company_ids=()
-    )
-    remaining = sum(1 for p in proposals if p.state in OPEN_STATES)
-    await emit_finalised(
-        session,
-        caller,
-        view,
-        BulkResult(
-            approved=approved, rejected=0, rounds=rounds, remaining=remaining, caption=caption
-        ),
-    )
-    return FinaliseResult(
-        companies=companies,
-        concepts=concepts,
-        bound=0,
-        equivalences=equivalences,
-        approved=approved,
-        scenes_played=0,
-        caption=caption,
     )
 
 
@@ -251,6 +209,7 @@ async def _half_approve(
         proposal.id,
         company_ids=proposal_company_ids(proposal),
         domain_key=view.proposal_domain_key(proposal),
+        origin=proposal.origin,
     )
     outcome = DecisionOutcome(artefacts=view.proposal_artefacts(proposal), audit=audit)
     await emit_proposal_event(
@@ -304,6 +263,7 @@ async def _complete_approval(
         proposal.id,
         company_ids=proposal_company_ids(proposal),
         domain_key=view.proposal_domain_key(proposal),
+        origin=proposal.origin,
     )
     await emit_proposal_event(session, caller, view, proposal, "proposal.approved", outcome, bulk)
     await delete_removed_company(session, caller, view, outcome)

@@ -1,6 +1,7 @@
-"""Northwind Industries: the home company and the concepts of story scenes 1 to 7, verbatim.
+"""Northwind Industries: the dev and test fixture's home company and its concepts.
 
-Each scene lists its proposals in order. A `concept` row is `(parent label, label, domain key,
+Each batch lists the proposals of one domain product in order; a batch is proposed, then
+approved, before the next one. A `concept` row is `(parent label, label, domain key,
 action, caption)`; a `spec` row is `(parent label, label, rule, caption, domain key)`; a
 `relation` row is `(subject label, action, object label, caption)`.
 """
@@ -40,13 +41,13 @@ class RelationRow:
 
 
 @dataclass(frozen=True)
-class Scene:
+class Batch:
     name: str
     rows: tuple[ConceptRow | SpecRow | RelationRow, ...]
 
 
-SCENES: tuple[Scene, ...] = (
-    Scene(
+BATCHES: tuple[Batch, ...] = (
+    Batch(
         "Production",
         (
             ConceptRow(
@@ -70,7 +71,7 @@ SCENES: tuple[Scene, ...] = (
             ),
         ),
     ),
-    Scene(
+    Batch(
         "Supply chain",
         (
             ConceptRow(
@@ -89,7 +90,7 @@ SCENES: tuple[Scene, ...] = (
             ConceptRow("Warehouse", "Stock level", "supply", "tracks", "Stock level is kept."),
         ),
     ),
-    Scene(
+    Batch(
         "Sales",
         (
             ConceptRow(COMPANY_NAME, "Customer", "sales", "serves", "Customer is kept in Sales."),
@@ -111,7 +112,7 @@ SCENES: tuple[Scene, ...] = (
             ),
         ),
     ),
-    Scene(
+    Batch(
         "Logistics",
         (
             ConceptRow(
@@ -132,7 +133,7 @@ SCENES: tuple[Scene, ...] = (
             ),
         ),
     ),
-    Scene(
+    Batch(
         "Quality and maintenance",
         (
             ConceptRow(
@@ -172,7 +173,7 @@ SCENES: tuple[Scene, ...] = (
             ),
         ),
     ),
-    Scene(
+    Batch(
         "Finance and people",
         (
             ConceptRow(
@@ -195,7 +196,7 @@ SCENES: tuple[Scene, ...] = (
             ),
         ),
     ),
-    Scene(
+    Batch(
         "Engineering",
         (
             ConceptRow(
@@ -221,39 +222,4 @@ SCENES: tuple[Scene, ...] = (
             ),
         ),
     ),
-)
-
-# Scene 14, "It keeps learning": `(child, action, parent, domain key)`; the birth relation reads
-# `parent action child`, as the concept helper builds it.
-LEARNING_POOL: tuple[tuple[str, str, str, str], ...] = (
-    ("Batch", "produced in", "Work order", "production"),
-    ("Downtime", "records", "Machine", "production"),
-    ("Changeover", "requires", "Production line", "production"),
-    ("Tool", "uses", "Machine", "production"),
-    ("Scrap", "generates", "Work order", "production"),
-    ("Supplier contract", "governed by", "Supplier", "supply"),
-    ("Forecast", "planned by", "Material", "supply"),
-    ("Goods receipt", "confirmed by", "Purchase order", "supply"),
-    ("Lot", "received as", "Material", "supply"),
-    ("Discount", "applies to", "Price list", "sales"),
-    ("Contract", "covered by", "Customer", "sales"),
-    ("Opportunity", "preceded by", "Quotation", "sales"),
-    ("Packaging", "requires", "Shipment", "logistics"),
-    ("Customs declaration", "needs", "Shipment", "logistics"),
-    ("Return", "reversed by", "Delivery", "logistics"),
-    ("Corrective action", "triggers", "Defect", "quality"),
-    ("Audit", "reviewed by", "Quality standard", "quality"),
-    ("Customer complaint", "raises", "Defect", "quality"),
-    ("Alarm", "raises", "Sensor", "maintenance"),
-    ("Work permit", "requires", "Maintenance plan", "maintenance"),
-    ("Technician", "performed by", "Maintenance plan", "maintenance"),
-    ("Payment", "settles", "Invoice", "finance"),
-    ("Credit note", "corrects", "Invoice", "finance"),
-    ("Depreciation", "charges", "Cost centre", "finance"),
-    ("Skill", "requires", "Certification", "people"),
-    ("Absence", "recorded for", "Employee", "people"),
-    ("Safety incident", "involves", "Employee", "people"),
-    ("Prototype", "built from", "Specification", "engineering"),
-    ("Test report", "produced by", "Test", "engineering"),
-    ("Drawing", "detailed in", "Specification", "engineering"),
 )

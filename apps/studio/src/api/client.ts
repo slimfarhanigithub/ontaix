@@ -33,10 +33,8 @@ import {
   type CompanyCreate,
   type CompanyCreated,
   type DecisionResult,
-  type DemoNext,
-  type DemoScenes,
   type DomainProduct,
-  type FinaliseResult,
+  type ImportResult,
   type Page,
   type Problem,
   type Proposal,
@@ -44,6 +42,7 @@ import {
   type Scene,
   type Settings,
   type SettingsPatch,
+  type TeachRequest,
   type TeachResult,
   type ViewState,
 } from './types';
@@ -81,7 +80,9 @@ async function call<R>(method: string, path: string, body?: unknown): Promise<R>
   return (await res.json()) as R;
 }
 
+/** A form body goes as multipart with the boundary the browser picks; anything else as JSON. */
 function send(method: string, path: string, body: unknown): Promise<Response> {
+  if (body instanceof FormData) return fetch(API_BASE + path, { method, headers: { ...IDENTITY }, body });
   return fetch(API_BASE + path, {
     method,
     headers: body === undefined ? { ...IDENTITY } : { ...IDENTITY, 'content-type': 'application/json' },
@@ -136,18 +137,18 @@ export const api = {
     call<DecisionResult>('POST', `/proposals/${id}/reject`, reason ? { reason } : undefined),
   approveAll: () => call<BulkResult>('POST', '/proposals/approve-all'),
   rejectAll: () => call<BulkResult>('POST', '/proposals/reject-all'),
-  finaliseAll: () => call<FinaliseResult>('POST', '/proposals/finalise-all'),
   createCompany: (body: CompanyCreate) => call<CompanyCreated>('POST', '/companies', body),
   updateDomainProduct: (id: string, patch: { hidden?: boolean }) =>
     call<DomainProduct>('PATCH', `/domain-products/${id}`, patch),
   patchSettings: (patch: SettingsPatch) => call<Settings>('PATCH', '/settings', patch),
   patchAppearance: (patch: AppearancePatch) => call<Appearance>('PATCH', '/appearance', patch),
   putViewState: (state: Partial<ViewState>) => call<ViewState>('PUT', '/view-state', state),
-  teachParse: (body: { companyId: string; text: string; fromImport?: boolean }) =>
-    call<TeachResult>('POST', '/teach/parse', body),
-  demoScenes: () => call<DemoScenes>('GET', '/demo/scenes'),
-  demoNext: () => call<DemoNext>('POST', '/demo/next'),
-  demoReset: () => call<Scene>('POST', '/demo/reset'),
+  teachParse: (body: TeachRequest) => call<TeachResult>('POST', '/teach/parse', body),
+  importSentences: (file: File) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return call<ImportResult>('POST', '/import/sentences', form);
+  },
 
   listConnectors: () => call<ConnectorType[]>('GET', '/connectors'),
   discover: (code: string, body: DiscoveryRequest) =>

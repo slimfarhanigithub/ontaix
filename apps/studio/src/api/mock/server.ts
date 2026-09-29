@@ -7,7 +7,6 @@
  * `approve`, `reject` and `afterApply` (reference lines 573-607).
  */
 import { DEFAULT_BRASS, DOMAIN_R, DOMAIN_TEMPLATES, C, NEUTRAL } from '../../canvas/constants';
-import { demoScenes, SCENES } from '../../demo/scenes';
 import { contentWords, domainPrefix, singular, title, understand } from '../../nl/parser';
 import { nowDate } from '../../runtime/clock';
 import { random } from '../../runtime/rng';
@@ -16,6 +15,7 @@ import { mixedRelationEnd } from '../drafts';
 import { liveEvents, type EventBus, type EventType } from '../events';
 import type * as T from '../types';
 import { createDirectory, DirectoryRefusal, pageOf, parseListArgs } from './directory';
+import { extractDocument, ExtractRefusal } from './extract';
 import { ATTR, CATALOG, DISCOVER, generic, HOME_COMPANY, RECORDS, SEED, type AttrSpec } from './seed';
 
 interface MCompany {
@@ -139,6 +139,8 @@ interface MProposal {
   createdAt: string;
   decidedAt: string | null;
   second: boolean;
+  origin: T.Origin;
+  originDetail: T.OriginDetail | null;
   apply?: () => void;
   onReject?: () => void;
 }
@@ -148,8 +150,22 @@ export interface MockResponse {
   body: unknown;
 }
 
+/** A stored document import: its sentences, their positions and the per-sentence reuse counters. */
+interface MImport {
+  id: string;
+  fileName: string;
+  mediaType: T.ImportMediaType;
+  sentences: string[];
+  positions: (T.DocumentPosition | null)[];
+  parseCounts: number[];
+  drafted: boolean[];
+  expiresAt: number;
+}
+
 export interface MockServer {
   handle(method: string, path: string, body?: unknown): MockResponse;
+  /** `POST /import/sentences`: reads and extracts the uploaded file, then stores the import. */
+  importDocument(file: { name: string; type: string; bytes: Uint8Array }): Promise<MockResponse>;
 }
 
 /** Birth draws of a concept: angle noise, node seed and link bend. */
@@ -180,6 +196,10 @@ class Refusal extends Error {
 }
 
 const TENANT_ID = '00000000-0000-4000-8000-00000000000a';
+/** An import serves parses and drafts for one hour. */
+const IMPORT_LIFETIME_MS = 60 * 60 * 1000;
+/** A cited sentence may be parsed this many times. */
+const IMPORT_PARSES_PER_SENTENCE = 3;
 const ACTOR: T.Actor = { kind: 'user', id: '00000000-0000-4000-8000-0000000000a1', name: 'Owner' };
 const KIND_HEADING: Record<T.ProposalType, string> = {
   concept: 'New concept',
@@ -205,9 +225,11 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   let bindings: MBinding[] = [];
   let proposals: MProposal[] = [];
   let audit: T.AuditEntry[] = [];
+  let imports: MImport[] = [];
   let sequence = 0;
-  let sceneIdx = 0;
   let coverage = false;
+  /** Provenance given to the proposals the current request creates. */
+  let provenance: { origin: T.Origin; originDetail: T.OriginDetail | null } = { origin: 'text', originDetail: null };
   const settings: T.Settings = {
     voice: true,
     importDocs: true,
@@ -226,7 +248,6 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     refresh: '15 min',
     agentAccess: true,
     costCap: true,
-    demoStory: true,
   };
   const appearance = { theme: 'dark' as 'dark' | 'light', colors: {} as Record<string, string>, accent: '#3fb8a9', source: DEFAULT_BRASS };
   const directory = createDirectory({
@@ -255,7 +276,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
 
   /** A decision entry: the proposal's company and the template key of its domain product. */
   function addProposalAudit(p: MProposal, what: string, ok: boolean): T.AuditEntry {
-    return addAudit(p.type, what, ok, p.id, p.companyId ? [p.companyId] : [], domainById(p.domainId)?.key ?? null);
+    return addAudit(p.type, what, ok, p.id, p.companyId ? [p.companyId] : [], domainById(p.domainId)?.key ?? null, p.origin);
   }
 
   function addAudit(
@@ -265,8 +286,9 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     proposalId: string | null = null,
     companyIds: string[] = [],
     domainKey: T.DomainKey | null = null,
+    origin: T.Origin | null = null,
   ): T.AuditEntry {
-    const e: T.AuditEntry = { id: audit.length + 1, at: iso(), actor: ACTOR, kind, what, ok, proposalId, companyIds, domainKey };
+    const e: T.AuditEntry = { id: audit.length + 1, at: iso(), actor: ACTOR, kind, what, ok, proposalId, origin, companyIds, domainKey };
     audit.unshift(e);
     if (audit.length > 400) audit.pop();
     return e;
@@ -455,6 +477,8 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     bindingIds: p.bindingIds,
     attributeId: p.attributeId,
     proposer: ACTOR,
+    origin: p.origin,
+    originDetail: p.originDetail,
     approvals: [],
     createdAt: p.createdAt,
     decidedAt: p.decidedAt,
@@ -478,9 +502,8 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     proposals: open().map(toProposal),
     settings: { ...settings },
     appearance: toAppearance(),
-    viewState: { coverage, sceneIdx },
+    viewState: { coverage },
     connectors: CATALOG.map(([code, name, category, scopeText]) => ({ code, name, category, scopeText })),
-    demoStory: { enabled: settings.demoStory, sceneIdx, sceneCount: demoScenes().length },
   });
 
   // ------------------------------------------------------------ model helpers
@@ -493,8 +516,10 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     return l;
   }
 
-  function newProposal(p: Omit<MProposal, 'id' | 'state' | 'createdAt' | 'decidedAt' | 'second'>): MProposal {
-    const full: MProposal = { ...p, id: uuid(), state: 'pending', createdAt: iso(), decidedAt: null, second: false };
+  function newProposal(
+    p: Omit<MProposal, 'id' | 'state' | 'createdAt' | 'decidedAt' | 'second' | 'origin' | 'originDetail'>,
+  ): MProposal {
+    const full: MProposal = { ...p, id: uuid(), state: 'pending', createdAt: iso(), decidedAt: null, second: false, ...provenance };
     proposals.push(full);
     return full;
   }
@@ -1364,8 +1389,9 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     return { approved, rejected: 0, rounds, remaining: open().length, caption: 'All pending proposals are now part of the model.' };
   }
 
-  // ------------------------------------------------------------ demo
+  // ------------------------------------------------------------ fixture
 
+  /** The dev and test fixture: the home company's root cell and nothing else. */
   function reset(): void {
     companies = [];
     concepts = [];
@@ -1374,7 +1400,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     bindings = [];
     proposals = [];
     audit = [];
-    sceneIdx = 0;
+    imports = [];
     coverage = false;
     appearance.theme = 'dark';
     appearance.colors = {};
@@ -1428,15 +1454,37 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     );
   }
 
-  /** The port of the reference's `teach`: intents to drafts, without writing anything. */
-  function teachParse(body: { companyId: string; text: string; fromImport?: boolean }): T.TeachResult {
+  /**
+   * The port of the reference's `teach` on its import path: intents to drafts, without writing
+   * anything to the model. The sentence is typed text, a speech transcript, or a stored import
+   * sentence cited by `importRef`, whose text is read from the import; each draft carries the
+   * request's origin and import reference.
+   */
+  function teachParse(body: T.TeachRequest): T.TeachResult {
     const co = companyOf(body.companyId);
-    if (!co) throw new Refusal(404, 'company_not_found', 'company does not exist');
-    const text0 = (body.text || '').trim();
-    if (!text0) throw new Refusal(422, 'text_required', 'a sentence is needed');
-    const up = SCENES[sceneIdx + 1];
-    if (!body.fromImport && settings.demoStory && up && up.match && up.match.test(text0))
-      return { outcome: 'scene', domainKey: null, intents: [], drafts: [], statements: [], caption: '', scene: demoScenes()[sceneIdx + 1] };
+    if (!co) throw new Refusal(404, 'not_found', 'company not found in this tenant');
+    let text0: string;
+    let origin: T.Origin;
+    let originDetail: T.OriginDetail | null = null;
+    if (body.importRef) {
+      if (!settings.importDocs) throw new Refusal(409, 'channel_disabled', 'document import is disabled in the admin portal');
+      const { imp, index } = citedSentence(body.importRef);
+      if (imp.parseCounts[index] >= IMPORT_PARSES_PER_SENTENCE)
+        throw new Refusal(409, 'import_sentence_used', 'this sentence was already parsed three times');
+      imp.parseCounts[index]++;
+      text0 = imp.sentences[index];
+      origin = 'document';
+      originDetail = detailOf(imp, index);
+    } else {
+      origin = body.origin === 'speech' ? 'speech' : 'text';
+      if (!settings.liveTeaching) throw new Refusal(409, 'channel_disabled', 'live teaching is disabled in the admin portal');
+      if (origin === 'speech' && !settings.voice) throw new Refusal(409, 'channel_disabled', 'voice input is disabled in the admin portal');
+      text0 = (body.text || '').trim();
+      if (!text0) throw new Refusal(422, 'validation_failed', 'a sentence is needed');
+    }
+    const declared = origin;
+    const stamp = <D extends T.ProposalDraft>(d: D): D =>
+      body.importRef ? { ...d, importRef: body.importRef } : { ...d, origin: declared as T.InputOrigin };
     const { domainKey: domKey, text } = domainPrefix(text0);
     const key = (fallback: string | null | undefined) => (domKey || fallback || 'production') as T.DomainKey;
     const root = conceptById(co.rootId) as MConcept;
@@ -1493,7 +1541,16 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       }
     }
     if (made.length)
-      return { outcome: 'understood', domainKey: (domKey as T.DomainKey) || null, intents, drafts, statements: made, caption: made.join(' · ') + '. Waiting for your approval on the right.', scene: null };
+      return {
+        outcome: 'understood',
+        domainKey: (domKey as T.DomainKey) || null,
+        intents,
+        drafts: drafts.map(stamp),
+        statements: made,
+        caption: made.join(' · ') + '. Waiting for your approval on the right.',
+        origin,
+        originDetail,
+      };
     // nothing parsed: fall back to naming the concepts mentioned
     const words = contentWords(text);
     const mine = concepts.filter((n) => n.companyId === co.id && !n.dyingAt);
@@ -1507,17 +1564,120 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         drafts: [],
         statements: [],
         caption: 'Try “<subject> <action> <object>”, “A is a B”, or “A that … is a B”. Start with “In quality, …” to choose the domain product.',
-        scene: null,
+        origin,
+        originDetail,
       };
     return {
       outcome: 'partly_understood',
       domainKey: (domKey as T.DomainKey) || null,
       intents,
-      drafts: fresh.map((w) => ({ type: 'concept' as const, companyId: co.id, parentId: host.id, label: title(w), domainKey: key(host.domainKey), action: 'relates to', caption: `${title(w)} is kept.` })),
+      drafts: fresh.map((w) =>
+        stamp({ type: 'concept' as const, companyId: co.id, parentId: host.id, label: title(w), domainKey: key(host.domainKey), action: 'relates to', caption: `${title(w)} is kept.` }),
+      ),
       statements: [],
       caption: `No action found; ${fresh.map(title).join(', ')} proposed from ${host.label} with “relates to”. Click the line to give it the right action.`,
-      scene: null,
+      origin,
+      originDetail,
     };
+  }
+
+  // ------------------------------------------------------------ document imports
+
+  /** The stored import and sentence a reference cites: 404 when unknown, 410 past its expiry. */
+  function citedSentence(ref: T.ImportRef): { imp: MImport; index: number } {
+    const imp = imports.find((x) => x.id === ref?.importId);
+    if (!imp) throw new Refusal(404, 'not_found', 'import not found in this tenant');
+    if (nowDate().getTime() >= imp.expiresAt) throw new Refusal(410, 'import_expired', 'the import has expired; import the document again');
+    const index = ref.sentenceIndex;
+    if (!Number.isInteger(index) || index < 0 || index >= imp.sentences.length)
+      throw new Refusal(404, 'not_found', 'sentence not found in this import');
+    return { imp, index };
+  }
+
+  function detailOf(imp: MImport, index: number): T.OriginDetail {
+    const position = imp.positions[index];
+    return { fileName: imp.fileName, mediaType: imp.mediaType, sentenceIndex: index, ...(position ? { position } : {}) };
+  }
+
+  /**
+   * Provenance of every draft of one proposal call, checked before anything is created: a draft's
+   * own origin and import reference win over the call's. A cited sentence is claimed once per
+   * call; `claim` marks the claims when the call succeeds.
+   */
+  function provenanceOf(drafts: T.ProposalDraft[], batch: { origin?: T.InputOrigin; importRef?: T.ImportRef } = {}) {
+    const claimed = new Map<string, { imp: MImport; index: number }>();
+    const each = drafts.map((d) => {
+      const ref = d.importRef ?? batch.importRef;
+      if (ref) {
+        if (!settings.importDocs) throw new Refusal(409, 'channel_disabled', 'document import is disabled in the admin portal');
+        const cited = citedSentence(ref);
+        const key = `${cited.imp.id}|${cited.index}`;
+        if (!claimed.has(key)) {
+          if (cited.imp.drafted[cited.index]) throw new Refusal(409, 'import_sentence_used', 'this sentence was already drafted');
+          claimed.set(key, cited);
+        }
+        return { origin: 'document' as T.Origin, originDetail: detailOf(cited.imp, cited.index) as T.OriginDetail | null };
+      }
+      const origin: T.Origin = (d.origin ?? batch.origin) === 'speech' ? 'speech' : 'text';
+      if (origin === 'speech' && !settings.voice) throw new Refusal(409, 'channel_disabled', 'voice input is disabled in the admin portal');
+      return { origin, originDetail: null as T.OriginDetail | null };
+    });
+    const claim = () => {
+      for (const { imp, index } of claimed.values()) imp.drafted[index] = true;
+    };
+    return { each, claim };
+  }
+
+  /** Creates drafts in order under their provenance; the import claims land only when all succeed. */
+  function createDrafts(drafts: T.ProposalDraft[], batch?: { origin?: T.InputOrigin; importRef?: T.ImportRef }): T.Proposal[] {
+    refuseMixedDrafts(drafts);
+    const { each, claim } = provenanceOf(drafts, batch);
+    const outs: T.Proposal[] = [];
+    try {
+      drafts.forEach((d, i) => {
+        provenance = each[i];
+        const p = createFromDraft(d, []);
+        const out = toProposal(p);
+        emit('proposal.created', { proposal: out, artefacts: out.artefacts, cascaded: [] });
+        outs.push(out);
+      });
+    } finally {
+      provenance = { origin: 'text', originDetail: null };
+    }
+    claim();
+    return outs;
+  }
+
+  /** Validates, extracts and stores an uploaded document, as `POST /import/sentences` does. */
+  async function importDocument(file: { name: string; type: string; bytes: Uint8Array }): Promise<MockResponse> {
+    try {
+      if (!settings.importDocs) throw new Refusal(409, 'channel_disabled', 'document import is disabled in the admin portal');
+      const extracted = await extractDocument(file.name, file.type, file.bytes);
+      const imp: MImport = {
+        id: uuid(),
+        fileName: extracted.fileName,
+        mediaType: extracted.mediaType,
+        sentences: extracted.sentences.map((x) => x.text),
+        positions: extracted.sentences.map((x) => x.position),
+        parseCounts: extracted.sentences.map(() => 0),
+        drafted: extracted.sentences.map(() => false),
+        expiresAt: nowDate().getTime() + IMPORT_LIFETIME_MS,
+      };
+      imports.push(imp);
+      return json(200, {
+        importId: imp.id,
+        expiresAt: new Date(imp.expiresAt).toISOString(),
+        fileName: imp.fileName,
+        origin: 'document',
+        originDetail: { fileName: imp.fileName, mediaType: imp.mediaType },
+        sentences: imp.sentences,
+        positions: imp.positions,
+      } satisfies T.ImportResult);
+    } catch (e) {
+      if (e instanceof Refusal) return problem(e);
+      if (e instanceof ExtractRefusal) return problem(new Refusal(e.status, e.code, e.detail));
+      throw e;
+    }
   }
 
   // ------------------------------------------------------------ routing
@@ -1724,25 +1884,10 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       const items = open().map(toProposal);
       return json(200, { items, page: 1, pageSize: items.length || 1, total: items.length });
     }
-    if (is('POST', 'proposals')) {
-      refuseMixedDrafts([body as T.ProposalDraft]);
-      const cascade: MProposal[] = [];
-      const p = createFromDraft(body as T.ProposalDraft, cascade);
-      const out = toProposal(p);
-      emit('proposal.created', { proposal: out, artefacts: out.artefacts, cascaded: [] });
-      return json(202, out);
-    }
+    if (is('POST', 'proposals')) return json(202, createDrafts([body as T.ProposalDraft])[0]);
     if (is('POST', 'proposals', 'batch')) {
-      const drafts = (body as { drafts: T.ProposalDraft[] }).drafts || [];
-      refuseMixedDrafts(drafts);
-      const outs: T.Proposal[] = [];
-      for (const d of drafts) {
-        const p = createFromDraft(d, []);
-        const out = toProposal(p);
-        emit('proposal.created', { proposal: out, artefacts: out.artefacts, cascaded: [] });
-        outs.push(out);
-      }
-      return json(202, outs);
+      const batch = body as { drafts: T.ProposalDraft[]; origin?: T.InputOrigin; importRef?: T.ImportRef };
+      return json(202, createDrafts(batch.drafts || [], { origin: batch.origin, importRef: batch.importRef }));
     }
     if (is('POST', 'proposals', 'approve-all')) return json(200, approveAll());
     if (is('POST', 'proposals', 'reject-all')) {
@@ -1753,22 +1898,6 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         rejected++;
       }
       return json(200, { approved: 0, rejected, rounds: 1, remaining: open().length, caption: 'All pending proposals were discarded.' } satisfies T.BulkResult);
-    }
-    if (is('POST', 'proposals', 'finalise-all')) {
-      const bulk = approveAll();
-      const cells = concepts.filter((n) => n.kind === 'concept' && !n.dyingAt).length,
-        bound = concepts.filter((n) => n.bound).length,
-        same = relations.filter((l) => l.kind === 'same').length;
-      addAudit('demo', 'finalised all scenes', true);
-      return json(200, {
-        companies: companies.length,
-        concepts: cells,
-        bound,
-        equivalences: same,
-        approved: bulk.approved,
-        scenesPlayed: 0,
-        caption: `${companies.length} compan${companies.length === 1 ? 'y' : 'ies'}, ${cells} concepts, ${bound} bound to data, ${same} equivalences. Everything approved.`,
-      } satisfies T.FinaliseResult);
     }
     if (is('GET', 'proposals', null)) {
       const p = proposals.find((x) => x.id === seg[1]);
@@ -1841,28 +1970,17 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     if (is('PUT', 'view-state')) {
       const vs = body as Partial<T.ViewState>;
       if (typeof vs.coverage === 'boolean') coverage = vs.coverage;
-      if (typeof vs.sceneIdx === 'number') sceneIdx = vs.sceneIdx;
-      return json(200, { coverage, sceneIdx } satisfies T.ViewState);
+      return json(200, { coverage } satisfies T.ViewState);
     }
-    if (is('POST', 'teach', 'parse')) return json(200, teachParse(body as { companyId: string; text: string; fromImport?: boolean }));
-    if (is('GET', 'demo', 'scenes')) return json(200, { sceneIdx, scenes: demoScenes() } satisfies T.DemoScenes);
-    if (is('POST', 'demo', 'next')) {
-      const scenes = demoScenes();
-      if (sceneIdx >= scenes.length - 1) throw new Refusal(409, 'end_of_story', 'the story has ended');
-      sceneIdx += 1;
-      const scene = scenes[sceneIdx];
-      emit('demo.scene_played', { sceneIdx, scene });
-      return json(200, { sceneIdx, scene, proposals: [] } satisfies T.DemoNext);
-    }
-    if (is('POST', 'demo', 'reset')) {
-      reset();
-      return json(200, toScene());
-    }
+    if (is('POST', 'teach', 'parse')) return json(200, teachParse(body as T.TeachRequest));
+    if (is('POST', 'import', 'sentences'))
+      throw new Refusal(422, 'validation_failed', 'the document is sent as multipart form data in the field file');
     if (is('GET', 'healthz')) return json(200, { status: 'ok' });
     throw new Refusal(404, 'not_found', `${method} ${path} is not part of the mock API`);
   }
 
   return {
+    importDocument,
     handle(method, path, body) {
       try {
         return route(method.toUpperCase(), path, body);

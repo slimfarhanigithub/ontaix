@@ -15,6 +15,7 @@ from app.models.api.base import ApiModel
 from app.models.api.binding import Binding
 from app.models.api.concept import Concept
 from app.models.api.domain_product import DomainProduct
+from app.models.api.origin import Origin, OriginDetail
 from app.models.api.relation import Relation
 
 
@@ -59,6 +60,8 @@ class Proposal(ApiModel):
     binding_ids: list[uuid.UUID] = Field(default_factory=list)
     attribute_id: uuid.UUID | None = None
     proposer: Actor
+    origin: Origin
+    origin_detail: OriginDetail | None
     approvals: list[Approval] = Field(default_factory=list)
     bulk: bool = False
     created_at: datetime
@@ -83,14 +86,4 @@ class BulkResult(ApiModel):
     rejected: int
     rounds: int
     remaining: int
-    caption: str | None = None
-
-
-class FinaliseResult(ApiModel):
-    companies: int
-    concepts: int
-    bound: int
-    equivalences: int
-    approved: int
-    scenes_played: int
     caption: str | None = None

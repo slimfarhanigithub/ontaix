@@ -1,4 +1,4 @@
-"""The demo tenant's directory: the seven default groups and a small set of dev users.
+"""The fixture tenant's directory: the seven default groups and a small set of dev users.
 
 Users sign in through the `dev` issuer with their e-mail as subject, so `X-Ontaix-User: <email>`
 identifies them locally. The e-mail domain belongs to the fictional Northwind Industries.

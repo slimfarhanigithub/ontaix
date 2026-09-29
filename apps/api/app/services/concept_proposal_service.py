@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import Caller
 from app.models.api.actor import Actor
 from app.models.api.drafts import ConceptDraft, SpecDraft
+from app.models.proposals.provenance import TYPED_TEXT, Provenance
 from app.models.storage.base import NodeKind, ProposalType, RelationKind
 from app.models.storage.company import Company
 from app.models.storage.concept import Concept
@@ -44,6 +45,7 @@ async def propose_concept(
     draft: ConceptDraft,
     bulk: bool,
     enforce: bool,
+    provenance: Provenance = TYPED_TEXT,
 ) -> Proposal:
     company, parent, product = _resolve_birth(
         view, draft.company_id, draft.parent_id, draft.parent_label, draft.domain_key
@@ -93,6 +95,7 @@ async def propose_concept(
         concept_id=concept.id,
         relation_id=relation.id,
         bulk=bulk,
+        provenance=provenance,
     )
     await _emit_born(session, proposer, view, proposal, concept, relation)
     return proposal
@@ -106,6 +109,7 @@ async def propose_spec(
     draft: SpecDraft,
     bulk: bool,
     enforce: bool,
+    provenance: Provenance = TYPED_TEXT,
 ) -> Proposal:
     company, parent, product = _resolve_birth(
         view, draft.company_id, draft.parent_id, draft.parent_label, draft.domain_key
@@ -150,6 +154,7 @@ async def propose_spec(
         concept_id=concept.id,
         relation_id=relation.id,
         bulk=bulk,
+        provenance=provenance,
     )
     await _emit_born(session, proposer, view, proposal, concept, relation)
     return proposal

@@ -13,7 +13,6 @@ from app.models.api.page import PageOf
 from app.models.api.proposal import (
     BulkResult,
     DecisionResult,
-    FinaliseResult,
     Proposal,
     RejectRequest,
 )
@@ -48,7 +47,7 @@ async def create_proposal(
 async def create_proposal_batch(
     body: ProposalBatch, session: SessionDependency, caller: CallerDependency
 ) -> list[Proposal]:
-    return await proposal_read_service.create_batch(session, caller, body.drafts)
+    return await proposal_read_service.create_batch(session, caller, body)
 
 
 @router.post("/proposals/approve-all", response_model=BulkResult)
@@ -59,11 +58,6 @@ async def approve_all(session: SessionDependency, caller: CallerDependency) -> B
 @router.post("/proposals/reject-all", response_model=BulkResult)
 async def reject_all(session: SessionDependency, caller: CallerDependency) -> BulkResult:
     return await decision_service.reject_all(session, caller)
-
-
-@router.post("/proposals/finalise-all", response_model=FinaliseResult)
-async def finalise_all(session: SessionDependency, caller: CallerDependency) -> FinaliseResult:
-    return await decision_service.finalise_all(session, caller)
 
 
 @router.get("/proposals/{proposal_id}", response_model=Proposal)

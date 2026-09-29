@@ -4,9 +4,10 @@
  *
  * The answer is a Response-shaped object whose `json()` resolves in a microtask. A real
  * `Response` reads its body in a later task, and under a fake clock that gap lets a frame run
- * between two proposals of one story scene, which the reference never does.
+ * between two proposals of one teach batch, which the reference never does. A multipart upload
+ * (`POST /import/sentences`) is read from its form before the mock answers.
  */
-import { createMockServer, type MockServer } from './server';
+import { createMockServer, type MockResponse, type MockServer } from './server';
 
 export function installMockFetch(base = '/api/v1', server: MockServer = createMockServer()): MockServer {
   const realFetch = window.fetch.bind(window);
@@ -15,18 +16,28 @@ export function installMockFetch(base = '/api/v1', server: MockServer = createMo
     const u = new URL(url, location.origin);
     if (!u.pathname.startsWith(base)) return realFetch(input, init);
     const method = (init?.method || (typeof input === 'object' && 'method' in input ? input.method : 'GET') || 'GET').toUpperCase();
+    if (init?.body instanceof FormData) return upload(server, init.body);
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
-    const res = server.handle(method, u.pathname.slice(base.length) + u.search, body);
-    const text = JSON.stringify(res.body);
-    const answer = {
-      ok: res.status >= 200 && res.status < 300,
-      status: res.status,
-      statusText: '',
-      headers: new Headers({ 'content-type': res.status >= 400 ? 'application/problem+json' : 'application/json' }),
-      json: () => Promise.resolve(JSON.parse(text)),
-      text: () => Promise.resolve(text),
-    };
-    return Promise.resolve(answer as unknown as Response);
+    return Promise.resolve(answer(server.handle(method, u.pathname.slice(base.length) + u.search, body)));
   };
   return server;
+}
+
+async function upload(server: MockServer, form: FormData): Promise<Response> {
+  const file = form.get('file');
+  if (!(file instanceof Blob)) return answer(server.handle('POST', '/import/sentences', {}));
+  const name = file instanceof File ? file.name : '';
+  return answer(await server.importDocument({ name, type: file.type, bytes: new Uint8Array(await file.arrayBuffer()) }));
+}
+
+function answer(res: MockResponse): Response {
+  const text = JSON.stringify(res.body);
+  return {
+    ok: res.status >= 200 && res.status < 300,
+    status: res.status,
+    statusText: '',
+    headers: new Headers({ 'content-type': res.status >= 400 ? 'application/problem+json' : 'application/json' }),
+    json: () => Promise.resolve(JSON.parse(text)),
+    text: () => Promise.resolve(text),
+  } as unknown as Response;
 }

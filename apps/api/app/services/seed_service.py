@@ -1,4 +1,5 @@
-"""Builds the demo tenant: directory, Northwind Industries, Aurora Valves and their equivalences.
+"""Builds the dev and test fixture tenant: directory, Northwind Industries, Aurora Valves and
+their equivalences.
 
 Every concept and relation goes through the proposal service and is approved through the
 decision service, so the seeded state carries real audit entries, outbox rows and domain
@@ -41,11 +42,11 @@ logger = logging.getLogger(__name__)
 
 
 async def seed_demo_tenant(session: AsyncSession) -> bool:
-    """Create the demo tenant with its data; returns False when it already exists."""
+    """Create the fixture tenant with its data; returns False when it already exists."""
     if await tenant_repository.get_by_slug(session, directory.TENANT_SLUG) is not None:
         return False
     tenant = await tenant_repository.create(session, directory.TENANT_SLUG, directory.TENANT_NAME)
-    await tenant_settings_repository.create(session, tenant.id, demo_story=True)
+    await tenant_settings_repository.create(session, tenant.id)
     await view_state_repository.create(session, tenant.id)
     users = await _seed_directory(session, tenant.id)
     proposer = await _caller_for(session, users[directory.PROPOSER_EMAIL])
@@ -105,10 +106,10 @@ async def _seed_northwind(session: AsyncSession, proposer: Caller, approver: Cal
     company = await company_service.add_company(
         session, view, northwind.COMPANY_NAME, northwind.COMPANY_SUB, is_home=True
     )
-    for scene in northwind.SCENES:
+    for batch in northwind.BATCHES:
         created = [
             await proposal_service.create(session, proposer, view, _draft(company.id, row))
-            for row in scene.rows
+            for row in batch.rows
         ]
         for proposal in created:
             await decision_service.approve(session, approver, proposal.id, bulk=True)

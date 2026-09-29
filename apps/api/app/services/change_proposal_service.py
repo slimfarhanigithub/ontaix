@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import Caller
 from app.models.api.actor import Actor
 from app.models.api.drafts import ChangeDraft
+from app.models.proposals.provenance import TYPED_TEXT, Provenance
 from app.models.storage.base import ChangeKind, NodeKind, ProposalType, RelationKind
 from app.models.storage.concept import Concept
 from app.models.storage.proposal import Proposal
@@ -48,6 +49,7 @@ async def propose_change(
     draft: ChangeDraft,
     bulk: bool,
     enforce: bool,
+    provenance: Provenance = TYPED_TEXT,
 ) -> Proposal:
     if draft.change_kind in UNAVAILABLE_CHANGE_KINDS:
         raise ProblemError(
@@ -55,22 +57,24 @@ async def propose_change(
         )
     match draft.change_kind:
         case "rename":
-            return await _propose_rename(session, caller, proposer, view, draft, bulk, enforce)
+            return await _propose_rename(
+                session, caller, proposer, view, draft, bulk, enforce, provenance
+            )
         case "delete_concept":
             return await _propose_delete_concept(
-                session, caller, proposer, view, draft, bulk, enforce
+                session, caller, proposer, view, draft, bulk, enforce, provenance
             )
         case "edit_relation":
             return await _propose_edit_relation(
-                session, caller, proposer, view, draft, bulk, enforce
+                session, caller, proposer, view, draft, bulk, enforce, provenance
             )
         case "remove_relation":
             return await _propose_remove_relation(
-                session, caller, proposer, view, draft, bulk, enforce
+                session, caller, proposer, view, draft, bulk, enforce, provenance
             )
         case _:
             return await _propose_remove_company(
-                session, caller, proposer, view, draft, bulk, enforce
+                session, caller, proposer, view, draft, bulk, enforce, provenance
             )
 
 
@@ -82,6 +86,7 @@ async def _propose_rename(
     draft: ChangeDraft,
     bulk: bool,
     enforce: bool,
+    provenance: Provenance = TYPED_TEXT,
 ) -> Proposal:
     concept = _payload_concept(view, draft.payload.concept_id)
     new_label = (draft.payload.new_label or "").strip()
@@ -117,6 +122,7 @@ async def _propose_rename(
         concept_id=None,
         relation_id=None,
         bulk=bulk,
+        provenance=provenance,
     )
 
 
@@ -128,6 +134,7 @@ async def _propose_delete_concept(
     draft: ChangeDraft,
     bulk: bool,
     enforce: bool,
+    provenance: Provenance = TYPED_TEXT,
 ) -> Proposal:
     concept = _payload_concept(view, draft.payload.concept_id)
     if enforce:
@@ -156,6 +163,7 @@ async def _propose_delete_concept(
         concept_id=None,
         relation_id=None,
         bulk=bulk,
+        provenance=provenance,
     )
 
 
@@ -167,6 +175,7 @@ async def _propose_edit_relation(
     draft: ChangeDraft,
     bulk: bool,
     enforce: bool,
+    provenance: Provenance = TYPED_TEXT,
 ) -> Proposal:
     relation = _payload_relation(view, draft.payload.relation_id)
     a, b = view.concepts[relation.a_id], view.concepts[relation.b_id]
@@ -213,6 +222,7 @@ async def _propose_edit_relation(
         concept_id=None,
         relation_id=None,
         bulk=bulk,
+        provenance=provenance,
     )
 
 
@@ -224,6 +234,7 @@ async def _propose_remove_relation(
     draft: ChangeDraft,
     bulk: bool,
     enforce: bool,
+    provenance: Provenance = TYPED_TEXT,
 ) -> Proposal:
     relation = _payload_relation(view, draft.payload.relation_id)
     if relation.kind is RelationKind.CLASH:
@@ -263,6 +274,7 @@ async def _propose_remove_relation(
         concept_id=None,
         relation_id=None,
         bulk=bulk,
+        provenance=provenance,
     )
 
 
@@ -274,6 +286,7 @@ async def _propose_remove_company(
     draft: ChangeDraft,
     bulk: bool,
     enforce: bool,
+    provenance: Provenance = TYPED_TEXT,
 ) -> Proposal:
     company = view.companies.get(draft.payload.company_id or uuid.UUID(int=0))
     if company is None or company.dying_at is not None:
@@ -305,6 +318,7 @@ async def _propose_remove_company(
         concept_id=None,
         relation_id=None,
         bulk=bulk,
+        provenance=provenance,
     )
 
 

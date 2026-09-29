@@ -37,11 +37,92 @@ export const VIEWPORTS: Viewport[] = [
 ];
 
 /**
+ * The story-only elements of the reference, hidden in both pages with `display: none` so the
+ * surrounding layout closes up as it does in a Studio that never renders them: the scene counter
+ * and scene name (the admin button beside them stays), the Next button and Finalise all.
+ */
+const STORY_ONLY_CSS = '#sceneNum,#sceneName,#next,#finalise{display:none!important}';
+/** The caption, hidden while the reference still shows the story's opening caption. */
+const OPENING_CAPTION_CSS = '.caption{visibility:hidden!important}';
+/** The teach placeholder, made transparent in one-company scenes with live teaching on, where the reference shows story text. */
+const PLACEHOLDER_CSS = '#say::placeholder{color:transparent!important}';
+
+/** Adds the acceptance stylesheets to a page as soon as its document exists. */
+const ACCEPTANCE_STYLES = `(() => {
+  const add = () => {
+    for (const [id, css] of ${JSON.stringify([
+      ['ontaix-story-only', STORY_ONLY_CSS],
+      ['ontaix-opening-caption', OPENING_CAPTION_CSS],
+    ])}) {
+      if (document.getElementById(id)) continue;
+      const style = document.createElement('style');
+      style.id = id;
+      style.textContent = css;
+      document.head.appendChild(style);
+    }
+  };
+  if (document.head) add();
+  else document.addEventListener('DOMContentLoaded', add, { once: true });
+})();`;
+
+/**
+ * Removes the two story fragments of `.hint`: the first `kbd` (`Space`) with the text node after
+ * it, the last `kbd` (`R`) with the text node after it, and sets the text node after `<kbd>F</kbd>`
+ * to exactly ` full screen`. The Studio renders the hint in that form already, so nothing changes there.
+ */
+function stripHintStory(): void {
+  const hint = document.querySelector('.hint');
+  if (!hint) return;
+  const kbds = hint.querySelectorAll('kbd');
+  const drop = (k: Element | undefined, text: string) => {
+    if (!k || k.textContent !== text) return;
+    if (k.nextSibling && k.nextSibling.nodeType === Node.TEXT_NODE) k.nextSibling.remove();
+    k.remove();
+  };
+  drop(kbds[0], 'Space');
+  drop(kbds[kbds.length - 1], 'R');
+  const f = Array.from(hint.querySelectorAll('kbd')).find((k) => k.textContent === 'F');
+  if (f && f.nextSibling && f.nextSibling.nodeType === Node.TEXT_NODE) f.nextSibling.textContent = ' full screen';
+}
+
+/** Shows the caption once the first teach, import, company or decision has replaced the reference's opening caption. */
+export async function revealCaption(page: Page): Promise<void> {
+  await page.evaluate(() => document.getElementById('ontaix-opening-caption')?.remove());
+}
+
+/**
+ * Brings both pages to the compared form just before the screenshot: the hint without its story
+ * fragments (asserted equal as text), and the teach placeholder made transparent in both pages
+ * when the reference has one company and live teaching on, where it still shows story text.
+ */
+export async function beforeScreenshot(ref: Page, studio: Page): Promise<void> {
+  await ref.evaluate(stripHintStory);
+  await studio.evaluate(stripHintStory);
+  const hints = await Promise.all([ref, studio].map((p) => p.evaluate(() => document.querySelector('.hint')?.textContent ?? '')));
+  expect(hints[1], '.hint text of the Studio equals the reference without its story fragments').toBe(hints[0]);
+  const storyPlaceholder = await ref.evaluate(() => {
+    const say = document.getElementById('say') as HTMLInputElement | null;
+    const companies = document.querySelectorAll('#companySel option').length;
+    return !!say && companies < 2 && say.placeholder !== 'Live teaching is disabled in the admin portal';
+  });
+  if (!storyPlaceholder) return;
+  for (const page of [ref, studio])
+    await page.evaluate((css) => {
+      if (document.getElementById('ontaix-placeholder')) return;
+      const style = document.createElement('style');
+      style.id = 'ontaix-placeholder';
+      style.textContent = css;
+      document.head.appendChild(style);
+    }, PLACEHOLDER_CSS);
+}
+
+/**
  * Installs the fake clock and pauses it before navigation, so no frame runs until the test
  * advances time. The reference also gets `Math.random` replaced with the Studio's generator.
  */
 export async function prepare(page: Page, opts: { seedMathRandom: boolean }): Promise<void> {
   await serveFontsLocally(page);
+  await page.addInitScript(ACCEPTANCE_STYLES);
   await page.clock.install({ time: START_TIME });
   await page.clock.pauseAt(START_TIME);
   if (opts.seedMathRandom) {
@@ -112,6 +193,158 @@ export async function advance(page: Page, ms: number, stepMs = 250): Promise<voi
     await page.clock.runFor(step);
     left -= step;
   }
+}
+
+/** The two pages of one comparison, driven in lockstep through the same user actions. */
+export interface Pair {
+  ref: Page;
+  studio: Page;
+}
+
+/** Runs one drive step on the reference, then on the Studio. */
+export async function both(pair: Pair, step: (page: Page) => Promise<void>): Promise<void> {
+  await step(pair.ref);
+  await step(pair.studio);
+}
+
+async function isStudio(page: Page): Promise<boolean> {
+  return page.evaluate(() => '__ontaix' in window);
+}
+
+/** The Studio's caption sequence, bumped by every caption; the reference answers 0. */
+async function captionSeq(page: Page): Promise<number> {
+  return page.evaluate(() => (window as unknown as { __ontaix?: { store: { ui: { caption: { seq: number } } } } }).__ontaix?.store.ui.caption.seq ?? 0);
+}
+
+/** Waits until the Studio has captioned the outcome of an action whose API calls resolve in microtasks. */
+async function captioned(page: Page, before: number): Promise<void> {
+  if (!(await isStudio(page))) return;
+  await page.waitForFunction(
+    (seq) => (window as unknown as { __ontaix: { store: { ui: { caption: { seq: number } } } } }).__ontaix.store.ui.caption.seq > seq,
+    before,
+  );
+}
+
+const blur = (page: Page) => page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+
+/**
+ * Teaches the active company one sentence typed into the teach bar. The sentences never name what
+ * the reference's next story scene listens for, so the reference reads them exactly as its import
+ * path (`teach(sentence, true)`) does; the Studio sends them as `text`.
+ */
+export async function teachText(page: Page, sentence: string): Promise<void> {
+  const seq = await captionSeq(page);
+  const scene = () => page.evaluate(() => document.getElementById('sceneNum')?.textContent ?? null);
+  const sceneBefore = await scene();
+  await page.fill('#say', sentence);
+  await page.press('#say', 'Enter');
+  await blur(page);
+  await captioned(page, seq);
+  // The reference's scene counter stays put: the sentence was parsed, not played as a story scene.
+  expect(await scene(), `"${sentence}" was taken by the reference's story instead of the parser`).toBe(sceneBefore);
+  await revealCaption(page);
+}
+
+/** Imports a text document through the file input, the same user action on both pages, and lets every sentence run. */
+export async function importText(page: Page, name: string, text: string, ms = 2000): Promise<void> {
+  const before = await page.locator('#propList .prop').count();
+  await page.setInputFiles('#importFile', { name, mimeType: 'text/plain', buffer: Buffer.from(text, 'utf-8') });
+  // The file is read in real time on both pages; the first sentence is taught at once after that.
+  await page.waitForFunction((n) => document.querySelectorAll('#propList .prop').length > n, before);
+  await revealCaption(page);
+  // Sentences are taught one clock tick apart; the clock advances until the import has finished.
+  const finished = () => page.evaluate(() => /^Import (finished|failed)/.test(document.getElementById('captionKicker')?.textContent || ''));
+  let spent = 0;
+  while (!(await finished())) {
+    if (spent >= 30_000) throw new Error('the import did not finish within 30 s of page time');
+    await advance(page, 50, 50);
+    spent += 50;
+  }
+  if (spent < ms) await advance(page, ms - spent);
+}
+
+/** Adds a company through the add-company dialog, starting with its starter vocabulary. */
+export async function addCompanyWithStarter(page: Page, name: string, sub: string): Promise<void> {
+  await page.click('#addCo');
+  await advance(page, 300);
+  await page.fill('#acName', name);
+  await page.fill('#acSub', sub);
+  const seq = await captionSeq(page);
+  await page.click('.dlg .df .btn.primary');
+  await blur(page);
+  await captioned(page, seq);
+  await revealCaption(page);
+}
+
+/**
+ * Proposes a relation through the relationship box: cell `a` is dragged onto cell `b`, the action
+ * is typed and Enter proposes. Across companies, `equivalent to` proposes an equivalence. Both
+ * pages hold the same cells at the same places, so the drag reads them from the Studio's store.
+ */
+export async function relate(pair: Pair, a: [string, string], b: [string, string], action: string): Promise<void> {
+  const [from, to] = await pair.studio.evaluate(
+    ({ a, b }) => {
+      type N = { label: string; x: number; y: number; company: { name: string } | null };
+      const { store } = (
+        window as unknown as {
+          __ontaix: { store: { s: { nodes: N[]; cam: { x: number; y: number; s: number } }; renderer: { v: { W: number; H: number } } } };
+        }
+      ).__ontaix;
+      const { s, renderer } = store;
+      const panel = renderer.v.W > 900 && !document.body.classList.contains('panel-off') ? 320 : 0;
+      const screen = ([label, company]: [string, string]): [number, number] => {
+        const n = s.nodes.find((x) => x.label === label && x.company?.name === company);
+        if (!n) throw new Error(`no cell ${label} in ${company}`);
+        return [(n.x - s.cam.x) * s.cam.s + (renderer.v.W - panel) / 2, (n.y - s.cam.y) * s.cam.s + renderer.v.H / 2];
+      };
+      return [screen(a), screen(b)];
+    },
+    { a, b },
+  );
+  await both(pair, async (page) => {
+    await page.mouse.move(from[0], from[1]);
+    await page.mouse.down();
+    await page.mouse.move(to[0], to[1], { steps: 6 });
+    await page.mouse.up();
+    await advance(page, 300);
+    const seq = await captionSeq(page);
+    await page.fill('#lbAction', action);
+    await page.press('#lbAction', 'Enter');
+    await blur(page);
+    await captioned(page, seq);
+    await revealCaption(page);
+  });
+}
+
+/**
+ * Sentences that grow the home company one concept at a time, each from a concept already there.
+ * None names a plant, production line, machine or shift, the words the reference's first story
+ * scene listens for.
+ */
+export const FIRST_MODEL = [
+  'In sales, Northwind Industries serves customers.',
+  'In sales, a customer places sales orders.',
+  'In sales, a sales order contains products.',
+  'In logistics, a sales order is fulfilled by deliveries.',
+];
+
+/** Fonts, animations off, then the first model taught sentence by sentence. */
+export async function teachFirstModel(page: Page): Promise<void> {
+  await fontsReady(page);
+  await advance(page, 500);
+  await page.click('#skip');
+  for (const sentence of FIRST_MODEL) {
+    await teachText(page, sentence);
+    await advance(page, 400);
+  }
+}
+
+/** Approves every ready proposal from the changes panel. */
+export async function approveAll(page: Page): Promise<void> {
+  const seq = await captionSeq(page);
+  await page.click('#approveAll');
+  await captioned(page, seq);
+  await revealCaption(page);
 }
 
 /** Switches the page to light mode the way a user does: admin portal, theme button, close. */

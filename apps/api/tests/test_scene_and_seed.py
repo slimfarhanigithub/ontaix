@@ -1,4 +1,4 @@
-"""The scene snapshot after the demo seed, and tenant isolation between two tenants."""
+"""The scene snapshot after the fixture seed, and tenant isolation between two tenants."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ async def test_scene_returns_both_seeded_companies(
     assert home["key"] == "northwind-industries" and acquired["key"] == "aurora-valves"
 
     expected_northwind = sum(
-        1 for s in northwind.SCENES for r in s.rows if not isinstance(r, northwind.RelationRow)
+        1 for b in northwind.BATCHES for r in b.rows if not isinstance(r, northwind.RelationRow)
     )
     assert home["counts"]["concepts"] == expected_northwind
     assert acquired["counts"]["concepts"] == 13
@@ -63,11 +63,12 @@ async def test_scene_returns_both_seeded_companies(
     assert len(same) == len(aurora.EQUIVALENCES)
     assert all(len(link["companyIds"]) == 2 for link in same)
     assert scene["proposals"] == []
-    assert scene["settings"]["demoStory"] is True
+    assert "demoStory" not in scene["settings"]
     assert scene["settings"]["approvalRequired"] is True
     assert scene["appearance"]["colors"]["production"] == "#3fb8a9"
     assert len(scene["connectors"]) == 15
-    assert scene["demoStory"] == {"enabled": True, "sceneIdx": 0, "sceneCount": 15}
+    assert "demoStory" not in scene
+    assert scene["viewState"] == {"coverage": False}
     assert scene["sequence"] > 0
 
 

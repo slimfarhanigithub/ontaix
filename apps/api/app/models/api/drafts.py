@@ -1,4 +1,8 @@
-"""Typed proposal drafts accepted by `POST /proposals`, the batch and the resource endpoints."""
+"""Typed proposal drafts accepted by `POST /proposals`, the batch and the resource endpoints.
+
+Every draft may declare its `origin` (`text` or `speech`, `text` when unset) and cite a stored
+import sentence through `import_ref`; only the generic endpoints accept `import_ref`.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +12,7 @@ from typing import Annotated, Literal
 from pydantic import Field, model_validator
 
 from app.models.api.base import ApiModel
+from app.models.api.origin import ImportRef, InputOrigin
 
 DEFAULT_ACTION = "relates to"
 
@@ -16,6 +21,8 @@ Seed = Annotated[float, Field(ge=0, lt=1)]
 
 class ConceptDraft(ApiModel):
     type: Literal["concept"] = "concept"
+    origin: InputOrigin | None = None
+    import_ref: ImportRef | None = None
     company_id: uuid.UUID
     parent_id: uuid.UUID | None = None
     parent_label: str | None = Field(default=None, max_length=120)
@@ -35,6 +42,8 @@ class ConceptDraft(ApiModel):
 
 class SpecDraft(ApiModel):
     type: Literal["spec"] = "spec"
+    origin: InputOrigin | None = None
+    import_ref: ImportRef | None = None
     company_id: uuid.UUID
     parent_id: uuid.UUID | None = None
     parent_label: str | None = Field(default=None, max_length=120)
@@ -53,6 +62,8 @@ class SpecDraft(ApiModel):
 
 class RelationDraft(ApiModel):
     type: Literal["relation"] = "relation"
+    origin: InputOrigin | None = None
+    import_ref: ImportRef | None = None
     a_id: uuid.UUID | None = None
     b_id: uuid.UUID | None = None
     a_label: str | None = Field(default=None, max_length=120)
@@ -74,6 +85,8 @@ class RelationDraft(ApiModel):
 
 class SourceDraft(ApiModel):
     type: Literal["source"] = "source"
+    origin: InputOrigin | None = None
+    import_ref: ImportRef | None = None
     company_id: uuid.UUID
     label: str = Field(min_length=1, max_length=120)
     kind_text: str = Field(max_length=60)
@@ -96,6 +109,8 @@ class SourceDraft(ApiModel):
 
 class BindingDraft(ApiModel):
     type: Literal["bind"] = "bind"
+    origin: InputOrigin | None = None
+    import_ref: ImportRef | None = None
     source_id: uuid.UUID
     concept_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
     caption: str | None = Field(default=None, max_length=300)
@@ -104,6 +119,8 @@ class BindingDraft(ApiModel):
 
 class AttributeDraft(ApiModel):
     type: Literal["attr"] = "attr"
+    origin: InputOrigin | None = None
+    import_ref: ImportRef | None = None
     concept_id: uuid.UUID
     source_id: uuid.UUID | None = None
     name: str = Field(min_length=1, max_length=80)
@@ -126,6 +143,8 @@ class ChangePayload(ApiModel):
 
 class ChangeDraft(ApiModel):
     type: Literal["change"] = "change"
+    origin: InputOrigin | None = None
+    import_ref: ImportRef | None = None
     change_kind: Literal[
         "rename",
         "delete_concept",
@@ -156,4 +175,8 @@ ConceptOrSpecDraft = Annotated[ConceptDraft | SpecDraft, Field(discriminator="ty
 
 
 class ProposalBatch(ApiModel):
+    """`origin` and `import_ref` apply to every draft that sets none of its own."""
+
+    origin: InputOrigin | None = None
+    import_ref: ImportRef | None = None
     drafts: list[ProposalDraft] = Field(min_length=1, max_length=200)
