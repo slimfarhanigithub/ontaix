@@ -67,9 +67,14 @@ DEFAULT_MEMBER_ACTION = "includes"
 REFUSED_ACTIONS = frozenset({"is a", "equivalent to"})
 
 _WORDS = re.compile(r"[a-z0-9][a-z0-9&'-]*")
-# Characters that join two word characters into one word (the UAX 29 MidLetter and MidNumLet
-# joiners, and the hyphen, which is kept inside a word as a stricter rule).
-_WORD_JOINERS = frozenset("'\u2019.:\u00b7-")
+# UAX 29 joiners: MidLetter joins two letters, MidNum two digits, MidNumLet either (the
+# apostrophe counts as MidNumLet). The hyphen joins any two word characters, a stricter rule.
+_MID_LETTER = frozenset("\u003a\u00b7\u0387\u055f\u05f4\u2027\ufe13\ufe55\uff1a")
+_MID_NUM = frozenset(
+    "\u002c\u003b\u037e\u0589\u060c\u060d\u066c\u07f8\u2044\ufe10\ufe14\ufe50\ufe54\uff0c\uff1b"
+)
+_MID_NUM_LET = frozenset("\u0027\u002e\u2018\u2019\u2024\ufe52\uff07\uff0e")
+_HYPHEN = "-"
 
 
 @dataclass
@@ -511,12 +516,15 @@ def _ground(label: str, text: str, source: tuple[int, int]) -> str | None:
 
 
 def _words(text: str) -> list[tuple[int, int]]:
-    """Code-point ranges of the words of `text`, by the UAX 29 rules that matter here: letters,
-    digits, connector punctuation and combining marks (categories Mn, Mc, Me) belong to the word,
-    so an accent in decomposed text, a Thai or Devanagari vowel sign never ends it; `'`, `’`,
-    `.`, `:`, `·` and `-` between two word characters keep the word whole (`node.js`,
-    `insight’s`). Ranges index the text as given, so decomposed and precomposed input give the
-    same words over their own offsets."""
+    """Code-point ranges of the words of `text`, by the UAX 29 word rules that matter here.
+
+    Letters, digits and connector punctuation make words. Combining marks (Mn, Mc, Me) and
+    format characters (Cf: ZWNJ, ZWJ, soft hyphen, word joiner) after a word character stay in
+    the word (rule WB4), so an accent in decomposed text, a Thai or Devanagari vowel sign or a
+    Persian ZWNJ never ends it. A MidLetter joiner between two letters, a MidNum joiner between
+    two digits, a MidNumLet joiner between two letters or two digits, and a hyphen between any
+    two word characters keep the word whole (`node.js`, `node．js`, `insight’s`, `3,000`).
+    Ranges index the text as given, so decomposed and precomposed input give the same words."""
     words: list[tuple[int, int]] = []
     i, n = 0, len(text)
     while i < n:
@@ -524,10 +532,16 @@ def _words(text: str) -> list[tuple[int, int]]:
             i += 1
             continue
         start = i
+        last = text[i]
+        i += 1
         while i < n:
-            if _word_char(text[i]):
+            c = text[i]
+            if _word_char(c):
+                last = c
                 i += 1
-            elif text[i] in _WORD_JOINERS and i + 1 < n and _word_char(text[i + 1]):
+            elif _extends(c):
+                i += 1
+            elif _joins(c, last, _next_base(text, i + 1)):
                 i += 1
             else:
                 break
@@ -536,7 +550,35 @@ def _words(text: str) -> list[tuple[int, int]]:
 
 
 def _word_char(c: str) -> bool:
-    return c.isalnum() or unicodedata.category(c)[0] in "MN" or unicodedata.category(c) == "Pc"
+    return c.isalnum() or unicodedata.category(c) in ("Nl", "No", "Pc")
+
+
+def _extends(c: str) -> bool:
+    """Combining marks and format characters, which extend the word before them (WB4)."""
+    return unicodedata.category(c) in ("Mn", "Mc", "Me", "Cf")
+
+
+def _next_base(text: str, i: int) -> str | None:
+    """The next word character from `i`, skipping marks and format characters, or None."""
+    while i < len(text) and _extends(text[i]):
+        i += 1
+    return text[i] if i < len(text) and _word_char(text[i]) else None
+
+
+def _joins(c: str, before: str, after: str | None) -> bool:
+    if after is None:
+        return False
+    letters = before.isalpha() and after.isalpha()
+    digits = before.isdigit() and after.isdigit()
+    if c == _HYPHEN:
+        return True
+    if c in _MID_LETTER:
+        return letters
+    if c in _MID_NUM:
+        return digits
+    if c in _MID_NUM_LET:
+        return letters or digits
+    return False
 
 
 def _valid_label(label: str) -> bool:

@@ -422,3 +422,30 @@ async def test_a_whole_word_with_marks_or_joiners_grounds(
     )
     r = await post(client, tenant, company_id, sentence, "speech")
     assert [d["label"] for d in r["drafts"]] == [drafted]
+
+
+@pytest.mark.parametrize(
+    ("sentence", "fragment"),
+    [
+        ("these services cover می‌خواهم", "خواهم"),
+        ("these services cover data­base", "Base"),
+        ("these services cover data⁠base", "Base"),
+        ("these services cover node．js", "Js"),
+        ("these services cover a‧b", "B"),
+    ],
+)
+async def test_format_characters_and_uax29_joiners_keep_a_word_whole(
+    client, tenant: TenantFixture, sentence, fragment
+):
+    company_id, _ = await add_company(tenant, "Insight")
+    await configure(tenant)
+    seg = [{"index": 0, "start": 0, "end": len(sentence)}]
+    install(
+        lambda ctx: answer(
+            intent(C0, new(fragment), 0, len(sentence), "covers", segment=0), segments=seg
+        )
+    )
+    r = await post(client, tenant, company_id, sentence, "speech")
+    assert r["llmOutcome"] == "used"
+    assert r["drafts"] == []
+    assert [u["reason"] for u in r["unresolved"]] == ["ungrounded_label"]
