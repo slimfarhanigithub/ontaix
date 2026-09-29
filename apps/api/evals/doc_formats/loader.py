@@ -24,12 +24,8 @@ import openpyxl
 from pptx import Presentation
 from pptx.shapes.group import GroupShape
 
-from app.utilities.document_text import (
-    DocumentTooLargeError,
-    DocumentUnreadableError,
-    _docx_paragraphs,
-    _pdf_pages,
-)
+from app.utilities.document_errors import DocumentTooLargeError, DocumentUnreadableError
+from app.utilities.document_text import DOCX, PDF, extract_document
 from evals.doc_formats.loaded_document import LoadedDocument, OcrUsage
 from evals.doc_formats.ocr_client import FakeOcrClient, OcrClient
 from evals.html_to_text import html_to_markdown
@@ -83,13 +79,13 @@ async def load_document(path: Path, ocr: OcrClient | None = None) -> LoadedDocum
         elif fmt == "html":
             text = html_to_markdown(_decode(path, data))
         elif fmt == "docx":
-            text = _blocks(_docx_paragraphs(data))
+            text = _blocks([b.text for b in extract_document(data, DOCX).blocks])
         elif fmt == "pptx":
             text, pages = _pptx_text(data)
         elif fmt == "xlsx":
             text = _xlsx_text(data)
         else:
-            page_texts = _pdf_pages(data)
+            page_texts = [b.text for b in extract_document(data, PDF).blocks]
             pages = len(page_texts)
             if not _is_scanned(page_texts):
                 text = _blocks(page_texts)

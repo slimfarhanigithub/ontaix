@@ -108,6 +108,9 @@ export interface UiState {
 
 type Listener = () => void;
 
+/** Calls one Approve branch click makes at most while the API reports the branch incomplete. */
+const MAX_BRANCH_CALLS = 100;
+
 
 class StudioStore {
   readonly s: SceneState;
@@ -850,6 +853,21 @@ class StudioStore {
     } catch (err) {
       this.refused(err);
     }
+  }
+
+  /** Approves a proposal and the open proposals of its branch, calling again while the API reports
+   * the branch incomplete and the last call still approved something. */
+  async approveBranch(p: Proposal): Promise<void> {
+    if (!p.ready) return;
+    try {
+      for (let calls = 0; calls < MAX_BRANCH_CALLS; calls++) {
+        const res = await api.approveBranch(p.id);
+        if (res.complete || res.approved === 0) break;
+      }
+    } catch (err) {
+      await this.decisionRefused(err);
+    }
+    await this.refreshProposals();
   }
 
   async rejectAll(): Promise<void> {

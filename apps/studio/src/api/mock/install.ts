@@ -5,7 +5,8 @@
  * The answer is a Response-shaped object whose `json()` resolves in a microtask. A real
  * `Response` reads its body in a later task, and under a fake clock that gap lets a frame run
  * between two proposals of one teach batch, which the reference never does. A multipart upload
- * (`POST /import/sentences`) is read from its form before the mock answers.
+ * (`POST /import/sentences`, `POST /ontology-imports`) is read from its form before the mock
+ * answers.
  */
 import { createMockServer, type MockResponse, type MockServer } from './server';
 
@@ -16,18 +17,26 @@ export function installMockFetch(base = '/api/v1', server: MockServer = createMo
     const u = new URL(url, location.origin);
     if (!u.pathname.startsWith(base)) return realFetch(input, init);
     const method = (init?.method || (typeof input === 'object' && 'method' in input ? input.method : 'GET') || 'GET').toUpperCase();
-    if (init?.body instanceof FormData) return upload(server, init.body);
+    if (init?.body instanceof FormData) return upload(server, u.pathname.slice(base.length), init.body);
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     return Promise.resolve(answer(server.handle(method, u.pathname.slice(base.length) + u.search, body)));
   };
   return server;
 }
 
-async function upload(server: MockServer, form: FormData): Promise<Response> {
+async function upload(server: MockServer, path: string, form: FormData): Promise<Response> {
   const file = form.get('file');
-  if (!(file instanceof Blob)) return answer(server.handle('POST', '/import/sentences', {}));
+  if (!(file instanceof Blob)) return answer(server.handle('POST', path, {}));
   const name = file instanceof File ? file.name : '';
-  return answer(await server.importDocument({ name, type: file.type, bytes: new Uint8Array(await file.arrayBuffer()) }));
+  const received = { name, type: file.type, bytes: new Uint8Array(await file.arrayBuffer()) };
+  if (path === '/ontology-imports') {
+    const fields: Record<string, string> = {};
+    form.forEach((value, key) => {
+      if (typeof value === 'string') fields[key] = value;
+    });
+    return answer(await server.importOntology(received, fields));
+  }
+  return answer(await server.importDocument(received));
 }
 
 function answer(res: MockResponse): Response {

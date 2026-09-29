@@ -172,8 +172,8 @@ export interface DraftSeed {
   seed?: number;
 }
 
-/** How a proposal's content entered Ontaix; `document` is set by the server only. */
-export type Origin = 'text' | 'speech' | 'document';
+/** How a proposal's content entered Ontaix; `document`, `suggestion` and `ontology_import` are set by the server only. */
+export type Origin = 'text' | 'speech' | 'document' | 'suggestion' | 'ontology_import';
 /** The origin a client declares on a draft or a teach parse. */
 export type InputOrigin = 'text' | 'speech';
 
@@ -184,8 +184,10 @@ export interface ImportRef {
 }
 
 export interface DocumentPosition {
-  unit: 'page' | 'paragraph';
+  unit: 'page' | 'paragraph' | 'slide' | 'sheet';
   index: number;
+  /** Only with `sheet`: the 1-based spreadsheet row. */
+  row?: number;
 }
 
 export type ImportMediaType =
@@ -194,7 +196,10 @@ export type ImportMediaType =
   | 'text/csv'
   | 'application/json'
   | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  | 'application/pdf';
+  | 'application/pdf'
+  | 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  | 'text/html';
 
 /** Where a `document` proposal came from, copied by the server from the stored import. */
 export interface OriginDetail {
@@ -221,6 +226,52 @@ export interface ImportResult {
   /** Pieces of extracted text left out of `sentences`, such as those under 13 characters. */
   skipped: number;
   positions?: (DocumentPosition | null)[];
+}
+
+export type OntologyFormat = 'rdf_xml' | 'turtle' | 'owl_xml' | 'json_ld' | 'n_triples' | 'obo' | 'csv' | 'xlsx';
+
+export type OntologySkipReason =
+  | 'already_known'
+  | 'reused_existing'
+  | 'invalid_label'
+  | 'duplicate_label'
+  | 'remote_import_not_fetched'
+  | 'unsupported_axiom'
+  | 'equivalence_not_imported'
+  | 'datatype_property'
+  | 'individual_skipped'
+  | 'forbidden_action'
+  | 'cycle'
+  | 'unknown_parent';
+
+export interface OntologyImportNote {
+  source: string;
+  labelLanguage?: string | null;
+  depth: number | null;
+  requires: number[];
+}
+
+/** `POST /ontology-imports`: the mapped tree the server stored for 24 hours. */
+export interface OntologyImportResult {
+  ontologyImportId: string;
+  expiresAt: string;
+  companyId: string;
+  parentConceptId: string | null;
+  format: OntologyFormat;
+  languages: string[];
+  individuals: 'skip' | 'as_concepts';
+  drafts: ProposalDraft[];
+  notes: OntologyImportNote[];
+  skipped: { source: string; label?: string; reason: OntologySkipReason }[];
+}
+
+export interface OntologyImportRequest {
+  companyId: string;
+  parentConceptId?: string;
+  /** BCP 47 tags separated by commas, first preferred, at most 10. */
+  languages?: string;
+  individuals?: 'skip' | 'as_concepts';
+  domainKey?: DomainKey;
 }
 
 export interface ConceptDraft extends DraftSeed, DraftOrigin {
@@ -375,6 +426,8 @@ export interface Proposal {
   createdAt: string;
   decidedAt?: string | null;
   artefacts?: Artefacts;
+  /** Open proposals in the branch of a `concept` or `spec` proposal other than itself; 0 or absent otherwise. */
+  openBelow?: number;
 }
 
 export interface AuditEntry {
@@ -426,6 +479,8 @@ export interface Settings {
   costCap: boolean;
   /** Tokens Ontaix's own language model calls may use per UTC month; 0 turns the step off. */
   llmMonthlyTokenCap: number;
+  /** Scanned PDF pages OCR may read per UTC month, users and agents together; 0 turns OCR off. */
+  ocrMonthlyPageCap: number;
 }
 
 export type SettingsPatch = Partial<Omit<Settings, 'approvalRequired' | 'readOnlyConnectors'>>;
@@ -539,6 +594,16 @@ export interface TeachResult {
   segments: SourceSegment[];
 }
 
+/** `POST /speech/token`: a short-lived Azure AI Speech token for the microphone. */
+export interface SpeechToken {
+  /** `aad#<resource id>#<access token>` for the Speech SDK; held in memory only. */
+  token: string;
+  region: string;
+  /** ISO date-time the access token expires. */
+  expiresAt: string;
+  language: 'en-GB' | 'en-US';
+}
+
 /** `POST /teach/parse`: typed text or a speech transcript, or a cited import sentence. */
 export interface TeachRequest {
   companyId: string;
@@ -547,6 +612,141 @@ export interface TeachRequest {
   importRef?: ImportRef;
   /** One per teach bar session and company, so the model step can resolve back-references. */
   sessionId?: string;
+}
+
+// ------------------------------------------------------------ concept expansion
+
+/** `POST /concepts/{conceptId}/expand`: optional steering from the caller. */
+export interface ExpansionRequest {
+  depth?: number;
+  maxChildren?: number;
+  focus?: string;
+  sessionId?: string;
+}
+
+export type ExpansionOutcome =
+  | 'used'
+  | 'not_configured'
+  | 'rate_limited'
+  | 'budget_exhausted'
+  | 'timeout'
+  | 'provider_error'
+  | 'refused'
+  | 'invalid_output';
+
+/** One note per expansion draft: confidence, rationale, depth (null for a relation) and the drafts it requires. */
+export interface ExpansionNote {
+  confidence: number;
+  rationale: string;
+  depth: number | null;
+  requires: number[];
+}
+
+export interface ExpansionSkip {
+  label: string;
+  reason: 'existing_label' | 'duplicate_in_response' | 'low_confidence' | 'over_cap' | 'parent_skipped' | 'duplicate_relation';
+}
+
+/** Expansion drafts in the contract's shape: a concept by `parentId` or `parentLabel`, a relation by id or label ends. */
+export type ExpansionDraft =
+  | (Omit<ConceptDraft, 'parentId'> & { parentId?: string })
+  | (Omit<RelationDraft, 'aId' | 'bId'> & { aId?: string; bId?: string; companyId?: string });
+
+export interface ExpansionResult {
+  expansionId: string | null;
+  expiresAt: string | null;
+  conceptId: string;
+  llmOutcome: ExpansionOutcome;
+  degraded: boolean;
+  drafts: ExpansionDraft[];
+  notes: ExpansionNote[];
+  skipped: ExpansionSkip[];
+}
+
+// ------------------------------------------------------------ whole-document extraction
+
+export type ExtractionState = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+export type ExtractionFailure =
+  | 'not_configured'
+  | 'budget_exhausted'
+  | 'rate_limited'
+  | 'job_timeout'
+  | 'no_drafts'
+  | 'import_expired'
+  | 'too_many_attempts'
+  | 'internal';
+
+export interface DocumentExtraction {
+  id: string;
+  importId: string | null;
+  companyId: string;
+  state: ExtractionState;
+  phase: 'outline' | 'sections' | 'mapping' | null;
+  chunks: number;
+  outlineChunksDone: number;
+  sectionChunksDone: number;
+  outlineNodes: number;
+  tokensUsed: number;
+  tokenCeiling: number;
+  nodeCeiling: number;
+  draftCount: number;
+  degraded: boolean;
+  failureReason: ExtractionFailure | null;
+  cancelRequested: boolean;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  expiresAt: string | null;
+  submittedAt: string | null;
+}
+
+export type OutlineRole = 'domain_area' | 'process' | 'subprocess' | 'step' | 'entity' | 'group';
+
+export interface OutlineNode {
+  index: number;
+  parentIndex: number | null;
+  parentConceptId?: string | null;
+  conceptId: string | null;
+  label: string;
+  role: OutlineRole;
+  depth: number;
+  sentenceIndex: number;
+}
+
+export interface DocumentDraftNote {
+  pass: 'outline' | 'section';
+  confidence: number;
+  explanation?: string;
+  role?: OutlineRole;
+  depth: number | null;
+  requires: number[];
+  sentenceIndex: number;
+  sourceSpan?: { start: number; end: number };
+}
+
+export interface ExtractionUnresolved {
+  chunk?: number;
+  sentenceIndex?: number;
+  label?: string;
+  reason: string;
+}
+
+export interface DocumentExtractionResult {
+  extractionId: string;
+  outline: OutlineNode[];
+  drafts: ProposalDraft[];
+  notes: DocumentDraftNote[];
+  unresolved: ExtractionUnresolved[];
+}
+
+/** `POST /proposals/{proposalId}/approve-branch`: what one call approved; `complete` false asks for another call. */
+export interface BranchResult {
+  rootId: string;
+  approved: number;
+  skipped: number;
+  remaining: number;
+  batches: number;
+  complete: boolean;
 }
 
 export interface Page {
@@ -683,8 +883,16 @@ export interface LlmUsage {
   outputTokens: number;
   tokensUsed: number;
   tokenCap: number;
+  ocrPagesUsed?: number;
+  ocrPageCap?: number;
   costEur: number;
-  byPurpose: { purpose: 'teach_extraction'; calls: number; costEur: number }[];
+  byPurpose: {
+    purpose: 'teach_extraction' | 'concept_expansion' | 'document_extraction' | 'document_ocr';
+    calls: number;
+    /** `document_ocr` only. */
+    pages?: number;
+    costEur: number;
+  }[];
 }
 
 export interface CrossCompanyDisabled {

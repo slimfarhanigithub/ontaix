@@ -1,4 +1,5 @@
-"""Concepts: the Entities list, single reads, lineage, attributes and the proposal endpoints."""
+"""Concepts: the Entities list, single reads, lineage, attributes, expansion and the proposal
+endpoints."""
 
 from __future__ import annotations
 
@@ -11,10 +12,11 @@ from app.auth import CallerDependency, SessionDependency
 from app.models.api.attribute import Attribute
 from app.models.api.concept import Concept, ConceptRename
 from app.models.api.drafts import ConceptOrSpecDraft
+from app.models.api.expansion import ExpansionRequest, ExpansionResult
 from app.models.api.lineage import Lineage
 from app.models.api.page import PageOf
 from app.models.api.proposal import Proposal
-from app.services import concept_service
+from app.services import concept_expansion_service, concept_service
 from app.utilities.listing import parse_list_query
 
 logger = logging.getLogger(__name__)
@@ -72,6 +74,16 @@ async def get_concept_lineage(
     concept_id: uuid.UUID, session: SessionDependency, caller: CallerDependency
 ) -> Lineage:
     return await concept_service.get_lineage(session, caller, concept_id)
+
+
+@router.post("/concepts/{concept_id}/expand", response_model=ExpansionResult)
+async def expand_concept(
+    concept_id: uuid.UUID,
+    body: ExpansionRequest,
+    session: SessionDependency,
+    caller: CallerDependency,
+) -> ExpansionResult:
+    return await concept_expansion_service.expand(session, caller, concept_id, body)
 
 
 @router.get("/concepts/{concept_id}/attributes", response_model=list[Attribute])

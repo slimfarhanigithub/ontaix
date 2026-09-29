@@ -59,6 +59,41 @@ Deployment configuration (Helm values in the cluster, the ignored `.env` locally
 | `ONTAIX_LLM_TIMEOUT_SECONDS` | 15 | Typed and document sentences; maximum 15 |
 | `ONTAIX_LLM_SPEECH_TIMEOUT_SECONDS` | 45 | Speech transcripts; maximum 45 |
 
+Concept expansion (ADR 0009) and whole-document extraction (ADR 0010) use the same provider, endpoint, credentials and price table and run on the `deep` model profile (`ONTAIX_FOUNDRY_DEEP_*`, `ONTAIX_LLM_DEEP_REASONING_ALLOWANCE_TOKENS`); their own settings below bound size, budget and time. None of these is a secret.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `ONTAIX_EXPAND_MAX_NODES` | 200 | Drafts per run, 1 to 2,000; cost protection only, no depth limit |
+| `ONTAIX_EXPAND_MAX_OUTPUT_TOKENS` | 32768 | |
+| `ONTAIX_EXPAND_CONTEXT_LABELS` | 1000 | |
+| `ONTAIX_EXPAND_TIMEOUT_SECONDS` | 120 | Maximum 300 |
+| `ONTAIX_EXPAND_CALLS_PER_HOUR` | 30 | Per user |
+| `ONTAIX_DOCUMENT_EXTRACTION_CHUNK_CHARS` | 10000 | Overlap is 2 sentences |
+| `ONTAIX_DOCUMENT_EXTRACTION_OUTLINE_CONTEXT_NODES` | 600 | |
+| `ONTAIX_DOCUMENT_EXTRACTION_MAX_NODES` | 2000 | Drafts per job, 1 to 5,000; cost protection only, no depth limit |
+| `ONTAIX_DOCUMENT_EXTRACTION_MAX_TOKENS` | 1000000 | Settled tokens per job, within the tenant's monthly cap |
+| `ONTAIX_DOCUMENT_EXTRACTION_MAX_CHARS` | 400000 | Largest document a job accepts |
+| `ONTAIX_DOCUMENT_EXTRACTION_TIMEOUT_SECONDS` | 180 | Per call; maximum 300 |
+| `ONTAIX_DOCUMENT_EXTRACTION_JOB_TIMEOUT_MINUTES` | 60 | Per job |
+| `ONTAIX_DOCUMENT_EXTRACTION_JOBS_PER_HOUR` | 5 | Per user |
+| `ONTAIX_DOCUMENT_EXTRACTION_MAX_ATTEMPTS` | 3 | Runner claims per job before it fails with `too_many_attempts`; 1 to 10 |
+| `ONTAIX_BRANCH_APPROVE_BATCH` | 200 | Proposals per branch-approval transaction |
+| `ONTAIX_BRANCH_APPROVE_MAX_ROUNDS` | 50 | Batches per branch-approval call |
+
+OCR of scanned PDF pages (ADR 0011) calls a Mistral document model deployed on the same Foundry resource as DataZoneStandard (EU), keyless like the teach deployment. The deployment and its role assignment for the API's workload identity are added in `infra/terraform/azure` before OCR is configured; until then a scanned PDF import answers `503 unavailable`. Ontology import (ADR 0012) calls no model.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `ONTAIX_OCR_ENDPOINT` | value of `ONTAIX_FOUNDRY_ENDPOINT` | Unset means OCR is not configured |
+| `ONTAIX_OCR_DEPLOYMENT` | `mistral-document-ai` | Or `mistral-ocr-4-0` |
+| `ONTAIX_OCR_MODEL` | value of `ONTAIX_OCR_DEPLOYMENT` | Its `ONTAIX_LLM_PRICE_TABLE` entry is `{"eurPerPage": <n>}` |
+| `ONTAIX_OCR_MAX_PAGES` | 100 | Image-only pages per import |
+| `ONTAIX_OCR_TIMEOUT_SECONDS` | 120 | Maximum 300 |
+| `ONTAIX_OCR_PAGES_PER_HOUR` | 600 | Per user or agent |
+| `ONTAIX_ONTOLOGY_IMPORT_MAX_BYTES` | 20971520 | 20 MiB |
+| `ONTAIX_ONTOLOGY_IMPORT_MAX_NODES` | 5000 | Drafts per import, at most 20,000; no depth limit |
+| `ONTAIX_ONTOLOGY_IMPORT_PARSE_TIMEOUT_SECONDS` | 60 | Child-process wall clock |
+
 Without `ONTAIX_FOUNDRY_ENDPOINT` the API runs normally and the teach bar uses the rule-based grammar alone (`llmOutcome` `not_configured`).
 
 ### Optional Anthropic Provider

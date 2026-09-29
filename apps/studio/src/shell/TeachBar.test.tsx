@@ -1,5 +1,7 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 
+import { FakeRecognizer, fakeSpeechSdk, resetFakeRecognizer } from '../teach/speechSdkFake';
+
 type Result = ArrayLike<{ transcript: string }> & { isFinal: boolean };
 
 /** A stand-in for the browser recogniser that the test drives by hand. */
@@ -28,6 +30,23 @@ class FakeRecognition {
     );
     this.onresult?.({ results: list });
   }
+}
+
+/** The API has no Speech resource, so each recording falls back to the browser recogniser. */
+async function noAzureSpeech(): Promise<void> {
+  const { api } = await import('../api/client');
+  const { ApiError } = await import('../api/types');
+  vi.spyOn(api, 'speechToken').mockRejectedValue(
+    new ApiError(503, { title: 'Unavailable', status: 503, code: 'unavailable' }),
+  );
+}
+
+/** Presses the microphone and lets the token request settle. */
+async function click(button: Element): Promise<void> {
+  fireEvent.click(button);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
 }
 
 describe('the microphone', () => {
@@ -96,7 +115,8 @@ describe('the microphone', () => {
   it('drains the queue on stop, sending the words never finished last, one request at a time', async () => {
     const { api } = await import('../api/client');
     const { store } = await import('../store/store');
-    store.s.activeCompany = { sid: 'company-a' } as typeof store.s.activeCompany;
+    store.s.activeCompany = { sid: 'company-a', name: 'Insight' } as typeof store.s.activeCompany;
+    await noAzureSpeech();
     const sent: string[] = [];
     let inFlight = 0;
     let most = 0;
@@ -110,7 +130,7 @@ describe('the microphone', () => {
     vi.spyOn(store, 'caption').mockImplementation(() => undefined);
     const { TeachBar } = await import('./TeachBar');
     const { container } = render(<TeachBar />);
-    fireEvent.click(container.querySelector('#mic') as Element);
+    await click(container.querySelector('#mic') as Element);
     const rec = FakeRecognition.last as FakeRecognition;
 
     act(() => rec.hear('Insight sells services. ', 'They focus on data. ', '~It has a platform'));
@@ -126,7 +146,8 @@ describe('the microphone', () => {
   it('keeps one request in flight when the speaker stops and starts again during a pending call', async () => {
     const { api } = await import('../api/client');
     const { store } = await import('../store/store');
-    store.s.activeCompany = { sid: 'company-a' } as typeof store.s.activeCompany;
+    store.s.activeCompany = { sid: 'company-a', name: 'Insight' } as typeof store.s.activeCompany;
+    await noAzureSpeech();
     const sent: string[] = [];
     let inFlight = 0;
     let most = 0;
@@ -142,10 +163,10 @@ describe('the microphone', () => {
     const { container } = render(<TeachBar />);
     const micButton = container.querySelector('#mic') as Element;
 
-    fireEvent.click(micButton);
+    await click(micButton);
     act(() => (FakeRecognition.last as FakeRecognition).hear('Insight sells services. '));
     act(() => (FakeRecognition.last as FakeRecognition).stop());
-    fireEvent.click(micButton);
+    await click(micButton);
     act(() => (FakeRecognition.last as FakeRecognition).hear('They focus on data. '));
     act(() => (FakeRecognition.last as FakeRecognition).stop());
     await act(async () => {
@@ -166,5 +187,107 @@ describe('the microphone', () => {
 
     expect(stop).toHaveBeenCalledTimes(1);
     expect(sentence).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the microphone on Azure Speech', () => {
+  const TOKEN = {
+    token: 'aad#/subscriptions/s#eyJ.token',
+    region: 'francecentral',
+    expiresAt: '2099-01-01T00:00:00Z',
+    language: 'en-GB' as const,
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    vi.doMock('microsoft-cognitiveservices-speech-sdk', () => fakeSpeechSdk());
+    (window as unknown as { SpeechRecognition: unknown }).SpeechRecognition = FakeRecognition;
+    FakeRecognition.last = null;
+    resetFakeRecognizer();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.doUnmock('microsoft-cognitiveservices-speech-sdk');
+    delete (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition;
+  });
+
+  async function listen(token: () => Promise<typeof TOKEN>) {
+    const { api } = await import('../api/client');
+    const { store } = await import('../store/store');
+    store.s.activeCompany = { sid: 'company-a', name: 'Insight' } as typeof store.s.activeCompany;
+    vi.spyOn(api, 'speechToken').mockImplementation(token);
+    const refused = vi.spyOn(store, 'refused').mockImplementation(() => undefined);
+    const teachModule = await import('../teach/teach');
+    const sentence = vi.fn();
+    vi.spyOn(teachModule, 'speechStream').mockReturnValue({ sentence, settled: () => Promise.resolve() });
+    const { TeachBar } = await import('./TeachBar');
+    const { container } = render(<TeachBar />);
+    await click(container.querySelector('#mic') as Element);
+    const input = () => (container.querySelector('#say') as HTMLInputElement).value;
+    return { container, input, refused, sentence };
+  }
+
+  it('queues each recognised sentence and shows words being recognised only in the input', async () => {
+    const { input, sentence } = await listen(() => Promise.resolve(TOKEN));
+    const rec = FakeRecognizer.last as FakeRecognizer;
+    expect(rec.phrases).toEqual(['Insight']);
+    expect(FakeRecognition.last).toBeNull();
+
+    act(() => rec.hearing('so, uh, Insight sells'));
+    expect(sentence).not.toHaveBeenCalled();
+    expect(input()).toBe('so, uh, Insight sells');
+    act(() => rec.heard('So, uh, Insight sells services.'));
+    act(() => rec.hearing('These services are'));
+
+    expect(sentence.mock.calls).toEqual([['So, uh, Insight sells services.']]);
+    expect(input()).toBe('So, uh, Insight sells services. These services are');
+  });
+
+  it('sends the words never finished as the last sentence when the speaker stops', async () => {
+    const { input, sentence } = await listen(() => Promise.resolve(TOKEN));
+    const rec = FakeRecognizer.last as FakeRecognizer;
+
+    act(() => rec.heard('Insight sells services.'));
+    act(() => rec.hearing('These services are focused on data'));
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(sentence.mock.calls).toEqual([['Insight sells services.'], ['These services are focused on data']]);
+    expect(rec.closed).toBe(true);
+    expect(input()).toBe('');
+  });
+
+  it('falls back to the browser recogniser on 503, as it does without Azure Speech', async () => {
+    const { ApiError } = await import('../api/types');
+    const unavailable = new ApiError(503, { title: 'Unavailable', status: 503, code: 'unavailable' });
+    const { sentence } = await listen(() => Promise.reject(unavailable));
+    const rec = FakeRecognition.last as FakeRecognition;
+
+    act(() => rec.hear('Insight sells services. '));
+
+    expect(FakeRecognizer.last).toBeNull();
+    expect(rec.continuous).toBe(true);
+    expect(sentence.mock.calls).toEqual([['Insight sells services. ']]);
+  });
+
+  it('hands the recording to the browser recogniser when Azure Speech cancels with an error', async () => {
+    const { sentence } = await listen(() => Promise.resolve(TOKEN));
+
+    act(() => (FakeRecognizer.last as FakeRecognizer).fail());
+    act(() => (FakeRecognition.last as FakeRecognition).hear('Insight sells services. '));
+
+    expect(sentence.mock.calls).toEqual([['Insight sells services. ']]);
+  });
+
+  it('shows a refusal and does not fall back when voice is off', async () => {
+    const { ApiError } = await import('../api/types');
+    const off = new ApiError(409, { title: 'Channel disabled', status: 409, code: 'channel_disabled' });
+    const { refused } = await listen(() => Promise.reject(off));
+
+    expect(refused).toHaveBeenCalledWith(off);
+    expect(FakeRecognition.last).toBeNull();
   });
 });

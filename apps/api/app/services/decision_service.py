@@ -136,6 +136,44 @@ async def reject_all(session: AsyncSession, caller: Caller) -> BulkResult:
     )
 
 
+async def approve_ready(
+    session: AsyncSession,
+    caller: Caller,
+    view: OntologyView,
+    proposals: list[Proposal],
+    candidate_ids: set[uuid.UUID],
+    limit: int,
+) -> int:
+    """Approve, parents first and round after round, the candidates that are open, ready and
+    within the caller's approval scope, until `limit` are approved; returns how many were.
+
+    The caller holds the tenant decision lock and `proposals` are the open proposals it locked.
+    A candidate that needs a second approver is left for a single decision.
+    """
+    approved = 0
+    progressed = True
+    while progressed and approved < limit:
+        progressed = False
+        for proposal in list(proposals):
+            if approved >= limit:
+                break
+            if proposal.id not in candidate_ids or proposal.state is not ProposalState.PENDING:
+                continue
+            if not may_approve(caller, view, proposal) or _needs_second_approval(view, proposal):
+                continue
+            if not view.readiness(proposal)[0]:
+                continue
+            await _complete_approval(session, caller, view, proposal, proposals, 1, True)
+            approved += 1
+            progressed = True
+    return approved
+
+
+def may_approve(caller: Caller, view: OntologyView, proposal: Proposal) -> bool:
+    """The caller may approve the proposal alone: an approving role in its scope."""
+    return _may_approve(caller, view, proposal)
+
+
 async def _load_decidable(
     session: AsyncSession, caller: Caller, proposal_id: uuid.UUID
 ) -> Proposal:

@@ -44,3 +44,23 @@ output "foundry_claude_endpoint" {
   description = "Endpoint of the Claude Foundry resource (ONTAIX_FOUNDRY_ENDPOINT with anthropic_foundry); callers authenticate with Entra ID."
   value       = azurerm_cognitive_account.claude.endpoint
 }
+
+output "speech_resource_id" {
+  description = "Full resource id of the Azure AI Speech resource (ONTAIX_SPEECH_RESOURCE_ID)."
+  value       = azurerm_cognitive_account.speech.id
+}
+
+output "speech_region" {
+  description = "Region of the Speech resource (ONTAIX_SPEECH_REGION)."
+  value       = azurerm_cognitive_account.speech.location
+}
+
+output "speech_endpoint" {
+  description = "Speech endpoint on its custom subdomain (ONTAIX_SPEECH_ENDPOINT); callers authenticate with Entra ID."
+  value       = azurerm_cognitive_account.speech.endpoint
+}
+
+output "speech_identity_client_id" {
+  description = "Client id of the identity that mints speech tokens (ONTAIX_SPEECH_CLIENT_ID in the cluster)."
+  value       = azurerm_user_assigned_identity.speech.client_id
+}

@@ -26,7 +26,7 @@ from app.models.api.proposal import Proposal as ProposalDto
 from app.models.api.relation import Relation as RelationDto
 from app.models.storage.app_user import AppUser
 from app.models.storage.attribute import Attribute
-from app.models.storage.base import NodeKind, ProposalType, RelationKind
+from app.models.storage.base import NodeKind, ProposalOrigin, ProposalType, RelationKind
 from app.models.storage.company import Company
 from app.models.storage.concept import Concept
 from app.models.storage.domain_product import DomainProduct
@@ -61,6 +61,9 @@ HEADINGS: dict[ProposalType, str] = {
     ProposalType.BIND: "Binding",
     ProposalType.ATTR: "Attribute",
 }
+
+# Ends the heading of a proposal whose content a language model suggested.
+SUGGESTED_HEADING = " · suggested"
 
 PREDICATE_BOTH_ENDS_APPROVED = "both_ends_approved"
 PREDICATES = frozenset({PREDICATE_BOTH_ENDS_APPROVED})
@@ -382,6 +385,8 @@ class OntologyView:
         heading = HEADINGS[proposal.type]
         if product is not None and proposal.type is not ProposalType.RELATION:
             heading += f" · {self.templates[product.template_key].name}"
+        if proposal.origin is ProposalOrigin.SUGGESTION:
+            heading += SUGGESTED_HEADING
         proposer_user = (
             self.users.get(proposal.proposer_user_id) if proposal.proposer_user_id else None
         )

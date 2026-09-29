@@ -31,6 +31,7 @@ import anthropic
 from app.clients.llm_client import (
     LlmAnswer,
     LlmProviderError,
+    LlmRefused,
     LlmRequest,
     LlmTimeout,
     elapsed_ms,
@@ -140,7 +141,7 @@ async def complete_messages(
         output_tokens,
     )
     if message.stop_reason == "refusal":
-        raise LlmProviderError("refusal", input_tokens, output_tokens, cost, latency_ms)
+        raise LlmRefused("refusal", input_tokens, output_tokens, cost, latency_ms)
     text = "".join(block.text for block in message.content if block.type == "text")
     return LlmAnswer(
         _without_optional_empties(text, request.output_schema),

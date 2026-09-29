@@ -13,16 +13,18 @@ _INSERT = text(
     """
     INSERT INTO ontaix.llm_call (
         tenant_id, actor_kind, actor_id, company_id, purpose, provider, model, input_tokens,
-        output_tokens, cost_eur, latency_ms, outcome)
+        output_tokens, cost_eur, latency_ms, pages, outcome)
     VALUES (:tenant_id, CAST(:actor_kind AS ontaix.actor_kind), :actor_id, :company_id, :purpose,
-        :provider, :model, :input_tokens, :output_tokens, :cost_eur, :latency_ms, :outcome)
+        :provider, :model, :input_tokens, :output_tokens, :cost_eur, :latency_ms, :pages,
+        :outcome)
     """
 )
 
 _TOTALS = text(
     """
     SELECT purpose, count(*) AS calls, coalesce(sum(input_tokens), 0) AS input_tokens,
-        coalesce(sum(output_tokens), 0) AS output_tokens, coalesce(sum(cost_eur), 0) AS cost_eur
+        coalesce(sum(output_tokens), 0) AS output_tokens, coalesce(sum(cost_eur), 0) AS cost_eur,
+        sum(pages) AS pages
     FROM ontaix.llm_call
     WHERE tenant_id = :tenant_id AND occurred_at >= :start AND occurred_at < :end
     GROUP BY purpose ORDER BY purpose
@@ -37,6 +39,8 @@ class PurposeTotals:
     input_tokens: int
     output_tokens: int
     cost_eur: float
+    # Set for the purpose `document_ocr` only.
+    pages: int | None = None
 
 
 @dataclass(frozen=True)
@@ -53,6 +57,8 @@ class CallRecord:
     cost_eur: float
     latency_ms: int
     outcome: str
+    # Set exactly for the purpose `document_ocr`: the pages the provider processed.
+    pages: int | None = None
 
 
 async def insert(session: AsyncSession, record: CallRecord) -> None:
@@ -67,7 +73,12 @@ async def totals_by_purpose(
     ).all()
     return [
         PurposeTotals(
-            r.purpose, int(r.calls), int(r.input_tokens), int(r.output_tokens), float(r.cost_eur)
+            r.purpose,
+            int(r.calls),
+            int(r.input_tokens),
+            int(r.output_tokens),
+            float(r.cost_eur),
+            int(r.pages) if r.pages is not None else None,
         )
         for r in rows
     ]

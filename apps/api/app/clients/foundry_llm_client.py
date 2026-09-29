@@ -30,6 +30,7 @@ import openai
 from app.clients.llm_client import (
     LlmAnswer,
     LlmProviderError,
+    LlmRefused,
     LlmRequest,
     LlmTimeout,
     cost_eur,
@@ -45,6 +46,8 @@ logger = logging.getLogger(__name__)
 PROVIDER = "azure_foundry"
 TOKEN_SCOPE = "https://cognitiveservices.azure.com/.default"
 SCHEMA_NAME = "answer"
+# The finish reason, and the error code of a refused request, when the content filter blocks it.
+CONTENT_FILTER = "content_filter"
 
 TokenProvider = Callable[[], Awaitable[str]]
 
@@ -112,6 +115,8 @@ class FoundryLlmClient:
             raise LlmProviderError("credential", latency_ms=elapsed_ms(started)) from exc
         except openai.APIStatusError as exc:
             logger.warning("language model call refused with status %s", exc.status_code)
+            if getattr(exc, "code", None) == CONTENT_FILTER:
+                raise LlmRefused("refusal", latency_ms=elapsed_ms(started)) from exc
             raise LlmProviderError("status", latency_ms=elapsed_ms(started)) from exc
         except openai.APIConnectionError as exc:
             logger.warning("language model call failed to connect")
@@ -127,8 +132,8 @@ class FoundryLlmClient:
         if not completion.choices:
             raise LlmProviderError("empty", input_tokens, output_tokens, cost, latency_ms)
         choice = completion.choices[0]
-        if choice.message.refusal or choice.finish_reason == "content_filter":
-            raise LlmProviderError("refusal", input_tokens, output_tokens, cost, latency_ms)
+        if choice.message.refusal or choice.finish_reason == CONTENT_FILTER:
+            raise LlmRefused("refusal", input_tokens, output_tokens, cost, latency_ms)
         text = _without_optional_nulls(choice.message.content or "", optional)
         return LlmAnswer(text, input_tokens, output_tokens, cost, latency_ms)
 

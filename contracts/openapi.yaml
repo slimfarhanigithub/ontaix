@@ -23,7 +23,7 @@ info:
 
     Rate limits: operations that parse text, import documents, create proposals or open outbound connections return `429` with code `rate_limited` when a per-user or per-agent budget is exceeded; the `Retry-After` header says when to retry. Budgets are counted in the database (`rate_budget_window`), so every API replica shares them.
 
-    Language model: Ontaix calls a language model in one place only, the fallback step of `POST /teach/parse` (ADR 0008). The model produces drafts, never writes, and its absence, failure or budget exhaustion never turns a request into an error.
+    Language model: Ontaix calls a language model in three places only, the extraction step of `POST /teach/parse` (ADR 0008), concept expansion, `POST /concepts/{conceptId}/expand` (ADR 0009), and whole-document extraction jobs, `POST /import/{importId}/extraction` (ADR 0010). OCR of scanned PDF pages during `POST /import/sentences` calls a document model through the same provider (ADR 0011). Ontology import (`POST /ontology-imports`, ADR 0012) calls no model. The model produces drafts, never writes, and its absence, failure or budget exhaustion never turns a request into an error. Teach extraction is grounded in the caller's own words; concept expansion is deliberately creative and ungrounded, so its suggestions are bounded by their own caps and carry the server-set origin `suggestion`.
 
     CORS: the API answers an explicit origin allow-list from configuration, never a wildcard. Authentication is bearer tokens only, no cookies, so there is no CSRF surface.
   license:
@@ -583,6 +583,50 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /concepts/{conceptId}/expand:
+    parameters:
+      - $ref: '#/components/parameters/ConceptId'
+    post:
+      tags: [Concepts]
+      summary: Ask the language model to suggest children for a concept
+      description: |
+        Concept expansion (ADR 0009). The model suggests new concepts under the expanded concept - children, and their children at any depth - and optional relations between them. Writes no ontology row and no proposal: it returns drafts with per-draft notes and stores them as one `concept_expansion` row for one hour, so that the caller can submit a selection with `POST /expansions/{expansionId}/proposals`, which records each proposal with the server-set origin `suggestion`. Every suggestion then still needs a human approval.
+
+        Unlike teach extraction, expansion is not grounded in the caller's words; it is bounded instead. There is no depth limit: a suggestion may sit at any depth below the expanded concept. The only ceilings, for cost protection, are the total drafts per run (`ONTAIX_EXPAND_MAX_NODES`, default 200, at most 2,000, concepts and relations together) and the token budget. `depth` and `maxChildren` are optional steering from the caller, not caps. Labels are 1 to 60 characters with the label character rules of teach extraction (no markup, control or format characters, no bidirectional controls, no surrounding space, at least one letter), actions normalised (NFKC, whitespace collapsed, trimmed, lower-cased) and never `is a` or `equivalent to`, no specialisation drafts. Every draft is born under the expanded concept or under another draft of the same response, in the expanded concept's company; relation drafts join only the expanded concept and drafts of the same response. No other existing concept can be cited, because the model is given no handle for one. A suggestion whose label matches a live or pending concept of the company (case-insensitive, singular or plural), or repeats an earlier suggestion, is skipped with its descendants and reported in `skipped`.
+
+        What the model receives, as delimited data and never as instructions - the expanded concept's label and domain, its ancestors, its siblings and its existing descendants, the company name, the nine domain templates, the labels of the company's concepts in the expanded concept's domain, and the caller's `focus`. Nothing of another company, and none of the ADR 0008 never-sent list.
+
+        Permission - `proposal.create` in the concept's scope through the Owner or Builder role (ADR 0003 check point 13). Members who teach through `everyoneTeaches` and agents are refused with `403`. `404` when the caller may not read the concept, and for a source, a dying or a deleted concept; `409 concept_pending` for a concept awaiting approval. The company root may be expanded.
+
+        Budgets - one unit of the caller's hourly `expand` budget is charged first (`429 rate_limited` when it is empty). Then, as for teach extraction, one unit of the hourly `llm` budget and a token reservation against `llmMonthlyTokenCap`; either being exhausted gives `200` with no drafts and `llmOutcome` `rate_limited` or `budget_exhausted`. Each provider call writes one `llm_call` row with purpose `concept_expansion`. A timeout (`ONTAIX_EXPAND_TIMEOUT_SECONDS`, default 120 seconds, wall clock), provider error, content filter or model refusal, or an invalid answer gives `200` with no drafts, `degraded` true and the reason in `llmOutcome`; the model never produces a `5xx`.
+      operationId: expandConcept
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpansionRequest'
+      responses:
+        '200':
+          description: The suggestions, or none with the reason.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpansionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
 
   /concepts/{conceptId}/attributes:
     parameters:
@@ -1281,6 +1325,94 @@ paths:
         '503':
           $ref: '#/components/responses/Busy'
 
+  /expansions/{expansionId}/proposals:
+    parameters:
+      - $ref: '#/components/parameters/ExpansionId'
+    post:
+      tags: [Proposals]
+      summary: Propose a selection of an expansion's suggestions
+      description: |
+        Creates one proposal per selected draft of a stored concept expansion (ADR 0009), in the expansion's draft order, in one transaction; all or nothing, like `POST /proposals/batch`. The client sends indexes only, never draft content: the server builds each proposal from the draft it stored, so a proposal with origin `suggestion` always holds what the model suggested and the API validated. The server records `origin` `suggestion` (`originDetail` null), and each proposal's `why` carries the suggestion's confidence and rationale (see `Proposal.why`).
+
+        Rules - the expansion belongs to the caller's tenant and to the same user, otherwise `404`; past `expiresAt` it is `410 expansion_expired` (then `404` once purged, 24 hours after expiry); it may be submitted by one successful call only (`409 expansion_submitted`). The selection must be closed under `ExpansionNote.requires`: every draft a selected draft requires is selected too, otherwise `422 validation_failed`. The caller must still hold `proposal.create` through Owner or Builder in the expanded concept's scope. Every draft then meets every check of `POST /proposals/batch` (for example `409 duplicate_label` when a concept with the same label was created since the expansion); any refusal fails the whole call, and the claim is released with the rolled-back transaction, so the caller can submit a smaller selection or expand again. Charges one proposal unit per created proposal. When the expansion was made with a `sessionId`, the server stores one teach session turn for that session after the commit (sentence `Expand <label>`, the expanded concept in `concept_ids`, the proposed labels in `new_labels`), so a later teach sentence can refer to them; storing it never fails the call.
+      operationId: proposeExpansion
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [indexes]
+              properties:
+                indexes:
+                  type: array
+                  minItems: 1
+                  maxItems: 2000
+                  uniqueItems: true
+                  description: 0-based indexes into the stored expansion's `drafts`. Order does not matter; proposals are created in draft order.
+                  items:
+                    type: integer
+                    minimum: 0
+                    maximum: 1999
+      responses:
+        '202':
+          description: The created proposals in draft order.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 2000
+                items:
+                  $ref: '#/components/schemas/Proposal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Busy'
+
+  /proposals/{proposalId}/approve-branch:
+    parameters:
+      - $ref: '#/components/parameters/ProposalId'
+    post:
+      tags: [Proposals]
+      summary: Approve a proposed concept and the proposals that depend on it
+      description: |
+        Branch approval (ADR 0010, decision rows 117 and 126). The root must be a `concept` or `spec` proposal (`409 branch_root_invalid` otherwise) that is open, or approved by an earlier call on the same root so that the branch continues; a rejected root is `409 proposal_decided`. Every member of the branch is still checked on its own under the decision lock. The branch is the root plus every open proposal that depends on it through proposal dependencies, transitively - the `concept` and `spec` proposals proposed under a pending concept of the branch (their `deps` or `waitFor` name it), and the `relation` proposals whose ends are all concepts of the branch or already approved. `change`, `source`, `bind` and `attr` proposals are never in a branch, so no rename, deletion or edit of an existing concept is approved through it. Dependencies resolve by id, within the root's company only: a pending concept of the branch is identified by its concept id, a proposal enters the branch when its `deps` or `waitFor` label resolves, among the open proposals and live concepts of the root's company (and, when the root has one, its domain product within that company), to a concept of the branch, and a relation proposal enters only when both its ends resolve that way to concepts of the branch or approved concepts of that company. A proposal of another company never enters a branch, even when its labels match. Each batch re-reads the branch and selects its ready proposals under its own decision lock, so a rejection or cascade committed between batches is seen: nothing is approved under a parent that has since been rejected or is no longer ready. Each proposal is approved only if the caller may approve it alone (ADR 0003 check points 2 to 4); others are skipped and counted in `remaining`.
+
+        Work is bounded: proposals are approved in rounds, parents before children, in batches of at most `ONTAIX_BRANCH_APPROVE_BATCH` (default 200) per transaction; each batch takes the tenant decision lock, commits and releases it, so other decisions interleave. At most `ONTAIX_BRANCH_APPROVE_MAX_ROUNDS` (default 50) batches per call. The result is `BranchResult`: `approved` so far (committed batches stay committed), `remaining` open proposals of the branch, and `complete` false when the round limit stopped the call with ready proposals left; the client calls again on the same root to continue. A `503 busy` on a batch returns the progress so far with `complete` false instead of an error when at least one batch committed. Events emitted carry `bulk` set to true. Rejecting a branch needs no new operation - `POST /proposals/{proposalId}/reject` already cascades to descendants.
+      operationId: approveProposalBranch
+      x-ontaix-permission: proposal.approve
+      responses:
+        '200':
+          description: What was approved, possibly partial.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BranchResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Busy'
+
   /proposals/approve-all:
     post:
       tags: [Proposals]
@@ -1499,6 +1631,55 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
+  /speech/token:
+    post:
+      tags: [Teach]
+      summary: Mint a short-lived Azure AI Speech token for the microphone
+      description: |
+        Speech recognition (ADR 0013). Returns a Microsoft Entra access token for the tenant's Azure AI Speech resource in France Central, already in the form the Speech SDK expects, `aad#<resourceId>#<accessToken>`, with the resource's `region` and the token's `expiresAt`. The Studio passes it to `SpeechConfig.fromAuthorizationToken(token, region)` and recognises English only (`en-GB` by default). The API obtains the token keyless from a dedicated managed identity (`ONTAIX_SPEECH_CLIENT_ID`) that holds only the role Cognitive Services Speech User on that one Speech resource. The token's audience is `https://cognitiveservices.azure.com`, valid wherever its identity holds a role, and that identity holds this one role only, so the token can do nothing but speech on this resource until it expires. The API never hands out its own workload identity's token or a developer's `az login` token: without the dedicated identity the answer is `503`, in every environment. No key ever exists or reaches the browser. The token carries no Ontaix identity and grants nothing in Ontaix.
+
+        Permission - the same as teaching: `proposal.create` in the scope of `companyId` (Owner, Builder, Agent in scope, or Member while `everyoneTeaches` is on); `403` otherwise. `404` when the caller may not read the company. `409 channel_disabled` while the `voice` setting is off. Charges one unit of the caller's hourly `speech` budget (default 60 per user or agent; `429 rate_limited` with `Retry-After`). Each successful call writes the audit entry `speech` `Speech recognition token issued` for that company. `503 unavailable` when no Speech resource or no dedicated identity is configured, or the token cannot be obtained; the Studio then falls back to the browser's own recogniser. The response is never cached (`Cache-Control: no-store`) and the token is never logged.
+      operationId: mintSpeechToken
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [companyId]
+              properties:
+                companyId:
+                  type: string
+                  format: uuid
+                  description: The company being taught; the permission and the audit entry use its scope.
+      responses:
+        '200':
+          description: The token. Not cacheable.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+              description: Always `no-store`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpeechToken'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Problem'
+
   /teach/suggest:
     get:
       tags: [Teach]
@@ -1551,7 +1732,16 @@ paths:
     post:
       tags: [Teach]
       summary: Extract sentences from a document
-      description: The only place documents are read - the Studio never extracts text itself and loads nothing from a CDN. Accepts at most 10 MiB with media type `text/plain`, `text/markdown`, `text/csv`, `application/json`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document` or `application/pdf`; anything else is `415`. Cuts the text into blocks at blank lines, headings, list items and table rows (a line break that only wraps a paragraph is a space), splits each block on sentence punctuation, and cuts a sentence longer than 399 characters after a clause boundary (`;`, `:`, a comma before a conjunction), else at its last space, else at 399 characters, so no text is lost to the length limit. Pieces shorter than 13 characters are left out and counted in `skipped`; nothing is dropped silently. Limits - at most 2,000,000 characters of extracted text and at most 2,000 sentences; DOCX is read with no DTD and no entity expansion and at most 1,000 archive members, PDF at most 2,000 pages, and decompression stops at the extracted-text limit. Past any limit the import is refused as a whole with `413 payload_too_large` and nothing is stored. Rate limit - one import unit is charged from the per-user or per-agent import budget before the upload is read, and the call is refused with `429 rate_limited` when that budget is empty; the unit is spent even when extraction finds no sentence. After extraction one parse unit per sentence is charged, taken before anything is stored; when the parse budget cannot cover every sentence the import is refused as a whole with `429 rate_limited` and nothing is stored. The parse budget allows at least 2,000 units per hour, so the largest document fits. Proposals created from the sentences are charged per draft when they are created. Refused with `409 channel_disabled` when the `importDocs` setting is off, and with `422 validation_failed` when the file name, after its directory part is stripped, is empty, longer than 255 characters or 1020 bytes, or holds a refused character; a file name is refused, never rewritten. Stores one `document_import` row (tenant, actor, file name, media type, SHA-256 of the file, extracted sentences with their positions) that expires one hour after creation, and returns its `importId` and the sentences. The client teaches sentence by sentence, citing each as `importRef` (`importId`, `sentenceIndex`); the import is usable only by the actor that created it, in its tenant. Expired imports answer `410 import_expired` until the purge deletes them 24 hours after expiry, then `404`.
+      description: |
+        The only place documents are read - the Studio never extracts text itself and loads nothing from a CDN. Accepts at most 10 MiB of `text/plain`, `text/markdown`, `text/csv`, `application/json`, DOCX (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`), PDF (`application/pdf`, text or scanned), PPTX (`application/vnd.openxmlformats-officedocument.presentationml.presentation`), XLSX (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`) or HTML (`text/html`); anything else is `415 unsupported_media_type` (ADR 0011).
+
+        Sniffing - the server decides the type from the bytes, and the declared type must agree with it. `%PDF-` is PDF. A ZIP archive is OOXML only when `[Content_Types].xml` declares exactly one main part of DOCX, PPTX or XLSX; a macro-enabled main part (`docm`, `pptm`, `xlsm`, any `macroEnabled` content type) or a `vbaProject.bin` part is refused, as are legacy binary Office files and encrypted OOXML (both OLE compound files). HTML is text starting, after a byte order mark and whitespace, with `<!doctype html`, `<html`, `<head` or `<body`. Text types are UTF-8 (a UTF-16 byte order mark is converted).
+
+        Per type - every XML part is read with no DTD and no entity expansion; OOXML archives hold at most 1,000 members; decompression is bounded in bytes - each member at most 50 MiB and the archive at most 200 MiB uncompressed, counted while streaming whatever the declared sizes say, and a compression ratio above 100 for any member is refused - and also stops at the extracted-text limit. PDF at most 2,000 pages. PPTX at most 500 slides; slide text and speaker notes, in slide order; images are not read. XLSX at most 50 sheets and 200,000 non-empty cells; each non-empty row becomes one sentence of its cell values joined by `, `, in sheet and row order; formulas are never evaluated (cached values only) and external links never followed. HTML at most 5 MiB and nesting depth 512; parsed without running anything; `script`, `style`, `template`, `noscript`, `iframe`, `object`, `embed`, `svg` and `math` contents are dropped; no external resource is ever fetched (no image, stylesheet, frame, font, base URL or link); block elements end sentences.
+
+        Scanned PDF - a page whose text layer holds fewer than 20 non-space characters is image-only. When a PDF has image-only pages, those pages are sent to the OCR provider behind the API's OCR client (a Mistral document model on an EU DataZone deployment of Azure AI Foundry by default, `ONTAIX_OCR_*` configuration), at most `ONTAIX_OCR_MAX_PAGES` pages per import (default 100) and within `ONTAIX_OCR_TIMEOUT_SECONDS` (default 120) wall clock; the recognised text joins the text-layer pages in page order and is treated exactly like extracted text. Each image-only page spends one unit of the caller's hourly `ocr` page budget, charged before the call (`429 rate_limited`), and the pages are reserved against the tenant's `ocrMonthlyPageCap` (users and agents together; `503 unavailable` when it would be passed); each OCR call writes one `llm_call` row with purpose `document_ocr` and its page count. When OCR is needed and not configured, turned off by `llmMonthlyTokenCap` 0, timed out or failing, the import is refused as a whole with `503 unavailable` and nothing is stored; more image-only pages than the cap is `413`.
+
+        Common limits - Cuts the text into blocks at blank lines, headings, list items and table rows (a line break that only wraps a paragraph is a space), splits each block on sentence punctuation, and cuts a sentence longer than 399 characters after a clause boundary (`;`, `:`, a comma before a conjunction), else at its last space, else at 399 characters, so no text is lost to the length limit. Pieces shorter than 13 characters are left out and counted in `skipped`; nothing is dropped silently. At most 2,000,000 characters of extracted text and at most 2,000 sentences. Extraction runs in a child process with a wall-clock limit and a memory cap. Past any limit the import is refused as a whole with `413 payload_too_large` and nothing is stored. Rate limit - one import unit is charged from the per-user or per-agent import budget before the upload is read, and the call is refused with `429 rate_limited` when that budget is empty; the unit is spent even when extraction finds no sentence. After extraction one parse unit per sentence is charged, taken before anything is stored; when the parse budget cannot cover every sentence the import is refused as a whole with `429 rate_limited` and nothing is stored. The parse budget allows at least 2,000 units per hour, so the largest document fits. Proposals created from the sentences are charged per draft when they are created. Refused with `409 channel_disabled` when the `importDocs` setting is off, and with `422 validation_failed` when the file name, after its directory part is stripped, is empty, longer than 255 characters or 1020 bytes, or holds a refused character; a file name is refused, never rewritten. Stores one `document_import` row (tenant, actor, file name, media type, SHA-256 of the file, extracted sentences with their positions) that expires one hour after creation, and returns its `importId` and the sentences. The client teaches sentence by sentence, citing each as `importRef` (`importId`, `sentenceIndex`); the import is usable only by the actor that created it, in its tenant. Expired imports answer `410 import_expired` until the purge deletes them 24 hours after expiry, then `404`.
       operationId: importSentences
       x-ontaix-permission: proposal.create
       requestBody:
@@ -1566,6 +1756,8 @@ paths:
                   type: string
                   contentMediaType: application/octet-stream
       responses:
+        '503':
+          $ref: '#/components/responses/Problem'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '409':
@@ -1605,7 +1797,7 @@ paths:
                         pattern: '^[^/\\:\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028\u2029\u202a-\u202e\u061c\u2066-\u2069\ufeff]{1,255}$'
                       mediaType:
                         type: string
-                        enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf]
+                        enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/html]
                   sentences:
                     type: array
                     maxItems: 2000
@@ -1631,6 +1823,327 @@ paths:
           $ref: '#/components/responses/Problem'
         '415':
           $ref: '#/components/responses/Problem'
+
+  /import/{importId}/extraction:
+    parameters:
+      - $ref: '#/components/parameters/ImportId'
+    post:
+      tags: [Teach]
+      summary: Start a whole-document extraction job
+      description: |
+        Whole-document extraction (ADR 0010). Maps a stored document import into one draft tree for a company, instead of teaching it sentence by sentence. Asynchronous - answers `202` with the job at once; the client follows it with `extraction.changed` events or by polling `GET /extractions/{extractionId}` (every 5 seconds is enough), then reads the result and submits it.
+
+        The job runs two passes over the document split into chunks of at most `ONTAIX_DOCUMENT_EXTRACTION_CHUNK_CHARS` code points (default 10,000) on sentence boundaries, each chunk overlapping the previous one by 2 sentences. Pass 1 (outline) - chunk by chunk, the model builds a hierarchy of the business from the text, the outline so far carried forward. Pass 2 (sections) - chunk by chunk, the model returns intents against the frozen outline. The server maps both to one draft tree. There is no depth limit: a node may attach under any node of the outline, at any depth, by handle or by a path of labels. The only ceilings, for cost protection, are the job's total drafts (`ONTAIX_DOCUMENT_EXTRACTION_MAX_NODES`, default 2,000) and its token budget (`ONTAIX_DOCUMENT_EXTRACTION_MAX_TOKENS`, default 1,000,000, within the tenant's `llmMonthlyTokenCap`). Grounding is kept - every new label must be words of the document; the model chooses structure, actions and domains, never labels. Document text is untrusted data, sent in delimited fields.
+
+        Rules - the import belongs to the caller's tenant and to the same user (`404` otherwise), is not expired (`410 import_expired`) and holds at most `ONTAIX_DOCUMENT_EXTRACTION_MAX_CHARS` extracted characters (default 400,000; `413 payload_too_large` above). One job per import (`409 extraction_exists`) and one running job per user (`409 extraction_running`). `409 channel_disabled` while `importDocs` is off. Permission - `proposal.create` in the company's scope through the Owner or Builder role (ADR 0003 check point 13); agents and `everyoneTeaches` Members get `403`. Charges one unit of the hourly `extraction` budget (default 5 jobs per user per hour; `429 rate_limited` when empty). An unavailable model or an exhausted token cap is not an error here - the job ends `failed` with the reason in `failureReason`.
+      operationId: startDocumentExtraction
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [companyId]
+              properties:
+                companyId:
+                  $ref: '#/components/schemas/Id'
+      responses:
+        '202':
+          description: The job, queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentExtraction'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '413':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /extractions/{extractionId}:
+    parameters:
+      - $ref: '#/components/parameters/ExtractionId'
+    get:
+      tags: [Teach]
+      summary: Get a whole-document extraction job's status
+      description: Readable only by the user who started the job, in its tenant (`404` otherwise). Cheap to poll; carries progress counts, never labels.
+      operationId: getDocumentExtraction
+      x-ontaix-permission: proposal.create
+      responses:
+        '200':
+          description: The job.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentExtraction'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Teach]
+      summary: Cancel a whole-document extraction job
+      description: Asks a queued or running job to stop. The runner stops before its next model call (a call in flight finishes or times out and is recorded), and the job ends `cancelled` with no result. Cancelling a job that has already ended returns it unchanged.
+      operationId: cancelDocumentExtraction
+      x-ontaix-permission: proposal.create
+      responses:
+        '202':
+          description: The job, with `cancelRequested` true or already final.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentExtraction'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /extractions/{extractionId}/result:
+    parameters:
+      - $ref: '#/components/parameters/ExtractionId'
+    get:
+      tags: [Teach]
+      summary: Get a finished job's draft tree
+      description: The outline and the draft tree of a `succeeded` job; `409 extraction_not_ready` before that, `410 extraction_expired` more than 24 hours after the job finished (then `404` once purged, 24 hours later). Only for the user who started the job.
+      operationId: getDocumentExtractionResult
+      x-ontaix-permission: proposal.create
+      responses:
+        '200':
+          description: The result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentExtractionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+
+  /extractions/{extractionId}/proposals:
+    parameters:
+      - $ref: '#/components/parameters/ExtractionId'
+    post:
+      tags: [Proposals]
+      summary: Propose a job's draft tree
+      description: Creates one proposal per selected draft of a `succeeded` job, in draft order (parents before children), in one all-or-nothing transaction, from the drafts the server stored; the client sends indexes only. Each proposal records `origin` `document` with the `originDetail` of the sentence that grounded it (file name, media type, sentence index, position), copied into the job when it was mapped, so it survives the import's purge. Same rules as `POST /expansions/{expansionId}/proposals` - one successful call per job (`409 extraction_submitted`), `409 extraction_not_ready` before success, `410 extraction_expired` after 24 hours, selection closed under `DocumentDraftNote.requires` (`422` otherwise), every check of `POST /proposals/batch`, one proposal unit per proposal, and the caller must still hold `proposal.create` through Owner or Builder. The Studio submits every draft; the tree is then reviewed in the changes panel, by branch with `POST /proposals/{proposalId}/approve-branch` or by the cascading reject.
+      operationId: proposeDocumentExtraction
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [indexes]
+              properties:
+                indexes:
+                  type: array
+                  minItems: 1
+                  maxItems: 5000
+                  uniqueItems: true
+                  items:
+                    type: integer
+                    minimum: 0
+                    maximum: 4999
+      responses:
+        '202':
+          description: The created proposals in draft order.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 5000
+                items:
+                  $ref: '#/components/schemas/Proposal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Busy'
+
+  /ontology-imports:
+    post:
+      tags: [Teach]
+      summary: Map an ontology or hierarchy file to a draft tree
+      description: |
+        Ontology import (ADR 0012). Deterministic - no language model is called. Reads one OWL ontology (RDF/XML, Turtle, OWL/XML, JSON-LD or N-Triples, SKOS vocabularies included), one OBO file, or a CSV or XLSX hierarchy, maps it to one draft tree in `companyId` under `parentConceptId` (default the company root), stores the tree for 24 hours and returns it. Writes no ontology row and no proposal; `POST /ontology-imports/{ontologyImportId}/proposals` turns a selection into proposals with origin `ontology_import`, reviewed branch by branch like a whole-document tree (ADR 0010).
+
+        Mapping - named classes (`owl:Class`, `rdfs:Class`), SKOS concepts and OBO terms become concepts: `rdfs:subClassOf` and OBO `is_a` give the parent path as specialisation drafts, `skos:broader` gives a concept born from its broader concept with action `includes`; a class with no named parent in the file is born under `parentConceptId`; further named parents become `is a` relation drafts. Object properties with a domain and a range, `someValuesFrom` and `allValuesFrom` restrictions on a named property, and OBO `relationship` lines become relation drafts whose action is the property's label, normalised (camel case split, lower-cased, at most 60 characters) and refused when it normalises to `is a` or `equivalent to`. CSV and XLSX hierarchies use either `label` and `parent` columns (optional `id`, `action`, `domain`) or level columns `Level 1`, `Level 2` and so on, as many as the file has; an `action` cell is normalised like a property verb and skipped as `forbidden_action` when it normalises to `is a` or `equivalent to` (the row is then born with `includes`), so specialisation comes only from `subClassOf` or `is_a`. XLSX files follow the OOXML sniffing and decompression bounds of `POST /import/sentences`. Individuals become concepts under their class with action `has instance` when `individuals` is `as_concepts`, and are skipped otherwise. There is no depth limit.
+
+        Labels - chosen per item by `languages` preference: `skos:prefLabel`, then `rdfs:label`, then `skos:altLabel`, then the OBO `name`, then the IRI's local name split into words; within each, the first language of `languages`, then an untagged literal, then any other language in tag order. Labels meet every label rule of the API (1 to 120 characters, no markup, control or format characters) or the item is skipped (`invalid_label`).
+
+        Reuse - an item whose chosen label matches a live or pending concept of the company (case-insensitive, singular or plural) reuses that concept: no draft, and its children attach to it. An item already in place (same label under the same parent) or a relation that already exists is skipped as `already_known`. All skips are reported in `skipped`.
+
+        Limits - at most `ONTAIX_ONTOLOGY_IMPORT_MAX_BYTES` (default 20 MiB) and 1,000,000 triples or 200,000 CSV or XLSX rows; at most `ONTAIX_ONTOLOGY_IMPORT_MAX_NODES` drafts (default 5,000, at most 20,000; beyond it `413`). Parsing runs in a child process with `ONTAIX_ONTOLOGY_IMPORT_PARSE_TIMEOUT_SECONDS` (default 60) and a memory cap; past it `413`. `owl:imports` is never fetched (each one is reported as `remote_import_not_fetched`); a JSON-LD remote `@context` is never fetched (`422`); XML is read with no DTD and no entity expansion; no reasoner runs - only asserted axioms are read. Every limit refuses the whole import; nothing is stored.
+
+        Rules - permission `proposal.create` in the scope of `companyId` (and of `parentConceptId` when given, which must be an approved live concept of that company, else `404` or `409 concept_pending`); `409 channel_disabled` while `importDocs` is off; one unit of the import budget (`429`). The detected format must agree with the declared media type or extension (`415` otherwise).
+      operationId: importOntology
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, companyId]
+              properties:
+                file:
+                  type: string
+                  contentMediaType: application/octet-stream
+                companyId:
+                  type: string
+                  format: uuid
+                parentConceptId:
+                  type: string
+                  format: uuid
+                languages:
+                  type: string
+                  maxLength: 100
+                  pattern: '^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*(,[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*){0,9}$'
+                  description: Label language preference, BCP 47 tags separated by commas, first preferred, at most 10, for example `en,fr`. Default `en`.
+                individuals:
+                  type: string
+                  enum: [skip, as_concepts]
+                  default: skip
+                domainKey:
+                  $ref: '#/components/schemas/DomainKey'
+      responses:
+        '200':
+          description: The mapped tree.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OntologyImportResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/Problem'
+        '415':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /ontology-imports/{ontologyImportId}:
+    parameters:
+      - $ref: '#/components/parameters/OntologyImportId'
+    get:
+      tags: [Teach]
+      summary: Get a stored ontology import's tree
+      description: Only for the actor that created it, in its tenant (`404` otherwise); `410 ontology_import_expired` after 24 hours, `404` once purged 24 hours later.
+      operationId: getOntologyImport
+      x-ontaix-permission: proposal.create
+      responses:
+        '200':
+          description: The mapped tree.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OntologyImportResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
+
+  /ontology-imports/{ontologyImportId}/proposals:
+    parameters:
+      - $ref: '#/components/parameters/OntologyImportId'
+    post:
+      tags: [Proposals]
+      summary: Propose an ontology import's tree
+      description: Creates one proposal per selected draft, in draft order, in one all-or-nothing transaction, from the drafts the server stored; the client sends indexes only. Each proposal records `origin` `ontology_import` (`originDetail` null) and a `why` of `Imported from <file name> · <source>` (the item's IRI or row, cut to 200 characters), as text. Same rules as `POST /expansions/{expansionId}/proposals` - one successful call (`409 ontology_import_submitted`), `410 ontology_import_expired` after 24 hours, selection closed under `OntologyImportNote.requires` (`422`), every check of `POST /proposals/batch`, one proposal unit per proposal, and the caller must still hold `proposal.create` in scope. The Studio submits every draft and the tree is reviewed with `POST /proposals/{proposalId}/approve-branch` and the cascading reject.
+      operationId: proposeOntologyImport
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [indexes]
+              properties:
+                indexes:
+                  type: array
+                  minItems: 1
+                  maxItems: 20000
+                  uniqueItems: true
+                  items:
+                    type: integer
+                    minimum: 0
+                    maximum: 19999
+      responses:
+        '202':
+          description: The created proposals in draft order.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 20000
+                items:
+                  $ref: '#/components/schemas/Proposal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   # ---------------------------------------------------------------- Identity
   /me:
@@ -2199,7 +2712,7 @@ paths:
     patch:
       tags: [Settings]
       summary: Change settings
-      description: Immediate; every changed key writes an audit entry `<key> enabled|disabled` (`llmMonthlyTokenCap set to <n>` for the token cap). `approvalRequired` and `readOnlyConnectors` are locked (`409 locked_setting`). Turning `crossCompany` off here is refused with `409 confirmation_required` when cross-company relations exist; use the dedicated disable endpoint.
+      description: Immediate; every changed key writes an audit entry `<key> enabled|disabled` (`llmMonthlyTokenCap set to <n>` for the token cap, `ocrMonthlyPageCap set to <n>` for the OCR page cap). `approvalRequired` and `readOnlyConnectors` are locked (`409 locked_setting`). Turning `crossCompany` off here is refused with `409 confirmation_required` when cross-company relations exist; use the dedicated disable endpoint.
       operationId: updateSettings
       x-ontaix-permission: settings.write
       requestBody:
@@ -2435,6 +2948,34 @@ components:
         type: string
         enum: [asc, desc]
         default: asc
+    ExpansionId:
+      name: expansionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ExtractionId:
+      name: extractionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ImportId:
+      name: importId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    OntologyImportId:
+      name: ontologyImportId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     CompanyId:
       name: companyId
       in: path
@@ -2530,7 +3071,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Gone:
-      description: The resource existed and has expired (code `import_expired`).
+      description: The resource existed and has expired (code `import_expired` for a document import, `expansion_expired` for a concept expansion, `extraction_expired` for a whole-document extraction result, `ontology_import_expired` for an ontology import).
       content:
         application/problem+json:
           schema:
@@ -2618,6 +3159,17 @@ components:
             - channel_disabled
             - import_expired
             - import_sentence_used
+            - expansion_expired
+            - expansion_submitted
+            - concept_pending
+            - extraction_exists
+            - extraction_running
+            - extraction_not_ready
+            - extraction_expired
+            - extraction_submitted
+            - ontology_import_expired
+            - ontology_import_submitted
+            - branch_root_invalid
             - unsupported_media_type
             - rate_limited
             - duplicate_attribute
@@ -3445,8 +3997,8 @@ components:
 
     Origin:
       type: string
-      enum: [text, speech, document]
-      description: How the content of a proposal entered Ontaix - `text` typed in the teach bar or any dialog, `speech` from the teach bar microphone (sent as the final transcript), `document` from `POST /import/sentences`. Always present on output. `text` and `speech` are declared by the client and are a display and audit label, not a trust signal; `document` is set by the server only, for drafts that cite a stored import sentence through `importRef`.
+      enum: [text, speech, document, suggestion, ontology_import]
+      description: How the content of a proposal entered Ontaix - `text` typed in the teach bar or any dialog, `speech` from the teach bar microphone (sent as the final transcript), `document` from `POST /import/sentences`, `suggestion` suggested by the language model through concept expansion (ADR 0009) and selected by a user, `ontology_import` mapped deterministically from an uploaded ontology or hierarchy file (ADR 0012). Always present on output. `text` and `speech` are declared by the client and are a display and audit label, not a trust signal; `document` is set by the server only, for drafts that cite a stored import sentence through `importRef`; `suggestion` is set by the server only, for proposals created by `POST /expansions/{expansionId}/proposals` from drafts the server stored, and no client can declare it (`InputOrigin` does not hold it); `ontology_import` is set by the server only, for proposals created by `POST /ontology-imports/{ontologyImportId}/proposals` from the tree the server mapped.
 
     InputOrigin:
       type: string
@@ -3482,7 +4034,7 @@ components:
           description: The basename of the uploaded file name - the server strips any directory part and refuses `/`, `\`, `:`, C0 and C1 control characters, DEL, the bidirectional controls U+061C, U+200E, U+200F, U+202A to U+202E and U+2066 to U+2069, the zero-width characters U+200B to U+200D, the line and paragraph separators U+2028 and U+2029, and U+FEFF. At most 255 characters and at most 1020 bytes in UTF-8 (the byte bound is checked by the server, `422`). User-supplied text - HTML-escaped wherever the server interpolates it (`Proposal.html`, captions, audit `what`), and rendered by the Studio as text only.
         mediaType:
           type: string
-          enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf]
+          enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/html]
         sentenceIndex:
           type: integer
           minimum: 0
@@ -3493,16 +4045,21 @@ components:
     DocumentPosition:
       type: object
       additionalProperties: false
-      description: Where in the document the sentence was found, when extraction knows it - a 1-based page or a 1-based paragraph.
+      description: Where in the document the sentence was found, when extraction knows it - a 1-based page (PDF), paragraph (DOCX, HTML), slide (PPTX) or sheet (XLSX, with the 1-based `row`).
       required: [unit, index]
       properties:
         unit:
           type: string
-          enum: [page, paragraph]
+          enum: [page, paragraph, slide, sheet]
         index:
           type: integer
           minimum: 1
           maximum: 100000
+        row:
+          type: integer
+          minimum: 1
+          maximum: 1048576
+          description: Only with `unit` `sheet` - the spreadsheet row the sentence was read from.
 
     Proposal:
       type: object
@@ -3523,7 +4080,7 @@ components:
           type: string
         heading:
           type: string
-          description: Panel heading - `New concept`, `Specialisation`, `Relation`, `Change`, `Data source`, `Binding`, `Attribute`, suffixed with ` · <domain name>` when a domain applies.
+          description: Panel heading - `New concept`, `Specialisation`, `Relation`, `Change`, `Data source`, `Binding`, `Attribute`, suffixed with ` · <domain name>` when a domain applies, then with ` · suggested` when `origin` is `suggestion` (for example `New concept · Sales · suggested`).
         color:
           type: string
         companyId:
@@ -3550,6 +4107,7 @@ components:
           description: Server-generated; every interpolated user-supplied string (labels, actions, captions, `originDetail.fileName`) is HTML-escaped and only `<b>`, `<i>` and `<span class="...">` may appear. The Studio renders it with those three tags allow-listed and everything else as text.
         why:
           type: [string, 'null']
+          description: Plain text, rendered as text in the panel's `.why` line. When `origin` is `suggestion` the server sets it when the proposal is created to `Suggested by the model · <confidence>% · <rationale>` (confidence rounded to a whole percent, rationale from the stored expansion note, at most 120 characters); the two-approver note is appended after ` · ` as for every proposal.
         caption:
           type: [string, 'null']
         conceptId:
@@ -3600,6 +4158,10 @@ components:
                 format: date-time
         bulk:
           type: boolean
+        openBelow:
+          type: integer
+          minimum: 0
+          description: For an open `concept` or `spec` proposal, the open proposals in its branch other than itself (the open proposals that depend on a `concept` or `spec` root through proposal dependencies, transitively, plus relation proposals whose ends are all in the branch or approved; never `change`, `source`, `bind` or `attr` proposals; see `POST /proposals/{proposalId}/approve-branch`), computed at read time; 0 or absent for every other proposal and when nothing open depends on it. The Studio shows `Approve branch` when it is above 0.
         createdAt:
           type: string
           format: date-time
@@ -3659,6 +4221,33 @@ components:
           $ref: '#/components/schemas/AuditEntry'
         caption:
           type: string
+
+    BranchResult:
+      type: object
+      additionalProperties: false
+      required: [rootId, approved, skipped, remaining, batches, complete]
+      properties:
+        rootId:
+          $ref: '#/components/schemas/Id'
+        approved:
+          type: integer
+          minimum: 0
+          description: Proposals approved by this call, across every committed batch.
+        skipped:
+          type: integer
+          minimum: 0
+          description: Branch proposals the caller may not approve alone (scope, second approver).
+        remaining:
+          type: integer
+          minimum: 0
+          description: Open proposals of the branch after this call, skipped and blocked ones included.
+        batches:
+          type: integer
+          minimum: 0
+          description: Batches committed, each in its own transaction under the decision lock.
+        complete:
+          type: boolean
+          description: False when the round limit or a `busy` lock stopped the call with ready proposals left; call again on the same root.
 
     BulkResult:
       type: object
@@ -4035,6 +4624,427 @@ components:
           enum: [not_understood, ambiguous_reference, low_confidence, model_unavailable, model_invalid_output, too_many_drafts, not_a_statement, ungrounded_label, too_many_segments, attribute_exists]
           description: '`not_understood` - neither the grammar nor the model found an intent. `ambiguous_reference` - the model could not tell what a back-reference points to. `low_confidence` - the model reported a confidence below 0.4. `model_unavailable` - the model step was triggered and did not answer (`llmOutcome` `not_configured`, `rate_limited`, `budget_exhausted`, `timeout` or `provider_error`). `model_invalid_output` - the answer failed validation. `too_many_drafts` - the intents beyond the draft cap of `drafts`. `not_a_statement` - a transcript sentence the model read as talk rather than teaching (a question, an aside, a correction it could not apply). `ungrounded_label` - a new label the model proposed that does not appear in the caller''s own words inside the intent''s source range, so the intent was not drafted. `too_many_segments` - the part of a transcript past the 40th segment when the model step was degraded. `attribute_exists` - an `attr` intent whose concept already has an attribute of that name with another value; editing an attribute is not taught.'
 
+    ExpansionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        depth:
+          type: integer
+          minimum: 1
+          description: Optional steering - how many levels below the expanded concept the caller wants (1 children only, 2 with grandchildren, and so on). No maximum; absent means no depth preference, and suggestions may sit at any depth. The only ceilings are the total drafts per run and the token budget.
+        maxChildren:
+          type: integer
+          minimum: 1
+          description: Optional steering - at most this many new children per parent, at every level. No maximum.
+        focus:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: '^[^<>\x00-\x1f\x7f-\x9f ­؀-؅؜۝܏࢐࢑࣢᠎​-‏ -‮⁠-⁤⁦-⁯﻿￹-￻]*$'
+          description: Optional words from the caller that steer the suggestions, for example `after-sales services`. Sent to the model as delimited data, never as instructions. Refuses markup, control characters and every Unicode format character (bidirectional and zero-width controls included); outside the Basic Multilingual Plane the server refuses the rest of category Cf (`422`).
+        sessionId:
+          type: string
+          format: uuid
+          description: The teach bar session the Studio is in (as `POST /teach/parse`). Not sent to the model. When the expansion is submitted, the proposed labels are stored as one turn of this session so a later teach sentence can refer to them.
+
+    ExpansionResult:
+      type: object
+      additionalProperties: false
+      required: [expansionId, expiresAt, conceptId, llmOutcome, degraded, drafts, notes, skipped]
+      properties:
+        expansionId:
+          type: [string, 'null']
+          format: uuid
+          description: The stored expansion to submit with `POST /expansions/{expansionId}/proposals`; null when `drafts` is empty, because nothing is stored then.
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+          description: One hour after the expansion was stored; null when `expansionId` is null.
+        conceptId:
+          $ref: '#/components/schemas/Id'
+        llmOutcome:
+          type: string
+          enum: [used, not_configured, rate_limited, budget_exhausted, timeout, provider_error, refused, invalid_output]
+          description: '`used` - the model answered and the answer validated (`drafts` may still be empty when every suggestion was skipped). `not_configured`, `rate_limited`, `budget_exhausted`, `timeout`, `provider_error` and `invalid_output` mean what they mean for `TeachResult.llmOutcome`. `refused` - the provider''s content filter blocked the request or answer, or the model declined. Every value is a `200`.'
+        degraded:
+          type: boolean
+          description: True for every `llmOutcome` other than `used`; `drafts`, `notes` and `skipped` are then empty.
+        drafts:
+          type: array
+          maxItems: 2000
+          description: Drafts in breadth-first order - `ConceptDraft`s (depth 1 by `parentId`, the expanded concept; deeper ones, at any depth, by `parentLabel`, a draft earlier in this list) followed by `RelationDraft`s between the expanded concept and drafts of this list. Concepts and relations together are at most the configured ceiling `ONTAIX_EXPAND_MAX_NODES` (default 200, at most 2,000). Shown to the caller for selection; submitted only by index through `POST /expansions/{expansionId}/proposals`, never through `POST /proposals/batch`. No `SpecDraft`, no `origin` and no `importRef` appear.
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/ConceptDraft'
+              - $ref: '#/components/schemas/RelationDraft'
+        notes:
+          type: array
+          maxItems: 2000
+          description: One entry per element of `drafts`, in the same order.
+          items:
+            $ref: '#/components/schemas/ExpansionNote'
+        skipped:
+          type: array
+          maxItems: 4000
+          description: Suggestions the server dropped from a valid answer, with the reason; a dropped suggestion takes its descendants and its links with it, each listed with reason `parent_skipped`.
+          items:
+            $ref: '#/components/schemas/ExpansionSkip'
+
+    ExpansionNote:
+      type: object
+      additionalProperties: false
+      required: [confidence, rationale, depth, requires]
+      properties:
+        confidence:
+          type: number
+          minimum: 0.4
+          maximum: 1
+          description: The confidence the model reported; suggestions below 0.4 are skipped. Advisory only.
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: One plain-text line from the model saying why the concept belongs here. Untrusted text - rendered as text, HTML-escaped wherever the server interpolates it.
+        depth:
+          type: [integer, 'null']
+          minimum: 1
+          description: 1 for a child of the expanded concept, 2 for a grandchild, and so on with no limit; null for a relation draft.
+        requires:
+          type: array
+          maxItems: 2
+          uniqueItems: true
+          description: Indexes of earlier drafts this one depends on - its parent for a concept draft (empty at depth 1), the drafts at its ends for a relation draft (the expanded concept is not listed). A selection is valid only when it holds every required draft of every selected one; deselecting a draft deselects everything that requires it.
+          items:
+            type: integer
+            minimum: 0
+            maximum: 1999
+
+    ExpansionSkip:
+      type: object
+      additionalProperties: false
+      required: [label, reason]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 130
+          description: The suggestion's label after the label casing rule, or `<from> <action> <to>` for a link cut to 130 characters. Model text - rendered as text.
+        reason:
+          type: string
+          enum: [existing_label, duplicate_in_response, low_confidence, over_cap, parent_skipped, duplicate_relation]
+          description: '`existing_label` - a live or pending concept of the company has this label (case-insensitive, singular or plural), so it is not proposed again. `duplicate_in_response` - an earlier suggestion of the answer has the same label. `low_confidence` - confidence below 0.4. `over_cap` - deeper than the request''s `depth` or beyond its `maxChildren` for one parent (when the request sets them), or beyond the configured total-drafts ceiling in answer order. `parent_skipped` - its parent or a link end was skipped. `duplicate_relation` - a link repeating a birth relation of the answer.'
+
+    DocumentExtraction:
+      type: object
+      additionalProperties: false
+      description: A whole-document extraction job (ADR 0010). Carries progress counts, never labels, so it is safe to publish in `extraction.changed`.
+      required: [id, importId, companyId, state, phase, chunks, outlineChunksDone, sectionChunksDone, outlineNodes, tokensUsed, tokenCeiling, nodeCeiling, draftCount, degraded, failureReason, cancelRequested, createdAt, startedAt, finishedAt, expiresAt, submittedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        importId:
+          type: [string, 'null']
+          format: uuid
+          description: Null once the import has been purged; the job keeps what it needs.
+        companyId:
+          $ref: '#/components/schemas/Id'
+        state:
+          type: string
+          enum: [queued, running, succeeded, failed, cancelled]
+        phase:
+          type: [string, 'null']
+          enum: [outline, sections, mapping, null]
+          description: The pass a `running` job is in; null otherwise.
+        chunks:
+          type: integer
+          minimum: 0
+        outlineChunksDone:
+          type: integer
+          minimum: 0
+        sectionChunksDone:
+          type: integer
+          minimum: 0
+        outlineNodes:
+          type: integer
+          minimum: 0
+          description: Outline nodes accepted so far.
+        tokensUsed:
+          type: integer
+          minimum: 0
+          description: Input plus output tokens the job's calls have settled so far.
+        tokenCeiling:
+          type: integer
+          minimum: 1
+          description: '`ONTAIX_DOCUMENT_EXTRACTION_MAX_TOKENS` when the job started.'
+        nodeCeiling:
+          type: integer
+          minimum: 1
+          description: '`ONTAIX_DOCUMENT_EXTRACTION_MAX_NODES` when the job started - the most drafts the result may hold.'
+        draftCount:
+          type: integer
+          minimum: 0
+          description: Drafts in the result; 0 until the job succeeds.
+        degraded:
+          type: boolean
+          description: True when the job succeeded without reading everything - a chunk failed, timed out or was invalid, or the job stopped at its token ceiling, the tenant cap or its node ceiling. The result's `unresolved` says where.
+        failureReason:
+          type: [string, 'null']
+          enum: [not_configured, budget_exhausted, rate_limited, job_timeout, no_drafts, import_expired, too_many_attempts, internal, null]
+          description: Set exactly when `state` is `failed`. `no_drafts` - the job ran but nothing grounded survived. `job_timeout` - the job ran longer than `ONTAIX_DOCUMENT_EXTRACTION_JOB_TIMEOUT_MINUTES` without a result. `too_many_attempts` - runners claimed the job `ONTAIX_DOCUMENT_EXTRACTION_MAX_ATTEMPTS` times (default 3) without finishing it, for example after repeated crashes.
+        cancelRequested:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: [string, 'null']
+          format: date-time
+        finishedAt:
+          type: [string, 'null']
+          format: date-time
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+          description: 24 hours after `finishedAt` for a succeeded job; the result can be read and submitted until then.
+        submittedAt:
+          type: [string, 'null']
+          format: date-time
+
+    DocumentExtractionResult:
+      type: object
+      additionalProperties: false
+      required: [extractionId, outline, drafts, notes, unresolved]
+      properties:
+        extractionId:
+          $ref: '#/components/schemas/Id'
+        outline:
+          type: array
+          maxItems: 5000
+          description: The outline pass 1 built, parents before children, for display and review; submitted only through the drafts.
+          items:
+            $ref: '#/components/schemas/OutlineNode'
+        drafts:
+          type: array
+          maxItems: 5000
+          description: The draft tree in submission order - concept and specialisation drafts parents first (depth-1 drafts by `parentId`, deeper ones by `parentLabel`, at any depth), then relation drafts. At most the job's `nodeCeiling`. No `origin` or `importRef`; the server sets `document` and `originDetail` when the drafts are proposed.
+          items:
+            $ref: '#/components/schemas/ProposalDraft'
+        notes:
+          type: array
+          maxItems: 5000
+          description: One entry per element of `drafts`, in the same order.
+          items:
+            $ref: '#/components/schemas/DocumentDraftNote'
+        unresolved:
+          type: array
+          maxItems: 5000
+          items:
+            type: object
+            additionalProperties: false
+            required: [reason]
+            properties:
+              chunk:
+                type: integer
+                minimum: 0
+              sentenceIndex:
+                type: integer
+                minimum: 0
+                maximum: 1999
+              label:
+                type: string
+                maxLength: 120
+                description: The dropped label, as the server sliced it from the document, when the reason concerns one.
+              reason:
+                type: string
+                enum: [not_understood, ambiguous_reference, not_a_statement, low_confidence, ungrounded_label, unknown_parent, model_invalid_output, timeout, provider_error, refused, budget_exhausted, node_ceiling, cancelled]
+
+    OutlineNode:
+      type: object
+      additionalProperties: false
+      required: [index, parentIndex, conceptId, label, role, depth, sentenceIndex]
+      properties:
+        index:
+          type: integer
+          minimum: 0
+        parentIndex:
+          type: [integer, 'null']
+          minimum: 0
+          description: The outline node this one sits under; null when it sits under the company root or an existing concept (`conceptId` of the parent is then in `parentConceptId`).
+        parentConceptId:
+          type: [string, 'null']
+          format: uuid
+        conceptId:
+          type: [string, 'null']
+          format: uuid
+          description: Set when the node is an existing concept of the company (reused, not drafted).
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+        role:
+          type: string
+          enum: [domain_area, process, subprocess, step, entity, group]
+        depth:
+          type: integer
+          minimum: 1
+          description: Levels below the company root; no maximum.
+        sentenceIndex:
+          type: integer
+          minimum: 0
+          maximum: 1999
+
+    DocumentDraftNote:
+      type: object
+      additionalProperties: false
+      required: [pass, confidence, depth, requires, sentenceIndex]
+      properties:
+        pass:
+          type: string
+          enum: [outline, section]
+        confidence:
+          type: number
+          minimum: 0.4
+          maximum: 1
+        explanation:
+          type: string
+          maxLength: 120
+          description: Model text, plain; rendered as text.
+        role:
+          type: string
+          enum: [domain_area, process, subprocess, step, entity, group]
+        depth:
+          type: [integer, 'null']
+          minimum: 1
+          description: Levels below the company root of a concept draft, no maximum; null for a relation draft.
+        requires:
+          type: array
+          maxItems: 2
+          uniqueItems: true
+          description: Indexes of earlier drafts this one depends on (its parent, or a relation's drafted ends). A selection must hold every required draft of every selected one.
+          items:
+            type: integer
+            minimum: 0
+            maximum: 4999
+        sentenceIndex:
+          type: integer
+          minimum: 0
+          maximum: 1999
+          description: The import sentence that grounds the draft's new label (for a relation, the sentence it was read from); copied with its position into the proposal's `originDetail`.
+        sourceSpan:
+          $ref: '#/components/schemas/SourceSpan'
+          description: The quoted words, as code points into that sentence.
+
+    OntologyImportResult:
+      type: object
+      additionalProperties: false
+      required: [ontologyImportId, expiresAt, companyId, parentConceptId, format, languages, individuals, drafts, notes, skipped]
+      properties:
+        ontologyImportId:
+          $ref: '#/components/schemas/Id'
+        expiresAt:
+          type: string
+          format: date-time
+        companyId:
+          $ref: '#/components/schemas/Id'
+        parentConceptId:
+          type: [string, 'null']
+          format: uuid
+          description: Null means the company root.
+        format:
+          type: string
+          enum: [rdf_xml, turtle, owl_xml, json_ld, n_triples, obo, csv, xlsx]
+          description: The format the server detected.
+        languages:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+        individuals:
+          type: string
+          enum: [skip, as_concepts]
+        drafts:
+          type: array
+          maxItems: 20000
+          description: The tree in submission order - concept and specialisation drafts parents first (under `parentConceptId`, an existing concept reused by label, or an earlier draft by `parentLabel`, at any depth), then relation drafts. No `origin` or `importRef`.
+          items:
+            $ref: '#/components/schemas/ProposalDraft'
+        notes:
+          type: array
+          maxItems: 20000
+          description: One entry per element of `drafts`, in the same order.
+          items:
+            $ref: '#/components/schemas/OntologyImportNote'
+        skipped:
+          type: array
+          maxItems: 100000
+          items:
+            type: object
+            additionalProperties: false
+            required: [source, reason]
+            properties:
+              source:
+                type: string
+                maxLength: 400
+                description: The item's IRI, OBO id or `row <n>`. Cf, control, bidirectional and line-separator characters (the character set refused in labels) are percent-encoded as UTF-8 (for example U+202E as `%E2%80%AE`), so the text cannot reorder or hide itself in the panel; rendered as text.
+              label:
+                type: string
+                maxLength: 120
+                description: The chosen label, only when it passed the label rules; absent for `invalid_label`, whose refused text is never echoed.
+              reason:
+                type: string
+                enum: [already_known, reused_existing, invalid_label, duplicate_label, remote_import_not_fetched, unsupported_axiom, equivalence_not_imported, datatype_property, individual_skipped, forbidden_action, cycle, unknown_parent]
+                description: '`reused_existing` is informational - the item matched an existing concept, which is reused and receives the item''s children. `equivalence_not_imported` - `owl:equivalentClass`, `owl:sameAs` and `skos:exactMatch` are not imported (equivalences are cross-company links proposed through the relationship dialog). `unsupported_axiom` - anything other than the mapped constructs (unions, intersections, cardinalities, property chains and so on), which is never reasoned over.'
+
+    OntologyImportNote:
+      type: object
+      additionalProperties: false
+      required: [source, depth, requires]
+      properties:
+        source:
+          type: string
+          maxLength: 400
+          description: The item's IRI, OBO id or `row <n>`. Cf, control, bidirectional and line-separator characters (the character set refused in labels) are percent-encoded as UTF-8 (for example U+202E as `%E2%80%AE`), so the text cannot reorder or hide itself in the panel; rendered as text. This sanitised form is what the proposal's `why` quotes.
+        labelLanguage:
+          type: [string, 'null']
+          maxLength: 35
+          description: The language tag of the chosen label; null for an untagged literal or a local name.
+        depth:
+          type: [integer, 'null']
+          minimum: 1
+          description: Levels below `parentConceptId` (or the root), no maximum; null for a relation draft.
+        requires:
+          type: array
+          maxItems: 2
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 0
+            maximum: 19999
+
+    SpeechToken:
+      type: object
+      additionalProperties: false
+      required: [token, region, expiresAt, language]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          pattern: '^aad#/subscriptions/[^#]+#[A-Za-z0-9._-]+$'
+          description: '`aad#<Speech resource id>#<Microsoft Entra access token>`, ready for `SpeechConfig.fromAuthorizationToken` and for `recognizer.authorizationToken` on refresh. A secret while it lives - held in memory only, never stored, logged or put in a URL.'
+        region:
+          type: string
+          const: francecentral
+          description: The Speech resource's region.
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the access token expires. The Studio requests a new token at least 5 minutes before, and at every microphone start, and sets it on the running recogniser.
+        language:
+          type: string
+          enum: [en-GB, en-US]
+          description: The recognition language the deployment is configured for (`ONTAIX_SPEECH_LANGUAGE`, default `en-GB`). English only.
+
     CurrentUser:
       type: object
       required: [user, effectiveRoles, permissions]
@@ -4291,7 +5301,7 @@ components:
     LlmUsage:
       type: object
       additionalProperties: false
-      description: Language model calls Ontaix itself made for the tenant in the month (teach extraction), from the `llm_call` cost records. Separate from the agent figures - `measuredEur` and `byPlatform` stay agent reads through the gateway. The Studio's Cost management page shows no new element for it until the UI contract records one.
+      description: Language model calls Ontaix itself made for the tenant in the month (teach extraction, concept expansion, whole-document extraction and OCR of scanned documents), from the `llm_call` cost records. Separate from the agent figures - `measuredEur` and `byPlatform` stay agent reads through the gateway. The Studio's Cost management page shows no new element for it until the UI contract records one.
       required: [calls, inputTokens, outputTokens, tokensUsed, tokenCap, costEur, byPurpose]
       properties:
         calls:
@@ -4311,6 +5321,14 @@ components:
           type: integer
           minimum: 0
           description: The tenant's `llmMonthlyTokenCap` setting.
+        ocrPagesUsed:
+          type: integer
+          minimum: 0
+          description: OCR pages counted against `ocrPageCap` this month, reservations of calls still running included.
+        ocrPageCap:
+          type: integer
+          minimum: 0
+          description: The tenant's `ocrMonthlyPageCap` setting.
         costEur:
           type: number
           minimum: 0
@@ -4324,17 +5342,21 @@ components:
             properties:
               purpose:
                 type: string
-                enum: [teach_extraction]
+                enum: [teach_extraction, concept_expansion, document_extraction, document_ocr]
               calls:
                 type: integer
                 minimum: 0
+              pages:
+                type: integer
+                minimum: 0
+                description: '`document_ocr` only - pages recognised this month; OCR is priced per page.'
               costEur:
                 type: number
                 minimum: 0
 
     Settings:
       type: object
-      required: [voice, importDocs, liveTeaching, everyoneTeaches, approvalRequired, twoApprovers, autoAttrs, notifyOwners, multiCompany, crossCompany, animations, coverageDefault, legend, readOnlyConnectors, refresh, agentAccess, costCap, llmMonthlyTokenCap]
+      required: [voice, importDocs, liveTeaching, everyoneTeaches, approvalRequired, twoApprovers, autoAttrs, notifyOwners, multiCompany, crossCompany, animations, coverageDefault, legend, readOnlyConnectors, refresh, agentAccess, costCap, llmMonthlyTokenCap, ocrMonthlyPageCap]
       properties:
         voice:
           type: boolean
@@ -4377,6 +5399,8 @@ components:
           description: Stop agents at 100 percent of the euro allocation. Does not govern Ontaix's own language model calls, which `llmMonthlyTokenCap` bounds.
         llmMonthlyTokenCap:
           $ref: '#/components/schemas/LlmMonthlyTokenCap'
+        ocrMonthlyPageCap:
+          $ref: '#/components/schemas/OcrMonthlyPageCap'
         egressAllowlist:
           type: array
           maxItems: 200
@@ -4422,6 +5446,8 @@ components:
           type: boolean
         llmMonthlyTokenCap:
           $ref: '#/components/schemas/LlmMonthlyTokenCap'
+        ocrMonthlyPageCap:
+          $ref: '#/components/schemas/OcrMonthlyPageCap'
         egressAllowlist:
           type: array
           maxItems: 200
@@ -4435,6 +5461,13 @@ components:
       maximum: 1000000000
       default: 2000000
       description: Tokens (input plus output) Ontaix's own language model calls may use for the tenant per calendar month (UTC), enforced whatever `costCap` says. The default of 2,000,000 keeps the model step on for every tenant, so sentences that trigger it are sent to the configured provider; `0` turns the step off, which is how a tenant administrator opts out. When the cap is reached the teach parse still answers `200` with the grammar's result and `llmOutcome` `budget_exhausted`. A change writes the audit entry `llmMonthlyTokenCap set to <n>`.
+
+    OcrMonthlyPageCap:
+      type: integer
+      minimum: 0
+      maximum: 1000000
+      default: 1000
+      description: Pages of scanned PDFs Ontaix may send to OCR for the tenant per calendar month (UTC), for users and agents together. Each import reserves its image-only page count in `llm_month_usage.ocr_pages` before the OCR call and settles it after; when the reservation would pass the cap, the import is refused with `503 unavailable` and nothing is stored. `0` turns OCR off (text PDFs and every other type still import). OCR is also off whenever `llmMonthlyTokenCap` is 0. A change writes the audit entry `ocrMonthlyPageCap set to <n>`.
 
     Appearance:
       type: object
@@ -4537,7 +5570,7 @@ components:
           $ref: '#/components/schemas/Actor'
         kind:
           type: string
-          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`.
+          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`, `speech` (a speech recognition token was issued, ADR 0013).
         what:
           type: string
         ok:

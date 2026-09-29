@@ -30,11 +30,18 @@ import {
   type SourceUpdate,
   type User,
   type BulkResult,
+  type BranchResult,
+  type DocumentExtraction,
+  type DocumentExtractionResult,
+  type ExpansionRequest,
+  type ExpansionResult,
   type CompanyCreate,
   type CompanyCreated,
   type DecisionResult,
   type DomainProduct,
   type ImportResult,
+  type OntologyImportRequest,
+  type OntologyImportResult,
   type Page,
   type Problem,
   type Proposal,
@@ -42,6 +49,7 @@ import {
   type Scene,
   type Settings,
   type SettingsPatch,
+  type SpeechToken,
   type TeachRequest,
   type TeachResult,
   type ViewState,
@@ -142,6 +150,18 @@ export const api = {
     call<DecisionResult>('POST', `/proposals/${id}/reject`, reason ? { reason } : undefined),
   approveAll: () => call<BulkResult>('POST', '/proposals/approve-all'),
   rejectAll: () => call<BulkResult>('POST', '/proposals/reject-all'),
+  approveBranch: (id: string) => call<BranchResult>('POST', `/proposals/${id}/approve-branch`),
+  expandConcept: (conceptId: string, body: ExpansionRequest) =>
+    call<ExpansionResult>('POST', `/concepts/${conceptId}/expand`, body),
+  proposeExpansion: (expansionId: string, indexes: number[]) =>
+    call<Proposal[]>('POST', `/expansions/${expansionId}/proposals`, { indexes }),
+  startDocumentExtraction: (importId: string, companyId: string) =>
+    call<DocumentExtraction>('POST', `/import/${importId}/extraction`, { companyId }),
+  getDocumentExtraction: (id: string) => call<DocumentExtraction>('GET', `/extractions/${id}`),
+  cancelDocumentExtraction: (id: string) => call<DocumentExtraction>('DELETE', `/extractions/${id}`),
+  getDocumentExtractionResult: (id: string) => call<DocumentExtractionResult>('GET', `/extractions/${id}/result`),
+  proposeDocumentExtraction: (id: string, indexes: number[]) =>
+    call<Proposal[]>('POST', `/extractions/${id}/proposals`, { indexes }),
   createCompany: (body: CompanyCreate) => call<CompanyCreated>('POST', '/companies', body),
   updateDomainProduct: (id: string, patch: { hidden?: boolean }) =>
     call<DomainProduct>('PATCH', `/domain-products/${id}`, patch),
@@ -149,11 +169,21 @@ export const api = {
   patchAppearance: (patch: AppearancePatch) => call<Appearance>('PATCH', '/appearance', patch),
   putViewState: (state: Partial<ViewState>) => call<ViewState>('PUT', '/view-state', state),
   teachParse: (body: TeachRequest) => call<TeachResult>('POST', '/teach/parse', body),
+  speechToken: (companyId: string) => call<SpeechToken>('POST', '/speech/token', { companyId }),
   importSentences: (file: File) => {
     const form = new FormData();
     form.append('file', file, file.name);
     return call<ImportResult>('POST', '/import/sentences', form);
   },
+  importOntology: (file: File, body: OntologyImportRequest) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    for (const [key, value] of Object.entries(body)) if (value !== undefined) form.append(key, value);
+    return call<OntologyImportResult>('POST', '/ontology-imports', form);
+  },
+  getOntologyImport: (id: string) => call<OntologyImportResult>('GET', `/ontology-imports/${id}`),
+  proposeOntologyImport: (id: string, indexes: number[]) =>
+    call<Proposal[]>('POST', `/ontology-imports/${id}/proposals`, { indexes }),
 
   listConnectors: () => call<ConnectorType[]>('GET', '/connectors'),
   discover: (code: string, body: DiscoveryRequest) =>

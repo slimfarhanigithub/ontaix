@@ -1,0 +1,342 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ontaix:contract:document-extraction:1.0.0",
+  "title": "Whole-Document Extraction Output",
+  "description": "The only shapes the language model steps of a whole-document extraction job may return (ADR 0010): an outline answer (pass 1, one per chunk, outline carried forward) or a section answer (pass 2, one per chunk, against the frozen outline). The API sends a strict-compatible form of the one it asks for and validates against it. Handles are per job: cN are existing concepts of the import's company sent as candidates (c0 its root, at most 200 per call); oN are outline nodes, numbered by the API in the order they were accepted and stable for the whole job; kN are keys of new nodes inside one answer. There is no depth limit. A node or intent may attach under any node of the outline, at any depth, by handle, by an earlier key, or by a path of labels from the company root; the only ceilings are the job's total drafts (ONTAIX_DOCUMENT_EXTRACTION_MAX_NODES, default 2,000) and its token budget (ONTAIX_DOCUMENT_EXTRACTION_MAX_TOKENS). The maxItems below are the absolute contract bound per answer. Every free-text field refuses markup (< and >), C0 and C1 control characters, DEL, U+00A0, U+2028, U+2029 and every Unicode format character (category Cf) in the Basic Multilingual Plane, exactly as contracts/teach-extraction.schema.json does; the API's normalisation step also refuses every Cf character outside that plane. Grounding (ADR 0008 rule, unchanged): every new label - an outline node's label and every newLabel of an intent - must equal, after normalisation, a run of whole words of the sentence named by sentenceIndex, allowing singular or plural; the drafted label is sliced from the document text, never taken from the model. A label that fails is dropped (unresolved, reason ungrounded_label) and so are the nodes and intents that depend on it. The model chooses structure - parents, actions, domains - but never invents a label. Answer-invalidating checks: a rel intent without an action, or a spec intent with one (schema); unique keys; a key cited as a parent or end is defined earlier in the answer; every handle was sent; every normalised action (NFKC, whitespace runs collapsed to one space, trimmed, lower-cased) is neither is a nor equivalent to; sentenceIndex lies in the chunk; no node or intent joins a concept to itself. Any failure makes that chunk's answer invalid; the chunk is listed as unresolved (model_invalid_output) and the job continues. The answer is requested as compact JSON.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/outlineAnswer"
+    },
+    {
+      "$ref": "#/$defs/sectionAnswer"
+    }
+  ],
+  "$defs": {
+    "ref": {
+      "description": "Where a node attaches or what an intent cites: a handle the API sent (cN an existing concept of the company, c0 its root; oN a node of the outline built so far), the key of a node earlier in the same answer, or a path of labels from the company root down to the parent, of any length. A path is resolved by the API against the whole outline and the company's concepts, one normalised label per level; a path that does not resolve drops the node or intent (unresolved, reason unknown_parent).",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "handle"
+          ],
+          "properties": {
+            "handle": {
+              "type": "string",
+              "pattern": "^(c(0|[1-9][0-9]?|1[0-9]{2})|o[1-9][0-9]{0,4})$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "pattern": "^k[1-9][0-9]{0,3}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120,
+                "pattern": "^[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$"
+              },
+              "description": "Labels root-first, starting below the company root. No maximum length: paths of any depth are allowed."
+            }
+          }
+        }
+      ]
+    },
+    "outlineAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pass",
+        "nodes"
+      ],
+      "properties": {
+        "pass": {
+          "const": "outline"
+        },
+        "nodes": {
+          "type": "array",
+          "maxItems": 400,
+          "items": {
+            "$ref": "#/$defs/outlineNode"
+          },
+          "description": "New outline nodes this chunk adds, parents before children. Nodes the chunk only mentions again are not repeated; a node whose normalised label equals an outline node or a sent candidate is that node or concept."
+        }
+      }
+    },
+    "outlineNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "parent",
+        "label",
+        "action",
+        "role",
+        "confidence",
+        "sentenceIndex",
+        "span"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^k[1-9][0-9]{0,3}$"
+        },
+        "parent": {
+          "$ref": "#/$defs/ref"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
+          "description": "No leading or trailing space. Must be grounded: the words appear in the document sentence named by sentenceIndex."
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^A-Z<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
+          "description": "The birth relation's action, read parent to child, for example runs, includes or consists of. After normalisation, is a and equivalent to are refused."
+        },
+        "role": {
+          "enum": [
+            "domain_area",
+            "process",
+            "subprocess",
+            "step",
+            "entity",
+            "group"
+          ],
+          "description": "Advisory: what the node is in the business. Shown to the reviewer in the draft note; it does not limit where the node may sit."
+        },
+        "domainKey": {
+          "enum": [
+            "production",
+            "supply",
+            "sales",
+            "logistics",
+            "quality",
+            "maintenance",
+            "finance",
+            "people",
+            "engineering"
+          ],
+          "description": "The domain template of the node; absent to inherit from its parent (production under the root)."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "sentenceIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1999,
+          "description": "The document sentence the words come from; it lies in the chunk the API sent (the overlap included)."
+        },
+        "span": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400,
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$",
+          "description": "A verbatim quote of the words in that sentence. The API locates it as in ADR 0008 (Source ranges)."
+        }
+      }
+    },
+    "sectionAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pass",
+        "intents",
+        "unresolved"
+      ],
+      "properties": {
+        "pass": {
+          "const": "section"
+        },
+        "intents": {
+          "type": "array",
+          "maxItems": 400,
+          "items": {
+            "$ref": "#/$defs/sectionIntent"
+          }
+        },
+        "unresolved": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "sentenceIndex",
+              "reason"
+            ],
+            "properties": {
+              "sentenceIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1999
+              },
+              "reason": {
+                "enum": [
+                  "not_understood",
+                  "ambiguous_reference",
+                  "not_a_statement"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "sectionIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "subject",
+        "object",
+        "confidence",
+        "sentenceIndex",
+        "span"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "rel"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "action"
+            ],
+            "not": {
+              "required": [
+                "rule"
+              ]
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "action"
+              ]
+            }
+          }
+        }
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "rel",
+            "spec"
+          ],
+          "description": "As in teach extraction: rel is subject action object; spec is subject is a kind of object, both ends in the import's company."
+        },
+        "subject": {
+          "$ref": "#/$defs/intentRef"
+        },
+        "object": {
+          "$ref": "#/$defs/intentRef"
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^A-Z<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^A-Z<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
+          "description": "Required for rel, absent for spec. After normalisation, is a and equivalent to are refused."
+        },
+        "rule": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$"
+        },
+        "domainKey": {
+          "enum": [
+            "production",
+            "supply",
+            "sales",
+            "logistics",
+            "quality",
+            "maintenance",
+            "finance",
+            "people",
+            "engineering"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "explanation": {
+          "type": "string",
+          "maxLength": 120,
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$"
+        },
+        "sentenceIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1999,
+          "description": "The document sentence the words come from; it lies in the chunk the API sent (the overlap included)."
+        },
+        "span": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400,
+          "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$",
+          "description": "A verbatim quote of the words in that sentence. The API locates it as in ADR 0008 (Source ranges)."
+        }
+      }
+    },
+    "intentRef": {
+      "description": "An outline node or candidate by handle, a node by path of labels, or a new grounded label. A new label as object of a rel intent whose subject exists is born under the subject.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ref"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "newLabel"
+          ],
+          "properties": {
+            "newLabel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "pattern": "^[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]([^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*[^<>\\s\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb])?$",
+              "description": "No leading or trailing space. Must be grounded: the words appear in the document sentence named by sentenceIndex."
+            }
+          }
+        }
+      ]
+    }
+  }
+}

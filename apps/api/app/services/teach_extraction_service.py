@@ -852,8 +852,30 @@ def _occurrences_folded(text: str, quote: str) -> list[tuple[int, int]]:
     return out
 
 
+def ground_in_sentence(label: str, sentence: str) -> tuple[str, int, int] | None:
+    """The words of `sentence` that `label` names, as a label with their code-point range, or
+    None: the teach grounding rule applied to one whole document sentence."""
+    return _grounded_run(label, sentence, (0, len(sentence)))
+
+
+def quote_range(text: str, quote: str) -> tuple[int, int] | None:
+    """The first occurrence of `quote` in `text`, exact or after whitespace collapse and case
+    folding, as a code-point range; None when it does not occur."""
+    quote = quote.strip()
+    if not quote:
+        return None
+    found = _occurrences_exact(text, quote) or _occurrences_folded(text, quote)
+    return found[0] if found else None
+
+
 def _ground(label: str, text: str, source: tuple[int, int]) -> str | None:
-    """The caller's own words in `text[source]` that `label` names, as a label, or None.
+    """The caller's own words in `text[source]` that `label` names, as a label, or None."""
+    grounded = _grounded_run(label, text, source)
+    return grounded[0] if grounded else None
+
+
+def _grounded_run(label: str, text: str, source: tuple[int, int]) -> tuple[str, int, int] | None:
+    """The caller's own words in `text[source]` that `label` names, as a label with their range.
 
     Words are found over the whole input, so a source range that cuts into a word grounds
     nothing; only words lying wholly inside the range count. Each word is normalised on its own
@@ -867,7 +889,7 @@ def _ground(label: str, text: str, source: tuple[int, int]) -> str | None:
     for first, last in _runs(label, text, source, _fold):
         candidate = title(unicodedata.normalize("NFKC", text[first:last]))
         if _valid_label(candidate):
-            return candidate
+            return candidate, first, last
     return None
 
 

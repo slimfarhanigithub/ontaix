@@ -6,10 +6,15 @@
  * the recogniser finishes as `speech` while the speaker goes on, so cells appear during speech;
  * words still being recognised only show in the input. On stop, words never finished join the
  * queue as the last sentence and the queue drains.
+ *
+ * Recognition runs on Azure AI Speech (../teach/azureSpeech) with the company's labels as a
+ * phrase list; when the API has no Speech resource, the network fails or the SDK cannot run, the
+ * recording uses the browser's recogniser instead. Both show and queue words the same way.
  */
 import { useEffect, useRef, useState } from 'react';
 
-import type { InputOrigin } from '../api/types';
+import { ApiError, type InputOrigin } from '../api/types';
+import { speechPhrases, startAzureSpeech } from '../teach/azureSpeech';
 import { speechStream, teach } from '../teach/teach';
 import { useStore } from './dom';
 
@@ -29,6 +34,12 @@ type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 
 /** Silence after the last recognised words that ends a recording. */
 const SILENCE_MS = 1500;
+/** Silence at the start of an Azure recording that ends it; the browser's recogniser ends itself. */
+const NO_SPEECH_MS = 8000;
+
+interface Recording {
+  stop(): void;
+}
 
 const SR: SpeechRecognitionCtor | undefined =
   (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition ||
@@ -38,18 +49,21 @@ export function TeachBar() {
   const st = useStore();
   const { say, sayPlaceholder, settings, listening } = st.ui;
   const companies = st.s.companies;
-  const rec = useRef<SpeechRecognitionLike | null>(null);
+  const recording = useRef<Recording | null>(null);
+  const starting = useRef(false);
+  const mounted = useRef(true);
   const [errorPlaceholder, setErrorPlaceholder] = useState<string | null>(null);
   const mic = useRef<HTMLButtonElement>(null);
   const silence = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       clearTimeout(silence.current);
-      rec.current?.stop();
-    },
-    [],
-  );
+      recording.current?.stop();
+    };
+  }, []);
 
   useEffect(() => {
     const el = mic.current;
@@ -60,13 +74,72 @@ export function TeachBar() {
   }, []);
 
   const speak = () => {
-    if (!SR) return;
     if (listening) {
-      rec.current?.stop();
+      recording.current?.stop();
       return;
     }
+    if (starting.current) return;
+    const companyId = st.s.activeCompany?.sid;
+    if (companyId) listenWithAzure(companyId);
+    else listenInBrowser();
+  };
+
+  const listenWithAzure = (companyId: string) => {
+    const stream = speechStream();
+    // Sentences of this recording already finished and queued, as the input shows them.
+    let done = '';
+    let heard = false;
+    const quiet = (ms: number) => {
+      clearTimeout(silence.current);
+      silence.current = setTimeout(() => recording.current?.stop(), ms);
+    };
+    starting.current = true;
+    startAzureSpeech(companyId, speechPhrases(st.s), {
+      started() {
+        st.ui.listening = true;
+        st.bump();
+        quiet(NO_SPEECH_MS);
+      },
+      interim(text) {
+        heard = true;
+        st.setSay(done + text);
+        quiet(SILENCE_MS);
+      },
+      final(sentence) {
+        heard = true;
+        stream.sentence(sentence);
+        done += `${sentence} `;
+        st.setSay(done);
+        quiet(SILENCE_MS);
+      },
+      ended(unfinished) {
+        clearTimeout(silence.current);
+        recording.current = null;
+        st.ui.listening = false;
+        st.bump();
+        if (unfinished.trim()) stream.sentence(unfinished);
+        if (heard) st.setSay('');
+      },
+      failed: listenInBrowser,
+    }).then(
+      (r) => {
+        starting.current = false;
+        if (!r) listenInBrowser();
+        else if (!mounted.current) r.stop();
+        else recording.current = r;
+      },
+      (err) => {
+        starting.current = false;
+        if (err instanceof ApiError) st.refused(err);
+        else listenInBrowser();
+      },
+    );
+  };
+
+  const listenInBrowser = () => {
+    if (!SR || !mounted.current) return;
     const r = new SR();
-    rec.current = r;
+    recording.current = r;
     r.lang = /^fr/i.test(navigator.language) ? 'fr-FR' : 'en-GB';
     r.interimResults = true;
     r.continuous = true;

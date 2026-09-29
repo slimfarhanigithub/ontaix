@@ -17,6 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.auth import DEV_USER_HEADER
 from app.clients.db_client import dispose_engine
 from app.clients.llm_client import check_llm_configuration, warm_llm_clients
+from app.clients.ocr_client import check_ocr_configuration
 from app.config import get_settings
 
 # Every ontology table has a foreign key to `tenant`; its mapping must be registered before the
@@ -28,14 +29,18 @@ from app.routers import (
     concepts,
     cost,
     domain_products,
+    expansions,
+    extractions,
     health,
     imports,
+    ontology_imports,
     proposals,
     relations,
     scene,
+    speech,
     teach,
 )
-from app.services import retention_purge_service
+from app.services import document_extraction_runner_service, retention_purge_service
 from app.services.import_purge_service import purge_periodically
 from app.utilities.contention import is_contention
 from app.utilities.problems import ProblemError, busy
@@ -57,8 +62,9 @@ HTTP_STATUS_CODES = {
 
 @asynccontextmanager
 async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Runs the expired-import purge and the retention purge for the life of the process,
-    warms the language model clients in the background, and cancels them all on shutdown."""
+    """Runs the expired-import purge, the retention purge and the whole-document extraction
+    runner for the life of the process, warms the language model clients in the background, and
+    cancels them all on shutdown."""
     settings = get_settings()
     tasks = [
         asyncio.create_task(warm_llm_clients(), name="llm-warm-up"),
@@ -68,6 +74,12 @@ async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
         asyncio.create_task(
             retention_purge_service.purge_periodically(settings.retention_purge_interval_seconds),
             name="retention-purge",
+        ),
+        asyncio.create_task(
+            document_extraction_runner_service.run_periodically(
+                settings.document_extraction_poll_seconds
+            ),
+            name="document-extraction-runner",
         ),
     ]
     try:
@@ -86,6 +98,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     logging.basicConfig(level=settings.log_level)
     check_llm_configuration(settings)
+    check_ocr_configuration(settings)
     if settings.is_dev:
         logger.warning(
             "environment is dev: the %s header is accepted without any other credential",
@@ -101,8 +114,12 @@ def create_app() -> FastAPI:
         concepts,
         relations,
         proposals,
+        expansions,
         teach,
+        speech,
         imports,
+        ontology_imports,
+        extractions,
         audit,
         cost,
     ):
