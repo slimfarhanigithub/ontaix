@@ -71,6 +71,8 @@ async function teachSentence(importRef: ImportRef): Promise<void> {
 
 /** The longest spoken sentence one request carries, in characters, as the API allows for `speech`. */
 const SPEECH_MAX_CHARS = 4000;
+/** How long a spoken sentence's parse may take before it is given up, a little above the API's 45 s. */
+export const SPEECH_PARSE_TIMEOUT_MS = 50_000;
 
 /** One recording of the teach bar microphone. */
 export interface SpeechStream {
@@ -80,29 +82,83 @@ export interface SpeechStream {
   settled(): Promise<void>;
 }
 
+/** The end of the spoken-sentence queue, shared by every recording so one parse is in flight at most. */
+let speechTail: Promise<void> = Promise.resolve();
+/** True from a `429` refusal of a spoken sentence until one is parsed again; its toast shows once. */
+let speechRateLimited = false;
+
 /**
- * Opens a recording for the active company. Each finished sentence joins a queue and is parsed as
- * `speech` in the company's teach session, one request at a time: the next sentence goes out once
- * the previous one is answered (or refused) and its drafts are proposed, so its back-references
- * resolve through the stored session turn and the proposals it builds on. Queueing never blocks
- * listening.
+ * Opens a recording for the active company. Each finished sentence joins one queue shared by all
+ * recordings and is parsed as `speech` in the company's teach session, one request at a time: the
+ * next sentence goes out once the previous one is answered (or refused) and its drafts are
+ * proposed, so its back-references resolve through the stored session turn and the proposals it
+ * builds on. Queueing never blocks listening.
  */
 export function speechStream(): SpeechStream {
   const co = store.s.activeCompany;
   const companyId = co?.sid;
   const sessionId = companyId ? teachSessionId(companyId) : '';
-  let queue: Promise<void> = Promise.resolve();
   return {
     sentence(text) {
       if (!companyId) return;
       for (const piece of speechPieces(text)) {
-        queue = queue
-          .then(() => parseAndPropose({ companyId, text: piece, origin: 'speech', sessionId }))
-          .catch((err) => store.refused(err));
+        speechTail = speechTail
+          .then(() => teachSpoken({ companyId, text: piece, origin: 'speech', sessionId }))
+          .catch(showSpeechRefusal);
       }
     },
-    settled: () => queue,
+    settled: () => speechTail,
   };
+}
+
+/**
+ * Parses and proposes one spoken sentence. A parse with no answer within the timeout is refused so
+ * the queue moves on. A `429` shows one toast for the whole run of refusals, holds the queue for
+ * its `Retry-After` and sends the sentence once more; the sentences after it follow.
+ */
+async function teachSpoken(request: TeachRequest): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    let result: TeachResult;
+    try {
+      result = await withTimeout(api.teachParse(request), SPEECH_PARSE_TIMEOUT_MS);
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 429)) {
+        showSpeechRefusal(err);
+        return;
+      }
+      if (!speechRateLimited) store.refused(err);
+      speechRateLimited = true;
+      if (attempt > 0) return;
+      await new Promise((r) => setTimeout(r, (err.retryAfter ?? 0) * 1000));
+      continue;
+    }
+    speechRateLimited = false;
+    await propose(result);
+    return;
+  }
+}
+
+/** Shows why a spoken sentence was not taught; a failure that is not an API refusal shows its message, so the queue never stops. */
+function showSpeechRefusal(err: unknown): void {
+  if (err instanceof ApiError) store.refused(err);
+  else store.toast2('Refused', err instanceof Error ? err.message : String(err));
+}
+
+/** The promise's outcome, or a refusal when it takes longer than `ms`. */
+function withTimeout<R>(promise: Promise<R>, ms: number): Promise<R> {
+  return new Promise<R>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('The model did not answer in time')), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
 }
 
 /** A spoken sentence trimmed and, past the API's limit, cut at its last space before the limit. */

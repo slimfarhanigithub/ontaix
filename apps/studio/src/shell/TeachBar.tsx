@@ -41,6 +41,15 @@ export function TeachBar() {
   const rec = useRef<SpeechRecognitionLike | null>(null);
   const [errorPlaceholder, setErrorPlaceholder] = useState<string | null>(null);
   const mic = useRef<HTMLButtonElement>(null);
+  const silence = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(
+    () => () => {
+      clearTimeout(silence.current);
+      rec.current?.stop();
+    },
+    [],
+  );
 
   useEffect(() => {
     const el = mic.current;
@@ -67,7 +76,6 @@ export function TeachBar() {
     let pending = '';
     let heard = false;
     let ended = false;
-    let silence: ReturnType<typeof setTimeout> | undefined;
     r.onstart = () => {
       st.ui.listening = true;
       st.bump();
@@ -86,14 +94,14 @@ export function TeachBar() {
       }
       heard = true;
       st.setSay(s);
-      clearTimeout(silence);
-      silence = setTimeout(() => r.stop(), SILENCE_MS);
+      clearTimeout(silence.current);
+      silence.current = setTimeout(() => r.stop(), SILENCE_MS);
     };
     r.onerror = () => {
       setErrorPlaceholder('The microphone did not respond. Type instead, the show goes on.');
     };
     r.onend = () => {
-      clearTimeout(silence);
+      clearTimeout(silence.current);
       st.ui.listening = false;
       st.bump();
       if (ended) return;

@@ -1,4 +1,4 @@
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 
 type Result = ArrayLike<{ transcript: string }> & { isFinal: boolean };
 
@@ -121,5 +121,50 @@ describe('the microphone', () => {
 
     expect(sent).toEqual(['Insight sells services.', 'They focus on data.', 'It has a platform']);
     expect(most).toBe(1);
+  });
+
+  it('keeps one request in flight when the speaker stops and starts again during a pending call', async () => {
+    const { api } = await import('../api/client');
+    const { store } = await import('../store/store');
+    store.s.activeCompany = { sid: 'company-a' } as typeof store.s.activeCompany;
+    const sent: string[] = [];
+    let inFlight = 0;
+    let most = 0;
+    vi.spyOn(api, 'teachParse').mockImplementation(async (body) => {
+      most = Math.max(most, ++inFlight);
+      sent.push(body.text as string);
+      await new Promise((r) => setTimeout(r, 1000));
+      inFlight--;
+      return { outcome: 'not_understood', drafts: [], caption: '' } as unknown as Awaited<ReturnType<typeof api.teachParse>>;
+    });
+    vi.spyOn(store, 'caption').mockImplementation(() => undefined);
+    const { TeachBar } = await import('./TeachBar');
+    const { container } = render(<TeachBar />);
+    const micButton = container.querySelector('#mic') as Element;
+
+    fireEvent.click(micButton);
+    act(() => (FakeRecognition.last as FakeRecognition).hear('Insight sells services. '));
+    act(() => (FakeRecognition.last as FakeRecognition).stop());
+    fireEvent.click(micButton);
+    act(() => (FakeRecognition.last as FakeRecognition).hear('They focus on data. '));
+    act(() => (FakeRecognition.last as FakeRecognition).stop());
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(sent).toEqual(['Insight sells services.', 'They focus on data.']);
+    expect(most).toBe(1);
+  });
+
+  it('stops the recogniser and its silence timer when the teach bar goes away', async () => {
+    const { rec, sentence } = await listen();
+    const stop = vi.spyOn(rec, 'stop');
+    act(() => rec.hear('~Insight sells'));
+
+    cleanup();
+    vi.advanceTimersByTime(1500);
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(sentence).toHaveBeenCalledTimes(1);
   });
 });

@@ -2,7 +2,7 @@ import { api } from '../api/client';
 import { ApiError, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
 import { addCompany, addLink, addNode } from '../canvas/state';
 import { store } from '../store/store';
-import { importDocument, skippedText, speechStream, teach, teachSessionId, withoutKnown } from './teach';
+import { SPEECH_PARSE_TIMEOUT_MS, importDocument, skippedText, speechStream, teach, teachSessionId, withoutKnown } from './teach';
 
 const result: TeachResult = {
   outcome: 'not_understood',
@@ -142,12 +142,92 @@ describe('speaking to the teach bar', () => {
     stream.sentence('Insight sells services.');
     stream.sentence('They are focused on data.');
     await tick();
-    refusals[0](new ApiError(429, { code: 'rate_limited', title: 'Too many requests', status: 429 } as ApiError['problem'], 30));
+    refusals[0](new ApiError(422, { code: 'validation_failed', title: 'Too long', status: 422 } as ApiError['problem']));
     await tick();
     answers[1]({ ...result, outcome: 'not_understood' });
     await stream.settled();
 
     expect(order).toEqual(['refused', 'Not understood']);
+  });
+
+  it('keeps one request in flight across recordings started one after another', async () => {
+    let inFlight = 0;
+    let most = 0;
+    const sent: string[] = [];
+    vi.spyOn(api, 'teachParse').mockImplementation(async (body) => {
+      most = Math.max(most, ++inFlight);
+      sent.push(body.text as string);
+      await tick();
+      inFlight--;
+      return result;
+    });
+    vi.spyOn(store, 'caption').mockImplementation(() => undefined);
+
+    const first = speechStream();
+    first.sentence('Insight sells services.');
+    const second = speechStream();
+    second.sentence('They are focused on data.');
+    await second.settled();
+
+    expect(most).toBe(1);
+    expect(sent).toEqual(['Insight sells services.', 'They are focused on data.']);
+  });
+
+  it('gives up a parse with no answer after the timeout and moves on', async () => {
+    vi.useFakeTimers();
+    try {
+      const sent: string[] = [];
+      vi.spyOn(api, 'teachParse').mockImplementation((body) => {
+        sent.push(body.text as string);
+        return sent.length === 1 ? new Promise<TeachResult>(() => undefined) : Promise.resolve(result);
+      });
+      const toast = vi.spyOn(store, 'toast2').mockImplementation(() => undefined);
+      vi.spyOn(store, 'caption').mockImplementation(() => undefined);
+      const stream = speechStream();
+
+      stream.sentence('Insight sells services.');
+      stream.sentence('They are focused on data.');
+      await vi.advanceTimersByTimeAsync(SPEECH_PARSE_TIMEOUT_MS - 1);
+      expect(sent).toEqual(['Insight sells services.']);
+      await vi.advanceTimersByTimeAsync(1);
+      await stream.settled();
+
+      expect(sent).toEqual(['Insight sells services.', 'They are focused on data.']);
+      expect(toast).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows one toast for a run of 429 refusals and sends the sentences again after Retry-After', async () => {
+    vi.useFakeTimers();
+    try {
+      const limited = () => new ApiError(429, { code: 'rate_limited', title: 'Too many requests', status: 429 } as ApiError['problem'], 2);
+      const answers = [limited(), limited(), limited(), result, result];
+      const sent: { text: string; at: number }[] = [];
+      vi.spyOn(api, 'teachParse').mockImplementation(async (body) => {
+        sent.push({ text: body.text as string, at: Date.now() });
+        const next = answers.shift();
+        if (next instanceof ApiError) throw next;
+        return next as TeachResult;
+      });
+      const refused = vi.spyOn(store, 'refused').mockImplementation(() => undefined);
+      vi.spyOn(store, 'caption').mockImplementation(() => undefined);
+      const start = Date.now();
+      const stream = speechStream();
+
+      stream.sentence('one');
+      stream.sentence('two');
+      stream.sentence('three');
+      await vi.runAllTimersAsync();
+      await stream.settled();
+
+      expect(refused).toHaveBeenCalledTimes(1);
+      expect(sent.map((s) => s.text)).toEqual(['one', 'one', 'two', 'two', 'three']);
+      expect(sent.map((s) => s.at - start)).toEqual([0, 2000, 2000, 4000, 4000]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('sends nothing for a sentence with no words', () => {
