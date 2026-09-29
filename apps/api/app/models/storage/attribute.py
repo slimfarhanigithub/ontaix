@@ -27,8 +27,9 @@ class Attribute(Base):
     source_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     name: Mapped[str]
     type: Mapped[AttributeType] = mapped_column(pg_enum(AttributeType, "attribute_type"))
-    col: Mapped[str]
-    fill: Mapped[int] = mapped_column(SmallInteger)
+    col: Mapped[str | None]
+    fill: Mapped[int | None] = mapped_column(SmallInteger)
+    value: Mapped[str | None]
     state: Mapped[AttributeState] = mapped_column(
         pg_enum(AttributeState, "attribute_state"), server_default=text("'proposed'")
     )

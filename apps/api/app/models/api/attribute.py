@@ -14,6 +14,7 @@ class Attribute(ApiModel):
     source_id: uuid.UUID | None = None
     name: str
     type: Literal["id", "text", "number", "ref", "date"]
-    col: str
-    fill: int
+    col: str | None
+    fill: int | None
+    value: str | None = None
     state: Literal["proposed", "approved"]

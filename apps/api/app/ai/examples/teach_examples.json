@@ -3614,6 +3614,170 @@
     ],
     "unresolved": []
    }
+  },
+  {
+   "id": "en-text-attributes",
+   "source": {
+    "set": "case",
+    "id": "en-text-verb-variety"
+   },
+   "tags": [
+    "text",
+    "attribute",
+    "reuse"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Kellbrook Logistics",
+    "sentence": "The warehouse is billed monthly and has a headcount of 40.",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Kellbrook Logistics",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Warehouse",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "attr",
+      "subject": {
+       "candidate": "c1"
+      },
+      "attributeName": "billing",
+      "attributeValue": "monthly",
+      "confidence": 0.9,
+      "span": "The warehouse is billed monthly",
+      "source": {
+       "start": 0,
+       "end": 31
+      }
+     },
+     {
+      "kind": "attr",
+      "subject": {
+       "candidate": "c1"
+      },
+      "attributeName": "headcount",
+      "attributeValue": "40",
+      "valueType": "number",
+      "confidence": 0.9,
+      "span": "has a headcount of 40",
+      "source": {
+       "start": 36,
+       "end": 57
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "en-speech-attributes",
+   "source": {
+    "set": "case",
+    "id": "en-speech-retail-monologue"
+   },
+   "tags": [
+    "speech",
+    "attribute",
+    "fillers",
+    "reuse"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Mirelle Stores",
+    "sentence": "so um we run a pop-up store and uh the pop-up store is priced per day and the online shop is based in Leeds",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Mirelle Stores",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Online shop",
+      "parent": "c0"
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "runs",
+      "object": {
+       "newLabel": "Pop-up store"
+      },
+      "confidence": 0.9,
+      "span": "we run a pop-up store",
+      "source": {
+       "start": 6,
+       "end": 27
+      },
+      "segment": 0
+     },
+     {
+      "kind": "attr",
+      "subject": {
+       "newLabel": "Pop-up store"
+      },
+      "attributeName": "pricing",
+      "attributeValue": "per day",
+      "confidence": 0.9,
+      "span": "the pop-up store is priced per day",
+      "source": {
+       "start": 35,
+       "end": 69
+      },
+      "segment": 1,
+      "explanation": "the pop-up store just introduced"
+     },
+     {
+      "kind": "attr",
+      "subject": {
+       "candidate": "c1"
+      },
+      "attributeName": "base",
+      "attributeValue": "Leeds",
+      "confidence": 0.85,
+      "span": "the online shop is based in Leeds",
+      "source": {
+       "start": 74,
+       "end": 107
+      },
+      "segment": 2,
+      "explanation": "Leeds is no candidate, so it is a value"
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 6,
+      "end": 27
+     },
+     {
+      "index": 1,
+      "start": 35,
+      "end": 69
+     },
+     {
+      "index": 2,
+      "start": 74,
+      "end": 107
+     }
+    ]
+   }
   }
  ]
 }

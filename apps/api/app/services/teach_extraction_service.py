@@ -20,6 +20,7 @@ import logging
 import re
 import unicodedata
 import uuid
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -45,7 +46,13 @@ from app.clients.llm_client import (
 )
 from app.config import LlmProfile, get_settings
 from app.models.api.settings import DEFAULT_LLM_MONTHLY_TOKEN_CAP
-from app.models.api.teach import DraftNote, LlmOutcome, SourceSpan, UnresolvedPhrase
+from app.models.api.teach import (
+    DraftNote,
+    LlmOutcome,
+    SourceSpan,
+    UnresolvedPhrase,
+    UnresolvedReason,
+)
 from app.models.llm.teach_extraction_answer import (
     AnswerIntent,
     CandidateRef,
@@ -73,6 +80,11 @@ MAX_SENTENCE_PHRASES = 10
 MAX_SEGMENT_CHARS = 400
 MAX_EXPLANATION = 300
 MAX_LABEL_CHARS = 120
+MAX_ATTRIBUTE_NAME = 80
+MAX_ATTRIBUTE_VALUE = 200
+# The inflections an attribute name may differ by from the caller's word, and the shortest stem.
+_INFLECTIONS = ("ing", "es", "ed", "s", "d")
+_MIN_STEM = 3
 DEFAULT_MEMBER_ACTION = "includes"
 # `X is a <role> of Y` is drafted as Y has <Role>, <Role> includes X.
 ROLE_NOUNS = frozenset(
@@ -452,6 +464,11 @@ def _interpret(
         seg_start, seg_end = segments[index]
         if not seg_start <= source[0] < source[1] <= seg_end:
             raise _InvalidAnswer("an intent's source lies outside its segment")
+        if intent.kind == "attr":
+            _check_attr_subject(intent.subject, handles, drafter)
+            checked.append(_Checked(intent, None, None, [], None, None, index, source, True))
+            continue
+        assert intent.object is not None
         # Each new label is reused as a candidate sent in this call, or grounded in the
         # caller's words inside the source range; the self-join checks run after that. An
         # ungrounded subject or object sinks the intent; an ungrounded member is left out alone.
@@ -518,6 +535,8 @@ def _interpret(
         else [(0, len(sentence))],
     )
     lists: dict[int, list[PlannedIntent]] = {}
+    # Attributes this answer drafts: (concept id or new label, name) to value.
+    taught: dict[tuple[str, str], str] = {}
     list_sizes: dict[int, int] = {}
     stated: dict[int, int] = {}
     for c in checked:
@@ -528,6 +547,13 @@ def _interpret(
                 stated.setdefault(intent.list_id, intent.stated_count)
         span = (c.source[0] + offset, c.source[1] + offset)
         where = sentence[span[0] : span[1]][:400]
+        if intent.kind == "attr":
+            attr = _plan_attr(c, handles, sent, drafter, text, taught, offset)
+            if isinstance(attr, PlannedIntent):
+                step.planned.append(attr)
+            elif attr is not None:
+                step.unresolved.append(UnresolvedPhrase(text=where, reason=attr))
+            continue
         if not c.grounded or c.subject is None or c.obj is None:
             step.unresolved.append(UnresolvedPhrase(text=where, reason="ungrounded_label"))
             continue
@@ -749,27 +775,39 @@ def _ground(label: str, text: str, source: tuple[int, int]) -> str | None:
     Characters around the words are dropped, except an abbreviation's closing full stop
     (`S.A.`), which the input must carry too. The label is sliced from the original input and
     put through the casing rule and the label rules, never taken from the model's string."""
+    for first, last in _runs(label, text, source, _fold):
+        candidate = title(unicodedata.normalize("NFKC", text[first:last]))
+        if _valid_label(candidate):
+            return candidate
+    return None
+
+
+def _runs(
+    phrase: str, text: str, source: tuple[int, int], fold: Callable[[str], str]
+) -> Iterator[tuple[int, int]]:
+    """Ranges of `text[source]` whose whole words match the words of `phrase` one by one under
+    `fold`, with the same separators between them, in order; see `_ground`."""
     start, end = source
     words = _words(text)
     if any(a < start < b or a < end < b for a, b in words):
-        return None
+        return
     inside = [(a, b) for a, b in words if a >= start and b <= end]
-    label = unicodedata.normalize("NFC", label)
-    label_words = _words(label)
-    wanted = [_fold(label[a:b]) for a, b in label_words]
+    phrase = unicodedata.normalize("NFC", phrase)
+    phrase_words = _words(phrase)
+    wanted = [fold(phrase[a:b]) for a, b in phrase_words]
     n = len(wanted)
     if not n:
-        return None
-    gaps = [label[x[1] : y[0]] for x, y in zip(label_words, label_words[1:], strict=False)]
-    # Characters around the label's words are not part of it, except an abbreviation's closing
-    # full stop (`S.A.`).
-    abbreviation = "." in label[label_words[-1][0] : label_words[-1][1]]
-    tail = "." if abbreviation and label[label_words[-1][1] :].startswith(".") else ""
+        return
+    gaps = [phrase[x[1] : y[0]] for x, y in zip(phrase_words, phrase_words[1:], strict=False)]
+    # Characters around the phrase's words are not part of it, except an abbreviation's
+    # closing full stop (`S.A.`).
+    abbreviation = "." in phrase[phrase_words[-1][0] : phrase_words[-1][1]]
+    tail = "." if abbreviation and phrase[phrase_words[-1][1] :].startswith(".") else ""
     if any(not _joins_label(g) for g in gaps):
-        return None
+        return
     for i in range(len(inside) - n + 1):
         run = inside[i : i + n]
-        if [_fold(text[a:b]) for a, b in run] != wanted:
+        if [fold(text[a:b]) for a, b in run] != wanted:
             continue
         spoken = [text[x[1] : y[0]] for x, y in zip(run, run[1:], strict=False)]
         if any(_gap(a) != _gap(b) for a, b in zip(spoken, gaps, strict=True)):
@@ -779,10 +817,7 @@ def _ground(label: str, text: str, source: tuple[int, int]) -> str | None:
             continue
         if _part_of_name(text, first, last):
             continue
-        candidate = title(unicodedata.normalize("NFKC", text[first:last]))
-        if _valid_label(candidate):
-            return candidate
-    return None
+        yield first, last
 
 
 def _part_of_name(text: str, first: int, last: int) -> bool:
@@ -940,8 +975,10 @@ def _grounded_labels(
     the caller's words sliced from the input."""
     labels: list[str] = []
     for intent, source in zip(answer.intents, sources, strict=True):
+        if intent.kind == "attr":
+            continue
         for ref in [intent.subject, intent.object, *(intent.members or [])]:
-            if isinstance(ref, CandidateRef):
+            if ref is None or isinstance(ref, CandidateRef):
                 continue
             spoken = _ground(title(unicodedata.normalize("NFKC", ref.new_label)), text, source)
             if spoken is not None and spoken not in labels:
@@ -985,6 +1022,139 @@ def _role_end(
     if spoken is None:
         return None
     return End(drafter.resolve(spoken), spoken, spoken, cited_new=True)
+
+
+def _check_attr_subject(ref: Any, handles: list[Concept], drafter: Drafter) -> None:
+    """An attr intent's cited subject was sent and belongs to the taught company."""
+    if not isinstance(ref, CandidateRef):
+        return
+    index = int(ref.candidate[1:])
+    if index >= len(handles):
+        raise _InvalidAnswer("a cited candidate was not sent")
+    if handles[index].company_id != drafter.company_id:
+        raise _InvalidAnswer("an attribute is taught on a concept of the taught company only")
+
+
+def _plan_attr(
+    c: _Checked,
+    handles: list[Concept],
+    sent: set[uuid.UUID],
+    drafter: Drafter,
+    text: str,
+    taught: dict[tuple[str, str], str],
+    offset: int,
+) -> PlannedIntent | UnresolvedReason | None:
+    """The planned attribute of an attr intent; the reason it is not drafted; or None for a
+    repeat of an attribute the same answer already drafts with the same value.
+
+    The subject resolves to a sent candidate, to a concept an earlier intent introduces, or to
+    an existing concept of the taught company named in the caller's words; the name and the
+    value are grounded in the caller's words inside the intent's source range."""
+    intent = c.intent
+    assert intent.attribute_name is not None and intent.attribute_value is not None
+    subject = _attr_subject(intent.subject, handles, sent, drafter, text, c.source)
+    name = _ground_name(intent.attribute_name, text, c.source)
+    value = _ground_value(intent.attribute_value, text, c.source)
+    if subject is None or name is None or value is None:
+        return "ungrounded_label"
+    if intent.confidence < MIN_CONFIDENCE:
+        return "low_confidence"
+    concept = subject.concept
+    key = (str(concept.id) if concept else subject.label.lower(), name)
+    existing = drafter.view.attribute_named(concept.id, name) if concept else None
+    held = existing.value if existing is not None else None
+    if existing is not None and (held is None or held.casefold() != value.casefold()):
+        return "attribute_exists"
+    if key in taught:
+        return None if taught[key].casefold() == value.casefold() else "attribute_exists"
+    span = (c.source[0] + offset, c.source[1] + offset)
+    note = DraftNote(
+        extractor="llm",
+        confidence=intent.confidence,
+        explanation=intent.explanation,
+        segment=c.segment,
+        source_span=SourceSpan(start=span[0], end=span[1]),
+    )
+    planned = drafter.model_attr(subject, name, value, intent.value_type or "text", note, held)
+    if held is None:
+        taught[key] = value
+    planned.span = intent.span
+    planned.segment = c.segment
+    return planned
+
+
+def _attr_subject(
+    ref: Any,
+    handles: list[Concept],
+    sent: set[uuid.UUID],
+    drafter: Drafter,
+    text: str,
+    source: tuple[int, int],
+) -> End | None:
+    """The concept an attr intent describes, or None. A new label is reused as a candidate sent
+    in this call, else names a concept an earlier intent of the answer introduces, else must be
+    grounded in the caller's words and then name an existing concept of the taught company; it
+    never introduces a concept."""
+    if isinstance(ref, CandidateRef):
+        concept = handles[int(ref.candidate[1:])]
+        return End(concept, concept.label, concept.label)
+    label = title(unicodedata.normalize("NFKC", ref.new_label))
+    reused = drafter.resolve(label)
+    if reused is not None and reused.id in sent:
+        return End(reused, reused.label, reused.label)
+    introduced = drafter.introduced_label(label)
+    if introduced is not None:
+        return End(None, introduced, introduced, cited_new=True)
+    spoken = _ground(label, text, source)
+    concept = drafter.resolve(spoken) if spoken else None
+    if concept is None or spoken is None:
+        return None
+    return End(concept, concept.label, spoken)
+
+
+def _ground_value(value: str, text: str, source: tuple[int, int]) -> str | None:
+    """The caller's own words in `text[source]` that `value` quotes, word for word (NFKC and
+    case folded, no singular or plural), sliced from the input with its whitespace runs
+    collapsed; None when the input does not carry them."""
+    for first, last in _runs(value, text, source, _fold_exact):
+        spoken = " ".join(unicodedata.normalize("NFKC", text[first:last]).split())
+        if 0 < len(spoken) <= MAX_ATTRIBUTE_VALUE and not has_refused_character(spoken):
+            return spoken
+    return None
+
+
+def _ground_name(name: str, text: str, source: tuple[int, int]) -> str | None:
+    """`name` lower-cased when each of its words is a word of `text[source]` or an inflection
+    of one on the same stem (`-s`, `-es`, `-ed`, `-d`, `-ing`: `billing` for `billed`), else
+    None. The name is words separated by single spaces, nothing else."""
+    start, end = source
+    words = _words(text)
+    if any(a < start < b or a < end < b for a, b in words):
+        return None
+    spoken = [_stems(_fold_exact(text[a:b])) for a, b in words if a >= start and b <= end]
+    normalised = unicodedata.normalize("NFKC", name).casefold()
+    name_words = [normalised[a:b] for a, b in _words(normalised)]
+    if not name_words or " ".join(name_words) != normalised:
+        return None
+    if len(normalised) > MAX_ATTRIBUTE_NAME or has_refused_character(normalised):
+        return None
+    if any(not any(_stems(w) & stems for stems in spoken) for w in name_words):
+        return None
+    return normalised
+
+
+def _stems(word: str) -> set[str]:
+    """The word and the stems it gives with one inflection removed, each at least three
+    characters long."""
+    stems = {word}
+    for suffix in _INFLECTIONS:
+        if word.endswith(suffix) and len(word) - len(suffix) >= _MIN_STEM:
+            stems.add(word[: -len(suffix)])
+    return stems
+
+
+def _fold_exact(word: str) -> str:
+    return unicodedata.normalize("NFKC", word).casefold()
 
 
 def _same(a: End, b: End) -> bool:

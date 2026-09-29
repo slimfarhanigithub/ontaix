@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 from app.clients.llm_client import (
@@ -27,10 +28,12 @@ class FakeLlmClient:
     model = "fake-model-1"
 
     def __init__(self) -> None:
-        self.answers: list[str | LlmCallError] = []
+        # An answer is recorded text, an error to raise, or a builder that writes the answer
+        # from the request's JSON data, so it can cite the handles that request sent.
+        self.answers: list[str | LlmCallError | Callable[[dict], str]] = []
         self.requests: list[LlmRequest] = []
 
-    def answer(self, *answers: str | LlmCallError) -> FakeLlmClient:
+    def answer(self, *answers: str | LlmCallError | Callable[[dict], str]) -> FakeLlmClient:
         self.answers.extend(answers)
         return self
 
@@ -44,6 +47,8 @@ class FakeLlmClient:
         answer = self.answers.pop(0)
         if isinstance(answer, LlmCallError):
             raise answer
+        if callable(answer):
+            answer = answer(json.loads(request.user))
         return LlmAnswer(answer, INPUT_TOKENS, OUTPUT_TOKENS, 0.002094, 420)
 
     def context(self, index: int = -1) -> dict:

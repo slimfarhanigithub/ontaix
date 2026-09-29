@@ -139,10 +139,13 @@ export function Drawer() {
             <span className={`state ${a.state === 'proposed' ? 'new' : ''}`}>
               {a.state === 'proposed' ? 'found in data · pending' : 'approved'}
             </span>
-            <span className="col">{`${a.type} · ${a.col}`}</span>
-            <div className="fill" title={`${a.fill} percent filled`}>
-              <i style={{ width: `${Math.max(0, Math.min(100, Number(a.fill) || 0))}%` }}></i>
-            </div>
+            {/* A taught attribute shows its value where a source attribute shows its column, and has no fill bar. */}
+            <span className="col">{`${a.type} · ${a.value ?? a.col}`}</span>
+            {a.value === undefined ? (
+              <div className="fill" title={`${a.fill} percent filled`}>
+                <i style={{ width: `${Math.max(0, Math.min(100, Number(a.fill) || 0))}%` }}></i>
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
