@@ -45,7 +45,7 @@ The teach extraction fallback (ADR 0008) calls the configured language model pro
 - Azure Key Vault, secret name `anthropic-api-key`. The owner sets the value from a signed-in shell of their own; Terraform does not manage the value, so it never enters Terraform state or CI logs. The API reads it at start-up through the workload identity `id-ontaix-dev-frc`, which already holds Key Vault Secrets User.
 - Local development: the ignored `.env` file, variable `ONTAIX_ANTHROPIC_API_KEY`.
 
-The key is never in settings, API responses, events, audit entries, logs, tests, fixtures, commits or documentation, and no agent asks the owner for it in a conversation. Provider and model are deployment configuration (`ONTAIX_LLM_PROVIDER`, default `anthropic`; `ONTAIX_LLM_MODEL`, default `claude-sonnet-5`; `ONTAIX_LLM_TIMEOUT_SECONDS`, default and maximum 15). Without a key the API runs normally and the teach bar uses the rule-based grammar alone (`llmOutcome` `not_configured`).
+The key is never in settings, API responses, events, audit entries, logs, tests, fixtures, commits or documentation, and no agent asks the owner for it in a conversation. Provider and model are deployment configuration (`ONTAIX_LLM_PROVIDER`, default `anthropic`; `ONTAIX_LLM_MODEL`, default `claude-sonnet-5`; `ONTAIX_LLM_TIMEOUT_SECONDS` for typed and document sentences, default and maximum 15; `ONTAIX_LLM_SPEECH_TIMEOUT_SECONDS` for speech transcripts, default and maximum 45). Without a key the API runs normally and the teach bar uses the rule-based grammar alone (`llmOutcome` `not_configured`).
 
 ## Security posture
 - No client secret anywhere: CI uses OIDC federation; pods use workload identity; images are pulled

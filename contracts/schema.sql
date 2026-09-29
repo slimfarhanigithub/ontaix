@@ -85,7 +85,7 @@ CREATE TABLE tenant_settings (
   updated_at           timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT tenant_settings_colors_is_object CHECK (jsonb_typeof(colors) = 'object')
 );
-COMMENT ON TABLE tenant_settings IS 'The 22 tenant settings plus appearance, the connector egress allowlist and the monthly token cap of Ontaix''s own language model calls (0 turns the teach extraction model step off); the two locked settings are enforced by CHECK constraints.';
+COMMENT ON TABLE tenant_settings IS 'The 22 tenant settings plus appearance, the connector egress allowlist and the monthly token cap of Ontaix''s own language model calls (default 2,000,000, so the teach extraction model step is on; 0 turns it off and is how an administrator opts out); the two locked settings are enforced by CHECK constraints.';
 
 CREATE TABLE tenant_view_state (
   tenant_id   uuid PRIMARY KEY REFERENCES tenant(id) ON DELETE CASCADE,
