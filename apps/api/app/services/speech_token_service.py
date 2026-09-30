@@ -2,9 +2,10 @@
 
 The caller must be allowed to teach the company (`proposal.create` in its scope) with the
 `voice` setting on. Each call spends one unit of the caller's hourly `speech` budget, and each
-issued token writes one audit entry that never holds the token. When no Speech resource is
-configured, or the token cannot be minted, the answer is `503 unavailable` and the Studio uses
-the browser's own recogniser.
+issued token writes one audit entry that never holds the token. The token is the Speech
+resource's own STS token, exchanged server-side from an Entra token that never leaves the API.
+When no Speech resource or credential is configured, or the exchange fails, the answer is
+`503 unavailable` and the Studio uses the browser's own recogniser.
 """
 
 from __future__ import annotations
@@ -60,7 +61,7 @@ async def mint(session: AsyncSession, caller: Caller, body: SpeechTokenRequest) 
         company_ids=[company.id],
     )
     return SpeechToken(
-        token=f"aad#{settings.speech_resource_id}#{access.token}",
+        token=access.token,
         region=settings.speech_region,
         expires_at=datetime.fromtimestamp(access.expires_on, UTC),
         language=settings.speech_language,

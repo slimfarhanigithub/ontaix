@@ -36,6 +36,7 @@ from app.utilities.document_errors import (
 )
 from app.utilities.document_text import (
     MAX_UPLOAD_BYTES,
+    MEDIA_TYPES,
     agreed_media_type,
     base_name,
     file_name_problem,
@@ -63,11 +64,17 @@ async def admit_import(session: AsyncSession, caller: Caller) -> None:
 
 
 async def import_sentences(
-    session: AsyncSession, caller: Caller, raw_file_name: str, content_type: str | None, data: bytes
+    session: AsyncSession,
+    caller: Caller,
+    raw_file_name: str,
+    content_type: str | None,
+    data: bytes,
+    chosen_media_type: str | None = None,
 ) -> ImportResult:
     """Sniff, extract, recognise, charge and store one upload admitted by `admit_import`;
     nothing is stored when any step refuses. The type comes from the bytes and must agree with
-    the declared one. Extraction runs in a child process with a time limit; image-only PDF pages
+    the declared one: `chosen_media_type` when given, else the extension, else the upload's
+    media type. Extraction runs in a child process with a time limit; image-only PDF pages
     are recognised by OCR. One parse unit per extracted sentence is spent before anything is
     stored.
     """
@@ -75,7 +82,9 @@ async def import_sentences(
     problem = file_name_problem(file_name)
     if problem:
         raise validation_failed("file", problem)
-    declared = media_type_of(file_name, content_type)
+    if chosen_media_type is not None and chosen_media_type not in MEDIA_TYPES:
+        raise validation_failed("mediaType", SUPPORTED_TYPES)
+    declared = chosen_media_type or media_type_of(file_name, content_type)
     if declared is None:
         raise ProblemError(415, "unsupported_media_type", SUPPORTED_TYPES)
     if len(data) > MAX_UPLOAD_BYTES:

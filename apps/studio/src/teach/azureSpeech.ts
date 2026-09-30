@@ -21,6 +21,11 @@ export const MAX_PHRASES = 500;
 export const MAX_PHRASE_CHARS = 120;
 /** A fresh token is set on the running recogniser this long before the current one expires. */
 export const TOKEN_REFRESH_LEAD_MS = 5 * 60_000;
+/**
+ * Silence that ends a sentence (Speech SDK `Speech_SegmentationSilenceTimeoutMs`), below the
+ * service default, so a finished sentence is recognised and taught sooner.
+ */
+export const SEGMENTATION_SILENCE_MS = 500;
 /** Shortest wait before a refresh, so a token already near its expiry is not asked for in a loop. */
 const MIN_REFRESH_DELAY_MS = 30_000;
 
@@ -62,6 +67,7 @@ export async function startAzureSpeech(
     sdk = await import('microsoft-cognitiveservices-speech-sdk');
     const config = sdk.SpeechConfig.fromAuthorizationToken(token.token, token.region);
     config.speechRecognitionLanguage = token.language;
+    config.setProperty(sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, String(SEGMENTATION_SILENCE_MS));
     recognizer = new sdk.SpeechRecognizer(config, sdk.AudioConfig.fromDefaultMicrophoneInput());
   } catch {
     return null;

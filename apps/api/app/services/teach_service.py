@@ -7,9 +7,11 @@ resolves to nothing becomes a proposed new cell, never a silent creation.
 
 When a fallback trigger holds, the language model step runs after the grammar. A valid answer
 replaces the grammar's intents, or is merged into them when only `partly_understood` triggered
-the step; any other end of the step leaves the grammar's result standing, marked `degraded`,
-with the whole sentence listed as unresolved. The sentence is then stored as a turn of the
-caller's teach session.
+the step. When the step is on and does not answer, or its answer is refused, typed text and
+speech draft nothing: the result is `not_understood`, marked `degraded`, with every segment
+listed as unresolved. Document sentences, and every origin while the step is off, keep the
+grammar's result, marked `degraded` when the step was needed. The sentence is then stored as a
+turn of the caller's teach session.
 
 A parse runs in two parts: `prepare` applies the gates and charges, so every refusal is raised
 before any answer begins, and runs the grammar; `PreparedParse.finish` runs the model step and
@@ -75,6 +77,8 @@ from app.utilities.transcript import MAX_SEGMENTS, split_transcript
 logger = logging.getLogger(__name__)
 
 PARSE_UNIT_CHARS = 400
+# Ends of a model step that is on but did not answer.
+UNAVAILABLE = frozenset({"rate_limited", "budget_exhausted", "timeout", "provider_error"})
 DOCUMENT_CONTEXT_SENTENCES = 2
 
 
@@ -114,6 +118,7 @@ class PreparedParse:
     grammar: GrammarPlan | None = None
     triggers: set = field(default_factory=set)
     model_first: bool = False
+    step_on: bool = False
 
     async def finish(self, on_drafts: DraftListener | None = None) -> TeachResult:
         """The parse result. With `on_drafts` the model's answer is streamed, and each part of
@@ -167,11 +172,13 @@ class PreparedParse:
             grammar, segments = _grammar_by_segment(drafter, sentence)
         else:
             grammar, segments = self.grammar or plan_grammar(drafter, text), whole
-        refused = step.outcome == "invalid_output" and source.reading.mode != "document"
+        refused = source.reading.mode != "document" and (
+            step.outcome == "invalid_output" or (self.step_on and step.outcome in UNAVAILABLE)
+        )
         if refused:
-            # The model answered and its answer was refused: typed and spoken text draft
-            # nothing in its place, so word runs never become labels, and every segment is
-            # listed with the reason.
+            # The model is on and its answer was refused, or it did not answer: typed and
+            # spoken text draft nothing in its place, so word runs never become labels, and
+            # every segment is listed with the reason. The owner can send the sentence again.
             grammar = GrammarPlan([], "not_understood", NOT_UNDERSTOOD, grammar.beyond)
         if not refused and not triggers and not source.reading.model_first:
             # Typed text the grammar reads whole: its result stands as it would with the
@@ -227,9 +234,8 @@ async def prepare(session: AsyncSession, caller: Caller, body: TeachRequest) -> 
     triggers: set = set()
     # Every origin goes to the model first while the step is on; typed text keeps the grammar
     # and its fallback triggers for when the step is off or does not answer.
-    model_first = source.reading.model_first or teach_extraction_service.enabled(
-        view, source.profile
-    )
+    step_on = teach_extraction_service.enabled(view, source.profile)
+    model_first = source.reading.model_first or step_on
     if not source.reading.model_first:
         grammar = plan_grammar(drafter, text)
         triggers = fallback_triggers(text, grammar.outcome)
@@ -243,6 +249,7 @@ async def prepare(session: AsyncSession, caller: Caller, body: TeachRequest) -> 
     await session.commit()
     prepared.drafter, prepared.dom_key, prepared.text = drafter, dom_key, text
     prepared.grammar, prepared.triggers, prepared.model_first = grammar, triggers, model_first
+    prepared.step_on = step_on
     return prepared
 
 

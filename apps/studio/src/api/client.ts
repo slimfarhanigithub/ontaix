@@ -39,6 +39,8 @@ import {
   type CompanyCreated,
   type DecisionResult,
   type DomainProduct,
+  type ImportDetection,
+  type ImportMediaType,
   type ImportResult,
   type OntologyImportRequest,
   type OntologyImportResult,
@@ -229,10 +231,16 @@ export const api = {
   teachParse: (body: TeachRequest, listen?: TeachStreamListener) =>
     listen ? teachParseStream(body, listen) : call<TeachResult>('POST', '/teach/parse', body),
   speechToken: (companyId: string) => call<SpeechToken>('POST', '/speech/token', { companyId }),
-  importSentences: (file: File) => {
+  importSentences: (file: File, mediaType?: ImportMediaType) => {
     const form = new FormData();
     form.append('file', file, file.name);
+    if (mediaType) form.append('mediaType', mediaType);
     return call<ImportResult>('POST', '/import/sentences', form);
+  },
+  detectImport: (file: File) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return call<ImportDetection>('POST', '/import/detect', form);
   },
   importOntology: (file: File, body: OntologyImportRequest) => {
     const form = new FormData();

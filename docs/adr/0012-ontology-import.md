@@ -46,7 +46,7 @@ Synchronous rather than a job: parsing and mapping are deterministic and bounded
 | CSV (`text/csv`) | Header row | Hierarchy table |
 | XLSX | OOXML sniffing of ADR 0011 | Hierarchy table, first sheet |
 
-SKOS vocabularies arrive in any RDF syntax. The detected format must agree with the declared media type or file extension (`415`). XML is read with no DTD and no entity expansion.
+SKOS vocabularies arrive in any RDF syntax. The detected format must agree with the declared one (`415`): the optional form field `format` when given (amendment, row 137; `turtle` also accepts N-Triples content; an unknown value is `422`), else the file extension, else the media type. `format` lets a file be read in a chosen format whatever its name says. XML is read with no DTD and no entity expansion. Whether a file is an ontology at all is answered by `POST /import/detect` (ADR 0011, amendment of row 137), which applies the same content sniffing and tells a CSV or XLSX hierarchy from a document table by its header row.
 
 ### Mapping
 
@@ -101,10 +101,10 @@ Per item, the first non-empty candidate of: `skos:prefLabel`, `rdfs:label`, `sko
 
 ### Review And Studio
 
-The Studio submits every draft, and the tree is reviewed with branch approval and the cascading reject of ADR 0010. Recorded deviation (row 115): the import dialog's `#imMode` gains a third `.chk` radio row, `Ontology`; the label languages come from the browser's language list, individuals are skipped and the tree goes under the taught company's root, with no new field; progress and outcome use the existing `.caption`. Exact texts are in `docs/ui-contract.md`.
+The Studio submits every draft, and the tree is reviewed with branch approval and the cascading reject of ADR 0010. Recorded deviation (rows 115 and 135): an imported file detected as an ontology goes to ontology import in the detected format, sent as `format`; the owner can read it another way from the `#imAs` pill beside Import; the label languages come from the browser's language list, individuals are skipped and the tree goes under the taught company's root; progress and outcome use the existing `.caption`. Exact texts are in `docs/ui-contract.md`.
 
 ## Consequences
 
 - An existing ontology or hierarchy becomes a reviewable proposal tree in one step, with provenance per proposal, and without any model call or egress.
 - Semantics beyond classes, hierarchy, labels and object relations are reported, not silently lost, and never reasoned over.
-- One new table, one new origin value, three new endpoints and two new Problem codes (`ontology_import_expired`, `ontology_import_submitted`).
+- One new table, one new origin value, three new endpoints and two new Problem codes (`ontology_import_expired`, `ontology_import_submitted`); row 137 adds the optional `format` form field.

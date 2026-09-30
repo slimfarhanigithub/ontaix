@@ -30,6 +30,7 @@ import { GREEN, RED, DEFAULT_BRASS, DEFAULT_COLORS, DOMAIN_TEMPLATES } from '../
 import { divide, type BirthDraws } from '../canvas/division';
 import { focusOnCell, focusOnDomain } from '../canvas/focus';
 import { hideLineageState, showLineageState } from '../canvas/lineage';
+import type { LastImport } from '../teach/importReading';
 import type { Renderer } from '../canvas/renderer';
 import {
   addCompany,
@@ -112,6 +113,8 @@ export interface UiState {
   linkBox: LinkBoxState | null;
   toasts: Toast[];
   importing: boolean;
+  /** The file imported last, how it was detected and how it was read; null before any import. */
+  lastImport: LastImport | null;
   /** Teach bar parses in flight: typed sentences, queued spoken sentences and document imports. */
   processing: number;
   /** The cell whose Expand suggestions are loading. */
@@ -177,6 +180,7 @@ class StudioStore {
       linkBox: null,
       toasts: [],
       importing: false,
+      lastImport: null,
       processing: 0,
       expanding: null,
       listening: false,

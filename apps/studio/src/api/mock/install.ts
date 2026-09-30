@@ -5,9 +5,9 @@
  * The answer is a Response-shaped object whose `json()` resolves in a microtask. A real
  * `Response` reads its body in a later task, and under a fake clock that gap lets a frame run
  * between two proposals of one teach batch, which the reference never does. A multipart upload
- * (`POST /import/sentences`, `POST /ontology-imports`) is read from its form before the mock
- * answers. A newline-delimited answer (`POST /teach/parse/stream`) has no readable body stream: its
- * lines are read whole from `text()`, in the same microtask.
+ * (`POST /import/detect`, `POST /import/sentences`, `POST /ontology-imports`) is read from its
+ * form before the mock answers. A newline-delimited answer (`POST /teach/parse/stream`) has no
+ * readable body stream: its lines are read whole from `text()`, in the same microtask.
  */
 import { createMockServer, type MockResponse, type MockServer } from './server';
 
@@ -30,14 +30,13 @@ async function upload(server: MockServer, path: string, form: FormData): Promise
   if (!(file instanceof Blob)) return answer(server.handle('POST', path, {}));
   const name = file instanceof File ? file.name : '';
   const received = { name, type: file.type, bytes: new Uint8Array(await file.arrayBuffer()) };
-  if (path === '/ontology-imports') {
-    const fields: Record<string, string> = {};
-    form.forEach((value, key) => {
-      if (typeof value === 'string') fields[key] = value;
-    });
-    return answer(await server.importOntology(received, fields));
-  }
-  return answer(await server.importDocument(received));
+  const fields: Record<string, string> = {};
+  form.forEach((value, key) => {
+    if (typeof value === 'string') fields[key] = value;
+  });
+  if (path === '/ontology-imports') return answer(await server.importOntology(received, fields));
+  if (path === '/import/detect') return answer(await server.detectImport(received));
+  return answer(await server.importDocument(received, fields));
 }
 
 function answer(res: MockResponse): Response {

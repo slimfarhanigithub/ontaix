@@ -19,6 +19,7 @@ is sent as `low`, the lowest effort Claude takes).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -40,6 +41,9 @@ TOKEN_SCOPE = "https://ai.azure.com/.default"
 # Idle connections stay open this long; the Foundry front end keeps them longer.
 KEEPALIVE_SECONDS = 120.0
 WARM_UP_TIMEOUT_SECONDS = 10.0
+# The warm-up waits this long for the token; an acquisition still running then completes into
+# the shared cache for the first call.
+WARM_UP_TOKEN_TIMEOUT_SECONDS = 70.0
 
 _REDACTING_FILTER = protect_loggers(
     ("anthropic", "azure", "msal", "httpx2", "httpx", "httpcore", "urllib3")
@@ -102,7 +106,7 @@ class AnthropicFoundryLlmClient:
         """Acquires the Entra ID token and opens a TLS connection to the Foundry host with an
         unauthenticated GET of the Messages base URL: no model call, no cost."""
         started = time.perf_counter()
-        await self._token()
+        await asyncio.wait_for(self._token(), WARM_UP_TOKEN_TIMEOUT_SECONDS)
         token_ms = int((time.perf_counter() - started) * 1000)
         await self._http.get(self._base_url, timeout=WARM_UP_TIMEOUT_SECONDS)
         logger.debug(

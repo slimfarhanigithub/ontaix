@@ -230,6 +230,15 @@ export interface ImportResult {
 
 export type OntologyFormat = 'rdf_xml' | 'turtle' | 'owl_xml' | 'json_ld' | 'n_triples' | 'obo' | 'csv' | 'xlsx';
 
+/** `POST /import/detect`: whether a file is a document or an ontology, decided from its bytes first. */
+export interface ImportDetection {
+  kind: 'document' | 'ontology';
+  /** The ontology format when `kind` is ontology, else null. */
+  format: OntologyFormat | null;
+  /** The document media type the bytes read as, for reading the file as a document. */
+  mediaType: ImportMediaType;
+}
+
 export type OntologySkipReason =
   | 'already_known'
   | 'reused_existing'
@@ -272,6 +281,8 @@ export interface OntologyImportRequest {
   languages?: string;
   individuals?: 'skip' | 'as_concepts';
   domainKey?: DomainKey;
+  /** The format to read the file as, in place of its extension and media type. */
+  format?: OntologyFormat;
 }
 
 export interface ConceptDraft extends DraftSeed, DraftOrigin {
@@ -620,10 +631,10 @@ export type TeachStreamListener = (event: TeachDraftEvent | TeachRetractEvent) =
 
 /** `POST /speech/token`: a short-lived Azure AI Speech token for the microphone. */
 export interface SpeechToken {
-  /** `aad#<resource id>#<access token>` for the Speech SDK; held in memory only. */
+  /** The Speech resource's STS token for the Speech SDK, valid about 10 minutes; held in memory only. */
   token: string;
   region: string;
-  /** ISO date-time the access token expires. */
+  /** ISO date-time the Speech token expires. */
   expiresAt: string;
   language: 'en-GB' | 'en-US';
 }
