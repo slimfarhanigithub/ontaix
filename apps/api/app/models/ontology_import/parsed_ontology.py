@@ -38,6 +38,7 @@ SkipReason = Literal[
     "forbidden_action",
     "cycle",
     "unknown_parent",
+    "unknown_domain",
 ]
 
 
@@ -47,6 +48,15 @@ class LabelLiteral:
     language: str | None = None
 
 
+@dataclass(frozen=True)
+class TaughtValue:
+    """A taught attribute read from an Ontaix export: its name, type and value."""
+
+    name: str
+    type: str
+    value: str
+
+
 @dataclass
 class OntologyItem:
     """A named class, SKOS concept, OBO term, individual or hierarchy row.
@@ -54,7 +64,9 @@ class OntologyItem:
     `source` is its IRI, OBO id or `row <n>`; `labels` maps a label property to its literals in
     file order; `local_name` is the IRI's last segment, the fallback label. `parents` are the
     sources of named parents with how the item hangs under each; `action` and `domain` come
-    from a hierarchy row's columns.
+    from a hierarchy row's columns or from the `ox:` annotations of an Ontaix export, which also
+    give `born_from` (the birth parent), `birth_reverse`, `rule`, `attributes`, and `root` for
+    the company root.
     """
 
     source: str
@@ -64,6 +76,11 @@ class OntologyItem:
     parents: list[tuple[str, ParentKind]] = field(default_factory=list)
     action: str | None = None
     domain: str | None = None
+    born_from: str | None = None
+    birth_reverse: bool = False
+    rule: str | None = None
+    root: bool = False
+    attributes: list[TaughtValue] = field(default_factory=list)
 
     def add_label(self, prop: str, literal: LabelLiteral) -> None:
         self.labels.setdefault(prop, []).append(literal)
@@ -108,3 +125,5 @@ class ParsedOntology:
     skipped: list[SkippedSource] = field(default_factory=list)
     # True for CSV and XLSX hierarchies: items keep file order instead of the source-sorted one.
     table: bool = False
+    # True when the file uses the Ontaix vocabulary (`ox:`), as an Ontaix export does.
+    ontaix: bool = False

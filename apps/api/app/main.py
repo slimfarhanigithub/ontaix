@@ -30,6 +30,7 @@ from app.routers import (
     cost,
     domain_products,
     expansions,
+    export,
     extractions,
     health,
     imports,
@@ -120,6 +121,7 @@ def create_app() -> FastAPI:
         imports,
         ontology_imports,
         extractions,
+        export,
         audit,
         cost,
     ):

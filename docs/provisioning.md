@@ -93,6 +93,10 @@ OCR of scanned PDF pages (ADR 0011) calls a Mistral document model deployed on t
 | `ONTAIX_ONTOLOGY_IMPORT_MAX_BYTES` | 20971520 | 20 MiB |
 | `ONTAIX_ONTOLOGY_IMPORT_MAX_NODES` | 5000 | Drafts per import, at most 20,000; no depth limit |
 | `ONTAIX_ONTOLOGY_IMPORT_PARSE_TIMEOUT_SECONDS` | 60 | Child-process wall clock |
+| `ONTAIX_EXPORT_MAX_CONCEPTS` | 20000 | Concepts per export (ADR 0016); `413` above |
+| `ONTAIX_EXPORT_PER_HOUR` | 20 | Exports per user or agent |
+| `ONTAIX_EXPORT_TIMEOUT_SECONDS` | 60 | Child-process wall clock; `503 unavailable` past it |
+| `ONTAIX_EXPORT_BASE_IRI` | `urn:ontaix:` | Base of every exported IRI |
 
 Without `ONTAIX_FOUNDRY_ENDPOINT` the API runs normally and the teach bar uses the rule-based grammar alone (`llmOutcome` `not_configured`).
 
