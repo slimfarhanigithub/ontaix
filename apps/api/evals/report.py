@@ -48,6 +48,7 @@ def markdown(record: RunRecord) -> str:
     for stage in record.stages:
         lines += _stage(stage)
         lines += _speech(stage)
+        lines += _timings(stage)
     lines += _cases(record)
     lines += _documents(record)
     if record.notes:
@@ -195,6 +196,39 @@ def _speech(stage: StageResult) -> list[str]:
             f"{_labels(row['invented'])} | {_labels(row['missed'])} |"
         )
     return [*lines, ""]
+
+
+def _timings(stage: StageResult) -> list[str]:
+    """Per configuration, the milliseconds of every stage of a parse and of the model step at
+    the median, the 90th percentile and the slowest, over every parse of the run."""
+    lines: list[str] = []
+    for run_key, per_suite in stage.summaries.items():
+        summary = per_suite[ALL_SUITES]
+        if not summary.stage_timings:
+            continue
+        lines += [
+            f"### {stage.name.title()} Timing Breakdown For {run_key}",
+            "",
+            "Milliseconds per stage over every parse of the run. `parse` is the request: "
+            "`view` loads the ontology, `source` applies the gates and charges, `grammar` "
+            "runs the rules, `model` is the whole model step, `drafts` builds the drafts and "
+            "`turns` stores the session turns. `extraction` is the model step: `budget` and "
+            "`reserve` check and reserve the budgets, `candidates`, `examples` and `context` "
+            "build the prompt, `provider` is the whole model call and `provider_first_token` "
+            "its time to the first answer fragment when streamed, `interpret` validates, "
+            "grounds and maps the answer, `settle` records the cost. Token counts are per "
+            "call.",
+            "",
+            "| Clock | Stage | Parses | p50 | p90 | Max |",
+            "|---|---|---|---|---|---|",
+        ]
+        for name, stages in summary.stage_timings.items():
+            for label, p in stages.items():
+                lines.append(
+                    f"| {name} | {label} | {p.count} | {p.p50_ms} | {p.p90_ms} | {p.max_ms} |"
+                )
+        lines.append("")
+    return lines
 
 
 def _labels(labels: list[str]) -> str:

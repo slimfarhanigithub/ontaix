@@ -3,7 +3,9 @@
 Concept and relation precision, recall and F1 are micro-averaged over the scored cases; parent,
 action and path accuracy are over matched concepts; recall is also given against groundable
 concepts only (labels the source text contains). Levels are summed over cases and reported for
-every level present, with no depth limit. Cost and latency cover every case, scored or not.
+every level present, with no depth limit. Cost and latency cover every case, scored or not, and
+so do the stage timings: the median, 90th percentile and slowest of every stage each parse of
+the pipeline published, so a change in latency is placed in the stage that caused it.
 Pure functions: no I/O.
 """
 
@@ -13,6 +15,7 @@ import math
 from collections import Counter
 from dataclasses import dataclass, field
 
+from app.utilities.stage_clock import StageTimings
 from evals.scoring import CaseScore, f1
 
 
@@ -31,6 +34,20 @@ class CaseUsage:
     llm_outcomes: dict[str, int] = field(default_factory=dict)
     extractors: dict[str, int] = field(default_factory=dict)
     error: str | None = None
+    # The provider's time to its first answer fragment, per streamed call.
+    first_token_ms: list[int] = field(default_factory=list)
+    timings: list[StageTimings] = field(default_factory=list)
+
+
+@dataclass
+class StagePercentiles:
+    """One stage over every parse of a run: how many parses ran it, and its milliseconds at the
+    median, the 90th percentile and the slowest."""
+
+    count: int
+    p50_ms: int
+    p90_ms: int
+    max_ms: int
 
 
 @dataclass
@@ -80,6 +97,8 @@ class RunSummary:
     mean_latency_s: float
     p95_latency_s: float
     llm_outcomes: dict[str, int]
+    # Per clock name (`parse`, `extraction`), per stage, in the order the stages first ended.
+    stage_timings: dict[str, dict[str, StagePercentiles]] = field(default_factory=dict)
 
 
 def summarise(
@@ -139,7 +158,30 @@ def summarise(
         mean_latency_s=_mean(latencies) / 1000,
         p95_latency_s=_percentile(latencies, 0.95) / 1000,
         llm_outcomes=dict(sorted(outcomes.items())),
+        stage_timings=stage_percentiles([t for u in usages for t in u.timings]),
     )
+
+
+def stage_percentiles(timings: list[StageTimings]) -> dict[str, dict[str, StagePercentiles]]:
+    """Every stage of every clock name in `timings`, with its percentiles over the parses that
+    ran it; counters (`input_tokens`, `output_tokens`) are summarised the same way."""
+    values: dict[str, dict[str, list[int]]] = {}
+    for t in timings:
+        per_stage = values.setdefault(t.name, {})
+        for stage, ms in [*t.stages.items(), *t.counts.items()]:
+            per_stage.setdefault(stage, []).append(ms)
+    out: dict[str, dict[str, StagePercentiles]] = {}
+    for name, per_stage in values.items():
+        out[name] = {}
+        for stage, samples in per_stage.items():
+            ordered = sorted(samples)
+            out[name][stage] = StagePercentiles(
+                len(ordered),
+                int(_percentile(ordered, 0.5)),
+                int(_percentile(ordered, 0.9)),
+                ordered[-1],
+            )
+    return out
 
 
 def _levels(scores: list[CaseScore]) -> dict[int, LevelSummary]:

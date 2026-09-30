@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from app.utilities.stage_clock import StageTimings, record_timings
 from evals.aggregate import CaseUsage
 from evals.input_modes import DocumentCache, InputMode, ModeUnavailable
 from evals.recording_llm_client import RecordedCall, record_calls
@@ -40,6 +41,8 @@ class CaseResult:
     repeat: int
     units: list[UnitResult] = field(default_factory=list)
     calls: list[RecordedCall] = field(default_factory=list)
+    # The stage timings every parse of the case published, in order (see `usage_of`).
+    timings: list[StageTimings] = field(default_factory=list)
     usage: CaseUsage = field(default_factory=CaseUsage)
     concepts: list[PredictedConcept] = field(default_factory=list)
     relations: list[PredictedRelation] = field(default_factory=list)
@@ -68,6 +71,7 @@ async def run_case(
     """Never raises: a failure is recorded on the result."""
     result = CaseResult(case.id, case.kind, case.origin, mode.name, run_key, repeat)
     result.calls = record_calls()
+    result.timings = record_timings()
     started = time.monotonic()
     try:
         ws = Workspace(client, case)
@@ -157,4 +161,6 @@ def usage_of(result: CaseResult) -> CaseUsage:
         llm_outcomes=dict(outcomes),
         extractors=dict(extractors),
         error=result.error,
+        first_token_ms=[c.first_token_ms for c in result.calls if c.first_token_ms is not None],
+        timings=list(result.timings),
     )

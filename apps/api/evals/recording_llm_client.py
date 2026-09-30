@@ -43,6 +43,8 @@ class RecordedCall:
     cost_eur: float
     latency_ms: int
     error: str | None = None
+    # The provider's time to its first answer fragment; None when the answer was read whole.
+    first_token_ms: int | None = None
 
 
 @dataclass
@@ -140,7 +142,11 @@ class RecordingLlmClient:
         if calls is not None:
             calls.append(
                 RecordedCall(
-                    answer.input_tokens, answer.output_tokens, answer.cost_eur, answer.latency_ms
+                    answer.input_tokens,
+                    answer.output_tokens,
+                    answer.cost_eur,
+                    answer.latency_ms,
+                    first_token_ms=answer.first_token_ms,
                 )
             )
         return answer

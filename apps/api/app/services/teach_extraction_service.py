@@ -18,7 +18,6 @@ import functools
 import json
 import logging
 import re
-import time
 import unicodedata
 import uuid
 from collections.abc import Callable, Iterator
@@ -71,6 +70,7 @@ from app.utilities.action_text import has_refused_character, normalise_action
 from app.utilities.example_selection import most_similar, within_budget
 from app.utilities.permissions import can_read
 from app.utilities.sound_alike import sounds_like_name
+from app.utilities.stage_clock import StageClock
 from app.utilities.teach_parser import singular, title
 
 logger = logging.getLogger(__name__)
@@ -150,22 +150,6 @@ class _UnorderedSegments(Exception):
     """The answer's segments overlap, go backwards, are out of order or are too long."""
 
 
-class _Stages:
-    """Milliseconds spent in each named stage of one step, for the debug log."""
-
-    def __init__(self) -> None:
-        self._last = time.perf_counter()
-        self._spent: list[tuple[str, int]] = []
-
-    def mark(self, stage: str) -> None:
-        now = time.perf_counter()
-        self._spent.append((stage, int((now - self._last) * 1000)))
-        self._last = now
-
-    def __str__(self) -> str:
-        return " ".join(f"{stage}={ms}ms" for stage, ms in self._spent)
-
-
 @dataclass(frozen=True)
 class Reading:
     """How the model reads the input: one typed sentence, a whole speech transcript, or one
@@ -231,16 +215,19 @@ async def _run(
     if cap <= 0:
         return ModelStep("budget_exhausted")
     actor_kind = caller.actor_kind.value
-    stages = _Stages()
+    clock = StageClock("extraction")
     if not await try_charge(Budget.LLM, caller.tenant_id, actor_kind, caller.user_id):
         return ModelStep("rate_limited")
-    stages.mark("budget")
+    clock.mark("budget")
     handles = _candidates(caller, drafter, text, turns)
+    clock.mark("candidates")
+    examples = examples_for(text, reading.mode)
+    clock.mark("examples")
     config = get_settings()
     allowance = config.llm_profile(profile).reasoning_allowance_tokens
     request = LlmRequest(
         system=SYSTEM_PROMPT,
-        user=_context(drafter, text, turns, handles, reading),
+        user=_context(drafter, text, turns, handles, reading, examples),
         output_schema=SPEECH_OUTPUT_SCHEMA if reading.speech else OUTPUT_SCHEMA,
         # The answer bound plus the reasoning allowance: a provider's output bound counts
         # reasoning tokens too. The answer's own size is bounded by its validation.
@@ -250,12 +237,12 @@ async def _run(
             config.llm_speech_timeout_seconds if reading.speech else config.llm_timeout_seconds
         ),
     )
-    stages.mark("context")
+    clock.mark("context")
     upper_bound = client.estimate_input_tokens(request) + request.max_output_tokens
     reservation = await llm_usage_service.reserve(caller.tenant_id, upper_bound, cap)
     if reservation is None:
         return ModelStep("budget_exhausted")
-    stages.mark("reserve")
+    clock.mark("reserve")
 
     def record(outcome: str, tokens_in: int, tokens_out: int, cost: float, ms: int) -> CallRecord:
         return CallRecord(
@@ -282,13 +269,18 @@ async def _run(
         except LlmCallError as exc:
             outcome = "timeout" if isinstance(exc, LlmTimeout) else "provider_error"
             usage = (exc.input_tokens, exc.output_tokens, exc.cost_eur, exc.latency_ms)
+            clock.mark("provider")
             return ModelStep(outcome)
         except Exception:
             logger.exception("the language model adapter failed unexpectedly")
             outcome = "provider_error"
+            clock.mark("provider")
             return ModelStep(outcome)
         usage = (answer.input_tokens, answer.output_tokens, answer.cost_eur, answer.latency_ms)
-        stages.mark("model")
+        clock.mark("provider")
+        clock.set("provider_first_token", answer.first_token_ms)
+        clock.count("input_tokens", answer.input_tokens)
+        clock.count("output_tokens", answer.output_tokens)
         try:
             step = _interpret(answer.text, handles, drafter, sentence, text, reading)
         except _InvalidAnswer as exc:
@@ -300,15 +292,16 @@ async def _run(
         outcome = "used"
         return step
     finally:
-        stages.mark("interpret")
+        clock.mark("interpret")
         await _settle(reservation, record(outcome, *usage))
-        stages.mark("settle")
+        clock.mark("settle")
+        clock.total()
         logger.debug(
             "teach extraction on %s (%s, %d input tokens estimated): %s",
             profile,
             outcome,
             upper_bound - request.max_output_tokens,
-            stages,
+            clock.publish(),
         )
 
 
@@ -396,8 +389,10 @@ def _context(
     turns: list[StoredTurn],
     handles: list[Concept],
     reading: Reading,
+    examples: list[dict[str, Any]],
 ) -> str:
-    """The user message: the call's data as JSON, with handles in place of every id."""
+    """The user message: the call's data as JSON, with handles in place of every id; `examples`
+    are the retrieved worked examples (`examples_for`)."""
     view = drafter.view
     handle_of = {c.id: f"c{i}" for i, c in enumerate(handles)}
 
@@ -439,7 +434,7 @@ def _context(
     if reading.mode == "document":
         data["neighbours"] = {"before": list(reading.before), "after": list(reading.after)}
     # The retrieved examples come first, after the fixed prefix and before the caller's text.
-    return json.dumps({"examples": examples_for(text, reading.mode), **data}, ensure_ascii=False)
+    return json.dumps({"examples": examples, **data}, ensure_ascii=False)
 
 
 def examples_for(text: str, mode: str) -> list[dict[str, Any]]:

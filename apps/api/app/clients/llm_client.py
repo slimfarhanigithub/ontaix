@@ -56,6 +56,9 @@ class LlmAnswer:
     output_tokens: int
     cost_eur: float
     latency_ms: int
+    # Milliseconds from the start of the call to the first answer fragment, when the answer was
+    # streamed; None when the call read the answer whole.
+    first_token_ms: int | None = None
 
 
 class LlmCallError(Exception):

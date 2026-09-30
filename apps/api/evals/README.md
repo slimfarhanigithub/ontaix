@@ -42,6 +42,10 @@ The default `--plan smart` is shown above; each effort falls back to the closest
 - Grounding ceiling: the share of expected labels found whole-word in the source; recall is reported against all expected concepts and against groundable ones only.
 - Finals pair each configuration with the baseline case by case (concept F1 against groundable concepts, each case's mean over repeats): mean difference, 95 % CI, wins/ties/losses, sign test.
 
+## Timing Breakdown
+
+Each stage's report holds, per configuration, a Timing Breakdown table: for every stage of a parse (`view`, `source`, `grammar`, `model`, `drafts`, `turns`) and of the model step (`budget`, `candidates`, `examples`, `context`, `reserve`, `provider`, `provider_first_token` when streamed, `interpret`, `settle`), the number of parses that ran it and its milliseconds at the median, the 90th percentile and the slowest, with the input and output token counts per call. The pipeline publishes the timings of every parse in process (`app/utilities/stage_clock.py`); the harness records them per case (`CaseResult.timings`) and the JSON record keeps them under each summary's `stage_timings`. A latency change is read off the stage that moved, not off the total alone.
+
 ## Cases
 
 | Origin | Where | Notes |

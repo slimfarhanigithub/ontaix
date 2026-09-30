@@ -17,7 +17,6 @@ turn of the caller's teach session.
 from __future__ import annotations
 
 import logging
-import time
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -62,6 +61,7 @@ from app.utilities.channels import (
 )
 from app.utilities.permissions import can_propose_anywhere, can_read
 from app.utilities.problems import forbidden, not_found
+from app.utilities.stage_clock import StageClock
 from app.utilities.teach_parser import domain_prefix
 from app.utilities.teach_triggers import fallback_triggers, replaces_grammar
 from app.utilities.transcript import MAX_SEGMENTS, split_transcript
@@ -86,15 +86,16 @@ class _Source:
 
 
 async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> TeachResult:
-    started = time.perf_counter()
+    clock = StageClock("parse")
     view = await load_view(session, caller.tenant_id)
-    view_ms = int((time.perf_counter() - started) * 1000)
+    clock.mark("view")
     company = view.companies.get(body.company_id)
     if company is None or not can_read(caller.grants, company.id):
         raise not_found("company")
     if not can_propose_anywhere(caller.grants, caller.everyone_teaches):
         raise forbidden("Your roles do not allow proposing")
     source = await _source(session, caller, view, body)
+    clock.mark("source")
     key = (
         teach_session_service.session_key(caller, company.id, body.session_id)
         if body.session_id
@@ -120,6 +121,7 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
     if not source.reading.model_first:
         grammar = plan_grammar(drafter, text)
         triggers = fallback_triggers(text, grammar.outcome)
+        clock.mark("grammar")
     if grammar is not None and not triggers and not model_first:
         kept = assemble(grammar.planned, sentence)
         caption = grammar.caption
@@ -131,6 +133,7 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
         step = await teach_extraction_service.run(
             caller, drafter, sentence, text, turns, source.reading, profile=source.profile
         )
+        clock.mark("model")
         if step.outcome != "used":
             if speech:
                 grammar, segments = _grammar_by_segment(drafter, sentence)
@@ -156,14 +159,11 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
             replace = model_first or replaces_grammar(triggers)
             segments = step.segments or whole
             result, kept = _with_model(grammar, step, replace, sentence, dom_key, source, segments)
+    clock.mark("drafts")
     await teach_session_service.store_turns(key, result.extractor, _turns(source, result, kept))
-    logger.debug(
-        "teach parse (%s, %s): view %d ms, total %d ms",
-        result.extractor,
-        result.llm_outcome,
-        view_ms,
-        int((time.perf_counter() - started) * 1000),
-    )
+    clock.mark("turns")
+    clock.total()
+    logger.debug("teach parse (%s, %s): %s", result.extractor, result.llm_outcome, clock.publish())
     return result
 
 
