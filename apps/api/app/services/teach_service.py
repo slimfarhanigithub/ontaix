@@ -40,8 +40,14 @@ from app.models.api.teach import (
     TeachResult,
     UnresolvedPhrase,
 )
+from app.models.storage.company import Company
 from app.repositories.teach_session_turn_repository import SessionKey
-from app.services import import_service, teach_extraction_service, teach_session_service
+from app.services import (
+    import_service,
+    learning_capture_service,
+    teach_extraction_service,
+    teach_session_service,
+)
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.rate_limit_service import Budget, charge
 from app.services.teach_draft_service import (
@@ -119,6 +125,8 @@ class PreparedParse:
     triggers: set = field(default_factory=set)
     model_first: bool = False
     step_on: bool = False
+    company: Company | None = None
+    session_id: uuid.UUID | None = None
 
     async def finish(self, on_drafts: DraftListener | None = None) -> TeachResult:
         """The parse result. With `on_drafts` the model's answer is streamed, and each part of
@@ -132,6 +140,11 @@ class PreparedParse:
         turns = _turns(self.source, result, kept)
         await teach_session_service.store_turns(self.key, result.extractor, turns)
         self.clock.mark("turns")
+        assert self.company is not None
+        result.parse_id = await learning_capture_service.record_parse(
+            self.caller, self.company, self.session_id, self.source.origin, self.sentence, result
+        )
+        self.clock.mark("learning")
         self.clock.total()
         logger.debug(
             "teach parse (%s, %s): %s", result.extractor, result.llm_outcome, self.clock.publish()
@@ -223,6 +236,7 @@ async def prepare(session: AsyncSession, caller: Caller, body: TeachRequest) -> 
     )
     sentence = source.text.strip()
     prepared = PreparedParse(caller, source, key, sentence, clock)
+    prepared.company, prepared.session_id = company, body.session_id
     root = view.root_of(company.id)
     if root is None:
         empty = Assembled([], [], [], [], [], [], [])

@@ -24,6 +24,7 @@ EXTRACTION_STAGES = [
     "budget",
     "candidates",
     "examples",
+    "learning",
     "context",
     "reserve",
     "provider",
@@ -49,7 +50,16 @@ async def test_a_parse_publishes_the_stages_of_the_request_and_of_the_model_step
     extraction, parse = timings
     assert list(extraction.stages) == EXTRACTION_STAGES
     assert extraction.counts == {"input_tokens": 812, "output_tokens": 64}
-    assert list(parse.stages) == ["view", "source", "grammar", "model", "drafts", "turns", "total"]
+    assert list(parse.stages) == [
+        "view",
+        "source",
+        "grammar",
+        "model",
+        "drafts",
+        "turns",
+        "learning",
+        "total",
+    ]
     assert parse.stages["total"] >= parse.stages["model"] >= extraction.stages["provider"]
 
 
