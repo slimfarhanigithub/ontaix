@@ -218,16 +218,10 @@ async def _document(
 @pytest.mark.parametrize(
     "data",
     [
-        b'"label,parent
-Sales,
-Orders,Sales
-',
-        b"label,parent
-" + b"x" * 200_000 + b"
-",
-        b"x" * 200_000 + b",parent
-",
+        b'"label,parent\nSales,\nOrders,Sales\n',
+        b"x" * 200_000 + b",parent\n",
     ],
+    ids=["unclosed_quote", "long_header"],
 )
 async def test_malformed_csv_is_a_document_not_an_error(
     client: httpx.AsyncClient, tenant: TenantFixture, data: bytes
@@ -238,29 +232,32 @@ async def test_malformed_csv_is_a_document_not_an_error(
     assert response.json() == {"kind": "document", "format": None, "mediaType": "text/csv"}
 
 
+async def test_a_row_beyond_the_prefix_leaves_the_header_verdict(
+    client: httpx.AsyncClient, tenant: TenantFixture
+) -> None:
+    data = b"label,parent\n" + b"x" * 200_000 + b"\n"
+
+    response = await detect(client, tenant, "tree.csv", data)
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"kind": "ontology", "format": "csv", "mediaType": "text/csv"}
+
+
 async def test_the_csv_header_sniff_answers_false_on_csv_errors() -> None:
-    assert is_csv_hierarchy(b'"label,parent
-Sales,
-') is False
+    assert is_csv_hierarchy(b'"label,parent\nSales,\n') is False
     assert is_csv_hierarchy(b'"' + b"a" * 200_000) is False
-    assert is_csv_hierarchy(b"label;parent
-Sales;
-") is True
+    assert is_csv_hierarchy(b"label;parent\nSales;\n") is True
 
 
 async def test_only_a_bounded_prefix_of_a_text_file_is_read() -> None:
-    triples = b"<http://x/a> <http://x/p> <http://x/b> .
-" * 5_000
-    late_directive = b"The plant runs three lines.
-" * 5_000 + b"@prefix : <http://x/> .
-"
+    triples = b"<http://x/a> <http://x/p> <http://x/b> .\n" * 5_000
+    late_directive = b"The plant runs three lines.\n" * 5_000 + b"@prefix : <http://x/> .\n"
     split_character = b"a" * (PREFIX_BYTES - 1) + "é".encode() + b"tail"
 
     assert len(triples) > PREFIX_BYTES
     assert detect_import("big.txt", None, triples).format == "n_triples"
     assert detect_import("notes.txt", None, late_directive).kind == "document"
-    assert text_prefix(triples).endswith(b".
-") and len(text_prefix(triples)) <= PREFIX_BYTES
+    assert text_prefix(triples).endswith(b".\n") and len(text_prefix(triples)) <= PREFIX_BYTES
     assert text_prefix(split_character) == b"a" * (PREFIX_BYTES - 1)
 
 
