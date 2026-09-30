@@ -6,13 +6,14 @@
  */
 import { Fragment, useEffect, useRef, type ReactNode, type RefObject } from 'react';
 
+import { useBusyAction } from './busy';
 import { useStore } from './dom';
 
 export interface DialogButton {
   label: string;
   cls?: string;
-  /** Returns false to keep the dialog open. */
-  onClick?: (root: HTMLDivElement, close: () => void) => boolean | void;
+  /** Returns false to keep the dialog open; a returned promise keeps it open, its button waiting, until it settles. */
+  onClick?: (root: HTMLDivElement, close: () => void) => boolean | void | Promise<boolean | void>;
   keep?: boolean;
 }
 
@@ -93,21 +94,37 @@ function StandardDialog({ spec, close }: { spec: DialogSpec; close: () => void }
       onClose={close}
       backRef={back}
       footer={(spec.buttons || []).map((b, i) => (
-        <button
-          key={i}
-          className={`btn ${b.cls || ''}`}
-          data-i={i}
-          onClick={() => {
-            const r = b.onClick && back.current ? b.onClick(back.current, close) : undefined;
-            if (r !== false && !b.keep) close();
-          }}
-        >
-          {b.label}
-        </button>
+        <FooterButton key={i} index={i} button={b} back={back} close={close} />
       ))}
     >
       {spec.body}
     </DialogFrame>
+  );
+}
+
+/** A footer button: closes the dialog after its click, or after the click's promise settles. */
+function FooterButton({ index, button: b, back, close }: { index: number; button: DialogButton; back: RefObject<HTMLDivElement | null>; close: () => void }) {
+  const { shown, run } = useBusyAction();
+  const after = (r: boolean | void) => {
+    if (r !== false && !b.keep) close();
+  };
+  return (
+    <button
+      className={`btn ${b.cls || ''}`}
+      data-i={index}
+      disabled={shown}
+      aria-busy={shown ? 'true' : undefined}
+      onClick={() =>
+        run(() => {
+          const r = b.onClick && back.current ? b.onClick(back.current, close) : undefined;
+          if (r instanceof Promise) return r.then(after);
+          after(r);
+        })
+      }
+    >
+      {shown ? <span className="spin"></span> : null}
+      {b.label}
+    </button>
   );
 }
 

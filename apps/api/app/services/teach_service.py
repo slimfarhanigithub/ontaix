@@ -133,7 +133,13 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
                 grammar, segments = _grammar_by_segment(drafter, sentence)
             else:
                 grammar, segments = grammar or plan_grammar(drafter, text), whole
-            if grammar is not None and not triggers and not source.reading.model_first:
+            refused = step.outcome == "invalid_output" and source.reading.mode != "document"
+            if refused:
+                # The model answered and its answer was refused: typed and spoken text draft
+                # nothing in its place, so word runs never become labels, and every segment is
+                # listed with the reason.
+                grammar = GrammarPlan([], "not_understood", NOT_UNDERSTOOD, grammar.beyond)
+            if not refused and not triggers and not source.reading.model_first:
                 # Typed text the grammar reads whole: its result stands as it would with the
                 # step off, and the outcome says why the model did not answer.
                 kept = assemble(grammar.planned, sentence)

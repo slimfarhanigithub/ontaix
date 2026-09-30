@@ -12,6 +12,7 @@ import type { Group, ProposalDraft, Scope, User } from '../api/types';
 import { DOMAIN_TEMPLATES } from '../canvas/constants';
 import type { Company, Link, Node } from '../canvas/types';
 import { title } from '../nl/parser';
+import { BusyButton, useBusyAction } from '../shell/busy';
 import { DialogFrame } from '../shell/Dialog';
 import { store } from '../store/store';
 import { attempt, directory, failed, fetchAll, invalidateDirectory } from './adminData';
@@ -31,12 +32,22 @@ export function renderAdmin(): void {
 }
 
 /** A small dialog with Cancel and one action button, the reference's `confirmDialog`. */
-export function confirmDialog(heading: string, body: ReactNode, label: string, onYes: () => void, danger?: boolean): void {
+export function confirmDialog(heading: string, body: ReactNode, label: string, onYes: () => unknown, danger?: boolean): void {
   store.openDialog({
     title: heading,
     body,
     small: true,
-    buttons: [{ label: 'Cancel' }, { label, cls: danger ? 'danger' : 'primary', onClick: () => onYes() }],
+    buttons: [
+      { label: 'Cancel' },
+      {
+        label,
+        cls: danger ? 'danger' : 'primary',
+        onClick: () => {
+          const r = onYes();
+          if (r instanceof Promise) return r.then(() => undefined);
+        },
+      },
+    ],
   });
 }
 
@@ -44,15 +55,15 @@ export function confirmDialog(heading: string, body: ReactNode, label: string, o
  * Sends a draft; the success feedback runs only once the server has accepted it. A refusal
  * shows the store's refusal toast instead.
  */
-function proposeThen(draft: ProposalDraft, accepted: () => void): void {
-  void store.propose(draft).then((p) => {
+function proposeThen(draft: ProposalDraft, accepted: () => void): Promise<void> {
+  return store.propose(draft).then((p) => {
     if (p) accepted();
   }, failed);
 }
 
 /** Runs a proposal-creating call; the success feedback runs only when it was accepted. */
-function attemptThen<T>(call: () => Promise<T>, accepted: () => void): void {
-  void attempt(call).then((r) => {
+function attemptThen<T>(call: () => Promise<T>, accepted: () => void): Promise<void> {
+  return attempt(call).then((r) => {
     if (r !== null) accepted();
   });
 }
@@ -60,14 +71,11 @@ function attemptThen<T>(call: () => Promise<T>, accepted: () => void): void {
 // ------------------------------------------------------------ settings
 
 /** Flips a tenant setting; turning off "Companies may interact" goes through the typed confirmation. */
-export function changeSetting(k: SettingKey): void {
+export function changeSetting(k: SettingKey): Promise<void> {
   const st = store.ui.settings;
-  if (!st) return;
-  if (k === 'crossCompany' && st.crossCompany) {
-    disableCrossCompany();
-    return;
-  }
-  void attempt(() => api.patchSettings({ [k]: !st[k] })).then((next) => {
+  if (!st) return Promise.resolve();
+  if (k === 'crossCompany' && st.crossCompany) return disableCrossCompany();
+  return attempt(() => api.patchSettings({ [k]: !st[k] })).then((next) => {
     if (!next) return;
     store.ui.settings = next;
     store.applySettings();
@@ -83,43 +91,44 @@ export function changeRefresh(value: string): void {
 
 const crossLinks = (): Link[] => store.s.links.filter((l) => l.a.company !== l.b.company && !l.dying);
 
-function disableCrossCompany(): void {
+/** With no cross-company relationship the switch turns off at once; otherwise the typed confirmation opens. */
+function disableCrossCompany(): Promise<void> {
   const xl = crossLinks();
   const done = (removed: number) => {
     store.toast2('Disabled', `${plural(removed, 'cross-company relationship')} removed`);
     store.applySettings();
     renderAdmin();
   };
-  if (!xl.length) {
-    void attempt(() => api.patchSettings({ crossCompany: false })).then((next) => {
+  if (!xl.length)
+    return attempt(() => api.patchSettings({ crossCompany: false })).then((next) => {
       if (!next) return;
       store.ui.settings = next;
       done(0);
     });
-    return;
-  }
   store.openDialog({
     render: (close) => (
       <CrossCompanyDialog
         links={xl}
         close={close}
-        onConfirm={(typed) => {
-          void attempt(() => api.disableCrossCompany(typed)).then((res) => {
+        onConfirm={(typed) =>
+          attempt(() => api.disableCrossCompany(typed)).then((res) => {
             if (!res) return;
             store.ui.settings = res.settings;
             done(res.removedRelations);
-          });
-        }}
+          })
+        }
       />
     ),
   });
+  return Promise.resolve();
 }
 
-function CrossCompanyDialog({ links, close, onConfirm }: { links: Link[]; close: () => void; onConfirm: (typed: string) => void }) {
+function CrossCompanyDialog({ links, close, onConfirm }: { links: Link[]; close: () => void; onConfirm: (typed: string) => Promise<void> }) {
   const [typed, setTyped] = useState('');
   const [bad, setBad] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const ok = isDisableConfirmed(typed);
+  const { shown, run } = useBusyAction();
   useEffect(() => {
     const t = setTimeout(() => input.current?.focus(), 40);
     return () => clearTimeout(t);
@@ -131,8 +140,7 @@ function CrossCompanyDialog({ links, close, onConfirm }: { links: Link[]; close:
       input.current?.focus();
       return;
     }
-    close();
-    onConfirm(typed.trim().toLowerCase());
+    return onConfirm(typed.trim().toLowerCase()).then(close);
   };
   return (
     <DialogFrame
@@ -144,7 +152,15 @@ function CrossCompanyDialog({ links, close, onConfirm }: { links: Link[]; close:
           <button className="btn " data-i={0} onClick={close}>
             Cancel
           </button>
-          <button className="btn danger" data-i={1} disabled={!ok} style={{ opacity: ok ? 1 : 0.5 }} onClick={submit}>
+          <button
+            className="btn danger"
+            data-i={1}
+            disabled={!ok || shown}
+            aria-busy={shown ? 'true' : undefined}
+            style={{ opacity: ok ? 1 : 0.5 }}
+            onClick={() => run(submit)}
+          >
+            {shown ? <span className="spin"></span> : null}
             Disable and remove relationships
           </button>
         </>
@@ -188,7 +204,7 @@ function CrossCompanyDialog({ links, close, onConfirm }: { links: Link[]; close:
             setBad(false);
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && isDisableConfirmed(typed)) submit();
+            if (e.key === 'Enter' && isDisableConfirmed(typed)) run(submit);
           }}
         />
       </div>
@@ -219,8 +235,8 @@ export function changeColour(key: string, value: string): void {
   }, 300);
 }
 
-export function resetColours(): void {
-  void attempt(() => api.resetAppearance()).then((ap) => {
+export function resetColours(): Promise<void> {
+  return attempt(() => api.resetAppearance()).then((ap) => {
     if (!ap) return;
     store.ui.appearance = ap;
     store.applyColors();
@@ -249,7 +265,7 @@ export function renameDialog(n: Node): void {
         onClick: (bk) => {
           const name = title((bk.querySelector<HTMLInputElement>('#rnName')?.value || '').trim());
           if (name && name !== n.label && n.sid)
-            proposeThen({ type: 'change', changeKind: 'rename', payload: { conceptId: n.sid, newLabel: name } }, () => {
+            return proposeThen({ type: 'change', changeKind: 'rename', payload: { conceptId: n.sid, newLabel: name } }, () => {
               store.toast2('Proposed', `rename to ${name}`);
               renderAdmin();
             });
@@ -271,7 +287,7 @@ export function deleteNodeDialog(n: Node): void {
     'Propose deletion',
     () => {
       if (n.sid)
-        proposeThen({ type: 'change', changeKind: 'delete_concept', payload: { conceptId: n.sid } }, () => {
+        return proposeThen({ type: 'change', changeKind: 'delete_concept', payload: { conceptId: n.sid } }, () => {
           store.toast2('Proposed', `deletion of ${n.label}`);
           renderAdmin();
         });
@@ -287,7 +303,7 @@ export function deleteRelationDialog(l: Link, name: string): void {
     'Propose deletion',
     () => {
       if (l.sid)
-        proposeThen({ type: 'change', changeKind: 'remove_relation', payload: { relationId: l.sid } }, () => {
+        return proposeThen({ type: 'change', changeKind: 'remove_relation', payload: { relationId: l.sid } }, () => {
           store.caption('One proposal', `Removing “${l.a.label} ${l.label} ${l.b.label}” is waiting for your approval.`);
           renderAdmin();
         });
@@ -326,7 +342,7 @@ export function bindDialog(n: Node): void {
           const id = bk.querySelector<HTMLSelectElement>('#bdSrc')?.value;
           const src = srcs.find((x) => String(x.id) === id);
           if (!src || !src.sid || !n.sid) return;
-          proposeThen({ type: 'bind', sourceId: src.sid, conceptIds: [n.sid] }, () => {
+          return proposeThen({ type: 'bind', sourceId: src.sid, conceptIds: [n.sid] }, () => {
             store.toast2('Proposed', `${n.label} bound to ${src.label}`);
             renderAdmin();
           });
@@ -345,7 +361,7 @@ export function unbindDialog(n: Node, source: string, attrs: number): void {
       const link = store.s.links.find((l) => l.kind === 'bind' && l.b === n && !l.pending);
       const sid = link?.sid;
       if (sid)
-        attemptThen(
+        return attemptThen(
           () => api.proposeUnbind(sid),
           () => {
             store.toast2('Proposed', `unbinding of ${n.label}`);
@@ -359,22 +375,19 @@ export function unbindDialog(n: Node, source: string, attrs: number): void {
 
 // ------------------------------------------------------------ sources and companies
 
-export function toggleSource(n: Node): void {
+export function toggleSource(n: Node): Promise<void> {
   const sid = n.sid;
-  if (!sid) return;
+  if (!sid) return Promise.resolve();
   const doIt = () => {
     const off = !n.disabled;
-    void attempt(() => (off ? api.disableSource(sid) : api.enableSource(sid))).then((src) => {
+    return attempt(() => (off ? api.disableSource(sid) : api.enableSource(sid))).then((src) => {
       if (!src) return;
       n.disabled = src.disabled;
       store.toast2(src.disabled ? 'Disabled' : 'Enabled', n.label);
       renderAdmin();
     });
   };
-  if (n.disabled) {
-    doIt();
-    return;
-  }
+  if (n.disabled) return doIt();
   const fed = store.s.links.filter((l) => l.kind === 'bind' && l.a === n).length;
   confirmDialog(
     `Disable ${n.label}?`,
@@ -385,6 +398,7 @@ export function toggleSource(n: Node): void {
     'Disable',
     doIt,
   );
+  return Promise.resolve();
 }
 
 export function removeSourceDialog(n: Node): void {
@@ -403,7 +417,7 @@ export function removeSourceDialog(n: Node): void {
     () => {
       const sid = n.sid;
       if (sid)
-        attemptThen(
+        return attemptThen(
           () => api.proposeRemoveSource(sid),
           () => {
             store.caption('One proposal', `Removing ${n.label} is waiting for approval.`);
@@ -425,7 +439,7 @@ export function removeCompanyDialog(c: Company): void {
     () => {
       const sid = c.sid;
       if (sid)
-        attemptThen(
+        return attemptThen(
           () => api.proposeRemoveCompany(sid),
           () => {
             store.toast2('Proposed', `removal of ${c.name} · approve it on the canvas`);
@@ -473,20 +487,18 @@ export function groupEdit(g: Group | null): void {
             return false;
           }
           const description = (bk.querySelector<HTMLInputElement>('#gDesc')?.value || '').trim();
-          if (g) {
-            void attempt(() => api.updateGroup(g.id, { name, description })).then((r) => {
+          if (g)
+            return attempt(() => api.updateGroup(g.id, { name, description })).then((r) => {
               if (!r) return;
               store.toast2('Saved', name);
               renderAdmin();
             });
-          } else {
-            void attempt(() => api.createGroup({ name, description })).then((ng) => {
-              if (!ng) return;
-              store.toast2('Created', name);
-              renderAdmin();
-              setTimeout(() => groupMembers(ng), 150);
-            });
-          }
+          return attempt(() => api.createGroup({ name, description })).then((ng) => {
+            if (!ng) return;
+            store.toast2('Created', name);
+            renderAdmin();
+            setTimeout(() => groupMembers(ng), 150);
+          });
         },
       },
     ],
@@ -527,7 +539,7 @@ function MembersDialog({ g, close }: { g: Group; close: () => void }) {
   }, [g]);
   const toggle = (r: MemberRow) => {
     const on = !r.on;
-    void attempt(() => (on ? api.addGroupMember(g.id, r.id) : api.removeGroupMember(g.id, r.id))).then((res) => {
+    return attempt(() => (on ? api.addGroupMember(g.id, r.id) : api.removeGroupMember(g.id, r.id))).then((res) => {
       if (res === null) return;
       setRows((cur) => cur.map((x) => (x.id === r.id ? { ...x, on } : x)));
     });
@@ -586,7 +598,7 @@ function RolesDialog({ g, close }: { g: Group; close: () => void }) {
       label = scopeSel.current?.value || 'Tenant';
     const scope = scopes.find((x) => x.label === label);
     if (!scope || roles.some((r) => roleLabel(r.role) === role && r.scope.label === label)) return;
-    void attempt(() => api.addGroupRole(g.id, { role: roleName(role), scope })).then((a) => {
+    return attempt(() => api.addGroupRole(g.id, { role: roleName(role), scope })).then((a) => {
       if (a) setRoles((cur) => [...cur, a]);
     });
   };
@@ -640,9 +652,9 @@ function RolesDialog({ g, close }: { g: Group; close: () => void }) {
             <option key={`${x.kind}:${x.label}`}>{x.label}</option>
           ))}
         </select>
-        <button className="btn" id="grAdd" onClick={add}>
+        <BusyButton className="btn" id="grAdd" onClick={add}>
           Add
-        </button>
+        </BusyButton>
       </div>
       <p style={{ margin: '12px 0 0', color: 'var(--ink-3)', fontSize: '12px' }}>
         Owner and Governor on the same scope is what certification needs. Administrator only applies at Tenant scope.
@@ -657,13 +669,12 @@ export function deleteGroupDialog(g: Group): void {
     `Delete “${g.name}”?`,
     `Its ${plural(g.memberCount, 'member')} lose the ${plural(nroles, 'role assignment')} it carries. Users themselves are not deleted.`,
     'Delete group',
-    () => {
-      void attempt(() => api.deleteGroup(g.id)).then((res) => {
+    () =>
+      attempt(() => api.deleteGroup(g.id)).then((res) => {
         if (res === null) return;
         store.toast2('Deleted', g.name);
         renderAdmin();
-      });
-    },
+      }),
     true,
   );
 }
@@ -702,13 +713,12 @@ function RoleGroupsDialog({ role, close }: { role: string; close: () => void }) 
   const hold = (r: HoldRow) => {
     if (r.on) {
       const drop = r.g.roles.filter((a) => roleLabel(a.role) === role);
-      void Promise.allSettled(drop.map((a) => api.removeGroupRole(r.g.id, a.id))).then((results) => {
+      return Promise.allSettled(drop.map((a) => api.removeGroupRole(r.g.id, a.id))).then((results) => {
         const removed = drop.filter((_, i) => results[i].status === 'fulfilled');
         replace({ ...r.g, roles: r.g.roles.filter((a) => !removed.includes(a)) });
         const refusal = results.find((x): x is PromiseRejectedResult => x.status === 'rejected');
         if (refusal) failed(refusal.reason);
       });
-      return;
     }
     const scopes = localScopes();
     store.openDialog({
@@ -733,7 +743,7 @@ function RoleGroupsDialog({ role, close }: { role: string; close: () => void }) 
             const label = bk.querySelector<HTMLSelectElement>('#rsScope')?.value;
             const scope = scopes.find((x) => x.label === label);
             if (!scope) return;
-            void attempt(() => api.addGroupRole(r.g.id, { role: roleName(role), scope })).then((a) => {
+            return attempt(() => api.addGroupRole(r.g.id, { role: roleName(role), scope })).then((a) => {
               if (a) replace({ ...r.g, roles: [...r.g.roles, a] });
             });
           },
@@ -815,11 +825,10 @@ function RegistryDialog({ close }: { close: () => void }) {
       )
       .catch((err: unknown) => failed(err, 'Unavailable'));
   }, []);
-  const toggle = (r: AgentRow) => {
-    void attempt(() => api.updateAgent(r.id, !r.on)).then((a) => {
+  const toggle = (r: AgentRow) =>
+    attempt(() => api.updateAgent(r.id, !r.on)).then((a) => {
       if (a) setRows((cur) => cur.map((x) => (x.id === r.id ? { ...x, on: a.access } : x)));
     });
-  };
   const columns: Column[] = [
     { label: 'Agent', key: 'name' },
     { label: 'Platform', key: 'platform' },

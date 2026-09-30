@@ -162,7 +162,10 @@ def test_no_example_shares_a_phrase_with_test_material() -> None:
     held_out = _held_out()
     held = set().union(*(_shingles(t) for t in held_out))
     for example in ALL_EXAMPLES:
-        assert not _shingles(example["input"]["sentence"]) & held, example["id"]
+        # Every turn a multi-turn example shows, not only its final sentence.
+        turns = [t["sentence"] for t in example["input"].get("sessionTurns", [])]
+        for text in [*turns, example["input"]["sentence"]]:
+            assert not _shingles(text) & held, (example["id"], text)
 
 
 @pytest.mark.asyncio(loop_scope="session")

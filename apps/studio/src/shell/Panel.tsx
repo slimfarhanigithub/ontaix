@@ -6,6 +6,7 @@
  */
 import type { Proposal } from '../api/types';
 import { NEUTRAL } from '../canvas/constants';
+import { BusyButton } from './busy';
 import { refStyle, useStore } from './dom';
 import { sanitizeHtml } from './sanitize';
 
@@ -44,12 +45,12 @@ export function Panel() {
         </button>
       </h2>
       <div className="bulk">
-        <button id="approveAll" disabled={!proposals.some((p) => p.ready)} onClick={() => void st.approveAll()}>
+        <BusyButton id="approveAll" disabled={!proposals.some((p) => p.ready)} onClick={() => st.approveAll()}>
           Approve all
-        </button>
-        <button id="rejectAll" disabled={!proposals.length} onClick={() => void st.rejectAll()}>
+        </BusyButton>
+        <BusyButton id="rejectAll" disabled={!proposals.length} onClick={() => st.rejectAll()}>
           Reject all
-        </button>
+        </BusyButton>
       </div>
       <div className="list" id="propList">
         {!proposals.length ? (
@@ -72,16 +73,16 @@ export function Panel() {
                 <div className="what" dangerouslySetInnerHTML={{ __html: sanitizeHtml(p.html) }} />
                 {p.why ? <div className="why">{p.why}</div> : null}
                 <div className="act">
-                  <button className="ok" disabled={!ok} onClick={() => void st.approve(p)}>
+                  <BusyButton className="ok" disabled={!ok} onClick={() => st.approve(p)}>
                     Approve
-                  </button>
-                  <button className="no" onClick={() => void st.reject(p)}>
+                  </BusyButton>
+                  <BusyButton className="no" onClick={() => st.reject(p)}>
                     Reject
-                  </button>
+                  </BusyButton>
                   {branchSize(p) ? (
-                    <button className="branch" onClick={() => void st.approveBranch(p)}>
+                    <BusyButton className="branch" onClick={() => st.approveBranch(p)}>
                       {`Approve branch (${branchSize(p)})`}
-                    </button>
+                    </BusyButton>
                   ) : null}
                   {ok ? null : <span className="wait">{`after ${p.waitFor || 'a previous item'}`}</span>}
                 </div>

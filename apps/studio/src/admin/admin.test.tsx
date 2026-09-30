@@ -108,7 +108,9 @@ describe('Companies may interact', () => {
   it('asks for the typed word before removing cross-company relationships', () => {
     hostileModel();
     const { container } = render(<Dialog />);
-    act(() => changeSetting('crossCompany'));
+    act(() => {
+      void changeSetting('crossCompany');
+    });
     const dlg = container.querySelector('.dlg');
     expect(dlg?.querySelector('.dh b')?.textContent).toBe('Disable interaction between companies?');
     expect(dlg?.querySelector('img')).toBeNull();

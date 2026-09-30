@@ -5,6 +5,7 @@
 import { useState } from 'react';
 
 import { api } from '../../api/client';
+import { BusyButton } from '../../shell/busy';
 import { useStore } from '../../shell/dom';
 import { attempt } from '../adminData';
 import { removeSourceDialog, renderAdmin, toggleSource } from '../actions';
@@ -85,9 +86,9 @@ export function DataSources() {
                     </span>
                   </td>
                   <td className="act" style={{ width: '290px' }}>
-                    <button data-act="configure" style={{ width: '86px', textAlign: 'center' }} onClick={() => showSourceForm(n)}>
+                    <BusyButton data-act="configure" style={{ width: '86px', textAlign: 'center' }} onClick={() => showSourceForm(n)}>
                       Configure
-                    </button>
+                    </BusyButton>
                     <Tg on={!n.disabled && !n.pending} locked={n.pending} data-act="toggle" onClick={() => toggleSource(n)} />
                     <button className="danger" data-act="remove" style={{ width: '70px', textAlign: 'center' }} onClick={() => removeSourceDialog(n)}>
                       Delete

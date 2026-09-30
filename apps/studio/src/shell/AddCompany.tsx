@@ -61,7 +61,7 @@ export function openAddCompany(): void {
           }
           const sub = bk.querySelector<HTMLInputElement>('#acSub')?.value.trim() || '';
           const seed = bk.querySelector<HTMLInputElement>('input[name=acSeed]:checked')?.value === 'seed';
-          void addCompany(name, sub, seed).then((c) => {
+          return addCompany(name, sub, seed).then((c) => {
             if (!c) return;
             store.caption(
               `${c.name} joins the view`,

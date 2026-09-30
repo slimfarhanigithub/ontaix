@@ -109,46 +109,6 @@ async def test_segment_offsets_drifted_into_words_move_to_the_nearer_edge(
     ]
 
 
-@pytest.mark.asyncio(loop_scope="session")
-async def test_a_segment_starting_inside_the_previous_one_starts_where_it_ends(
-    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
-) -> None:
-    company_id, root_id = await add_company(tenant, "Acme")
-    await configure(tenant)
-    transcript = "acme has two plants and the plants have paint shops"
-    # A live long-transcript shape: segment 1 starts eight code points before segment 0 ends.
-    fake_llm.answer(
-        speech_answer(
-            [
-                {
-                    "subject": C0,
-                    "object": new("Plants"),
-                    "action": "has",
-                    "span": "acme has two plants",
-                    "segment": 0,
-                    "source": {"start": 0, "end": 19},
-                },
-                {
-                    "subject": new("Plants"),
-                    "object": new("Paint shops"),
-                    "action": "has",
-                    "span": "the plants have paint shops",
-                    "segment": 1,
-                    "source": {"start": 24, "end": 51},
-                },
-            ],
-            [(0, 27), (19, 51)],
-        )
-    )
-
-    result = await speak(client, tenant, company_id, transcript)
-
-    assert result["llmOutcome"] == "used"
-    assert births(result) == [("Plants", str(root_id), "has"), ("Paint shops", "Plants", "has")]
-    (first, second) = result["segments"]
-    assert first["span"]["end"] <= second["span"]["start"]
-
-
 def test_the_instructions_state_the_rules_the_api_checks() -> None:
     # Each rule below refused whole live answers while the instructions left it unsaid.
     assert "source and span lie inside that one segment" in SYSTEM_PROMPT

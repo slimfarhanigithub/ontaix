@@ -10,6 +10,7 @@ import { ApiError, type ExpansionDraft, type ExpansionOutcome, type ExpansionRes
 import type { Node } from '../canvas/types';
 import { store } from '../store/store';
 import { teachSessionId } from '../teach/teach';
+import { BusyButton, useBusyAction } from './busy';
 import { DialogFrame } from './Dialog';
 
 export const EXPAND_SUB = 'The model suggests concepts to grow from it; each one is a proposal';
@@ -82,13 +83,15 @@ export function draftLine(d: ExpansionDraft, note: ExpansionResult['notes'][numb
 function ExpandDialog({ node, close }: { node: Node; close: () => void }) {
   const [depth, setDepth] = useState('');
   const [focus, setFocus] = useState('');
-  const [busy, setBusy] = useState(false);
+  const suggesting = useBusyAction();
   const [result, setResult] = useState<ExpansionResult | null>(null);
   const [checked, setChecked] = useState<Set<number>>(new Set());
 
+  /** Asks the model; the drawer's Expand button waits with this dialog while it answers. */
   const suggest = async () => {
-    if (busy || !node.sid) return;
-    setBusy(true);
+    if (!node.sid) return;
+    store.ui.expanding = node;
+    store.bump();
     const companyId = node.company?.sid;
     const text = focus.trim();
     try {
@@ -109,13 +112,13 @@ function ExpandDialog({ node, close }: { node: Node; close: () => void }) {
       if (err instanceof ApiError) store.refused(err);
       else throw err;
     } finally {
-      setBusy(false);
+      store.ui.expanding = null;
+      store.bump();
     }
   };
 
   const propose = async () => {
-    if (busy || !result?.expansionId || !checked.size) return;
-    setBusy(true);
+    if (!result?.expansionId || !checked.size) return;
     try {
       await api.proposeExpansion(
         result.expansionId,
@@ -140,31 +143,43 @@ function ExpandDialog({ node, close }: { node: Node; close: () => void }) {
             <button className="btn" onClick={close}>
               Cancel
             </button>
-            <button className="btn primary" onClick={() => void suggest()}>
+            <button
+              className="btn primary"
+              disabled={suggesting.shown}
+              aria-busy={suggesting.shown ? 'true' : undefined}
+              onClick={() => suggesting.run(suggest)}
+            >
+              {suggesting.shown ? <span className="spin"></span> : null}
               Suggest
             </button>
           </>
         }
       >
-        <div className="form">
-          <label>Depth</label>
-          <select id="exDepth" value={depth} onChange={(e) => setDepth(e.currentTarget.value)}>
-            <option value="">Any depth</option>
-            {DEPTHS.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-          <label>Focus (optional)</label>
-          <input
-            id="exFocus"
-            maxLength={FOCUS_MAX}
-            placeholder="e.g. after-sales services"
-            value={focus}
-            onChange={(e) => setFocus(e.currentTarget.value)}
-          />
-        </div>
+        {suggesting.shown ? (
+          <div id="exWait">
+            <span className="spin"></span>Expanding <b>{node.label}</b>…
+          </div>
+        ) : (
+          <div className="form">
+            <label>Depth</label>
+            <select id="exDepth" value={depth} onChange={(e) => setDepth(e.currentTarget.value)}>
+              <option value="">Any depth</option>
+              {DEPTHS.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+            <label>Focus (optional)</label>
+            <input
+              id="exFocus"
+              maxLength={FOCUS_MAX}
+              placeholder="e.g. after-sales services"
+              value={focus}
+              onChange={(e) => setFocus(e.currentTarget.value)}
+            />
+          </div>
+        )}
       </DialogFrame>
     );
   }
@@ -180,9 +195,9 @@ function ExpandDialog({ node, close }: { node: Node; close: () => void }) {
           <button className="btn" onClick={close}>
             Cancel
           </button>
-          <button className="btn primary" disabled={!checked.size} onClick={() => void propose()}>
+          <BusyButton className="btn primary" disabled={!checked.size} onClick={propose}>
             {`Propose ${checked.size}`}
-          </button>
+          </BusyButton>
         </>
       }
     >

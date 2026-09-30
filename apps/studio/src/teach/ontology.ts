@@ -8,6 +8,7 @@
 import { api } from '../api/client';
 import { ApiError } from '../api/types';
 import { store } from '../store/store';
+import { beginProcessing } from './processing';
 
 /** At most this many label languages go to the API, first preferred. */
 const MAX_LANGUAGES = 10;
@@ -28,7 +29,7 @@ export async function importOntology(file: File | null | undefined): Promise<voi
   const company = store.s.activeCompany;
   if (!file || store.ui.importing || !company?.sid) return;
   store.ui.importing = true;
-  store.bump();
+  const end = beginProcessing();
   const kicker = `Mapping ${file.name}`;
   try {
     store.caption(kicker, '');
@@ -46,6 +47,6 @@ export async function importOntology(file: File | null | undefined): Promise<voi
     store.refused(err);
   } finally {
     store.ui.importing = false;
-    store.bump();
+    end();
   }
 }

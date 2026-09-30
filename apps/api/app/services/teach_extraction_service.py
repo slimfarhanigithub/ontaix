@@ -146,6 +146,10 @@ class _InvalidAnswer(Exception):
     """The answer failed the schema or a check the schema cannot express."""
 
 
+class _UnorderedSegments(Exception):
+    """The answer's segments overlap, go backwards, are out of order or are too long."""
+
+
 class _Stages:
     """Milliseconds spent in each named stage of one step, for the debug log."""
 
@@ -483,15 +487,14 @@ def _interpret(
         len(answer.intents) > MAX_SENTENCE_INTENTS or len(answer.unresolved) > MAX_SENTENCE_PHRASES
     ):
         raise _InvalidAnswer("too many intents or phrases for one sentence")
-    segments, sources = _ranges(answer, text)
+    segments, sources, owners = _ranges(answer, text)
     sent = {c.id for c in handles}
     cross_company = bool(drafter.view.settings and drafter.view.settings.cross_company)
     checked: list[_Checked] = []
     earlier = _grounded_labels(answer, sources, text)
-    for intent, source in zip(answer.intents, sources, strict=True):
+    for intent, source, index in zip(answer.intents, sources, owners, strict=True):
         if reading.speech and intent.segment is None:
             raise _InvalidAnswer("a transcript intent names no segment")
-        index = intent.segment if intent.segment is not None else 0
         if index >= len(segments):
             raise _InvalidAnswer("an intent names a segment that was not given")
         if reading.speech and intent.explanation and len(intent.explanation) > 120:
@@ -680,31 +683,42 @@ class _Checked:
 
 def _ranges(
     answer: TeachExtractionAnswer, text: str
-) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
-    """The answer's segments in order (one covering the text when it gives none), and each
-    intent's source range.
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]], list[int]]:
+    """The answer's segments in order (one covering the text when it gives none), each intent's
+    source range and each intent's segment index.
 
-    The model's segment offsets are approximate: a segment that starts before the previous one
-    ends starts where it ends instead, a boundary that cuts a word is moved to the word's
-    nearer edge and each segment is trimmed of surrounding whitespace. When an intent's source
-    still reaches back into the previous segment, that segment ends where the source starts,
-    unless one of its own sources lies past that point. Each intent's
+    The model's segment offsets are approximate: a boundary that cuts a word is moved to the
+    word's nearer edge and each segment is trimmed of surrounding whitespace. Each intent's
     source is then located from its quote, and a segment is widened to cover the sources of its
-    intents; a source is never chosen where that widening would reach into another segment. The
-    order, overlap and length checks run on the result."""
+    intents; a source is never chosen where that widening would reach into another segment.
+    Segments that then overlap, go backwards, are out of order or are too long are repaired
+    rather than refused (see `_repaired`)."""
     words = _words(text)
+    owners = [intent.segment if intent.segment is not None else 0 for intent in answer.intents]
     if not answer.segments:
         whole = [(0, len(text))]
-        return whole, [_locate(intent, text, words, whole, 0) for intent in answer.intents]
+        sources = [_locate(intent, text, words, whole, 0) for intent in answer.intents]
+        return whole, sources, owners
+    try:
+        segments, sources = _ordered(answer, text, words, owners)
+    except _UnorderedSegments as exc:
+        logger.info("the teach extraction answer's segments were repaired: %s", exc)
+        return _repaired(answer, text, words)
+    return segments, sources, owners
+
+
+def _ordered(
+    answer: TeachExtractionAnswer, text: str, words: list[tuple[int, int]], owners: list[int]
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    """The model's own segments, snapped and widened over their intents' sources, and each
+    intent's source; raises _UnorderedSegments when they are not in order and apart."""
     snapped: list[tuple[int, int]] = []
     for i, seg in enumerate(answer.segments):
         if seg.index != i:
-            raise _InvalidAnswer("a segment is out of order")
-        start = max(seg.start, answer.segments[i - 1].end) if i else seg.start
-        if start >= seg.end:
-            raise _InvalidAnswer("segments overlap, go backwards or are too long")
-        snapped.append(_snap(text, words, *_clamp(start, seg.end, text)))
-    owners = [intent.segment if intent.segment is not None else 0 for intent in answer.intents]
+            raise _UnorderedSegments("a segment is out of order")
+        if i and seg.start < answer.segments[i - 1].end:
+            raise _UnorderedSegments("segments overlap or go backwards")
+        snapped.append(_snap(text, words, *_clamp(seg.start, seg.end, text)))
     sources = [
         _locate(intent, text, words, snapped, own)
         for intent, own in zip(answer.intents, owners, strict=True)
@@ -715,25 +729,78 @@ def _ranges(
         for own, (a, b) in zip(owners, sources, strict=True):
             if own == i:
                 start, end = min(start, a), max(end, b)
-        if out and start < last_end:
-            # A source reaches back into the previous segment: that segment ends where this
-            # one starts, when none of its own sources lies past that point.
-            before, _ = out[-1]
-            needed = max(
-                (b for own, (_, b) in zip(owners, sources, strict=True) if own == i - 1),
-                default=before + 1,
-            )
-            cut = start
-            while cut > before and text[cut - 1].isspace():
-                cut -= 1
-            if needed <= cut and before < cut:
-                out[-1] = (before, cut)
-                last_end = cut
         if start >= end or start < last_end or end - start > MAX_SEGMENT_CHARS:
-            raise _InvalidAnswer("segments overlap, go backwards or are too long")
+            raise _UnorderedSegments("segments overlap, go backwards or are too long")
         out.append((start, end))
         last_end = end
     return out, sources
+
+
+def _repaired(
+    answer: TeachExtractionAnswer, text: str, words: list[tuple[int, int]]
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]], list[int]]:
+    """Segments rebuilt from an answer whose own segments are out of order, with each intent's
+    source and the index of the segment holding it; the model's segment indices are ignored.
+
+    Each source is located from its quote over the whole text. A text of at most
+    MAX_SEGMENT_CHARS is one segment: the Studio sends one spoken sentence per request, which
+    has nothing to split. A longer text keeps the model's segments, clamped and snapped to
+    words, sorted and merged with each other and with the sources where they overlap; a merged
+    segment over MAX_SEGMENT_CHARS is split at word ends that cut no source. The answer is
+    refused only when a source cannot be placed in a segment of that length."""
+    whole = [(0, len(text))]
+    sources = [_locate(intent, text, words, whole, 0) for intent in answer.intents]
+    if len(text) <= MAX_SEGMENT_CHARS:
+        return whole, sources, [0] * len(sources)
+    ranges = list(sources)
+    for seg in answer.segments:
+        end = min(seg.end, len(text))
+        if seg.start < end:
+            ranges.append(_snap(text, words, seg.start, end))
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(r for r in ranges if r[0] < r[1]):
+        if merged and start < merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    segments = [piece for seg in merged for piece in _split(text, words, seg, sources)]
+    owners: list[int] = []
+    for start, end in sources:
+        holding = [i for i, (a, b) in enumerate(segments) if a <= start and end <= b]
+        if not holding:
+            raise _InvalidAnswer("an intent's source cannot be placed in a segment")
+        owners.append(holding[0])
+    return segments, sources, owners
+
+
+def _split(
+    text: str,
+    words: list[tuple[int, int]],
+    segment: tuple[int, int],
+    sources: list[tuple[int, int]],
+) -> list[tuple[int, int]]:
+    """`segment` in pieces of at most MAX_SEGMENT_CHARS, each cut at the last word end that
+    fits and lies inside no source; raises _InvalidAnswer when no such word end exists."""
+    start, end = segment
+    pieces: list[tuple[int, int]] = []
+    while end - start > MAX_SEGMENT_CHARS:
+        cuts = [
+            b
+            for _, b in words
+            if start < b <= start + MAX_SEGMENT_CHARS
+            and b < end
+            and not any(a < b < z for a, z in sources)
+        ]
+        if not cuts:
+            raise _InvalidAnswer("an intent's source cannot be placed in a segment")
+        piece = _trim(text, start, cuts[-1])
+        if piece[0] < piece[1]:
+            pieces.append(piece)
+        start = _trim(text, cuts[-1], end)[0]
+    piece = _trim(text, start, end)
+    if piece[0] < piece[1]:
+        pieces.append(piece)
+    return pieces
 
 
 def _clamp(start: int, end: int, text: str) -> tuple[int, int]:

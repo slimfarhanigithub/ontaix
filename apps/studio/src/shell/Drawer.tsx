@@ -13,6 +13,7 @@ import { deleteNodeDialog } from '../admin/actions';
 import { canDeleteFromDrawer } from '../admin/conceptDeletion';
 import { ancestorsOf, childrenOf, descendantsOf } from '../canvas/lineage';
 import type { Node } from '../canvas/types';
+import { useDelayed } from './busy';
 import { useStore } from './dom';
 import { canExpandFromDrawer, openExpandDialog } from './ExpandDialog';
 
@@ -24,6 +25,7 @@ export function Drawer() {
   const s = st.s;
   const n = st.ui.drawerNode;
   const lineageOn = !!n && s.lineageNode === n;
+  const expanding = useDelayed(!!n && st.ui.expanding === n);
 
   useEffect(() => {
     if (n && lineageOn) {
@@ -172,7 +174,8 @@ export function Drawer() {
           Lineage
         </button>
         {canExpandFromDrawer(n) ? (
-          <button id="drExpand" onClick={() => openExpandDialog(n)}>
+          <button id="drExpand" disabled={expanding} aria-busy={expanding ? 'true' : undefined} onClick={() => openExpandDialog(n)}>
+            {expanding ? <span className="spin"></span> : null}
             Expand
           </button>
         ) : null}
