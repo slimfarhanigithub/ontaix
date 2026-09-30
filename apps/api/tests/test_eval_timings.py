@@ -63,6 +63,29 @@ async def test_a_parse_publishes_the_stages_of_the_request_and_of_the_model_step
     assert parse.stages["total"] >= parse.stages["model"] >= extraction.stages["provider"]
 
 
+@pytest.mark.asyncio(loop_scope="session")
+async def test_the_harness_publishes_the_time_a_call_waited_at_its_gate() -> None:
+    from app.clients.llm_client import LlmAnswer, LlmRequest
+    from evals.recording_llm_client import Budget, CallGate, RecordingLlmClient
+
+    class Inner:
+        provider = model = "fake"
+
+        def estimate_input_tokens(self, request: LlmRequest) -> int:
+            return 1
+
+        async def complete(self, request: LlmRequest) -> LlmAnswer:
+            return LlmAnswer("{}", 1, 1, 0.0, 1)
+
+    timings = record_timings()
+    client = RecordingLlmClient(Inner(), Budget(1.0), CallGate(1))
+
+    await client.complete(LlmRequest("s", "u", {}, 10, 1.0))
+
+    assert [t.name for t in timings] == ["harness"]
+    assert list(timings[0].stages) == ["gate"]
+
+
 def test_stage_percentiles_are_per_clock_and_stage_over_the_parses_that_ran_it() -> None:
     timings = [
         StageTimings("parse", {"view": 10, "model": 2000, "total": 2100}),

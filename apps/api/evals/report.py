@@ -216,8 +216,9 @@ def _timings(stage: StageResult) -> list[str]:
             "`reserve` check and reserve the budgets, `candidates`, `examples` and `context` "
             "build the prompt, `provider` is the whole model call and `provider_first_token` "
             "its time to the first answer fragment when streamed, `interpret` validates, "
-            "grounds and maps the answer, `settle` records the cost. Token counts are per "
-            "call.",
+            "grounds and maps the answer, `settle` records the cost; `harness` `gate` is the "
+            "time a call waited for the harness's own concurrency gate, which the pipeline's "
+            "`provider` stage includes. Token counts are per call.",
             "",
             "| Clock | Stage | Parses | p50 | p90 | Max |",
             "|---|---|---|---|---|---|",
