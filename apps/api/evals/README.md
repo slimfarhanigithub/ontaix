@@ -38,9 +38,13 @@ flowchart LR
 The default `--plan smart` is shown above; each effort falls back to the closest one a model accepts (Claude Fable 5.1 and Sonnet 5.5 refuse `none`, so they run at `low`). `--plan grid` runs every candidate at every effort instead.
 
 - Composite = 0.5 precision block (concept precision 50 %, parent accuracy 25 %, verb accuracy 25 %) + 0.3 recall block (recall against groundable concepts 50 %, mean per-level F1 50 %) + 0.2 efficiency (latency and cost per case, relative to the best; an unpriced model scores 0.5 on cost).
-- Tree-aware scoring: label match after normalisation, any accepted parent, synonym-tolerant verbs, full-path correctness, invented and duplicated nodes, missing branches, depth reached, and precision/recall/F1 per level for every level present (no depth limit).
+- Tree-aware scoring: label match after normalisation (NFKC, case folded, leading articles removed, every word singular with the irregular plurals and invariant words of `app/utilities/label_forms.py`, so `features of interest` and `Feature Of Interest` are one label as the pipeline resolves them), any accepted parent, synonym-tolerant verbs, full-path correctness, invented and duplicated nodes, missing branches, depth reached, and precision/recall/F1 per level for every level present (no depth limit).
 - Grounding ceiling: the share of expected labels found whole-word in the source; recall is reported against all expected concepts and against groundable ones only.
 - Finals pair each configuration with the baseline case by case (concept F1 against groundable concepts, each case's mean over repeats): mean difference, 95 % CI, wins/ties/losses, sign test.
+
+## Rescoring A Stored Run
+
+`uv run python -m evals.rescore results/<run>.json [--out totals.json]` scores a run's JSON record again with the scorer as it is now, without a model call: the record keeps every case's gold and every drafted concept, relation and attribute. It prints, per configuration, the speech tuning totals (parent at depth, verb, relations, invented, missed, concept F1) as stored and as rescored, and the cases whose numbers moved. Use it when the scorer changes, so runs made under the old scorer stay comparable with new ones.
 
 ## Cases
 

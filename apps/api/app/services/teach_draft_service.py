@@ -28,7 +28,8 @@ from app.models.api.teach import DraftNote, Intent, UnresolvedPhrase
 from app.models.storage.concept import Concept
 from app.services.ontology_view_service import OntologyView
 from app.utilities.action_text import normalise_action
-from app.utilities.teach_parser import content_words, singular, title, understand
+from app.utilities.label_forms import label_key
+from app.utilities.teach_parser import content_words, title, understand
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,8 @@ class Drafter:
         self.root = root
         self.dom_key = dom_key
         self.extras = draft_extras
-        # New concepts earlier model intents of this result introduce: label to domain key.
+        # New concepts earlier model intents of this result introduce: label key (see
+        # `label_key`) to label and domain key.
         self.introduced: dict[str, tuple[str, str]] = {}
         self.mine = sorted(
             (c for c in view.live_concepts() if c.company_id == company_id),
@@ -103,18 +105,14 @@ class Drafter:
         )
 
     def resolve(self, np: str) -> Concept | None:
-        """The company's concept a noun phrase names, exactly or by singular and plural."""
+        """The company's concept a noun phrase names, exactly or by singular and plural of any
+        of its words (`features of interest` names `Feature Of Interest`)."""
         if not np:
             return None
-        lower = np.lower()
         wanted = title(np).lower()
+        key = label_key(np)
         return next((n for n in self.mine if n.label.lower() == wanted), None) or next(
-            (
-                n
-                for n in self.mine
-                if n.label.lower() == singular(lower) or singular(n.label.lower()) == lower
-            ),
-            None,
+            (n for n in self.mine if label_key(n.label) == key), None
         )
 
     def by_label(self, label: str) -> Concept | None:
@@ -438,12 +436,9 @@ class Drafter:
 
     def introduced_label(self, label: str) -> str | None:
         """The label of the new concept an earlier intent of this result introduces under
-        `label`, exactly or by singular and plural, or None."""
-        lower = label.lower()
-        for key, (introduced, _) in self.introduced.items():
-            if key == lower or singular(key) == lower or key == singular(lower):
-                return introduced
-        return None
+        `label`, exactly or by singular and plural of any word, or None."""
+        found = self.introduced.get(label_key(label))
+        return found[0] if found else None
 
     def model_attr(
         self,
@@ -496,12 +491,12 @@ class Drafter:
     def _introduced(self, end: End) -> tuple[str, str] | None:
         if end.concept is not None:
             return None
-        return self.introduced.get(end.label.lower())
+        return self.introduced.get(label_key(end.label))
 
     def _register(self, planned: PlannedIntent) -> None:
         for d in planned.drafts:
             if d.get("type") in ("concept", "spec"):
-                self.introduced.setdefault(d["label"].lower(), (d["label"], d["domainKey"]))
+                self.introduced.setdefault(label_key(d["label"]), (d["label"], d["domainKey"]))
 
     def draft(self, **fields: Any) -> dict[str, Any]:
         return {**self.extras, **fields}
