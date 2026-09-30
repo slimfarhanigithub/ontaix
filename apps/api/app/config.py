@@ -203,6 +203,13 @@ class Settings(BaseSettings):
     branch_approve_batch: int = Field(default=200, ge=1, le=5000)
     branch_approve_max_rounds: int = Field(default=50, ge=1, le=10_000)
 
+    # Usage learning: the deployment switch (false stops all capture and retrieval; the eval
+    # harness sets it false), the token budget of lessons and negatives per model call, and how
+    # long after a reject a re-teach outside the same session still links as a correction.
+    learning_enabled: bool = True
+    learning_context_tokens: int = Field(default=1500, ge=0, le=100_000)
+    learning_correction_window_minutes: float = Field(default=10, ge=0, le=24 * 60)
+
     @field_validator(
         "foundry_endpoint",
         "speech_resource_id",
