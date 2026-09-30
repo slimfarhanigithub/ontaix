@@ -72,12 +72,16 @@ export function draftTitle(d: ExpansionDraft, expanded: Node): string {
   return `${end(d.aId, d.aLabel)} ${d.action} ${end(d.bId, d.bLabel)}`;
 }
 
-/** The small line of a draft's row. */
-export function draftLine(d: ExpansionDraft, note: ExpansionResult['notes'][number], expanded: Node): string {
+/** The columns of a draft's row after its label: the link to what it grows from, the confidence and the note below. */
+export function draftColumns(
+  d: ExpansionDraft,
+  note: ExpansionResult['notes'][number],
+  expanded: Node,
+): { verb: string; confidence: string; note: string } {
   const confidence = `${Math.round(note.confidence * 100)}%`;
-  if (d.type !== 'concept') return `relation · ${confidence} · ${note.rationale}`;
+  if (d.type !== 'concept') return { verb: 'relation', confidence, note: note.rationale };
   const parent = d.parentId && d.parentId === expanded.sid ? expanded.label : d.parentLabel || expanded.label;
-  return `level ${note.depth ?? 1} · ${d.action} ${parent} · ${confidence} · ${note.rationale}`;
+  return { verb: `${d.action} ${parent}`, confidence, note: `level ${note.depth ?? 1} · ${note.rationale}` };
 }
 
 function ExpandDialog({ node, close }: { node: Node; close: () => void }) {
@@ -201,23 +205,30 @@ function ExpandDialog({ node, close }: { node: Node; close: () => void }) {
         </>
       }
     >
-      <div className="form">
-        <div style={{ display: 'grid', gap: '8px' }}>
-          {result.drafts.map((d, i) => (
-            <label className="chk" key={i}>
+      <div className="ex-list" role="group" aria-label={`Suggestions to grow from ${node.label}`}>
+        <div className="ex-head" aria-hidden="true">
+          <span></span>
+          <span>Suggestion</span>
+          <span>Link</span>
+          <span>Confidence</span>
+        </div>
+        {result.drafts.map((d, i) => {
+          const col = draftColumns(d, result.notes[i], node);
+          return (
+            <label className="chk ex-row" key={i}>
               <input
                 type="checkbox"
                 data-index={i}
                 checked={checked.has(i)}
                 onChange={() => setChecked((c) => toggleSelection(c, requires, i))}
               />
-              <span>
-                <b>{draftTitle(d, node)}</b>
-                <small>{draftLine(d, result.notes[i], node)}</small>
-              </span>
+              <b className="ex-label">{draftTitle(d, node)}</b>
+              <span className="ex-verb">{col.verb}</span>
+              <span className="ex-conf">{col.confidence}</span>
+              <small className="ex-note">{col.note}</small>
             </label>
-          ))}
-        </div>
+          );
+        })}
       </div>
     </DialogFrame>
   );

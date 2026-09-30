@@ -4,8 +4,9 @@
  * lines 610-611, 885-886 and 1091-1095 (voice). Typed sentences are taught as `text`. The
  * microphone listens until the speaker stops (a pause, or a second press) and queues each sentence
  * the recogniser finishes as `speech` while the speaker goes on, so cells appear during speech;
- * words still being recognised only show in the input. On stop, words never finished join the
- * queue as the last sentence and the queue drains.
+ * words still being recognised only show in the input. The microphone is a toggle (`aria-pressed`):
+ * pressed again, or after a pause, it stops at once and the words never finished join the queue as
+ * the last sentence, which drains.
  *
  * The bar is one line: the caption as a disclosure button, the company selector, the input, the
  * Processing status, the microphone and Teach. Opened, it grows upward with the last captions and
@@ -54,6 +55,11 @@ interface Recording {
   stop(): void;
 }
 
+/** The recording in progress: `end` stops it and queues the words not finished yet at once. */
+interface Live {
+  end(): void;
+}
+
 const SR: SpeechRecognitionCtor | undefined =
   (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition ||
   (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition;
@@ -63,7 +69,11 @@ export function TeachBar() {
   const { say, sayPlaceholder, settings, listening } = st.ui;
   const companies = st.s.companies;
   const recording = useRef<Recording | null>(null);
+  /** Ends the current recording and queues its unfinished words; null while nothing records. */
+  const live = useRef<Live | null>(null);
   const starting = useRef(false);
+  /** Set when the microphone is pressed again while an Azure recording is still starting. */
+  const cancelStart = useRef(false);
   const mounted = useRef(true);
   const [errorPlaceholder, setErrorPlaceholder] = useState<string | null>(null);
   const mic = useRef<HTMLButtonElement>(null);
@@ -118,7 +128,8 @@ export function TeachBar() {
     return () => {
       mounted.current = false;
       clearTimeout(silence.current);
-      recording.current?.stop();
+      if (live.current) live.current.end();
+      else recording.current?.stop();
     };
   }, []);
 
@@ -130,15 +141,49 @@ export function TeachBar() {
     }
   }, []);
 
+  /**
+   * The microphone is a toggle. The first press starts listening; the second stops the recogniser
+   * and sends the words still being recognised at once, as the last sentence of the queue, without
+   * waiting for the recogniser to finish them.
+   */
   const speak = () => {
-    if (listening) {
-      recording.current?.stop();
+    if (live.current) {
+      live.current.end();
       return;
     }
-    if (starting.current) return;
+    if (starting.current) {
+      cancelStart.current = true;
+      return;
+    }
     const companyId = st.s.activeCompany?.sid;
     if (companyId) listenWithAzure(companyId);
     else listenInBrowser();
+  };
+
+  /**
+   * One recording's end, shared by both recognisers: the first call queues `unfinished()` (the
+   * words not finished yet), clears the input when words were heard, marks the bar idle and stops
+   * the recogniser; later calls and results that arrive after it change nothing.
+   */
+  const recordingEnd = (stream: ReturnType<typeof speechStream>, unfinished: () => string, heard: () => boolean, stop: () => void) => {
+    let over = false;
+    return {
+      get over() {
+        return over;
+      },
+      end() {
+        if (over) return;
+        over = true;
+        clearTimeout(silence.current);
+        live.current = null;
+        const words = unfinished();
+        if (words.trim()) stream.sentence(words);
+        if (heard()) st.setSay('');
+        st.ui.listening = false;
+        st.bump();
+        stop();
+      },
+    };
   };
 
   const listenWithAzure = (companyId: string) => {
@@ -146,25 +191,42 @@ export function TeachBar() {
     // Sentences of this recording already finished and queued, as the input shows them.
     let done = '';
     let heard = false;
+    // Words still being recognised, sent as the last sentence when the recording ends.
+    let pending = '';
+    // This recording once Azure Speech has started it; a newer recording may replace it in `recording`.
+    let mine: Recording | null = null;
+    const rec = recordingEnd(
+      stream,
+      () => pending,
+      () => heard,
+      () => mine?.stop(),
+    );
     const quiet = (ms: number) => {
       clearTimeout(silence.current);
-      silence.current = setTimeout(() => recording.current?.stop(), ms);
+      silence.current = setTimeout(() => rec.end(), ms);
     };
     starting.current = true;
+    cancelStart.current = false;
     startAzureSpeech(companyId, speechPhrases(st.s), {
       started() {
+        if (cancelStart.current) return;
         setHeard('');
+        live.current = rec;
         st.ui.listening = true;
         st.bump();
         quiet(NO_SPEECH_MS);
       },
       interim(text) {
+        if (rec.over) return;
         heard = true;
+        pending = text;
         st.setSay(done + text);
         quiet(SILENCE_MS);
       },
       final(sentence) {
+        if (rec.over) return;
         heard = true;
+        pending = '';
         stream.sentence(sentence);
         setHeard(sentence.trim());
         done += `${sentence} `;
@@ -172,23 +234,29 @@ export function TeachBar() {
         quiet(SILENCE_MS);
       },
       ended(unfinished) {
-        clearTimeout(silence.current);
-        recording.current = null;
-        st.ui.listening = false;
-        st.bump();
-        if (unfinished.trim()) stream.sentence(unfinished);
-        if (heard) st.setSay('');
+        if (recording.current === mine) recording.current = null;
+        if (!rec.over) pending = unfinished;
+        rec.end();
       },
       failed: listenInBrowser,
     }).then(
       (r) => {
         starting.current = false;
-        if (!r) listenInBrowser();
-        else if (!mounted.current) r.stop();
-        else recording.current = r;
+        if (!r) {
+          listenInBrowser();
+          return;
+        }
+        mine = r;
+        recording.current = r;
+        if (rec.over) r.stop();
+        else if (!mounted.current || cancelStart.current) {
+          cancelStart.current = false;
+          rec.end();
+        }
       },
       (err) => {
         starting.current = false;
+        cancelStart.current = false;
         if (err instanceof ApiError) st.refused(err);
         else listenInBrowser();
       },
@@ -208,12 +276,22 @@ export function TeachBar() {
     let pending = '';
     let heard = false;
     let ended = false;
+    const rec = recordingEnd(
+      stream,
+      () => pending,
+      () => heard,
+      () => {
+        if (!ended) r.stop();
+      },
+    );
     r.onstart = () => {
       setHeard('');
+      live.current = rec;
       st.ui.listening = true;
       st.bump();
     };
     r.onresult = (ev) => {
+      if (rec.over) return;
       let s = '';
       pending = '';
       for (let i = 0; i < ev.results.length; i++) {
@@ -229,19 +307,15 @@ export function TeachBar() {
       heard = true;
       st.setSay(s);
       clearTimeout(silence.current);
-      silence.current = setTimeout(() => r.stop(), SILENCE_MS);
+      silence.current = setTimeout(() => rec.end(), SILENCE_MS);
     };
     r.onerror = () => {
       setErrorPlaceholder('The microphone did not respond. Type instead, the show goes on.');
     };
     r.onend = () => {
-      clearTimeout(silence.current);
-      st.ui.listening = false;
-      st.bump();
-      if (ended) return;
       ended = true;
-      if (pending.trim()) stream.sentence(pending);
-      if (heard) st.setSay('');
+      if (recording.current === r) recording.current = null;
+      rec.end();
     };
     r.start();
   };
@@ -336,15 +410,22 @@ export function TeachBar() {
         className={`mic${listening ? ' on' : ''}`}
         id="mic"
         aria-label="Speak"
-        title="Speak"
+        aria-pressed={listening}
+        title={listening ? 'Stop listening and teach what was heard' : 'Speak: press again to stop and teach'}
         ref={mic}
         style={{ display: settings && !settings.voice ? 'none' : undefined }}
         onClick={speak}
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <rect x="9" y="3" width="6" height="11" rx="3" />
-          <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
-        </svg>
+        {listening ? (
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <rect x="9" y="3" width="6" height="11" rx="3" />
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+          </svg>
+        )}
       </button>
       <button type="submit" id="teach">
         Teach

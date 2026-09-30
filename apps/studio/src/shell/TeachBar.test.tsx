@@ -177,6 +177,52 @@ describe('the microphone', () => {
     expect(most).toBe(1);
   });
 
+  it('is a toggle: the second press stops at once and sends the words still being recognised', async () => {
+    const { container, rec, sentence } = await listen();
+    const mic = container.querySelector('#mic') as HTMLButtonElement;
+    const say = () => (container.querySelector('#say') as HTMLInputElement).value;
+    expect(mic.getAttribute('aria-label')).toBe('Speak');
+    expect(mic.getAttribute('aria-pressed')).toBe('true');
+    expect(mic.title).toBe('Stop listening and teach what was heard');
+    // A real recogniser reports its end some time after stop(); nothing waits for it.
+    const stop = vi.spyOn(rec, 'stop').mockImplementation(() => undefined);
+
+    act(() => rec.hear('Insight sells services. ', '~They focus on'));
+    fireEvent.click(mic);
+
+    expect(sentence.mock.calls).toEqual([['Insight sells services. '], ['They focus on']]);
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(mic.getAttribute('aria-pressed')).toBe('false');
+    expect(mic.title).toBe('Speak: press again to stop and teach');
+    expect(say()).toBe('');
+
+    // What the recogniser still reports after the press is not sent again.
+    act(() => rec.hear('Insight sells services. ', 'They focus on data.'));
+    act(() => rec.onend?.());
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(sentence).toHaveBeenCalledTimes(2);
+    expect(say()).toBe('');
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts a new recording on the next press after a stop', async () => {
+    const { container, sentence } = await listen();
+    const mic = container.querySelector('#mic') as HTMLButtonElement;
+    const first = FakeRecognition.last as FakeRecognition;
+    act(() => first.hear('Insight sells services. '));
+    fireEvent.click(mic);
+    expect(mic.getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(mic);
+    const second = FakeRecognition.last as FakeRecognition;
+    expect(second).not.toBe(first);
+    expect(mic.getAttribute('aria-pressed')).toBe('true');
+    act(() => second.hear('They focus on data. '));
+    expect(sentence.mock.calls).toEqual([['Insight sells services. '], ['They focus on data. ']]);
+  });
+
   it('stops the recogniser and its silence timer when the teach bar goes away', async () => {
     const { rec, sentence } = await listen();
     const stop = vi.spyOn(rec, 'stop');
@@ -258,6 +304,27 @@ describe('the microphone on Azure Speech', () => {
     expect(sentence.mock.calls).toEqual([['Insight sells services.'], ['These services are focused on data']]);
     expect(rec.closed).toBe(true);
     expect(input()).toBe('');
+  });
+
+  it('stops at once on the second press and sends the words still being recognised', async () => {
+    const { container, input, sentence } = await listen(() => Promise.resolve(TOKEN));
+    const rec = FakeRecognizer.last as FakeRecognizer;
+    const mic = container.querySelector('#mic') as HTMLButtonElement;
+    expect(mic.getAttribute('aria-pressed')).toBe('true');
+    // The service confirms the stop later; nothing waits for it.
+    const stop = vi.spyOn(rec, 'stopContinuousRecognitionAsync').mockImplementation(() => undefined);
+
+    act(() => rec.heard('Insight sells services.'));
+    act(() => rec.hearing('They focus on'));
+    fireEvent.click(mic);
+
+    expect(sentence.mock.calls).toEqual([['Insight sells services.'], ['They focus on']]);
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(mic.getAttribute('aria-pressed')).toBe('false');
+    expect(input()).toBe('');
+
+    act(() => rec.heard('They focus on data.'));
+    expect(sentence).toHaveBeenCalledTimes(2);
   });
 
   it('falls back to the browser recogniser on 503, as it does without Azure Speech', async () => {

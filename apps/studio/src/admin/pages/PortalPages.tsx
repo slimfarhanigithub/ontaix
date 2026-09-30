@@ -1,11 +1,14 @@
 /**
  * The Portal group of the admin portal: Overview, Tenant settings and Appearance
- * (`pageOverview`, `pageSettings`, `pageAppearance`, reference lines 971-984).
+ * (`pageOverview`, `pageSettings`, `pageAppearance`, reference lines 971-984). Every setting row
+ * has a description (./rowText adds the ones the reference leaves empty), and Appearance holds the
+ * user's Skip animation choice under Motion.
  */
 import { DOMAIN_TEMPLATES, DEFAULT_COLORS } from '../../canvas/constants';
 import { BusyButton } from '../../shell/busy';
 import { useStore } from '../../shell/dom';
 import { changeColour, changeRefresh, renderAdmin, resetColours } from '../actions';
+import { ADDED_DESCRIPTIONS, SKIP_ANIMATION_ROW } from '../rowText';
 import { SetRow, Tg } from '../Toggle';
 
 export function Overview() {
@@ -69,7 +72,12 @@ export function TenantSettings() {
       <SetRow k="importDocs" title="Document import" desc="Read documents into proposals." />
       <SetRow k="everyoneTeaches" title="Members can teach" desc="When off, only Builders and Owners can propose; Members can only read." />
       <h3>Governance</h3>
-      <SetRow k="approvalRequired" title="Approval required for every change" desc="" locked />
+      <SetRow
+        k="approvalRequired"
+        title="Approval required for every change"
+        desc={ADDED_DESCRIPTIONS['Approval required for every change']}
+        locked
+      />
       <SetRow
         k="twoApprovers"
         title="Two approvers for changes"
@@ -82,7 +90,7 @@ export function TenantSettings() {
       />
       <SetRow k="notifyOwners" title="Notify domain owners" desc="Owners are notified when a proposal lands in their domain product." />
       <h3>Portfolio</h3>
-      <SetRow k="multiCompany" title="Several companies in one view" desc="" />
+      <SetRow k="multiCompany" title="Several companies in one view" desc={ADDED_DESCRIPTIONS['Several companies in one view']} />
       <SetRow
         k="crossCompany"
         title="Companies may interact"
@@ -109,7 +117,7 @@ export function TenantSettings() {
       <h3>Display</h3>
       <SetRow k="animations" title="Animations" desc="Cell division and line tracing. Off makes changes instant." />
       <SetRow k="coverageDefault" title="Coverage view by default" desc="Open the canvas with data coverage colouring on." />
-      <SetRow k="legend" title="Show the relationship legend" desc="" />
+      <SetRow k="legend" title="Show the relationship legend" desc={ADDED_DESCRIPTIONS['Show the relationship legend']} />
     </>
   );
 }
@@ -148,6 +156,19 @@ export function Appearance() {
           }}
         />
         <p>Light interface and canvas. Domain colours stay the same; the company and domain regions adapt.</p>
+      </div>
+      <h3>{SKIP_ANIMATION_ROW.heading}</h3>
+      <div className="set">
+        <b>{SKIP_ANIMATION_ROW.title}</b>
+        <Tg
+          on={st.ui.skipAnimation}
+          data-act="skipAnimation"
+          onClick={() => {
+            st.toggleSkip();
+            renderAdmin();
+          }}
+        />
+        <p>{SKIP_ANIMATION_ROW.desc}</p>
       </div>
       <h3>Interface</h3>
       <div className="colors">
