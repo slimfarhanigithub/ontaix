@@ -19,6 +19,8 @@ import {
   type DomainProduct,
   type Proposal,
   type ProposalDraft,
+  type ConceptDraft,
+  type SpecDraft,
   type Scene,
   type Settings,
   type Source,
@@ -144,6 +146,8 @@ class StudioStore {
   private loading: Promise<void> | null = null;
   /** Birth draws made when a draft was posted, keyed by company id and label, used when the proposal event arrives. */
   private births = new Map<string, BirthDraws>();
+  /** Cells drawn from streamed drafts whose proposals do not exist yet, by company and label (lower case). */
+  private early = new Map<string, Node>();
 
   constructor() {
     this.s = createScene({
@@ -456,6 +460,67 @@ class StudioStore {
     this.births.set(`${companyId}|${label.toLowerCase()}`, draws);
   }
 
+  /** Drops the draws remembered for a draft that is not proposed after all. */
+  forgetBirth(companyId: string, label: string): void {
+    this.births.delete(`${companyId}|${label.toLowerCase()}`);
+  }
+
+  /**
+   * Draws the cell a streamed concept or spec draft proposes, as its proposal's event will draw it,
+   * with the draws made for the draft; the proposal's event takes the cell over. Null when the
+   * draft's parent is not on the canvas or its label already has an early cell.
+   */
+  drawEarly(draft: ConceptDraft | SpecDraft, draws: BirthDraws): Node | null {
+    const s = this.s;
+    const key = `${draft.companyId}|${draft.label.toLowerCase()}`;
+    if (this.early.has(key)) return null;
+    const parent = draft.parentLabel
+      ? this.early.get(`${draft.companyId}|${draft.parentLabel.toLowerCase()}`) || this.conceptLabelled(draft.companyId, draft.parentLabel)
+      : bySid(s, draft.parentId);
+    if (!parent || parent.dying) return null;
+    const action = draft.type === 'concept' ? draft.action.normalize('NFKC').replace(/s+/g, ' ').trim().toLowerCase() : '';
+    const isa = draft.type === 'spec' || action === 'is a';
+    const n = divide(s, parent, draft.label, null, {
+      label: isa ? undefined : action,
+      domain: draft.domainKey ?? null,
+      isa,
+      reverse: !isa && draft.type === 'concept' && !!draft.reverse,
+      draws,
+    });
+    n.pending = true;
+    if (n.birthLink) n.birthLink.pending = true;
+    if (draft.type === 'spec') this.showRule(n, draft.rule || '');
+    this.early.set(key, n);
+    this.bump();
+    return n;
+  }
+
+  /** Takes back a cell drawn from a streamed draft that no proposal took over: it fades out. */
+  dropEarly(n: Node): void {
+    for (const [key, node] of this.early) if (node === n) this.early.delete(key);
+    if (n.sid || n.dying) return;
+    n.pending = false;
+    n.dying = { start: now(), color: n.color };
+    this.bump();
+  }
+
+  private conceptLabelled(companyId: string, label: string): Node | null {
+    const company = this.companyBySid(companyId);
+    const wanted = label.toLowerCase();
+    return this.s.nodes.find((n) => n.company === company && n.kind !== 'source' && !n.dying && n.label.toLowerCase() === wanted) || null;
+  }
+
+  /** A spec cell shows its rule under its label once it has divided. */
+  private showRule(n: Node, rule: string): void {
+    n._rule = rule;
+    setTimeout(
+      () => {
+        n.sub = rule;
+      },
+      this.s.SKIP ? 0 : 900,
+    );
+  }
+
   private takeBirth(companyId: string, label: string): BirthDraws | undefined {
     const k = `${companyId}|${label.toLowerCase()}`;
     const d = this.births.get(k);
@@ -473,6 +538,18 @@ class StudioStore {
         const c = art.concepts?.[0],
           r = art.relations?.[0];
         if (!c || !r || bySid(s, c.id)) return;
+        const earlyKey = `${c.companyId}|${c.label.toLowerCase()}`;
+        const early = this.early.get(earlyKey);
+        if (early && !early.dying) {
+          // The cell a streamed draft drew is this proposal's: it takes the ids, nothing is drawn again.
+          this.early.delete(earlyKey);
+          early.sid = c.id;
+          if (early.birthLink) {
+            early.birthLink.sid = r.id;
+            if (r.kind !== 'isa') early.birthLink.label = r.label;
+          }
+          break;
+        }
         const parent = bySid(s, c.parentId);
         if (!parent) return;
         const isa = r.kind === 'isa';
@@ -493,16 +570,7 @@ class StudioStore {
           n.birthLink.sid = r.id;
           n.birthLink.pending = true;
         }
-        if (p.type === 'spec') {
-          const rule = c.rule || '';
-          n._rule = rule;
-          setTimeout(
-            () => {
-              n.sub = rule;
-            },
-            s.SKIP ? 0 : 900,
-          );
-        }
+        if (p.type === 'spec') this.showRule(n, c.rule || '');
         break;
       }
       case 'relation': {

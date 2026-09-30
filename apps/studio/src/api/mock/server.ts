@@ -150,6 +150,8 @@ interface MProposal {
 export interface MockResponse {
   status: number;
   body: unknown;
+  /** The lines of a newline-delimited JSON answer, sent in place of `body`. */
+  lines?: unknown[];
 }
 
 /** A stored ontology import: the mapped tree, kept for 24 hours for its actor. */
@@ -1506,6 +1508,12 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
 
   // ------------------------------------------------------------ teaching
 
+  /** The lines of `POST /teach/parse/stream` for a parse the grammar answers whole: each draft, then the result. */
+  function streamedParse(result: T.TeachResult): T.TeachStreamEvent[] {
+    const drafts: T.TeachStreamEvent[] = result.drafts.map((draft, index) => ({ type: 'draft', index, draft, note: result.draftNotes[index] }));
+    return [...drafts, { type: 'result', result }];
+  }
+
   /** A concept of the company by name, plural or singular, the reference's `resolve`. */
   function resolveLabel(np: string, companyId: string): MConcept | null {
     if (!np) return null;
@@ -2538,6 +2546,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       return json(200, { coverage } satisfies T.ViewState);
     }
     if (is('POST', 'teach', 'parse')) return json(200, teachParse(body as T.TeachRequest));
+    if (is('POST', 'teach', 'parse', 'stream')) return { status: 200, body: null, lines: streamedParse(teachParse(body as T.TeachRequest)) };
     if (is('POST', 'ontology-imports'))
       throw new Refusal(422, 'validation_failed', 'the file is sent as multipart form data in the field file');
     if (is('GET', 'ontology-imports', null)) return json(200, ontologyImportOf(seg[1]).result);

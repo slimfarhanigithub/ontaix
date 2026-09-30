@@ -6,7 +6,8 @@
  * `Response` reads its body in a later task, and under a fake clock that gap lets a frame run
  * between two proposals of one teach batch, which the reference never does. A multipart upload
  * (`POST /import/sentences`, `POST /ontology-imports`) is read from its form before the mock
- * answers.
+ * answers. A newline-delimited answer (`POST /teach/parse/stream`) has no readable body stream: its
+ * lines are read whole from `text()`, in the same microtask.
  */
 import { createMockServer, type MockResponse, type MockServer } from './server';
 
@@ -40,12 +41,13 @@ async function upload(server: MockServer, path: string, form: FormData): Promise
 }
 
 function answer(res: MockResponse): Response {
-  const text = JSON.stringify(res.body);
+  const text = res.lines ? res.lines.map((line) => JSON.stringify(line) + '\n').join('') : JSON.stringify(res.body);
+  const type = res.status >= 400 ? 'application/problem+json' : res.lines ? 'application/x-ndjson' : 'application/json';
   return {
     ok: res.status >= 200 && res.status < 300,
     status: res.status,
     statusText: '',
-    headers: new Headers({ 'content-type': res.status >= 400 ? 'application/problem+json' : 'application/json' }),
+    headers: new Headers({ 'content-type': type }),
     json: () => Promise.resolve(JSON.parse(text)),
     text: () => Promise.resolve(text),
   } as unknown as Response;
