@@ -2,9 +2,9 @@
  * Shapes of the Ontaix API as contracts/openapi.yaml defines them, limited to what the Studio
  * canvas and the proposal flow read and write.
  */
-import type { DomainKey } from '../canvas/types';
+import type { DomainKey, TemplateKey } from '../canvas/types';
 
-export type { DomainKey };
+export type { DomainKey, TemplateKey };
 
 export type ActorKind = 'user' | 'agent' | 'system';
 
@@ -354,7 +354,12 @@ export type ChangeKind =
   | 'remove_source'
   | 'remove_company'
   | 'rename_source'
-  | 'resolve_conflict';
+  | 'resolve_conflict'
+  | 'create_domain'
+  | 'edit_domain'
+  | 'delete_domain'
+  | 'move_concept_domain'
+  | 'delete_bulk';
 
 export interface ChangeDraft extends DraftOrigin {
   type: 'change';
@@ -369,6 +374,13 @@ export interface ChangeDraft extends DraftOrigin {
     sourceId?: string;
     companyId?: string;
     conflictConceptIds?: [string, string];
+    domainKey?: DomainKey;
+    domainProductId?: string;
+    name?: string;
+    color?: string;
+    owner?: string;
+    conceptIds?: string[];
+    domainProductIds?: string[];
   };
   caption?: string;
 }
@@ -423,11 +435,20 @@ export interface Proposal {
   originDetail: OriginDetail | null;
   approvals: { ordinal: 1 | 2; userId: string; userName?: string; approvedAt: string }[];
   bulk?: boolean;
+  /** Incremented by every in-place edit of a pending draft; 0 when never edited. */
+  revision?: number;
   createdAt: string;
   decidedAt?: string | null;
   artefacts?: Artefacts;
   /** Open proposals in the branch of a `concept` or `spec` proposal other than itself; 0 or absent otherwise. */
   openBelow?: number;
+}
+
+/** `PATCH /proposals/{proposalId}`: a pending draft's new label and/or action, with the revision the editor saw. */
+export interface ProposalEdit {
+  revision: number;
+  label?: string;
+  action?: string;
 }
 
 export interface AuditEntry {
@@ -469,6 +490,8 @@ export interface Settings {
   autoAttrs: boolean;
   notifyOwners: boolean;
   multiCompany: boolean;
+  /** When false, `POST /companies` is refused and the Studio hides Add company; distinct from `multiCompany`. */
+  companyCreation: boolean;
   crossCompany: boolean;
   animations: boolean;
   coverageDefault: boolean;
@@ -893,6 +916,64 @@ export interface LlmUsage {
     pages?: number;
     costEur: number;
   }[];
+}
+
+// ------------------------------------------------------------ domains, deletion impact, bulk deletion
+
+/** A tenant domain: one of the nine templates (possibly renamed) or a custom domain, the same in every company. */
+export interface TenantDomain {
+  key: DomainKey;
+  name: string;
+  owner: string;
+  /** The effective colour, the value Appearance edits. */
+  color: string;
+  defaultColor: string;
+  template: boolean;
+  /** Ring position, 0 to 63; the templates take 0 to 8. */
+  position: number;
+  revision: number;
+}
+
+/** `POST /domains`: a new domain; its key is derived from the name by the server. */
+export interface DomainInput {
+  name: string;
+  color: string;
+  owner?: string;
+}
+
+/** `PATCH /domains/{domainKey}`: at least one of a new name, colour or owner. */
+export interface DomainPatch {
+  name?: string;
+  color?: string;
+  owner?: string;
+}
+
+/** `POST /deletion-impact`: a whole company, or concepts and domain products of one company. */
+export interface DeletionTarget {
+  companyId: string;
+  wholeCompany?: boolean;
+  conceptIds?: string[];
+  domainProductIds?: string[];
+}
+
+/** What approving a deletion would remove; `names` holds at most six labels, named concepts first. */
+export interface DeletionImpact {
+  concepts: number;
+  descendants: number;
+  relations: number;
+  crossCompanyRelations: number;
+  bindings: number;
+  attributes: number;
+  sources: number;
+  cascadedProposals: number;
+  names: string[];
+}
+
+/** `POST /proposals/bulk-delete`: up to 200 concepts and 20 domain products of one company. */
+export interface BulkDeleteRequest {
+  companyId: string;
+  conceptIds?: string[];
+  domainProductIds?: string[];
 }
 
 export interface CrossCompanyDisabled {

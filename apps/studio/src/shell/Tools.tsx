@@ -2,7 +2,8 @@
  * The tool row above the teach bar. Markup from reference/ontaix-studio-reference.html lines
  * 194-201 without the Finalise all button; behaviours from lines 548-565 (arrange, coverage,
  * skip), 616 (add a company) and 904-906 (import, drag and drop). The file is read with the
- * mode `#imMode` shows.
+ * mode `#imMode` shows. Add company is hidden while the `companyCreation` setting is off, as
+ * well as while `multiCompany` is off.
  */
 import { useEffect, useRef } from 'react';
 
@@ -39,7 +40,7 @@ export function Tools() {
         type="button"
         id="addCo"
         title="Add another company to the same view"
-        style={{ display: settings && !settings.multiCompany ? 'none' : undefined }}
+        style={{ display: settings && (!settings.multiCompany || settings.companyCreation === false) ? 'none' : undefined }}
         onClick={openAddCompany}
       >
         <svg viewBox="0 0 16 16">

@@ -44,11 +44,14 @@ export const VIEWPORTS: Viewport[] = [
 const STORY_ONLY_CSS = '#sceneNum,#sceneName,#next,#finalise{display:none!important}';
 /**
  * Owner additions absent from the reference, hidden in both pages with `display: none`: the
- * drawer's Expand and Delete buttons and the changes panel's `Approve branch` button. The
- * reference has no such elements, so the rule changes nothing there; in the Studio the drawer's
- * other actions and each proposal's row lay out as the reference's.
+ * drawer's Expand and Delete buttons, the changes panel's `Approve branch` button, and every
+ * element marked `data-ox-new` (the drawer's Rename and Move to domain, the panel's
+ * Edit, the selection bar, the admin tables' checkbox columns, Move, New domain, Edit and Delete
+ * buttons, header and cells together, and the Company creation setting row). The reference has
+ * no such elements, so the rule changes nothing there; in the Studio the drawer's other actions,
+ * each proposal's row and each table lay out as the reference's.
  */
-const OWNER_ADDITIONS_CSS = '#drExpand,#drDelete,.prop .act .branch{display:none!important}';
+const OWNER_ADDITIONS_CSS = '#drExpand,#drDelete,.prop .act .branch,[data-ox-new]{display:none!important}';
 /**
  * The import mode pill, an owner addition shown in every scene: the Studio's `#imMode` at its
  * default, added to the reference after `#importFile` before its first layout, so both tool rows

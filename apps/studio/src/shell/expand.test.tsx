@@ -173,8 +173,9 @@ describe('Approve branch', () => {
     store.ui.proposals = [proposal({ openBelow: 2 }), proposal({ id: 'p-2', openBelow: 0 })];
     const { container } = render(<Panel />);
     const rows = [...container.querySelectorAll('.prop')];
-    expect([...rows[0].querySelectorAll('.act button')].map((b) => b.textContent)).toEqual(['Approve', 'Reject', 'Approve branch (3)']);
-    expect(rows[1].querySelectorAll('.act button')).toHaveLength(2);
+    // `Edit` is the in-place draft edit, offered on every pending concept draft.
+    expect([...rows[0].querySelectorAll('.act button')].map((b) => b.textContent)).toEqual(['Approve', 'Reject', 'Approve branch (3)', 'Edit']);
+    expect(rows[1].querySelectorAll('.act button')).toHaveLength(3);
     expect(rows[0].querySelector('.top')?.textContent).toBe('New concept · Sales · suggested');
     expect(rows[0].querySelector('.why')?.textContent).toBe('Suggested by the model · 91% · Service after the sale');
   });

@@ -4,9 +4,11 @@
  * contracts/openapi.yaml and publishes every change on the live event bus, the way the real
  * API does over the WebSocket. Proposal text, readiness and side effects are the server-side
  * port of the reference's `pConcept`, `pSpec`, `pRelation`, `pSource`, `pBind`, `pAttr`,
- * `approve`, `reject` and `afterApply` (reference lines 573-607).
+ * `approve`, `reject` and `afterApply` (reference lines 573-607). Tenant domains, pending-draft
+ * edits with revisions, deletion impact, bulk deletion and the company-creation setting follow
+ * contracts/openapi.yaml.
  */
-import { DEFAULT_BRASS, DOMAIN_R, DOMAIN_TEMPLATES, C, NEUTRAL } from '../../canvas/constants';
+import { DEFAULT_BRASS, DOMAIN_R, DOMAIN_TEMPLATES, C, MAX_DOMAINS, NEUTRAL } from '../../canvas/constants';
 import { contentWords, domainPrefix, singular, title, understand } from '../../nl/parser';
 import { nowDate } from '../../runtime/clock';
 import { random } from '../../runtime/rng';
@@ -29,15 +31,24 @@ interface MCompany {
   domains: MDomain[];
 }
 
+/** A company's domain product; its name, owner and colour are the tenant domain's. */
 interface MDomain {
   id: string;
   companyId: string;
   key: T.DomainKey;
-  name: string;
-  owner: string;
-  templateColor: string;
   revision: number;
   hidden: boolean;
+}
+
+/** A tenant domain: a template or a custom domain, the same in every company. */
+interface MTenantDomain {
+  key: T.DomainKey;
+  name: string;
+  owner: string;
+  defaultColor: string;
+  template: boolean;
+  position: number;
+  revision: number;
 }
 
 interface MAttr {
@@ -138,6 +149,10 @@ interface MProposal {
   attributeId: string | null;
   /** Further concepts a decision changed, reported with its artefacts. */
   conceptIds?: string[];
+  /** Further domain products a decision changed, reported with its artefacts. */
+  domainIds?: string[];
+  /** Incremented by every in-place edit of the pending draft. */
+  revision: number;
   createdAt: string;
   decidedAt: string | null;
   second: boolean;
@@ -208,6 +223,17 @@ class Refusal extends Error {
 }
 
 const TENANT_ID = '00000000-0000-4000-8000-00000000000a';
+const HEX = /^#[0-9a-f]{6}$/i;
+const DOMAIN_KEY = /^[a-z][a-z0-9_]{1,39}$/;
+/** The API's label rules: 1 to 120 characters, no markup, control or format characters, no surrounding space. */
+const LABEL_MAX = 120;
+const ACTION_MAX = 60;
+const NAME_MAX = 60;
+const BULK_CONCEPTS = 200;
+const BULK_PRODUCTS = 20;
+/** Names the deletion impact lists before the rest collapse into a count. */
+const IMPACT_NAMES = 6;
+const forbiddenText = (s: string) => /[<>\u0000-\u001f\u007f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/.test(s) || s !== s.trim();
 /** An import serves parses and drafts for one hour. */
 const IMPORT_LIFETIME_MS = 60 * 60 * 1000;
 /** An ontology import serves its submission for 24 hours. */
@@ -233,6 +259,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   const e = escapeHtml;
 
   let companies: MCompany[] = [];
+  let domains: MTenantDomain[] = [];
   let concepts: MConcept[] = [];
   let sources: MSource[] = [];
   let relations: MRelation[] = [];
@@ -257,6 +284,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     autoAttrs: false,
     notifyOwners: true,
     multiCompany: true,
+    companyCreation: true,
     crossCompany: true,
     animations: true,
     coverageDefault: false,
@@ -277,7 +305,11 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     agentAccess: () => settings.agentAccess,
   });
 
-  const colourOf = (d: MDomain) => appearance.colors[d.key] || d.templateColor;
+  const tenantDomain = (key: string | null | undefined) => domains.find((d) => d.key === key) || null;
+  const domainColour = (key: string) => appearance.colors[key] || tenantDomain(key)?.defaultColor || NEUTRAL;
+  const colourOf = (d: MDomain) => domainColour(d.key);
+  const nameOf = (d: MDomain) => tenantDomain(d.key)?.name ?? d.key;
+  const ownerOf = (d: MDomain) => tenantDomain(d.key)?.owner ?? '';
   const companyOf = (id: string) => companies.find((c) => c.id === id) || null;
   const conceptById = (id: string | null | undefined) => concepts.find((c) => c.id === id) || null;
   const sourceById = (id: string | null | undefined) => sources.find((c) => c.id === id) || null;
@@ -287,6 +319,25 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     c.domainKey ? companyOf(c.companyId)?.domains.find((d) => d.key === c.domainKey) || null : null;
   const domainByKey = (companyId: string, key: string | null | undefined) =>
     companyOf(companyId)?.domains.find((d) => d.key === key) || null;
+  /** The company's product for a tenant domain, created when its first concept joins; null for a key the tenant lacks. */
+  function ensureProduct(companyId: string, key: string | null | undefined): MDomain | null {
+    const have = domainByKey(companyId, key);
+    if (have) return have;
+    const co = companyOf(companyId);
+    const td = tenantDomain(key);
+    if (!co || !td) return null;
+    const d: MDomain = { id: uuid(), companyId, key: td.key, revision: 0, hidden: false };
+    co.domains.push(d);
+    co.domains.sort((a, b) => (tenantDomain(a.key)?.position ?? 0) - (tenantDomain(b.key)?.position ?? 0));
+    return d;
+  }
+  /** The product a draft's `domainKey` names: the host's when absent, `422` when the tenant has no such domain. */
+  function productForDraft(companyId: string, key: string | null | undefined, host: MConcept): MDomain | null {
+    if (!key) return domainOfConcept(host);
+    const d = ensureProduct(companyId, key);
+    if (!d) throw new Refusal(422, 'validation_failed', `${key} is not a domain of the tenant`);
+    return d;
+  }
   /** A living concept by label inside a company, the reference's `find`. */
   const findConcept = (label: string, companyId: string) =>
     concepts.find((n) => n.label.toLowerCase() === label.toLowerCase() && n.companyId === companyId && !n.dyingAt) ||
@@ -404,7 +455,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       pending: l.pending,
       dyingAt: l.dyingAt,
       companyIds: [...new Set([a?.companyId, b?.companyId].filter((x): x is string => !!x))],
-      scope: ad === bd ? (ad ? ad.name : 'company') : `${ad ? ad.name : 'company'} → ${bd ? bd.name : 'company'}`,
+      scope: ad === bd ? (ad ? nameOf(ad) : 'company') : `${ad ? nameOf(ad) : 'company'} → ${bd ? nameOf(bd) : 'company'}`,
       state: l.pending ? 'awaiting approval' : 'approved',
     };
   };
@@ -415,8 +466,8 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       id: d.id,
       companyId: d.companyId,
       key: d.key,
-      name: d.name,
-      owner: d.owner,
+      name: nameOf(d),
+      owner: ownerOf(d),
       color: colourOf(d),
       revision: d.revision,
       version: `v1.${d.revision}`,
@@ -461,7 +512,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     const ss = [p.sourceId].map(sourceById).filter((x): x is MSource => !!x);
     const bs = p.bindingIds.map((id) => bindings.find((b) => b.id === id)).filter((x): x is MBinding => !!x);
     const as = p.attributeId ? concepts.flatMap((c) => c.attributes).filter((a) => a.id === p.attributeId) : [];
-    const ds = p.domainId ? [domainById(p.domainId)].filter((x): x is MDomain => !!x) : [];
+    const ds = [p.domainId, ...(p.domainIds || [])].map(domainById).filter((x): x is MDomain => !!x);
     return {
       concepts: cs.map(toConcept),
       relations: rs.map(toRelation),
@@ -499,6 +550,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     origin: p.origin,
     originDetail: p.originDetail,
     approvals: [],
+    revision: p.revision,
     createdAt: p.createdAt,
     decidedAt: p.decidedAt,
     artefacts: artefactsOf(p),
@@ -507,10 +559,21 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
 
   const toAppearance = (): T.Appearance => ({
     theme: appearance.theme,
-    colors: Object.fromEntries(DOMAIN_TEMPLATES.map((t) => [t.key, appearance.colors[t.key] || t.color])),
+    colors: Object.fromEntries(domains.map((d) => [d.key, appearance.colors[d.key] || d.defaultColor])),
     accent: appearance.accent,
     source: appearance.source,
-    defaults: { colors: Object.fromEntries(DOMAIN_TEMPLATES.map((t) => [t.key, t.color])), accent: '#3fb8a9', source: DEFAULT_BRASS },
+    defaults: { colors: Object.fromEntries(domains.map((d) => [d.key, d.defaultColor])), accent: '#3fb8a9', source: DEFAULT_BRASS },
+  });
+
+  const toTenantDomain = (d: MTenantDomain): T.TenantDomain => ({
+    key: d.key,
+    name: d.name,
+    owner: d.owner,
+    color: appearance.colors[d.key] || d.defaultColor,
+    defaultColor: d.defaultColor,
+    template: d.template,
+    position: d.position,
+    revision: d.revision,
   });
 
   const toScene = (): T.Scene => ({
@@ -537,9 +600,9 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   }
 
   function newProposal(
-    p: Omit<MProposal, 'id' | 'state' | 'createdAt' | 'decidedAt' | 'second' | 'origin' | 'originDetail'>,
+    p: Omit<MProposal, 'id' | 'state' | 'revision' | 'createdAt' | 'decidedAt' | 'second' | 'origin' | 'originDetail'>,
   ): MProposal {
-    const full: MProposal = { ...p, id: uuid(), state: 'pending', createdAt: iso(), decidedAt: null, second: false, ...provenance };
+    const full: MProposal = { ...p, id: uuid(), state: 'pending', revision: 0, createdAt: iso(), decidedAt: null, second: false, ...provenance };
     proposals.push(full);
     return full;
   }
@@ -553,16 +616,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       sub,
       position: companies.length,
       rootId: '',
-      domains: DOMAIN_TEMPLATES.map((t) => ({
-        id: uuid(),
-        companyId: id,
-        key: t.key,
-        name: t.name,
-        owner: t.owner,
-        templateColor: t.color,
-        revision: 0,
-        hidden: false,
-      })),
+      domains: domains.filter((t) => t.template).map((t) => ({ id: uuid(), companyId: id, key: t.key, revision: 0, hidden: false })),
     };
     const root: MConcept = {
       id: uuid(),
@@ -608,7 +662,9 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   // ------------------------------------------------------------ proposal builders
 
   function pConcept(host: MConcept, label: string, domainKey: string | null, pred: string, cap: string | undefined, reverse: boolean, seed?: number): MProposal {
-    const dom = domainByKey(host.companyId, domainKey) || domainOfConcept(host);
+    checkLabel(label);
+    checkAction(pred);
+    const dom = productForDraft(host.companyId, domainKey, host);
     const concept: MConcept = {
       id: uuid(),
       companyId: host.companyId,
@@ -641,21 +697,16 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       type: 'concept',
       changeKind: null,
       title: label,
-      heading: KIND_HEADING.concept + (dom ? ` · ${dom.name}` : ''),
+      heading: KIND_HEADING.concept + (dom ? ` · ${nameOf(dom)}` : ''),
       color: dom ? colourOf(dom) : NEUTRAL,
       companyId: host.companyId,
       domainId: dom ? dom.id : null,
       parentLabel,
       deps: [parentLabel],
-      ready: () => {
-        const n = findConcept(parentLabel, host.companyId);
-        return !!n && !n.pending && !n.dyingAt;
-      },
+      ready: () => !host.pending && !host.dyingAt && concepts.includes(host),
       waitFor: parentLabel,
-      html: reverse
-        ? `<b>${e(label)}</b> <em>· ${e(label)} <b>${e(pred)}</b> ${e(parentLabel)}</em>`
-        : `<b>${e(label)}</b> <em>· ${e(parentLabel)} <b>${e(pred)}</b> ${e(label)}</em>`,
-      why: dom ? `domain product: ${dom.name}` : '',
+      html: conceptHtml(label, parentLabel, pred, reverse),
+      why: dom ? `domain product: ${nameOf(dom)}` : '',
       caption: cap ?? null,
       conceptId: concept.id,
       relationId: rel.id,
@@ -667,7 +718,8 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   }
 
   function pSpec(host: MConcept, label: string, rule: string, cap: string | undefined, domainKey: string | null, seed?: number): MProposal {
-    const dom = domainByKey(host.companyId, domainKey) || domainOfConcept(host);
+    checkLabel(label);
+    const dom = productForDraft(host.companyId, domainKey, host);
     const concept: MConcept = {
       id: uuid(),
       companyId: host.companyId,
@@ -699,19 +751,16 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       type: 'spec',
       changeKind: null,
       title: label,
-      heading: KIND_HEADING.spec + (dom ? ` · ${dom.name}` : ''),
+      heading: KIND_HEADING.spec + (dom ? ` · ${nameOf(dom)}` : ''),
       color: dom ? colourOf(dom) : hostDom ? colourOf(hostDom) : C.root,
       companyId: host.companyId,
       domainId: dom ? dom.id : null,
       parentLabel,
       deps: [parentLabel],
-      ready: () => {
-        const n = findConcept(parentLabel, host.companyId);
-        return !!n && !n.pending && !n.dyingAt;
-      },
+      ready: () => !host.pending && !host.dyingAt && concepts.includes(host),
       waitFor: parentLabel,
-      html: `<b>${e(label)}</b> <em>is a ${e(parentLabel)}</em>`,
-      why: (rule ? `rule: ${rule}` : '') + (dom ? ` · domain product: ${dom.name}` : ''),
+      html: specHtml(label, parentLabel),
+      why: (rule ? `rule: ${rule}` : '') + (dom ? ` · domain product: ${nameOf(dom)}` : ''),
       caption: cap ?? null,
       conceptId: concept.id,
       relationId: rel.id,
@@ -748,12 +797,12 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       deps: [a.label, b.label],
       ready: () => !a.pending && !b.pending && !a.dyingAt && !b.dyingAt,
       waitFor: `${a.label} and ${b.label}`,
-      html: `${e(a.label)}${xco ? ' <em>(' + e(aCo?.name ?? '') + ')</em>' : ''} <b>${e(pred)}</b> ${e(b.label)}${xco ? ' <em>(' + e(bCo?.name ?? '') + ')</em>' : ''}`,
+      html: relationHtml(a, pred, b),
       why: xco
         ? `across companies: ${aCo?.name} ↔ ${bCo?.name}`
         : cross
-          ? `across domain products: ${ad ? ad.name : 'company'} → ${bd ? bd.name : 'company'}`
-          : `inside ${ad ? ad.name : 'the company'}`,
+          ? `across domain products: ${ad ? nameOf(ad) : 'company'} → ${bd ? nameOf(bd) : 'company'}`
+          : `inside ${ad ? nameOf(ad) : 'the company'}`,
       caption: cap ?? null,
       conceptId: null,
       relationId: rel.id,
@@ -988,12 +1037,14 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       const name = pl.newLabel || '';
       if (!n) throw new Refusal(404, 'concept_not_found', 'concept does not exist');
       if (!name || name === n.label) throw new Refusal(422, 'same_label', 'the new label equals the current one');
+      checkLabel(name);
+      if (findConcept(name, n.companyId)) throw new Refusal(409, 'duplicate_label', `${name} is already in the model.`);
       const d = domainOfConcept(n);
       return newProposal({
         type: 'change',
         changeKind: 'rename',
         title: `Rename ${n.label} to ${name}`,
-        heading: KIND_HEADING.change + (d ? ` · ${d.name}` : ''),
+        heading: KIND_HEADING.change + (d ? ` · ${nameOf(d)}` : ''),
         color: d ? colourOf(d) : C.root,
         companyId: n.companyId,
         domainId: d ? d.id : null,
@@ -1024,7 +1075,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         type: 'change',
         changeKind: 'delete_concept',
         title: `Delete ${n.label}`,
-        heading: KIND_HEADING.change + (d ? ` · ${d.name}` : ''),
+        heading: KIND_HEADING.change + (d ? ` · ${nameOf(d)}` : ''),
         color: C.conflict,
         companyId: n.companyId,
         domainId: d ? d.id : null,
@@ -1059,7 +1110,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
           type: 'change',
           changeKind: 'remove_relation',
           title: `Remove ${a.label} ${link.label} ${b.label}`,
-          heading: KIND_HEADING.change + (ad ? ` · ${ad.name}` : ''),
+          heading: KIND_HEADING.change + (ad ? ` · ${nameOf(ad)}` : ''),
           color: C.conflict,
           companyId: a.companyId,
           domainId: ad ? ad.id : null,
@@ -1090,6 +1141,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       const v = (pl.action || link.label).toLowerCase();
       const reverse = !!pl.reverse;
       if (v === link.label && !reverse) throw new Refusal(422, 'no_change', 'nothing changes');
+      checkAction(v);
       const from = reverse ? b : a,
         to = reverse ? a : b;
       const fd = domainOfConcept(from);
@@ -1097,7 +1149,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         type: 'change',
         changeKind: 'edit_relation',
         title: `${from.label} ${v} ${to.label}`,
-        heading: KIND_HEADING.change + (fd ? ` · ${fd.name}` : ''),
+        heading: KIND_HEADING.change + (fd ? ` · ${nameOf(fd)}` : ''),
         color: NEUTRAL,
         companyId: from.companyId,
         domainId: fd ? fd.id : null,
@@ -1134,7 +1186,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         type: 'change',
         changeKind: 'unbind',
         title: `Unbind ${n.label} from ${src.label}`,
-        heading: KIND_HEADING.change + (d ? ` · ${d.name}` : ''),
+        heading: KIND_HEADING.change + (d ? ` · ${nameOf(d)}` : ''),
         color: appearance.source,
         companyId: n.companyId,
         domainId: d ? d.id : null,
@@ -1225,8 +1277,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       const co = companyOf(pl.companyId || '');
       if (!co) throw new Refusal(404, 'company_not_found', 'company does not exist');
       if (co.position === 0 || companies.length < 2) throw new Refusal(409, 'home_company', 'the home company cannot be removed');
-      const cells =
-        concepts.filter((x) => x.companyId === co.id && !x.dyingAt).length + sources.filter((x) => x.companyId === co.id && !x.dyingAt).length;
+      const impact = deletionImpact({ companyId: co.id, wholeCompany: true });
       return newProposal({
         type: 'change',
         changeKind: 'remove_company',
@@ -1239,8 +1290,8 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         deps: [],
         ready: () => true,
         waitFor: null,
-        html: `Remove <b>${e(co.name)}</b> from the portfolio with its ${cells} cells`,
-        why: 'equivalences to other companies are removed too',
+        html: `Remove <b>${e(co.name)}</b> from the portfolio with its ${impactHtml(impact, true)}`,
+        why: 'every open proposal touching the company is rejected · equivalences to other companies are removed too',
         caption: draft.caption ?? `${co.name} left the view.`,
         conceptId: null,
         relationId: null,
@@ -1250,6 +1301,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         attributeId: null,
         apply() {
           const ids = new Set(concepts.filter((x) => x.companyId === co.id).map((x) => x.id));
+          for (const q of open()) if (q !== this && touchesCompany(q, co.id, ids)) reject(q, []);
           relations = relations.filter((l) => !ids.has(l.aId) && !ids.has(l.bId));
           bindings = bindings.filter((b) => !ids.has(b.conceptId));
           concepts = concepts.filter((x) => !ids.has(x.id));
@@ -1258,7 +1310,461 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         },
       });
     }
+    if (draft.changeKind === 'create_domain') return pCreateDomain({ name: pl.name || '', color: pl.color || '', owner: pl.owner });
+    if (draft.changeKind === 'edit_domain') return pEditDomain(pl.domainKey || '', { name: pl.name, color: pl.color, owner: pl.owner });
+    if (draft.changeKind === 'delete_domain') return pDeleteDomain(pl.domainProductId || '');
+    if (draft.changeKind === 'move_concept_domain') return pMoveConcept(pl.conceptId || '', pl.domainKey || '');
+    if (draft.changeKind === 'delete_bulk')
+      return pBulkDelete({ companyId: pl.companyId || '', conceptIds: pl.conceptIds, domainProductIds: pl.domainProductIds });
     throw new Refusal(422, 'unsupported_change', `${draft.changeKind} is not available in the mock API`);
+  }
+
+  // ------------------------------------------------------------ label rules, proposal text
+
+  function checkLabel(label: string): void {
+    if (typeof label !== 'string' || !label.length || label.length > LABEL_MAX || forbiddenText(label))
+      throw new Refusal(422, 'validation_failed', `a label holds 1 to ${LABEL_MAX} characters without markup, control characters or surrounding space`);
+  }
+
+  function checkAction(action: string): void {
+    if (typeof action !== 'string' || !action.length || action.length > ACTION_MAX || forbiddenText(action))
+      throw new Refusal(422, 'validation_failed', `an action holds 1 to ${ACTION_MAX} characters without markup, control characters or surrounding space`);
+  }
+
+  function checkName(name: string): void {
+    if (typeof name !== 'string' || !name.length || name.length > NAME_MAX || forbiddenText(name))
+      throw new Refusal(422, 'validation_failed', `a name holds 1 to ${NAME_MAX} characters without markup, control characters or surrounding space`);
+  }
+
+  const conceptHtml = (label: string, parentLabel: string, pred: string, reverse: boolean) =>
+    reverse
+      ? `<b>${e(label)}</b> <em>· ${e(label)} <b>${e(pred)}</b> ${e(parentLabel)}</em>`
+      : `<b>${e(label)}</b> <em>· ${e(parentLabel)} <b>${e(pred)}</b> ${e(label)}</em>`;
+
+  const specHtml = (label: string, parentLabel: string) => `<b>${e(label)}</b> <em>is a ${e(parentLabel)}</em>`;
+
+  function relationHtml(a: MConcept, pred: string, b: MConcept): string {
+    const xco = a.companyId !== b.companyId;
+    const aCo = companyOf(a.companyId),
+      bCo = companyOf(b.companyId);
+    return `${e(a.label)}${xco ? ' <em>(' + e(aCo?.name ?? '') + ')</em>' : ''} <b>${e(pred)}</b> ${e(b.label)}${xco ? ' <em>(' + e(bCo?.name ?? '') + ')</em>' : ''}`;
+  }
+
+  // ------------------------------------------------------------ editing a pending draft
+
+  /**
+   * `PATCH /proposals/{id}`: a pending concept, spec or relation draft changes label and/or action
+   * in place. Every creation check re-runs, the text is rebuilt, dependants naming the old label
+   * are rewritten, the revision increments and `proposal.changed` is emitted.
+   */
+  function editProposal(p: MProposal, body: T.ProposalEdit): T.Proposal {
+    if (!body || typeof body !== 'object' || !Number.isInteger(body.revision) || body.revision < 0)
+      throw new Refusal(422, 'validation_failed', 'revision is required');
+    if (body.label === undefined && body.action === undefined) throw new Refusal(422, 'validation_failed', 'label or action is required');
+    if (p.state !== 'pending' || (p.type !== 'concept' && p.type !== 'spec' && p.type !== 'relation'))
+      throw new Refusal(409, 'proposal_not_editable', `${p.title} cannot be edited`);
+    if (body.revision !== p.revision) throw new Refusal(409, 'proposal_changed', `${p.title} was edited since you read it`);
+    if (p.type === 'spec' && body.action !== undefined) throw new Refusal(422, 'validation_failed', 'a specialisation has no action');
+    if (p.type === 'relation' && body.label !== undefined) throw new Refusal(422, 'validation_failed', 'a relation has no label');
+    const rel = relationById(p.relationId);
+    if (!rel) throw new Refusal(409, 'proposal_not_editable', `${p.title} cannot be edited`);
+    if (p.type === 'relation') {
+      const action = (body.action as string).toLowerCase();
+      checkAction(action);
+      if (action === 'is a' || action === 'equivalent to') throw new Refusal(422, 'validation_failed', 'is a and equivalent to are not relation actions');
+      const a = conceptById(rel.aId),
+        b = conceptById(rel.bId);
+      if (!a || !b) throw new Refusal(409, 'proposal_not_editable', `${p.title} cannot be edited`);
+      if (relations.some((l) => l !== rel && l.aId === a.id && l.bId === b.id && l.label === action && !l.dyingAt))
+        throw new Refusal(409, 'duplicate_relation', `${a.label} ${action} ${b.label} is already in the model.`);
+      const before = p.title;
+      rel.label = action;
+      p.title = `${a.label} ${action} ${b.label}`;
+      p.html = relationHtml(a, action, b);
+      finishEdit(p, before);
+      emit('relation.changed', { relation: toRelation(rel) });
+      return toProposal(p);
+    }
+    const c = conceptById(p.conceptId);
+    if (!c || !p.parentLabel) throw new Refusal(409, 'proposal_not_editable', `${p.title} cannot be edited`);
+    const label = body.label === undefined ? c.label : title(body.label);
+    if (body.label !== undefined) {
+      checkLabel(label);
+      const taken = findConcept(label, c.companyId);
+      if (taken && taken !== c) throw new Refusal(409, 'duplicate_label', `${label} is already in the model.`);
+    }
+    const reverse = rel.aId === c.id;
+    const action = body.action === undefined ? rel.label : (body.action as string).toLowerCase();
+    if (body.action !== undefined) checkAction(action);
+    const old = c.label;
+    const before = p.title;
+    c.label = label;
+    rel.label = action;
+    p.title = label;
+    p.html = p.type === 'spec' ? specHtml(label, p.parentLabel) : conceptHtml(label, p.parentLabel, action, reverse);
+    if (old !== label)
+      for (const q of open()) {
+        if (q === p || q.companyId !== p.companyId) continue;
+        if (!q.deps.includes(old) && q.parentLabel !== old) continue;
+        q.deps = q.deps.map((x) => (x === old ? label : x));
+        if (q.parentLabel === old) q.parentLabel = label;
+        if (q.waitFor === old) q.waitFor = label;
+        else if (q.waitFor && q.type === 'relation') q.waitFor = q.deps.join(' and ');
+        q.html = q.html.split(e(old)).join(e(label));
+        if (q.title.includes(old)) q.title = q.title.split(old).join(label);
+      }
+    finishEdit(p, before);
+    emit('concept.changed', { concept: toConcept(c) });
+    return toProposal(p);
+  }
+
+  function finishEdit(p: MProposal, before: string): void {
+    p.revision += 1;
+    addAudit('edit', `${before} → ${p.title}`, true, p.id, p.companyId ? [p.companyId] : [], domainById(p.domainId)?.key ?? null, p.origin);
+    const out = toProposal(p);
+    emit('proposal.changed', { proposal: out, artefacts: out.artefacts, cascaded: [] });
+  }
+
+  // ------------------------------------------------------------ deletion impact
+
+  /** The approved, live concepts born from any of `roots`, transitively, the roots excluded; pending ones are cascaded proposals. */
+  function descendantsOf(roots: Set<MConcept>): MConcept[] {
+    return concepts.filter((q) => !q.dyingAt && !q.pending && !roots.has(q) && [...roots].some((r) => descends(q, r)));
+  }
+
+  /** An open proposal that names a doomed concept, a relation touching one, or a source, binding or attribute of the company. */
+  function touchesCompany(q: MProposal, companyId: string, ids: Set<string>): boolean {
+    if (q.companyId === companyId) return true;
+    return touchesConcepts(q, ids);
+  }
+
+  function touchesConcepts(q: MProposal, ids: Set<string>): boolean {
+    if (q.conceptId && ids.has(q.conceptId)) return true;
+    for (const rid of [q.relationId, ...q.relationIds]) {
+      const l = relationById(rid);
+      if (l && (ids.has(l.aId) || ids.has(l.bId))) return true;
+    }
+    for (const bid of q.bindingIds) {
+      const b = bindings.find((x) => x.id === bid);
+      if (b && ids.has(b.conceptId)) return true;
+    }
+    if (q.attributeId && concepts.some((c) => ids.has(c.id) && c.attributes.some((a) => a.id === q.attributeId))) return true;
+    return false;
+  }
+
+  /** Resolves a deletion target to the company and the concepts named directly (products expanded), refusing what the contract refuses. */
+  function resolveTarget(target: T.DeletionTarget): { co: MCompany; named: MConcept[]; products: MDomain[] } {
+    if (!target || typeof target !== 'object' || typeof target.companyId !== 'string') throw new Refusal(422, 'validation_failed', 'companyId is required');
+    const co = companyOf(target.companyId);
+    if (!co) throw new Refusal(404, 'not_found', 'company not found in this tenant');
+    const conceptIds = target.conceptIds ?? [];
+    const productIds = target.domainProductIds ?? [];
+    if (!Array.isArray(conceptIds) || !Array.isArray(productIds)) throw new Refusal(422, 'validation_failed', 'conceptIds and domainProductIds are lists');
+    if (conceptIds.length > BULK_CONCEPTS || productIds.length > BULK_PRODUCTS)
+      throw new Refusal(422, 'validation_failed', `at most ${BULK_CONCEPTS} concepts and ${BULK_PRODUCTS} domain products`);
+    if (new Set(conceptIds).size !== conceptIds.length || new Set(productIds).size !== productIds.length)
+      throw new Refusal(422, 'validation_failed', 'ids are listed once');
+    if (target.wholeCompany) {
+      if (conceptIds.length || productIds.length) throw new Refusal(422, 'validation_failed', 'a whole company names no concepts or domain products');
+      return { co, named: concepts.filter((c) => c.companyId === co.id && c.kind === 'concept' && !c.dyingAt && !c.pending), products: co.domains };
+    }
+    const named: MConcept[] = [];
+    for (const id of conceptIds) {
+      const c = conceptById(id);
+      if (!c || c.dyingAt) throw new Refusal(404, 'not_found', 'concept not found in this tenant');
+      if (c.companyId !== co.id) throw new Refusal(422, 'validation_failed', 'every concept belongs to the company');
+      if (c.kind === 'root') throw new Refusal(409, 'root_concept', 'the company root cannot be deleted');
+      named.push(c);
+    }
+    const products: MDomain[] = [];
+    for (const id of productIds) {
+      const d = domainById(id);
+      if (!d) throw new Refusal(404, 'not_found', 'domain product not found in this tenant');
+      if (d.companyId !== co.id) throw new Refusal(422, 'validation_failed', 'every domain product belongs to the company');
+      products.push(d);
+      for (const c of concepts) if (c.companyId === co.id && c.domainKey === d.key && !c.dyingAt && !c.pending && !named.includes(c)) named.push(c);
+    }
+    return { co, named, products };
+  }
+
+  /** `POST /deletion-impact`: what approving the deletion would remove. Pure. */
+  function deletionImpact(target: T.DeletionTarget): T.DeletionImpact {
+    const { co, named } = resolveTarget(target);
+    const roots = new Set(named);
+    const desc = descendantsOf(roots);
+    const doomed = new Set<string>([...named, ...desc].map((c) => c.id));
+    const rels = relations.filter((l) => !l.dyingAt && !l.pending && (doomed.has(l.aId) || doomed.has(l.bId)));
+    const cross = rels.filter((l) => conceptById(l.aId)?.companyId !== conceptById(l.bId)?.companyId).length;
+    const all = [...named, ...desc];
+    const openTouching = open().filter((q) => (target.wholeCompany ? touchesCompany(q, co.id, doomed) : touchesConcepts(q, doomed))).length;
+    return {
+      concepts: named.length,
+      descendants: desc.length,
+      relations: rels.length,
+      crossCompanyRelations: cross,
+      bindings: all.filter((c) => c.bound && !c.bound.pending).length,
+      attributes: all.reduce((n, c) => n + c.attributes.length, 0),
+      sources: target.wholeCompany ? sources.filter((s) => s.companyId === co.id && !s.dyingAt).length : 0,
+      cascadedProposals: openTouching,
+      names: all.slice(0, IMPACT_NAMES).map((c) => c.label),
+    };
+  }
+
+  /** The impact as proposal text: `3 concepts (A, B, C), 2 descendants, 5 relations (1 cross-company) …`. */
+  function impactHtml(i: T.DeletionImpact, company: boolean): string {
+    const n = (k: number, w: string) => `${k} ${w}${k === 1 ? '' : 's'}`;
+    const parts = [
+      `${n(i.concepts, 'concept')}${i.names.length ? ` (${i.names.map(e).join(', ')}${i.concepts + i.descendants > i.names.length ? ` and ${i.concepts + i.descendants - i.names.length} more` : ''})` : ''}`,
+      n(i.descendants, 'descendant'),
+      `${n(i.relations, 'relation')}${i.crossCompanyRelations ? ` (${i.crossCompanyRelations} cross-company)` : ''}`,
+    ];
+    if (company) parts.push(n(i.sources, 'source'));
+    parts.push(n(i.bindings, 'binding'), n(i.attributes, 'attribute'));
+    return parts.join(', ');
+  }
+
+  /** Marks concepts, their descendants and every touching relation dying, and rejects the open proposals touching them. */
+  function purgeConcepts(p: Pick<MProposal, 'conceptId' | 'conceptIds' | 'relationIds'>, named: MConcept[]): void {
+    const t = iso();
+    const roots = new Set(named);
+    const all = [...named, ...descendantsOf(roots)];
+    const ids = new Set(all.map((c) => c.id));
+    for (const q of open()) if (touchesConcepts(q, ids)) reject(q, []);
+    for (const c of all) c.dyingAt = t;
+    const rels = relations.filter((l) => !l.dyingAt && (ids.has(l.aId) || ids.has(l.bId)));
+    for (const l of rels) l.dyingAt = t;
+    p.conceptIds = all.map((c) => c.id).filter((id) => id !== p.conceptId);
+    p.relationIds = rels.map((l) => l.id);
+  }
+
+  // ------------------------------------------------------------ domains
+
+  /** A key from a name: lower case ASCII letters, digits and `_`, starting with a letter, unique in the tenant. */
+  function keyFromName(name: string): T.DomainKey {
+    let base = name
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 36);
+    if (!/^[a-z]/.test(base)) base = `d_${base}`;
+    if (base.length < 2) base = `${base}_1`;
+    let key = base,
+      n = 2;
+    while (tenantDomain(key)) key = `${base}_${n++}`;
+    return key;
+  }
+
+  function pCreateDomain(input: T.DomainInput): MProposal {
+    checkName(input.name);
+    if (!HEX.test(input.color || '')) throw new Refusal(422, 'validation_failed', 'color is a hex colour such as #3fb8a9');
+    const owner = input.owner ?? '';
+    if (owner.length > NAME_MAX || forbiddenText(owner)) throw new Refusal(422, 'validation_failed', 'owner holds at most 60 characters');
+    if (domains.length >= MAX_DOMAINS) throw new Refusal(409, 'domain_limit', `a tenant holds at most ${MAX_DOMAINS} domains`);
+    if (domains.some((d) => d.name.toLowerCase() === input.name.toLowerCase()))
+      throw new Refusal(409, 'duplicate_label', `${input.name} is already a domain of the tenant`);
+    const name = input.name,
+      color = input.color.toLowerCase();
+    return newProposal({
+      type: 'change',
+      changeKind: 'create_domain',
+      title: `New domain ${name}`,
+      heading: KIND_HEADING.change,
+      color,
+      companyId: null,
+      domainId: null,
+      parentLabel: null,
+      deps: [],
+      ready: () => true,
+      waitFor: null,
+      html: `New domain <b>${e(name)}</b>${owner ? ` <em>· owned by ${e(owner)}</em>` : ''}`,
+      why: 'tenant-wide: available to every company once approved',
+      caption: `${name} is a domain of every company now.`,
+      conceptId: null,
+      relationId: null,
+      relationIds: [],
+      sourceId: null,
+      bindingIds: [],
+      attributeId: null,
+      apply() {
+        if (domains.length >= MAX_DOMAINS) throw new Refusal(409, 'domain_limit', `a tenant holds at most ${MAX_DOMAINS} domains`);
+        if (domains.some((d) => d.name.toLowerCase() === name.toLowerCase()))
+          throw new Refusal(409, 'duplicate_label', `${name} is already a domain of the tenant`);
+        const taken = new Set(domains.map((d) => d.position));
+        let position = DOMAIN_TEMPLATES.length;
+        while (taken.has(position)) position++;
+        const d: MTenantDomain = { key: keyFromName(name), name, owner, defaultColor: color, template: false, position, revision: 0 };
+        domains.push(d);
+        emit('domain.changed', { domain: toTenantDomain(d), created: true });
+      },
+    });
+  }
+
+  function pEditDomain(key: string, patch: T.DomainPatch): MProposal {
+    const d = tenantDomain(key);
+    if (!d) throw new Refusal(404, 'not_found', 'domain not found in this tenant');
+    const fields = ['name', 'color', 'owner'] as const;
+    const given = fields.filter((k) => patch[k] !== undefined);
+    if (!given.length) throw new Refusal(422, 'validation_failed', 'name, color or owner is required');
+    if (patch.name !== undefined) {
+      checkName(patch.name);
+      if (domains.some((x) => x !== d && x.name.toLowerCase() === (patch.name as string).toLowerCase()))
+        throw new Refusal(409, 'duplicate_label', `${patch.name} is already a domain of the tenant`);
+    }
+    if (patch.color !== undefined && !HEX.test(patch.color)) throw new Refusal(422, 'validation_failed', 'color is a hex colour such as #3fb8a9');
+    if (patch.owner !== undefined && (patch.owner.length > NAME_MAX || forbiddenText(patch.owner)))
+      throw new Refusal(422, 'validation_failed', 'owner holds at most 60 characters');
+    const name = patch.name,
+      color = patch.color?.toLowerCase(),
+      owner = patch.owner;
+    const what = [
+      name !== undefined ? `rename to <b>${e(name)}</b>` : '',
+      color !== undefined ? `colour <b>${e(color)}</b>` : '',
+      owner !== undefined ? `owner <b>${e(owner)}</b>` : '',
+    ]
+      .filter(Boolean)
+      .join(', ');
+    return newProposal({
+      type: 'change',
+      changeKind: 'edit_domain',
+      title: `Edit domain ${d.name}`,
+      heading: KIND_HEADING.change + ` · ${d.name}`,
+      color: color ?? (appearance.colors[d.key] || d.defaultColor),
+      companyId: null,
+      domainId: null,
+      parentLabel: null,
+      deps: [],
+      ready: () => true,
+      waitFor: null,
+      html: `Domain <b>${e(d.name)}</b>: ${what}`,
+      why: 'tenant-wide: every company sees the change',
+      caption: `${name ?? d.name} changed in every company.`,
+      conceptId: null,
+      relationId: null,
+      relationIds: [],
+      sourceId: null,
+      bindingIds: [],
+      attributeId: null,
+      apply() {
+        if (name !== undefined && domains.some((x) => x !== d && x.name.toLowerCase() === name.toLowerCase()))
+          throw new Refusal(409, 'duplicate_label', `${name} is already a domain of the tenant`);
+        if (name !== undefined) d.name = name;
+        if (owner !== undefined) d.owner = owner;
+        if (color !== undefined) appearance.colors[d.key] = color;
+        d.revision += 1;
+        this.domainIds = companies.map((c) => c.domains.find((x) => x.key === d.key)?.id).filter((x): x is string => !!x);
+        emit('domain.changed', { domain: toTenantDomain(d), created: false });
+        if (color !== undefined) emit('appearance.changed', { appearance: toAppearance() });
+      },
+    });
+  }
+
+  function pDeleteDomain(productId: string): MProposal {
+    const d = domainById(productId);
+    if (!d) throw new Refusal(404, 'not_found', 'domain product not found in this tenant');
+    const co = companyOf(d.companyId) as MCompany;
+    const impact = deletionImpact({ companyId: co.id, domainProductIds: [d.id] });
+    return newProposal({
+      type: 'change',
+      changeKind: 'delete_domain',
+      title: `Delete ${nameOf(d)} of ${co.name}`,
+      heading: KIND_HEADING.change + ` · ${nameOf(d)}`,
+      color: C.conflict,
+      companyId: co.id,
+      domainId: d.id,
+      parentLabel: null,
+      deps: [],
+      ready: () => true,
+      waitFor: null,
+      html: `Delete <b>${e(nameOf(d))}</b> of ${e(co.name)} with its ${impactHtml(impact, false)}`,
+      why: 'the domain itself stays available to every company',
+      caption: `${nameOf(d)} of ${co.name} was emptied.`,
+      conceptId: null,
+      relationId: null,
+      relationIds: [],
+      sourceId: null,
+      bindingIds: [],
+      attributeId: null,
+      apply() {
+        purgeConcepts(this, concepts.filter((c) => c.companyId === co.id && c.domainKey === d.key && !c.dyingAt));
+      },
+    });
+  }
+
+  function pMoveConcept(conceptId: string, key: string): MProposal {
+    const c = conceptById(conceptId);
+    if (!c || c.dyingAt) throw new Refusal(404, 'not_found', 'concept not found in this tenant');
+    if (c.kind === 'root') throw new Refusal(409, 'root_concept', 'the company root has no domain');
+    if (c.pending) throw new Refusal(409, 'concept_pending', `${c.label} is awaiting approval`);
+    const td = tenantDomain(key);
+    if (!td) throw new Refusal(422, 'validation_failed', `${key} is not a domain of the tenant`);
+    if (c.domainKey === td.key) throw new Refusal(422, 'validation_failed', `${c.label} is already in ${td.name}`);
+    const from = domainOfConcept(c);
+    return newProposal({
+      type: 'change',
+      changeKind: 'move_concept_domain',
+      title: `Move ${c.label} to ${td.name}`,
+      heading: KIND_HEADING.change + ` · ${td.name}`,
+      color: domainColour(td.key),
+      companyId: c.companyId,
+      domainId: from ? from.id : null,
+      parentLabel: null,
+      deps: [],
+      ready: () => true,
+      waitFor: null,
+      html: `Move <b>${e(c.label)}</b> from <em>${e(from ? nameOf(from) : 'the company')}</em> to <em>${e(td.name)}</em>`,
+      why: 'children, relations and bindings stay as they are',
+      caption: `${c.label} is kept in ${td.name} now.`,
+      conceptId: c.id,
+      relationId: null,
+      relationIds: [],
+      sourceId: null,
+      bindingIds: [],
+      attributeId: null,
+      apply() {
+        const to = ensureProduct(c.companyId, td.key);
+        if (!to) throw new Refusal(422, 'validation_failed', `${td.key} is not a domain of the tenant`);
+        c.domainKey = td.key;
+        to.revision += 1;
+        this.domainIds = [to.id];
+      },
+    });
+  }
+
+  function pBulkDelete(body: T.BulkDeleteRequest): MProposal {
+    const { co, named, products } = resolveTarget({ companyId: body.companyId, conceptIds: body.conceptIds, domainProductIds: body.domainProductIds });
+    if (!(body.conceptIds ?? []).length && !(body.domainProductIds ?? []).length)
+      throw new Refusal(422, 'validation_failed', 'conceptIds or domainProductIds is required');
+    const impact = deletionImpact({ companyId: co.id, conceptIds: body.conceptIds, domainProductIds: body.domainProductIds });
+    const nc = (body.conceptIds ?? []).length,
+      nd = products.length;
+    const what = [nc ? `${nc} concept${nc === 1 ? '' : 's'}` : '', nd ? `${nd} domain product${nd === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
+    return newProposal({
+      type: 'change',
+      changeKind: 'delete_bulk',
+      title: `Delete ${what}`,
+      heading: KIND_HEADING.change,
+      color: C.conflict,
+      companyId: co.id,
+      domainId: null,
+      parentLabel: null,
+      deps: [],
+      ready: () => true,
+      waitFor: null,
+      html: `Delete ${e(what)} of ${e(co.name)}: ${impactHtml(impact, false)}`,
+      why: 'all or nothing on approval',
+      caption: `${what} left ${co.name}.`,
+      conceptId: null,
+      relationId: null,
+      relationIds: [],
+      sourceId: null,
+      bindingIds: [],
+      attributeId: null,
+      apply() {
+        purgeConcepts(this, named.filter((c) => !c.dyingAt));
+        this.domainIds = products.map((d) => d.id);
+      },
+    });
   }
 
   /** Like the API, a relation end given by both id and label (or neither) refuses the whole request. */
@@ -1348,7 +1854,9 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     return { proposal: toProposal(p), artefacts: artefactsOf(p), cascaded: cascaded.map(toProposal), audit: entry, caption };
   }
 
-  function approve(p: MProposal, bulk: boolean, cascade: MProposal[] = []): T.DecisionResult {
+  function approve(p: MProposal, bulk: boolean, cascade: MProposal[] = [], expectedRevision?: number): T.DecisionResult {
+    if (expectedRevision !== undefined && expectedRevision !== p.revision)
+      throw new Refusal(409, 'proposal_changed', `${p.title} was edited since you read it`);
     if (!p.ready()) throw new Refusal(409, 'proposal_not_ready', `${p.title} waits for ${p.waitFor || 'a previous item'}`);
     if (settings.twoApprovers && p.type === 'change' && !p.second) {
       p.second = true;
@@ -1375,6 +1883,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     if (p.apply) p.apply();
     const dom = domainById(p.domainId);
     if (dom) dom.revision += 1;
+    if (p.changeKind === 'edit_domain' || p.changeKind === 'delete_bulk') for (const d of (p.domainIds || []).map(domainById)) if (d) d.revision += 1;
     const result = decision(p, cascade, entry, p.caption ?? undefined);
     emit('proposal.approved', { ...result, audit: undefined }, bulk);
     afterApply();
@@ -1473,10 +1982,12 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     appearance.colors = {};
     appearance.accent = '#3fb8a9';
     appearance.source = DEFAULT_BRASS;
+    domains = DOMAIN_TEMPLATES.map((t, position) => ({ key: t.key, name: t.name, owner: t.owner, defaultColor: t.color, template: true, position, revision: 0 }));
     addCompany(HOME_COMPANY.name, HOME_COMPANY.sub);
   }
 
   function createCompany(body: T.CompanyCreate): T.CompanyCreated {
+    if (!settings.companyCreation) throw new Refusal(409, 'company_creation_disabled', 'company creation is disabled in the admin portal');
     if (!body?.name?.trim()) throw new Refusal(422, 'name_required', 'a company needs a name');
     const c = addCompany(body.name.trim(), (body.sub || '').trim());
     const root = conceptById(c.rootId) as MConcept;
@@ -1486,7 +1997,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       for (const [label, dom, pred, parent] of SEED) {
         const host = findConcept(parent || c.name, c.id);
         if (!host) continue;
-        const domName = c.domains.find((d) => d.key === dom)?.name;
+        const domName = tenantDomain(dom)?.name;
         let seed: number | undefined;
         if (hooks.rememberBirth) {
           const draws: MockBirth = { noise: random(), node: random() * 100, link: random() };
@@ -2149,7 +2660,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
           companyId: company.id,
           parentId: parent.id,
           parentDomainKey: parent.kind === 'root' ? null : parent.domainKey,
-          domainKeys: new Set(DOMAIN_TEMPLATES.map((t) => t.key)),
+          domainKeys: new Set(domains.map((t) => t.key)),
           domainKey: (fields.domainKey as T.DomainKey) || null,
           languages,
         },
@@ -2306,6 +2817,32 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     if (is('DELETE', 'sources', null)) return proposeChange({ type: 'change', changeKind: 'remove_source', payload: { sourceId: seg[1] } });
     if (is('DELETE', 'bindings', null)) return proposeChange({ type: 'change', changeKind: 'unbind', payload: { bindingId: seg[1] } });
     if (is('DELETE', 'companies', null)) return proposeChange({ type: 'change', changeKind: 'remove_company', payload: { companyId: seg[1] } });
+    if (is('GET', 'domains')) return json(200, [...domains].sort((a, b) => a.position - b.position).map(toTenantDomain));
+    if (is('POST', 'domains')) {
+      const input = (body || {}) as T.DomainInput;
+      return proposeChange({ type: 'change', changeKind: 'create_domain', payload: { name: input.name, color: input.color, owner: input.owner } });
+    }
+    if (is('PATCH', 'domains', null)) {
+      const key = decodeURIComponent(seg[1]);
+      if (!DOMAIN_KEY.test(key)) throw new Refusal(422, 'validation_failed', 'domainKey does not match the key pattern');
+      const patch = (body || {}) as T.DomainPatch;
+      return proposeChange({ type: 'change', changeKind: 'edit_domain', payload: { domainKey: key, name: patch.name, color: patch.color, owner: patch.owner } });
+    }
+    if (is('DELETE', 'domain-products', null)) return proposeChange({ type: 'change', changeKind: 'delete_domain', payload: { domainProductId: seg[1] } });
+    if (is('POST', 'concepts', null, 'move')) {
+      const key = (body as { domainKey?: unknown } | undefined)?.domainKey;
+      if (typeof key !== 'string' || !DOMAIN_KEY.test(key)) throw new Refusal(422, 'validation_failed', 'domainKey is required');
+      return proposeChange({ type: 'change', changeKind: 'move_concept_domain', payload: { conceptId: seg[1], domainKey: key } });
+    }
+    if (is('POST', 'deletion-impact')) return json(200, deletionImpact(body as T.DeletionTarget));
+    if (is('POST', 'proposals', 'bulk-delete')) {
+      const req = (body || {}) as T.BulkDeleteRequest;
+      return proposeChange({
+        type: 'change',
+        changeKind: 'delete_bulk',
+        payload: { companyId: req.companyId, conceptIds: req.conceptIds, domainProductIds: req.domainProductIds },
+      });
+    }
     if (is('POST', 'settings', 'cross-company', 'disable')) {
       if ((body as { confirmation?: string } | undefined)?.confirmation !== 'disable')
         throw new Refusal(409, 'confirmation_mismatch', 'type disable to confirm');
@@ -2453,13 +2990,24 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       if (!p) throw new Refusal(404, 'proposal_not_found', 'proposal does not exist');
       return json(200, toProposal(p));
     }
+    if (is('PATCH', 'proposals', null)) {
+      const p = proposals.find((x) => x.id === seg[1]);
+      if (!p) throw new Refusal(404, 'proposal_not_found', 'proposal does not exist');
+      return json(200, editProposal(p, body as T.ProposalEdit));
+    }
     if (is('POST', 'proposals', null, 'approve') || is('POST', 'proposals', null, 'second-approve')) {
       const p = proposals.find((x) => x.id === seg[1]);
       if (!p) throw new Refusal(404, 'proposal_not_found', 'proposal does not exist');
       if (p.state !== 'pending' && p.state !== 'half_approved') throw new Refusal(409, 'proposal_decided', 'already decided');
       if (seg[2] === 'second-approve' && p.state !== 'half_approved')
         throw new Refusal(409, 'proposal_not_half_approved', 'the proposal is not half approved');
-      return json(200, approve(p, false));
+      const raw = new URLSearchParams(search).get('expectedRevision');
+      let expected: number | undefined;
+      if (raw !== null) {
+        expected = Number(raw);
+        if (!Number.isInteger(expected) || expected < 0) throw new Refusal(422, 'validation_failed', 'expectedRevision is a whole number');
+      }
+      return json(200, approve(p, false, [], expected));
     }
     if (is('POST', 'proposals', null, 'reject')) {
       const p = proposals.find((x) => x.id === seg[1]);

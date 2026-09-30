@@ -1,6 +1,8 @@
 /**
  * The Portal group of the admin portal: Overview, Tenant settings and Appearance
- * (`pageOverview`, `pageSettings`, `pageAppearance`, reference lines 971-984).
+ * (`pageOverview`, `pageSettings`, `pageAppearance`, reference lines 971-984). Owner additions
+ * for ontology editing, marked `data-ox-new`: the `Company creation` setting row and a colour input per
+ * custom domain in Appearance.
  */
 import { DOMAIN_TEMPLATES, DEFAULT_COLORS } from '../../canvas/constants';
 import { BusyButton } from '../../shell/busy';
@@ -83,6 +85,7 @@ export function TenantSettings() {
       <SetRow k="notifyOwners" title="Notify domain owners" desc="Owners are notified when a proposal lands in their domain product." />
       <h3>Portfolio</h3>
       <SetRow k="multiCompany" title="Several companies in one view" desc="" />
+      <SetRow ox k="companyCreation" title="Company creation" desc="Allow adding companies." />
       <SetRow
         k="crossCompany"
         title="Companies may interact"
@@ -130,11 +133,22 @@ export function Appearance() {
           <label className="col" key={t.key}>
             <input type="color" value={colour(t.key)} data-col={t.key} onChange={(e) => changeColour(t.key, e.target.value)} />
             <span>
-              <b>{t.name}</b>
+              <b>{st.ui.domains.find((d) => d.key === t.key)?.name ?? t.name}</b>
               <small>{colour(t.key)}</small>
             </span>
           </label>
         ))}
+        {st.ui.domains
+          .filter((d) => !d.template)
+          .map((d) => (
+            <label className="col" key={d.key} data-ox-new="">
+              <input type="color" value={ap?.colors[d.key] || d.color} data-col={d.key} onChange={(e) => changeColour(d.key, e.target.value)} />
+              <span>
+                <b>{d.name}</b>
+                <small>{ap?.colors[d.key] || d.color}</small>
+              </span>
+            </label>
+          ))}
       </div>
       <h3>Theme</h3>
       <div className="set">

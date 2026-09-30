@@ -3,7 +3,8 @@
  * on its `nodes`, `links`, `companies` and domain objects, plus the server ids they map to.
  */
 
-export type DomainKey =
+/** The nine template domains every tenant starts with. */
+export type TemplateKey =
   | 'production'
   | 'supply'
   | 'sales'
@@ -13,6 +14,9 @@ export type DomainKey =
   | 'finance'
   | 'people'
   | 'engineering';
+
+/** A tenant domain key: a template key or a custom domain's key (`^[a-z][a-z0-9_]{1,39}$`). */
+export type DomainKey = string;
 
 export type NodeKind = 'root' | 'concept' | 'source';
 export type LinkKind = 'rel' | 'isa' | 'same' | 'clash' | 'bind';
@@ -38,6 +42,8 @@ export interface Domain {
   company: Company;
   version: number;
   hidden: boolean;
+  /** Ring position of the tenant domain: 0 to 8 for the templates, 9 to 63 for custom domains. */
+  position: number;
 }
 
 export interface Bound {
