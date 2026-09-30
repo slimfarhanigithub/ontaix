@@ -230,6 +230,15 @@ export interface ImportResult {
 
 export type OntologyFormat = 'rdf_xml' | 'turtle' | 'owl_xml' | 'json_ld' | 'n_triples' | 'obo' | 'csv' | 'xlsx';
 
+/** `POST /import/detect`: whether a file is a document or an ontology, decided from its bytes first. */
+export interface ImportDetection {
+  kind: 'document' | 'ontology';
+  /** The ontology format when `kind` is ontology, else null. */
+  format: OntologyFormat | null;
+  /** The document media type the bytes read as, for reading the file as a document. */
+  mediaType: ImportMediaType;
+}
+
 export type OntologySkipReason =
   | 'already_known'
   | 'reused_existing'
@@ -272,6 +281,8 @@ export interface OntologyImportRequest {
   languages?: string;
   individuals?: 'skip' | 'as_concepts';
   domainKey?: DomainKey;
+  /** The format to read the file as, in place of its extension and media type. */
+  format?: OntologyFormat;
 }
 
 export interface ConceptDraft extends DraftSeed, DraftOrigin {
@@ -593,6 +604,30 @@ export interface TeachResult {
   /** The sentences the request was split into; one for typed text and documents. */
   segments: SourceSegment[];
 }
+
+/** A line of `POST /teach/parse/stream`: a draft known early, the drafts the final result takes back, the result, or a failure. */
+export type TeachStreamEvent =
+  | TeachDraftEvent
+  | TeachRetractEvent
+  | { type: 'result'; result: TeachResult }
+  | { type: 'error'; problem: Problem };
+
+/** A draft the valid part of the model's answer gives, sent once; `index` counts the stream's drafts from 0. */
+export interface TeachDraftEvent {
+  type: 'draft';
+  index: number;
+  draft: ProposalDraft;
+  note: DraftNote;
+}
+
+/** Streamed drafts the final result does not hold, all of them when the whole answer is refused. */
+export interface TeachRetractEvent {
+  type: 'retract';
+  indexes: number[];
+}
+
+/** Receives a streamed parse's draft and retract lines as they arrive. */
+export type TeachStreamListener = (event: TeachDraftEvent | TeachRetractEvent) => void;
 
 /** `POST /speech/token`: a short-lived Azure AI Speech token for the microphone. */
 export interface SpeechToken {
