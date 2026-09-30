@@ -1,6 +1,6 @@
 """Ontology editing, tenant domains, company creation setting, and the `export` budget.
 
-Brings a database of revision 0006 to the current `contracts/schema.sql`: the change kinds
+Brings a database of revision 0008 to the current `contracts/schema.sql`: the change kinds
 `create_domain`, `edit_domain`, `delete_domain`, `move_concept_domain` and `delete_bulk`;
 `tenant_settings.company_creation`; the `tenant_domain` and `tenant_domain_revision` tables,
 filled with the nine templates for every existing tenant (revision 0 each) before
@@ -13,8 +13,8 @@ contract this revision only copies the templates of tenants that lack them. The 
 contract's text, so constraint names and definitions match a database loaded from it. The
 label CHECKs are written with Python escapes for their control and format characters.
 
-Revision ID: 0007
-Revises: 0006
+Revision ID: 0009
+Revises: 0008
 Create Date: 2026-09-30
 """
 
@@ -22,8 +22,8 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "0007"
-down_revision = "0006"
+revision = "0009"
+down_revision = "0008"
 branch_labels = None
 depends_on = None
 
@@ -122,4 +122,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise NotImplementedError("revision 0007 is one-way")
+    raise NotImplementedError("revision 0009 is one-way")

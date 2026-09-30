@@ -1,6 +1,6 @@
 # ADR 0015: Ontology Editing And Domains
 
-Status: Accepted. The features are owner decisions, final (decision rows 135 to 140); the derived choices named in those rows are approved under owner delegation (2026-09-30).
+Status: Accepted. The features are owner decisions, final (decision rows 142 to 147); the derived choices named in those rows are approved under owner delegation (2026-09-30).
 
 ## Context
 
@@ -71,7 +71,7 @@ Recolouring keeps the do-not rule, since a domain has one colour everywhere. App
 
 `POST /proposals/bulk-delete` creates one `delete_bulk` proposal for up to 200 concepts and up to 20 domain products of one company. Approval applies all or nothing, with the semantics of `delete_concept` and `delete_domain` for each item, and needs approval rights over every item. The proposal and the Studio confirmation name what goes from `POST /deletion-impact`. The Studio offers selection in the admin portal's Entities and Domain products tables (a checkbox column and `Delete selected`); selection on the canvas is not part of this decision.
 
-Decision row 143 adds canvas selection under owner delegation: Shift+click or Ctrl+click selects approved cells, shown as the reference's sticky focus set, and a selection bar offers `Delete selected (n)` for the same bulk proposal.
+Decision row 150 adds canvas selection under owner delegation: Shift+click or Ctrl+click selects approved cells, shown as the reference's sticky focus set, and a selection bar offers `Delete selected (n)` for the same bulk proposal.
 
 ### Admin Portal
 
