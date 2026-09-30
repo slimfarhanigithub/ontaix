@@ -1775,6 +1775,77 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
+  /teach/parse/stream:
+    post:
+      tags: [Teach]
+      summary: Parse a sentence with its drafts streamed as the model answers
+      description: |
+        The streamed variant of `POST /teach/parse` (ADR 0008, Streamed Parse; decision row 138). Same request body, same permission, same gates, charges and refusals, which answer before the stream begins, with the same status codes and `Problem` bodies as `POST /teach/parse`. The parse itself is the same: the same model call on the same profile, the same budgets (one parse unit per started 400 characters, one `llm` unit, the same token reservation and the same `llm_call` cost row), the same timeout and the same bounded retries of a `429` or `503` from the provider. Only the provider's answer is read as it arrives.
+
+        The response is `200` with `Content-Type: application/x-ndjson` and `Cache-Control: no-store`: one JSON object per line, each ended by a line feed, in this order:
+
+        - `draft` lines, zero or more. Each time the model's answer closes another intent, the answer so far goes through the checks and grounding of a whole answer and is mapped to the drafts the result would hold if the answer ended there; each draft not sent yet is sent once, with the next `index` (from 0) and its `DraftNote`. A part of the answer that fails a check sends nothing; later parts may still send drafts.
+        - one `retract` line, only when some sent draft is not in the final result: `indexes` names each such draft. When the whole answer is refused (`llmOutcome` `invalid_output`), every sent draft is named. A client removes what it showed for them.
+        - one `result` line, always last on success: `result` is exactly the body `POST /teach/parse` answers for the same request and the same model answer. A draft of the result equal to a sent draft that was not retracted is that draft; the result's own order and notes are the ones to submit.
+        - or, in place of the `result` line, one `error` line when the parse fails after the stream began: `problem` is a `Problem` with code `unavailable` (status `503`); nothing was written, and the client teaches the sentence again.
+
+        A sentence that needs no model step, or whose model step does not run (off, out of budget, rate limited), streams its `result` line alone. The parse runs to its end when the client goes away, so its budget, cost record and teach session turns are those of the plain endpoint. `POST /teach/parse` is unchanged.
+      operationId: parseTeachStream
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [companyId]
+              oneOf:
+                - required: [text]
+                - required: [importRef]
+              properties:
+                companyId:
+                  type: string
+                  format: uuid
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+                  description: As `POST /teach/parse`.
+                origin:
+                  $ref: '#/components/schemas/InputOrigin'
+                importRef:
+                  $ref: '#/components/schemas/ImportRef'
+                sessionId:
+                  type: string
+                  format: uuid
+                  description: As `POST /teach/parse`.
+      responses:
+        '410':
+          $ref: '#/components/responses/Gone'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '200':
+          description: The parse as newline-delimited JSON events, each line one `TeachStreamEvent`.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/TeachStreamEvent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
   /speech/token:
     post:
       tags: [Teach]
@@ -1879,7 +1950,7 @@ paths:
       description: |
         The only place documents are read - the Studio never extracts text itself and loads nothing from a CDN. Accepts at most 10 MiB of `text/plain`, `text/markdown`, `text/csv`, `application/json`, DOCX (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`), PDF (`application/pdf`, text or scanned), PPTX (`application/vnd.openxmlformats-officedocument.presentationml.presentation`), XLSX (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`) or HTML (`text/html`); anything else is `415 unsupported_media_type` (ADR 0011).
 
-        Sniffing - the server decides the type from the bytes, and the declared type must agree with it. `%PDF-` is PDF. A ZIP archive is OOXML only when `[Content_Types].xml` declares exactly one main part of DOCX, PPTX or XLSX; a macro-enabled main part (`docm`, `pptm`, `xlsm`, any `macroEnabled` content type) or a `vbaProject.bin` part is refused, as are legacy binary Office files and encrypted OOXML (both OLE compound files). HTML is text starting, after a byte order mark and whitespace, with `<!doctype html`, `<html`, `<head` or `<body`. Text types are UTF-8 (a UTF-16 byte order mark is converted).
+        Sniffing - the server decides the type from the bytes, and the declared type must agree with it. The declared type is the form field `mediaType` when given (one of the types above, else `422 validation_failed`), else the file extension, else the part's media type; `mediaType` lets a file be read as a document whatever its name says, for example a PDF named `.txt` or an ontology read as plain text (ADR 0011). `%PDF-` is PDF. A ZIP archive is OOXML only when `[Content_Types].xml` declares exactly one main part of DOCX, PPTX or XLSX; a macro-enabled main part (`docm`, `pptm`, `xlsm`, any `macroEnabled` content type) or a `vbaProject.bin` part is refused, as are legacy binary Office files and encrypted OOXML (both OLE compound files). HTML is text starting, after a byte order mark and whitespace, with `<!doctype html`, `<html`, `<head` or `<body`. Text types are UTF-8 (a UTF-16 byte order mark is converted).
 
         Per type - every XML part is read with no DTD and no entity expansion; OOXML archives hold at most 1,000 members; decompression is bounded in bytes - each member at most 50 MiB and the archive at most 200 MiB uncompressed, counted while streaming whatever the declared sizes say, and a compression ratio above 100 for any member is refused - and also stops at the extracted-text limit. PDF at most 2,000 pages. PPTX at most 500 slides; slide text and speaker notes, in slide order; images are not read. XLSX at most 50 sheets and 200,000 non-empty cells; each non-empty row becomes one sentence of its cell values joined by `, `, in sheet and row order; formulas are never evaluated (cached values only) and external links never followed. HTML at most 5 MiB and nesting depth 512; parsed without running anything; `script`, `style`, `template`, `noscript`, `iframe`, `object`, `embed`, `svg` and `math` contents are dropped; no external resource is ever fetched (no image, stylesheet, frame, font, base URL or link); block elements end sentences.
 
@@ -1899,6 +1970,10 @@ paths:
                 file:
                   type: string
                   contentMediaType: application/octet-stream
+                mediaType:
+                  type: string
+                  enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/html]
+                  description: The document type to read the file as, in place of its extension and part media type. The bytes must still agree with it.
       responses:
         '503':
           $ref: '#/components/responses/Problem'
@@ -1966,6 +2041,65 @@ paths:
         '413':
           $ref: '#/components/responses/Problem'
         '415':
+          $ref: '#/components/responses/Problem'
+
+  /import/detect:
+    post:
+      tags: [Teach]
+      summary: Detect whether a file is a document or an ontology
+      description: |
+        Import routing (ADR 0011, ADR 0012). Reads one upload and answers whether it is a document for `POST /import/sentences` or an ontology for `POST /ontology-imports`, with the ontology format and the document media type the bytes read as. Nothing is extracted, mapped or stored, and no model is called.
+
+        Detection - the bytes decide when they are unambiguous: PDF, DOCX, PPTX and HTML (sniffed as in `POST /import/sentences`) are documents; text whose root element is `rdf:RDF` (RDF/XML) or `owl:Ontology` (OWL/XML), JSON naming an `@context` or `@graph` key (JSON-LD), an OBO `format-version:` header with `[Term]` stanzas, a Turtle `@prefix`, `@base`, `PREFIX` or `BASE` directive, or lines that are all full N-Triples are ontologies. A CSV (by extension, or by `text/csv` when the extension names no document type) or an XLSX workbook is an ontology when its first non-empty row, of the first sheet for XLSX, is a hierarchy header (`label` and `parent` columns, or at least one `Level <n>` column, matched without regard to case or surrounding space), and a document otherwise. Other text follows its extension, else its part media type: an ontology extension (`.owl`, `.rdf`, `.xml`, `.owx`, `.ttl`, `.nt`, `.jsonld`, `.obo`) or media type names the format, anything else is a document. So the content wins over a wrong extension: Turtle named `.txt` is an ontology, a PDF named `.ttl` a document. JSON without `@context` or `@graph` is a document. `mediaType` is always set: the document type the bytes read as (a text type from the extension or part media type, plain text for other text), so a file detected as an ontology can still be read as a document.
+
+        Rules - permission `proposal.create` in some scope (`403` otherwise); `409 channel_disabled` while `importDocs` is off; no import unit is spent. At most the larger of the two import limits (10 MiB and `ONTAIX_ONTOLOGY_IMPORT_MAX_BYTES`), else `413`. XML is read with no DTD and no entity expansion, and only up to its root element; an Office archive follows the OOXML sniffing and decompression bounds of `POST /import/sentences`, and its header row is read in a child process with the ontology parse time limit and memory cap (`503 busy` when every reading slot is taken). Legacy or encrypted Office files, unknown or macro-enabled archives and binary data are `415 unsupported_media_type`; a refused file name is `422 validation_failed`.
+      operationId: detectImport
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  contentMediaType: application/octet-stream
+      responses:
+        '200':
+          description: What the file is.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [kind, format, mediaType]
+                properties:
+                  kind:
+                    type: string
+                    enum: [document, ontology]
+                  format:
+                    type: [string, 'null']
+                    enum: [rdf_xml, turtle, owl_xml, json_ld, n_triples, obo, csv, xlsx, null]
+                    description: The ontology format when `kind` is `ontology`, else null.
+                  mediaType:
+                    type: string
+                    enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/html]
+                    description: The document media type the bytes read as, sent as `mediaType` to `POST /import/sentences` when the file is read as a document.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/Problem'
+        '415':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '503':
           $ref: '#/components/responses/Problem'
 
   /import/{importId}/extraction:
@@ -2155,7 +2289,7 @@ paths:
 
         Limits - at most `ONTAIX_ONTOLOGY_IMPORT_MAX_BYTES` (default 20 MiB) and 1,000,000 triples or 200,000 CSV or XLSX rows; at most `ONTAIX_ONTOLOGY_IMPORT_MAX_NODES` drafts (default 5,000, at most 20,000; beyond it `413`). Parsing runs in a child process with `ONTAIX_ONTOLOGY_IMPORT_PARSE_TIMEOUT_SECONDS` (default 60) and a memory cap; past it `413`. `owl:imports` is never fetched (each one is reported as `remote_import_not_fetched`); a JSON-LD remote `@context` is never fetched (`422`); XML is read with no DTD and no entity expansion; no reasoner runs - only asserted axioms are read. Every limit refuses the whole import; nothing is stored.
 
-        Rules - permission `proposal.create` in the scope of `companyId` (and of `parentConceptId` when given, which must be an approved live concept of that company, else `404` or `409 concept_pending`); `409 channel_disabled` while `importDocs` is off; one unit of the import budget (`429`). The detected format must agree with the declared media type or extension (`415` otherwise).
+        Rules - permission `proposal.create` in the scope of `companyId` (and of `parentConceptId` when given, which must be an approved live concept of that company, else `404` or `409 concept_pending`); `409 channel_disabled` while `importDocs` is off; one unit of the import budget (`429`). The detected format must agree with the declared one (`415` otherwise): the form field `format` when given, else the extension, else the part media type. `format` lets a file be read in a chosen format whatever its name says; `turtle` also accepts N-Triples content, and an unknown value is `422 validation_failed`.
       operationId: importOntology
       x-ontaix-permission: proposal.create
       requestBody:
@@ -2186,6 +2320,10 @@ paths:
                   default: skip
                 domainKey:
                   $ref: '#/components/schemas/DomainKey'
+                format:
+                  type: string
+                  enum: [rdf_xml, turtle, owl_xml, json_ld, n_triples, obo, csv, xlsx]
+                  description: The format to read the file as, in place of its extension and part media type. The bytes must still agree with it.
       responses:
         '200':
           description: The mapped tree.
@@ -4607,6 +4745,70 @@ components:
           items:
             $ref: '#/components/schemas/LineageNode'
 
+    TeachStreamEvent:
+      description: One line of `POST /teach/parse/stream`, told apart by `type`.
+      oneOf:
+        - $ref: '#/components/schemas/TeachDraftEvent'
+        - $ref: '#/components/schemas/TeachRetractEvent'
+        - $ref: '#/components/schemas/TeachResultEvent'
+        - $ref: '#/components/schemas/TeachErrorEvent'
+      discriminator:
+        propertyName: type
+        mapping:
+          draft: '#/components/schemas/TeachDraftEvent'
+          retract: '#/components/schemas/TeachRetractEvent'
+          result: '#/components/schemas/TeachResultEvent'
+          error: '#/components/schemas/TeachErrorEvent'
+    TeachDraftEvent:
+      type: object
+      description: A draft the valid part of the model's answer received so far gives, sent once, as soon as it is known. Advisory until the `result` line; never submitted on its own.
+      required: [type, index, draft, note]
+      properties:
+        type:
+          type: string
+          enum: [draft]
+        index:
+          type: integer
+          minimum: 0
+          description: The stream's count of drafts, from 0, in the order they are sent.
+        draft:
+          $ref: '#/components/schemas/ProposalDraft'
+        note:
+          $ref: '#/components/schemas/DraftNote'
+    TeachRetractEvent:
+      type: object
+      description: The sent drafts the final result does not hold - every one of them when the whole answer is refused. Sent once, just before the `result` line, only when it names at least one draft.
+      required: [type, indexes]
+      properties:
+        type:
+          type: string
+          enum: [retract]
+        indexes:
+          type: array
+          minItems: 1
+          items:
+            type: integer
+            minimum: 0
+    TeachResultEvent:
+      type: object
+      description: The last line of a parse; `result` is the body `POST /teach/parse` answers for the same request and model answer.
+      required: [type, result]
+      properties:
+        type:
+          type: string
+          enum: [result]
+        result:
+          $ref: '#/components/schemas/TeachResult'
+    TeachErrorEvent:
+      type: object
+      description: The last line of a parse that failed after its stream began, in place of the `result` line. `problem.code` is `unavailable`; nothing was written.
+      required: [type, problem]
+      properties:
+        type:
+          type: string
+          enum: [error]
+        problem:
+          $ref: '#/components/schemas/Problem'
     TeachResult:
       type: object
       required: [outcome, domainKey, intents, drafts, caption, origin, originDetail, extractor, degraded, llmOutcome, draftNotes, unresolved]

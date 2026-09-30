@@ -1,4 +1,5 @@
 """POST /import/sentences: a document extracted server-side into stored sentences.
+POST /import/detect: whether an upload is a document or an ontology.
 
 The permission, the `importDocs` setting and the import budget are checked before the upload
 is read. The body is then read as it streams in, declared length or not, and refused with `413`
@@ -16,8 +17,9 @@ from fastapi import APIRouter, Request
 from starlette.datastructures import UploadFile
 
 from app.auth import CallerDependency, SessionDependency
+from app.models.api.import_detection import ImportDetection
 from app.models.api.imports import ImportResult
-from app.services import import_service
+from app.services import import_detection_service, import_service
 from app.utilities.document_text import MAX_UPLOAD_BYTES
 from app.utilities.problems import ProblemError, validation_failed
 
@@ -43,9 +45,35 @@ async def import_sentences(
         upload = form.get("file")
         if not isinstance(upload, UploadFile):
             raise validation_failed("file", "a file is required in the form field `file`")
+        media_type = form.get("mediaType")
+        if media_type is not None and not isinstance(media_type, str):
+            raise validation_failed("mediaType", "mediaType is a text field")
         data = await upload.read(MAX_UPLOAD_BYTES + 1)
         return await import_service.import_sentences(
-            session, caller, upload.filename or "", upload.content_type, data
+            session, caller, upload.filename or "", upload.content_type, data, media_type or None
+        )
+    finally:
+        await form.close()
+
+
+@router.post("/import/detect", response_model=ImportDetection)
+async def detect_import(
+    request: Request, session: SessionDependency, caller: CallerDependency
+) -> ImportDetection:
+    await import_detection_service.admit_detection(session, caller)
+    limit = import_detection_service.max_detect_bytes() + MULTIPART_OVERHEAD_BYTES
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > limit:
+        raise _too_large()
+    body = await read_capped(request, limit, _too_large())
+    form = await Request(request.scope, receive=replay(body)).form(max_files=1, max_fields=1)
+    try:
+        upload = form.get("file")
+        if not isinstance(upload, UploadFile):
+            raise validation_failed("file", "a file is required in the form field `file`")
+        data = await upload.read(import_detection_service.max_detect_bytes() + 1)
+        return await import_detection_service.detect(
+            upload.filename or "", upload.content_type, data
         )
     finally:
         await form.close()

@@ -10,7 +10,8 @@ likeness to the text, then the company's own lessons, negatives, speech aliases 
 learnt from its people's decisions; the reservation's estimate counts all of it. The reservation is
 settled and a cost record stored whatever happens. A valid answer is mapped to drafts with the
 grammar's mapping; anything else leaves the grammar's result standing and the step reports why.
-The step never raises.
+A streamed call reads each part of the answer as it arrives with the same checks, for the
+client to show early; only the whole answer decides the step. The step never raises.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ import re
 import time
 import unicodedata
 import uuid
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -42,8 +43,10 @@ from app.ai.prompts.teach_extraction import (
 from app.auth import Caller
 from app.clients.llm_client import (
     LlmCallError,
+    LlmClient,
     LlmRequest,
     LlmTimeout,
+    TextListener,
     estimate_tokens,
     get_llm_client,
 )
@@ -72,7 +75,8 @@ from app.utilities.action_text import has_refused_character, normalise_action
 from app.utilities.example_selection import most_similar, within_budget
 from app.utilities.learning_structure import fold
 from app.utilities.permissions import can_read
-from app.utilities.sound_alike import sounds_like_name
+from app.utilities.sound_alike import company_possessive_rest, sounds_like_name
+from app.utilities.streamed_json import closed_items
 from app.utilities.teach_parser import singular, title
 
 logger = logging.getLogger(__name__)
@@ -144,6 +148,10 @@ class ModelStep:
     segments: list[tuple[int, int]] = field(default_factory=list)
 
 
+# Receives the step that the part of a streamed answer received so far gives.
+PartialListener = Callable[[ModelStep], Awaitable[None]]
+
+
 class _InvalidAnswer(Exception):
     """The answer failed the schema or a check the schema cannot express."""
 
@@ -206,11 +214,18 @@ async def run(
     reading: Reading | None = None,
     *,
     profile: LlmProfile,
+    on_partial: PartialListener | None = None,
 ) -> ModelStep:
     """The model step for `sentence` (`text` is the sentence after its domain prefix), on the
-    caller's model profile. Budgets and the monthly cap are the same for every profile."""
+    caller's model profile. Budgets and the monthly cap are the same for every profile.
+
+    With `on_partial` the answer is streamed, and each time it closes another intent the answer
+    so far is read as a step and handed to `on_partial` (see `_partials`); the step returned is
+    the one the whole answer gives, exactly as without it."""
     try:
-        return await _run(caller, drafter, sentence, text, turns, reading or Reading(), profile)
+        return await _run(
+            caller, drafter, sentence, text, turns, reading or Reading(), profile, on_partial
+        )
     except Exception:
         logger.exception("the teach extraction step failed; the grammar's result stands")
         return ModelStep("provider_error")
@@ -224,6 +239,7 @@ async def _run(
     turns: list[StoredTurn],
     reading: Reading,
     profile: LlmProfile,
+    on_partial: PartialListener | None,
 ) -> ModelStep:
     client = get_llm_client(profile)
     if client is None:
@@ -284,7 +300,13 @@ async def _run(
     outcome, usage = "invalid_output", (0, 0, 0.0, 0)
     try:
         try:
-            answer = await client.complete(request)
+            if on_partial is None:
+                answer = await client.complete(request)
+            else:
+                partials = _partials(
+                    client, request, handles, drafter, sentence, text, reading, on_partial
+                )
+                answer = await client.stream(request, partials)
         except LlmCallError as exc:
             outcome = "timeout" if isinstance(exc, LlmTimeout) else "provider_error"
             usage = (exc.input_tokens, exc.output_tokens, exc.cost_eur, exc.latency_ms)
@@ -316,6 +338,67 @@ async def _run(
             upper_bound - request.max_output_tokens,
             stages,
         )
+
+
+def _partials(
+    client: LlmClient,
+    request: LlmRequest,
+    handles: list[Concept],
+    drafter: Drafter,
+    sentence: str,
+    text: str,
+    reading: Reading,
+    on_partial: PartialListener,
+) -> TextListener:
+    """The listener of a streamed answer. Each time the text received so far closes another
+    intent (or another segment), the answer so far - its closed intents, segments and phrases -
+    goes through `_interpret`, the reading of a whole answer, on a drafter of its own, and the
+    step it gives goes to `on_partial`. A part that fails a check gives no step; the whole
+    answer decides. A failure here never reaches the call: the listener stops instead."""
+    seen = (0, 0)
+    received = 0
+    stopped = False
+
+    async def listen(raw: str) -> None:
+        nonlocal seen, received, stopped
+        if stopped:
+            return
+        if len(raw) < received:
+            # A retried attempt starts its answer again.
+            seen = (0, 0)
+            received = 0
+        grown = raw[received:]
+        received = len(raw)
+        if "}" not in grown:
+            return
+        items = closed_items(raw)
+        intents = items.get("intents", [])
+        counts = (len(intents), len(items.get("segments", [])))
+        if not intents or counts == seen:
+            return
+        seen = counts
+        part: dict[str, Any] = {"intents": intents, "unresolved": items.get("unresolved", [])}
+        if "segments" in items:
+            part["segments"] = items["segments"]
+        own = Drafter(
+            drafter.view, drafter.company_id, drafter.root, drafter.dom_key, drafter.extras
+        )
+        try:
+            answer = client.answer_text(json.dumps(part, ensure_ascii=False), request)
+            step = _interpret(answer, handles, own, sentence, text, reading)
+        except _InvalidAnswer:
+            return
+        except Exception:
+            logger.exception("reading part of a streamed teach extraction answer failed")
+            stopped = True
+            return
+        try:
+            await on_partial(step)
+        except Exception:
+            logger.exception("handing on part of a streamed teach extraction answer failed")
+            stopped = True
+
+    return listen
 
 
 async def _settle(reservation: llm_usage_service.Reservation, record: CallRecord) -> None:
@@ -536,6 +619,8 @@ def _interpret(
             for i, end in enumerate(placed):
                 if end is not None and _misheard(end, drafter):
                     placed[i], reasons[i] = None, "ambiguous_reference"
+                elif end is not None:
+                    placed[i] = _company_possessive(end, drafter) or end
         grounded = placed[0] is not None and placed[1] is not None
         dropped = sum(1 for end in placed[2:] if end is None)
         ends = [end for end in placed if end is not None]
@@ -1187,6 +1272,18 @@ def _misheard(end: End, drafter: Drafter) -> bool:
         return False
     companies = [company.name for company in drafter.view.companies.values()]
     return any(sounds_like_name(end.label, c.label, company_names=companies) for c in drafter.mine)
+
+
+def _company_possessive(end: End, drafter: Drafter) -> End | None:
+    """A new label that starts with the taught company's name misheard ("Inside sales" for
+    Insight) as the company's own rest of the label: the existing concept it names (Sales), or
+    a new label of those words alone. None when `end` is not such a label."""
+    if end.concept is not None:
+        return None
+    rest = company_possessive_rest(end.label, drafter.view.companies[drafter.company_id].name)
+    if rest is None:
+        return None
+    return End(drafter.resolve(rest), title(rest), rest, cited_new=True)
 
 
 def _distinct(reasons: list[UnresolvedReason | None]) -> tuple[UnresolvedReason, ...]:

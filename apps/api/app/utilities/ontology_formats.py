@@ -4,7 +4,9 @@ RDF/XML and OWL/XML are told apart by their root element, read with no DTD; JSON
 naming an `@context` or `@graph` key; OBO has a `format-version:` header and `[Term]` stanzas;
 N-Triples is one full triple per line and anything else textual is Turtle; an XLSX hierarchy
 is sniffed like an Excel document import; CSV is taken as declared. The detected format must
-agree with the file extension, else with the declared media type.
+agree with the format the caller chose, else with the file extension, else with the declared
+media type. `content_format` names the format that text shows on its own, with no declaration,
+for telling an ontology from a document.
 """
 
 from __future__ import annotations
@@ -48,15 +50,20 @@ FORMATS_BY_MEDIA_TYPE: dict[str, tuple[OntologyFormat, ...]] = {
 }
 
 _JSON_LD_KEY = re.compile(r'"@(?:context|graph)"\s*:')
+# A Turtle `@prefix` or `@base` directive, or its SPARQL-style `PREFIX` or `BASE` form.
+_TURTLE_DIRECTIVE = re.compile(r"^\s*(?:@prefix|@base|PREFIX|BASE)\s+\S*\s*<", re.MULTILINE)
 _NTRIPLE = re.compile(
     r'^(<[^>\s]*>|_:\S+)\s+<[^>\s]*>\s+(<[^>\s]*>|_:\S+|"(?:[^"\\]|\\.)*"(\^\^<[^>\s]*>|@[A-Za-z0-9-]+)?)\s*\.\s*(#.*)?$'
 )
 
 
-def detect_format(file_name: str, content_type: str | None, data: bytes) -> OntologyFormat:
+def detect_format(
+    file_name: str, content_type: str | None, data: bytes, chosen: OntologyFormat | None = None
+) -> OntologyFormat:
     """The detected format, or `UnsupportedDocumentError` when it is none of the supported
-    ones or disagrees with the file's extension or declared media type."""
-    allowed = _declared(file_name, content_type)
+    ones or disagrees with the declared one: `chosen` when given (Turtle also holds
+    N-Triples), else the file's extension, else its media type."""
+    allowed = _chosen(chosen) if chosen else _declared(file_name, content_type)
     if allowed is None:
         raise UnsupportedDocumentError(
             "OWL (RDF/XML, Turtle, OWL/XML, JSON-LD, N-Triples), SKOS, OBO, CSV and Excel "
@@ -65,12 +72,53 @@ def detect_format(file_name: str, content_type: str | None, data: bytes) -> Onto
     sniffed = _sniff(data, allowed)
     if sniffed not in allowed:
         raise UnsupportedDocumentError(
-            f"the file reads as {sniffed.replace('_', ' ')} but its name or type says otherwise"
+            f"the file reads as {sniffed.replace('_', ' ')} but "
+            + ("the chosen format" if chosen else "its name or type")
+            + " says otherwise"
         )
     # A Turtle file whose statements are all full triples is still read as Turtle.
     if sniffed == "n_triples" and "n_triples" != allowed[0]:
         return allowed[0]
     return sniffed
+
+
+def content_format(data: bytes) -> OntologyFormat | None:
+    """The ontology format that the text of `data` shows with no declaration: an RDF/XML or
+    OWL/XML root, JSON naming `@context` or `@graph`, an OBO header with terms, a Turtle
+    directive, or lines that are all full N-Triples; None for any other bytes. A CSV or XLSX
+    hierarchy is told by its header row, in `hierarchy_table_reader`."""
+    try:
+        text = decode_text(data)
+    except UnicodeDecodeError:
+        return None
+    head = text.lstrip()
+    if head.startswith("<"):
+        try:
+            return _xml_format(data)
+        except UnsupportedDocumentError:
+            pass
+    if head.startswith(("{", "[")):
+        return "json_ld" if _JSON_LD_KEY.search(text) else None
+    try:
+        return _obo(text)
+    except UnsupportedDocumentError:
+        pass
+    if _TURTLE_DIRECTIVE.search(text[:65536]):
+        return "turtle"
+    if _triples_or_turtle(text) == "n_triples":
+        return "n_triples"
+    return None
+
+
+def declared_format(file_name: str, content_type: str | None) -> OntologyFormat | None:
+    """The first ontology format the extension, else the media type, declares; None when
+    neither names one."""
+    allowed = _declared(file_name, content_type)
+    return allowed[0] if allowed else None
+
+
+def _chosen(chosen: OntologyFormat) -> tuple[OntologyFormat, ...]:
+    return ("turtle", "n_triples") if chosen == "turtle" else (chosen,)
 
 
 def _declared(file_name: str, content_type: str | None) -> tuple[OntologyFormat, ...] | None:

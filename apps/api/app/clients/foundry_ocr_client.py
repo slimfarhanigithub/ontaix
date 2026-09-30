@@ -6,11 +6,12 @@ resource's Azure host names the endpoint uses), addressed to the OCR deployment,
 request's PDF - the image-only pages alone, never the uploaded document - as a base64 data URL
 and the 0-based list of its pages; image data is not requested back.
 Authentication is keyless, an Entra ID bearer token for
-`https://cognitiveservices.azure.com/.default` from `DefaultAzureCredential`, as for the teach
-deployment. The wall clock of the call - token acquisition, DNS, connect, TLS, sending and
-reading the last byte - is bounded by `asyncio.timeout` on top of the HTTP client's own
-timeout, and nothing is retried. The HTTP and Azure loggers are held at WARNING and filtered,
-so neither the document nor a token reaches a log.
+`https://cognitiveservices.azure.com/.default` from `DefaultAzureCredential` through the
+process-wide token cache, as for the teach deployment. The wall clock of the call - token
+acquisition, DNS, connect, TLS, sending and reading the last byte - is bounded by
+`asyncio.timeout` on top of the HTTP client's own timeout, and nothing is retried. The HTTP and
+Azure loggers are held at WARNING and filtered, so neither the document nor a token reaches a
+log.
 """
 
 from __future__ import annotations

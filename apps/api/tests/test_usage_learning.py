@@ -307,6 +307,9 @@ async def test_bulk_approvals_are_kept_as_bulk(
 async def test_a_speech_correction_learns_an_alias_and_the_model_receives_the_learning(
     client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
 ) -> None:
+    # The grammar seeds the lessons with the step off: a step that is on but does not answer
+    # drafts nothing for speech.
+    await configure(tenant, llm_monthly_token_cap=0)
     spoken = await parse(client, tenant, tenant.owner, SPOKEN, origin="speech")
     plant, custommer = await batch(client, tenant.owner, spoken)
     await decide(client, tenant.owner, plant["id"])
