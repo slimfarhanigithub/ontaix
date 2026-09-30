@@ -48,7 +48,7 @@ const STORY_ONLY_CSS = '#sceneNum,#sceneName,#next,#finalise{display:none!import
  * reference has no such elements, so the rule changes nothing there; in the Studio the drawer's
  * other actions and each proposal's row lay out as the reference's.
  */
-const OWNER_ADDITIONS_CSS = '#drExpand,#drDelete,.prop .act .branch{display:none!important}';
+const OWNER_ADDITIONS_CSS = '#drExpand,#drDelete,#imAs,.prop .act .branch{display:none!important}';
 /** The caption, hidden while the reference still shows the story's opening caption. */
 const OPENING_CAPTION_CSS = '.caption{visibility:hidden!important}';
 /** The teach placeholder, made transparent in one-company scenes with live teaching on, where the reference shows story text. */
@@ -108,8 +108,7 @@ export async function revealCaption(page: Page): Promise<void> {
 }
 
 /**
- * Brings both pages to the compared form just before the screenshot: the Studio checked to show
- * no import reading pill, the hint without its story fragments
+ * Brings both pages to the compared form just before the screenshot: the hint without its story fragments
  * (asserted equal as text), the teach bar and caption hidden in both pages, and the teach
  * placeholder made transparent in both pages when the reference has one company and live
  * teaching on, where it still shows story text.
@@ -123,8 +122,6 @@ export async function beforeScreenshot(ref: Page, studio: Page): Promise<void> {
       style.textContent = css;
       document.head.appendChild(style);
     }, TEACH_BAR_CSS);
-  // `#imAs`, an owner addition, appears only once a file has been imported, which no scene does.
-  expect(await studio.evaluate(() => !document.getElementById('imAs')), 'no scene shows the import reading pill').toBe(true);
   await ref.evaluate(stripHintStory);
   await studio.evaluate(stripHintStory);
   const hints = await Promise.all([ref, studio].map((p) => p.evaluate(() => document.querySelector('.hint')?.textContent ?? '')));
@@ -281,12 +278,41 @@ export async function teachText(page: Page, sentence: string): Promise<void> {
   await revealCaption(page);
 }
 
+/**
+ * Answers the Studio's whole-document job with `503`, as the e2e suite does, so an imported
+ * document is read sentence by sentence as the reference reads it. The Studio's mock API answers
+ * `fetch` in the page, so the refusal wraps `window.fetch` there rather than a Playwright route.
+ */
+async function refuseWholeDocument(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as Window & { __ontaixRefuseWholeDocument?: boolean };
+    if (w.__ontaixRefuseWholeDocument) return;
+    w.__ontaixRefuseWholeDocument = true;
+    const previous = window.fetch.bind(window);
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (!/\/api\/v1\/import\/[^/]+\/extraction$/.test(new URL(url, location.origin).pathname)) return previous(input, init);
+      const problem = { title: 'Unavailable', status: 503, code: 'unavailable', detail: 'not in this scene' };
+      return Promise.resolve(
+        new Response(JSON.stringify(problem), { status: 503, headers: { 'content-type': 'application/problem+json' } }),
+      );
+    };
+  });
+}
+
 /** Imports a text document through the file input, the same user action on both pages, and lets every sentence run. */
 export async function importText(page: Page, name: string, text: string, ms = 2000): Promise<void> {
+  if (await isStudio(page)) await refuseWholeDocument(page);
   const before = await page.locator('#propList .prop').count();
   await page.setInputFiles('#importFile', { name, mimeType: 'text/plain', buffer: Buffer.from(text, 'utf-8') });
-  // The file is read in real time on both pages; the first sentence is taught at once after that.
-  await page.waitForFunction((n) => document.querySelectorAll('#propList .prop').length > n, before);
+  // The file is read in real time on both pages; the first sentence is taught at once after that,
+  // the Studio's refused whole-document read included, so the clock stays put until then.
+  const proposals = () => page.locator('#propList .prop').count();
+  const started = Date.now();
+  while ((await proposals()) <= before) {
+    if (Date.now() - started > 30_000) throw new Error('the import proposed nothing within 30 s');
+    await page.waitForTimeout(20);
+  }
   await revealCaption(page);
   // Sentences are taught one clock tick apart; the clock advances until the import has finished.
   const finished = () => page.evaluate(() => /^Import (finished|failed)/.test(document.getElementById('captionKicker')?.textContent || ''));

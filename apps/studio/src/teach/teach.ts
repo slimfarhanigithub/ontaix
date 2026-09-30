@@ -430,8 +430,9 @@ export async function importDocument(
     const co = store.s.activeCompany;
     if (mode === 'document' && co?.sid) {
       if ((await readWholeDocument(imported, co.sid)) !== 'unavailable') return;
-      // The failure caption stays readable before the sentence-by-sentence captions replace it.
-      await wait(FALLBACK_PAUSE_MS);
+      // The failure caption stays readable before the sentence-by-sentence captions replace it;
+      // with animations off the sentences follow at once, as they do without the whole read.
+      if (!store.s.SKIP) await wait(FALLBACK_PAUSE_MS);
     }
     const sents = imported.sentences;
     const before = store.ui.proposals.length;
