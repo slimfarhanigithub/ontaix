@@ -21,6 +21,7 @@ from app.clients.anthropic_foundry_llm_client import (
 from app.clients.llm_client import LlmProviderError, LlmRequest
 from app.config import ModelPrice, Settings
 from app.models.llm.teach_extraction_answer import TeachExtractionAnswer
+from app.utilities.strict_json_schema import to_required_form
 from tests.llm_fakes import recorded
 
 # A made-up value, not a credential.
@@ -116,6 +117,10 @@ async def test_a_structured_answer_with_thinking_counts_every_token(monkeypatch)
     assert body["thinking"] == {"type": "adaptive"}
     assert body["output_config"]["effort"] == "medium"
     assert body["output_config"]["format"]["type"] == "json_schema"
+    # The required form: every property required, within Claude's cap on union-typed ones.
+    sent_schema = body["output_config"]["format"]["schema"]
+    assert sent_schema == to_required_form(OUTPUT_SCHEMA)[0]
+    assert unions(sent_schema) <= 16
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -287,3 +292,53 @@ async def test_empty_values_claude_writes_for_unset_optional_properties_are_remo
     assert "memberAction" not in intent and "explanation" not in intent
     assert json.loads(answer.text)["unresolved"] == []
     TeachExtractionAnswer.model_validate_json(answer.text)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_the_unset_values_of_the_required_form_are_removed(monkeypatch) -> None:
+    written = {
+        "intents": [
+            {
+                "kind": "rel",
+                "subject": {"candidate": "c1"},
+                "object": {"newLabel": "Staff"},
+                "action": "has",
+                "domainKey": None,
+                "confidence": 0.9,
+                "explanation": "",
+                "span": "wages have staff",
+                "segment": None,
+                "source": {"start": 0, "end": 16},
+                "members": [],
+                "memberAction": "",
+                "statedCount": None,
+                "listId": None,
+            }
+        ],
+        "segments": [],
+        "unresolved": [],
+    }
+    install(monkeypatch, message(json.dumps(written)))
+    client = AnthropicFoundryLlmClient(BASE_URL, "claude-sonnet-5", PRICE, "none")
+
+    answer = await client.complete(request())
+
+    data = json.loads(answer.text)
+    assert "segments" not in data
+    (intent,) = data["intents"]
+    assert set(intent) == {"kind", "subject", "object", "action", "confidence", "span", "source"}
+    TeachExtractionAnswer.model_validate_json(answer.text)
+
+
+def unions(node: object) -> int:
+    """The properties whose schema is a union, as Claude counts them against its cap."""
+    if isinstance(node, list):
+        return sum(unions(item) for item in node)
+    if not isinstance(node, dict):
+        return 0
+    own = sum(
+        1
+        for sub in (node.get("properties") or {}).values()
+        if isinstance(sub, dict) and ("anyOf" in sub or isinstance(sub.get("type"), list))
+    )
+    return own + sum(unions(value) for value in node.values())

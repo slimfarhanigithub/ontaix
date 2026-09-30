@@ -8,6 +8,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import type { ConnectorType, Discovery, RefreshInterval, Source, SourceAuth } from '../api/types';
 import type { Node } from '../canvas/types';
+import { BusyButton } from '../shell/busy';
 import { DialogFrame } from '../shell/Dialog';
 import { store } from '../store/store';
 import { attempt, failed } from './adminData';
@@ -126,33 +127,39 @@ function SourceWizard({ n, src, cat, close }: { n: Node | null; src: Source | nu
       verify(d, sel);
       return;
     }
-    finish();
+    return finish();
   };
 
-  const finish = () => {
+  /** Saves or proposes the source; the wizard closes once the calls settle. */
+  const finish = (): Promise<void> => {
     const co = companies[data.co] || companies[0];
     const auth = (AUTHS.find((a) => a[0] === data.auth) || AUTHS[0])[1];
     if (n) {
       const sid = n.sid;
-      if (sid) {
-        void attempt(() => api.updateSource(sid, { host: data.host, scope: data.scope, auth, refresh: data.refresh })).then((r) => {
-          if (!r) return;
-          store.toast2('Saved', `${data.name} reconfigured`);
-          renderAdmin();
-        });
-        if (data.name !== n.label)
-          void store
-            .propose({ type: 'change', changeKind: 'rename_source', payload: { sourceId: sid, newLabel: data.name } })
-            .then((p) => {
-              if (p) store.toast2('Proposed', `rename to ${data.name}`);
-            }, failed);
+      if (!sid) {
+        close();
+        return Promise.resolve();
       }
-      close();
-      return;
+      const saved = attempt(() => api.updateSource(sid, { host: data.host, scope: data.scope, auth, refresh: data.refresh })).then((r) => {
+        if (!r) return;
+        store.toast2('Saved', `${data.name} reconfigured`);
+        renderAdmin();
+      });
+      const renamed =
+        data.name !== n.label
+          ? store
+              .propose({ type: 'change', changeKind: 'rename_source', payload: { sourceId: sid, newLabel: data.name } })
+              .then((p) => {
+                if (p) store.toast2('Proposed', `rename to ${data.name}`);
+              }, failed)
+          : undefined;
+      return Promise.all([saved, renamed]).then(close);
     }
-    close();
-    if (!co?.sid) return;
-    void store
+    if (!co?.sid) {
+      close();
+      return Promise.resolve();
+    }
+    return store
       .propose({
         type: 'source',
         companyId: co.sid,
@@ -170,7 +177,8 @@ function SourceWizard({ n, src, cat, close }: { n: Node | null; src: Source | nu
         store.toast2('Proposed', `${data.name} is waiting for approval on the canvas`);
         if (store.ui.adminOpen) renderAdmin();
         store.caption('One proposal', `${data.name} (${sel ? sel.name : 'system'}) is waiting for approval as a data source of ${co.name}.`);
-      }, failed);
+      }, failed)
+      .then(close);
   };
 
   const steps = (
@@ -205,9 +213,9 @@ function SourceWizard({ n, src, cat, close }: { n: Node | null; src: Source | nu
           <button className="btn " data-i={1} onClick={close}>
             Cancel
           </button>
-          <button className="btn primary" data-i={2} disabled={step === 1 && !sel} onClick={next}>
+          <BusyButton className="btn primary" data-i={2} disabled={step === 1 && !sel} onClick={next}>
             {step === 3 ? 'Propose this source' : 'Next'}
-          </button>
+          </BusyButton>
         </>
       }
     >

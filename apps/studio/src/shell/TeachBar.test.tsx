@@ -64,7 +64,7 @@ describe('the microphone', () => {
     const teachModule = await import('../teach/teach');
     const sentence = vi.fn();
     const stream = vi.spyOn(teachModule, 'speechStream').mockReturnValue({ sentence, settled: () => Promise.resolve() });
-    const teach = vi.spyOn(teachModule, 'teach').mockResolvedValue();
+    const teach = vi.spyOn(teachModule, 'teach').mockResolvedValue(true);
     const { TeachBar } = await import('./TeachBar');
     const { container } = render(<TeachBar />);
     fireEvent.click(container.querySelector('#mic') as Element);
@@ -192,7 +192,7 @@ describe('the microphone', () => {
 
 describe('the microphone on Azure Speech', () => {
   const TOKEN = {
-    token: 'aad#/subscriptions/s#eyJ.token',
+    token: 'eyJhbGciOiJIUzI1NiJ9.eyJyZWdpb24iOiJmcmFuY2VjZW50cmFsIn0.sts',
     region: 'francecentral',
     expiresAt: '2099-01-01T00:00:00Z',
     language: 'en-GB' as const,

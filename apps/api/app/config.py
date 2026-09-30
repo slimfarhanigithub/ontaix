@@ -166,11 +166,18 @@ class Settings(BaseSettings):
     )
     speech_region: SpeechRegion = "francecentral"
     speech_endpoint: str | None = Field(default=None, pattern=r"^https://[^\s/?#]+/?$")
-    # Client id of the dedicated managed identity that mints speech tokens; it holds only
-    # Cognitive Services Speech User on the Speech resource. Unset answers 503 in every
-    # environment: no other identity ever mints a token for the browser.
+    # Client id of the dedicated managed identity whose Entra token the API exchanges at the
+    # Speech resource's STS endpoint; it holds roles on the Speech resource only. Unset, the
+    # developer's `az login` is used instead, only in `dev` and only without
+    # AZURE_FEDERATED_TOKEN_FILE; otherwise the answer is 503. The browser only ever receives
+    # the Speech STS token.
     speech_client_id: str | None = Field(
         default=None, pattern=r"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$"
+    )
+    # Set by Kubernetes workload identity in a pod; its presence rules out the `az login`
+    # fallback for speech tokens.
+    azure_federated_token_file: str | None = Field(
+        default=None, validation_alias="AZURE_FEDERATED_TOKEN_FILE"
     )
     speech_language: SpeechLanguage = "en-GB"
     speech_tokens_per_hour: int = Field(default=60, ge=0)
@@ -215,6 +222,7 @@ class Settings(BaseSettings):
         "speech_resource_id",
         "speech_endpoint",
         "speech_client_id",
+        "azure_federated_token_file",
         "foundry_deep_deployment",
         "foundry_deep_reasoning_effort",
         "llm_deep_reasoning_allowance_tokens",

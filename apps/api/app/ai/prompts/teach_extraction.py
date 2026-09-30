@@ -120,21 +120,34 @@ Return one intent per fact:
   first letter capitalised (Apps, Data, AI) and no surrounding spaces.
 - Cite a new concept by the same newLabel in every intent that uses it: it is born once, from
   the first intent that mentions it, and later intents build on it.
+- Drill-down. Each sentence of a recording usually goes one level deeper into what an earlier
+  one introduced. "X is split in/into A and B", "under X there are A and B", "X has A and B",
+  "X consists of A and B" make A and B children of X: one rel intent per item with X as the
+  subject and the speaker's verb. A later "A is split into C and D" or "A has E" cites A and
+  goes one level deeper again, with no limit on depth. "Each of them has E", "they each have
+  E" and "both have E" give one rel intent per referent, all with the same newLabel E. When
+  the speaker comes back to a concept named earlier ("the offering also has a warranty",
+  "going back to the dairy, it makes cheese"), the subject is that concept, not the one the
+  previous sentence was about and not the company. "X has a <noun> which is a Y" gives one
+  rel intent, X with the action "has <noun>" (has primary topic) and the object Y.
 - Back-references. A phrase that points back ("these services", "the managed ones", "they",
   "it", "them both", "its subsidiaries") names the concepts the sessionTurns or the earlier
   words mean: cite their candidate handles, one intent per concept for a plural ("ADNOC buys
   them both" after Advisory and Managed services gives ADNOC buys each). A possessive before a
   relationship noun and names ("its subsidiaries XRG and Drilling buy advisory", after a turn
   about ADNOC) states the grouping first: the owner has the role (subject the owner, action
-  has, object the role, members the names), then the names' own facts. A new label never comes
+  has, object the role, members the names), then the names' own facts. "Its" and "their" point
+  to the concept the previous sentences were about (the buyer just named, ADNOC), never to the
+  company being taught unless the company is that concept. A new label never comes
   from a sessionTurn: a phrase whose only meaning is a plain introduced label, never a
   candidate, goes to unresolved with reason ambiguous_reference.
 - Properties are not concepts. How a concept is billed, priced, paid, measured or how often
   ("billed monthly", "billed per day", "costs 40 euros", "renewed every year") describes the
   concept; it is not a relation to another concept. Never make the value, unit, frequency or
   time word (Monthly, Day, Year) a concept, and never coin a label the text does not say
-  ("Monthly billing"). Return no intent for it: list the phrase in unresolved with reason
-  not_understood.
+  ("Monthly billing"). Return it as an attr intent on that concept, found as any other
+  subject is ("the managed ones are billed monthly" after Advisory and Managed services gives
+  the Managed services candidate, attributeName billing, attributeValue monthly).
 - Misheard names. In speech mode a word that sounds like a candidate's label but is spelled
   differently ("ahmedabus" when c0 is Amdaris) is most likely that candidate misheard: cite
   the candidate when the context makes it clear and say so in the explanation; otherwise list
@@ -146,12 +159,18 @@ Return one intent per fact:
   statedCount 3. The object is the group itself, never one of its members. When the text names
   no group ("split in advisory and managed services"), there are no members: return one rel
   intent per item instead. When the noun only describes the list ("these services are focused
-  around three areas, app, data and AI", "in three regions"), there is no grouping concept:
-  return one rel intent per item from the subject with the speaker's verb as the action
-  ("focuses on"), all with the same listId and the statedCount. Drafts always follow the list,
-  never the stated number. statedCount is only the number of items the speaker announces for
-  that list, from 0 to 1000, and only with members or a listId; a number that counts anything
-  else ("four thousand employees") is never a statedCount.
+  around three areas, app, data and AI", "in three regions", "has three starting points",
+  "two ways", "several parts"), there is no grouping concept: return one rel intent per item
+  from the subject with the speaker's verb as the action ("focuses on", "has"), all with the
+  same listId and the statedCount. Only "kinds", "types" and "sorts" name specialisations:
+  "there are three types of price specification, unit price specifications, delivery charge
+  specifications and payment charge specifications" gives one spec intent per item, each a kind
+  of Price specification, and no concept for the word "types". Any other noun for the variety
+  of a concept (versions, ranges, options, styles) is descriptive, as above: one rel intent per
+  item from the concept the sentence is about, with the speaker's verb. Drafts always
+  follow the list, never the stated number. statedCount is only the number of items the
+  speaker announces for that list, from 0 to 1000, and only with members or a listId; a
+  number that counts anything else ("four thousand employees") is never a statedCount.
 - A rel intent has an action and no rule. A spec intent has no action, members, memberAction or
   listId. memberAction comes only with members, and members hold at least one concept.
 - Candidates with a company field belong to another company. Cite one only in a rel intent
@@ -240,41 +259,73 @@ _CONCEPT_REF: dict[str, Any] = {
     ]
 }
 
+
+def _intent(kind: str, required: list[str], properties: dict[str, Any]) -> dict[str, Any]:
+    """The shape of one kind of intent: its own properties besides the ones every intent has."""
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["kind", "subject", *required, "confidence", "source"],
+        "properties": {
+            "kind": {"type": "string", "enum": [kind]},
+            "subject": {"$ref": "#/$defs/conceptRef"},
+            **properties,
+            "confidence": {"type": "number"},
+            "explanation": {"type": "string"},
+            "span": {"type": "string"},
+            "segment": {"type": "integer"},
+            "source": {"$ref": "#/$defs/span"},
+        },
+    }
+
+
+_DOMAIN_KEY: dict[str, Any] = {
+    "anyOf": [{"type": "string", "enum": list(DOMAIN_KEYS)}, {"type": "null"}]
+}
+
+# One shape per kind, so a rel or spec intent cannot leave out its object and an attr intent
+# cannot carry one: a model whose structured outputs keep optional properties optional drops
+# a property it needs when every kind shares one shape.
+_INTENTS: list[dict[str, Any]] = [
+    _intent(
+        "rel",
+        ["object", "action"],
+        {
+            "object": {"$ref": "#/$defs/conceptRef"},
+            "action": {"type": "string"},
+            "domainKey": _DOMAIN_KEY,
+            "members": {"type": "array", "items": {"$ref": "#/$defs/conceptRef"}},
+            "memberAction": {"type": "string"},
+            "statedCount": {"type": "integer"},
+            "listId": {"type": "integer"},
+        },
+    ),
+    _intent(
+        "spec",
+        ["object"],
+        {
+            "object": {"$ref": "#/$defs/conceptRef"},
+            "rule": {"type": "string"},
+            "domainKey": _DOMAIN_KEY,
+        },
+    ),
+    _intent(
+        "attr",
+        ["attributeName", "attributeValue"],
+        {
+            "attributeName": {"type": "string"},
+            "attributeValue": {"type": "string"},
+            "valueType": {"type": "string", "enum": ["text", "number", "date"]},
+        },
+    ),
+]
+
 OUTPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
     "required": ["intents", "unresolved"],
     "properties": {
-        "intents": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["kind", "subject", "confidence", "source"],
-                "properties": {
-                    "kind": {"type": "string", "enum": ["rel", "spec", "attr"]},
-                    "subject": {"$ref": "#/$defs/conceptRef"},
-                    "object": {"$ref": "#/$defs/conceptRef"},
-                    "action": {"type": "string"},
-                    "rule": {"type": "string"},
-                    "domainKey": {
-                        "anyOf": [{"type": "string", "enum": list(DOMAIN_KEYS)}, {"type": "null"}]
-                    },
-                    "confidence": {"type": "number"},
-                    "explanation": {"type": "string"},
-                    "span": {"type": "string"},
-                    "segment": {"type": "integer"},
-                    "source": {"$ref": "#/$defs/span"},
-                    "members": {"type": "array", "items": {"$ref": "#/$defs/conceptRef"}},
-                    "memberAction": {"type": "string"},
-                    "statedCount": {"type": "integer"},
-                    "listId": {"type": "integer"},
-                    "attributeName": {"type": "string"},
-                    "attributeValue": {"type": "string"},
-                    "valueType": {"type": "string", "enum": ["text", "number", "date"]},
-                },
-            },
-        },
+        "intents": {"type": "array", "items": {"anyOf": _INTENTS}},
         "segments": {
             "type": "array",
             "items": {
@@ -325,11 +376,9 @@ SPEECH_OUTPUT_SCHEMA: dict[str, Any] = {
         "intents": {
             "type": "array",
             "items": {
-                **OUTPUT_SCHEMA["properties"]["intents"]["items"],
-                "required": [
-                    *OUTPUT_SCHEMA["properties"]["intents"]["items"]["required"],
-                    "segment",
-                ],
+                "anyOf": [
+                    {**shape, "required": [*shape["required"], "segment"]} for shape in _INTENTS
+                ]
             },
         },
     },

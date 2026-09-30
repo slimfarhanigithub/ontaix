@@ -143,6 +143,10 @@ def speech_rows(stage: StageResult) -> list[dict[str, Any]]:
                     "relationsExpected": s.relations_expected,
                     "relationVerbCorrect": s.relation_action_correct,
                     "relationAccuracy": _ratio(s.relation_action_correct, s.relations_expected),
+                    "attributesExpected": s.attributes_expected,
+                    "attributesMatched": s.attributes_matched,
+                    "inventedAttributes": list(s.invented_attributes),
+                    "missedAttributes": list(s.missed_attributes),
                     "depthReached": s.depth_achieved,
                     "depthGold": s.depth_expected,
                     "invented": list(s.invented),
@@ -166,11 +170,12 @@ def _speech(stage: StageResult) -> list[str]:
         "Each recording is sent sentence by sentence as `speech` in one session; its final "
         "drafts are scored against the gold tree. Parent at depth: expected concepts drafted "
         "under an accepted parent at the expected level. Verb: matched concepts with an "
-        "accepted verb. Relation: expected relations drafted with an accepted verb.",
+        "accepted verb. Relation: expected relations drafted with an accepted verb. Attribute: "
+        "expected taught attributes drafted on the right concept with an accepted value.",
         "",
         "| Case | Configuration | Repeat | Sentences | Parent at depth | Verb | Relation | "
-        "Depth reached / gold | Invented | Missed |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "Attribute | Depth reached / gold | Invented | Missed |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         relation = (
@@ -178,10 +183,15 @@ def _speech(stage: StageResult) -> list[str]:
             if row["relationsExpected"]
             else "-"
         )
+        attribute = (
+            f"{row['attributesMatched']}/{row['attributesExpected']}"
+            if row["attributesExpected"]
+            else "-"
+        )
         lines.append(
             f"| {row['case']} | {row['configuration']} | {row['repeat']} | {row['sentences']} | "
             f"{row['parentAtDepth']}/{row['expected']} | {row['verbCorrect']}/{row['matched']} "
-            f"| {relation} | {row['depthReached']} / {row['depthGold']} | "
+            f"| {relation} | {attribute} | {row['depthReached']} / {row['depthGold']} | "
             f"{_labels(row['invented'])} | {_labels(row['missed'])} |"
         )
     return [*lines, ""]

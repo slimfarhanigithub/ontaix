@@ -1780,9 +1780,9 @@ paths:
       tags: [Teach]
       summary: Mint a short-lived Azure AI Speech token for the microphone
       description: |
-        Speech recognition (ADR 0013). Returns a Microsoft Entra access token for the tenant's Azure AI Speech resource in France Central, already in the form the Speech SDK expects, `aad#<resourceId>#<accessToken>`, with the resource's `region` and the token's `expiresAt`. The Studio passes it to `SpeechConfig.fromAuthorizationToken(token, region)` and recognises English only (`en-GB` by default). The API obtains the token keyless from a dedicated managed identity (`ONTAIX_SPEECH_CLIENT_ID`) that holds only the role Cognitive Services Speech User on that one Speech resource. The token's audience is `https://cognitiveservices.azure.com`, valid wherever its identity holds a role, and that identity holds this one role only, so the token can do nothing but speech on this resource until it expires. The API never hands out its own workload identity's token or a developer's `az login` token: without the dedicated identity the answer is `503`, in every environment. No key ever exists or reaches the browser. The token carries no Ontaix identity and grants nothing in Ontaix.
+        Speech recognition (ADR 0013). Returns a Speech token issued by the tenant's Azure AI Speech resource in France Central, with the resource's `region` and the token's `expiresAt`. The Studio passes it to `SpeechConfig.fromAuthorizationToken(token, region)` and recognises English only (`en-GB` by default). The API obtains it server-side and keyless: it takes a Microsoft Entra access token for `https://cognitiveservices.azure.com/.default` and exchanges it at the resource's own `sts/v1.0/issueToken` endpoint on its custom subdomain. The Entra token comes from the dedicated managed identity `ONTAIX_SPEECH_CLIENT_ID`, which holds roles on that one Speech resource only; without it, and only in `dev` and only without `AZURE_FEDERATED_TOKEN_FILE`, from the developer's `az login`. The Entra token never leaves the API; the browser receives only the Speech token, valid about 10 minutes on this one Speech resource and for nothing else. No key ever exists or reaches the browser. The token carries no Ontaix identity and grants nothing in Ontaix.
 
-        Permission - the same as teaching: `proposal.create` in the scope of `companyId` (Owner, Builder, Agent in scope, or Member while `everyoneTeaches` is on); `403` otherwise. `404` when the caller may not read the company. `409 channel_disabled` while the `voice` setting is off. Charges one unit of the caller's hourly `speech` budget (default 60 per user or agent; `429 rate_limited` with `Retry-After`). Each successful call writes the audit entry `speech` `Speech recognition token issued` for that company. `503 unavailable` when no Speech resource or no dedicated identity is configured, or the token cannot be obtained; the Studio then falls back to the browser's own recogniser. The response is never cached (`Cache-Control: no-store`) and the token is never logged.
+        Permission - the same as teaching: `proposal.create` in the scope of `companyId` (Owner, Builder, Agent in scope, or Member while `everyoneTeaches` is on); `403` otherwise. `404` when the caller may not read the company. `409 channel_disabled` while the `voice` setting is off. Charges one unit of the caller's hourly `speech` budget (default 60 per user or agent; `429 rate_limited` with `Retry-After`). Each successful call writes the audit entry `speech` `Speech recognition token issued` for that company. `503 unavailable` when no Speech resource or no credential is configured, or the Entra token or the exchange fails; the Studio then falls back to the browser's own recogniser. The response is never cached (`Cache-Control: no-store`) and the token is never logged.
       operationId: mintSpeechToken
       x-ontaix-permission: proposal.create
       requestBody:
@@ -5178,8 +5178,8 @@ components:
           type: string
           minLength: 1
           maxLength: 8192
-          pattern: '^aad#/subscriptions/[^#]+#[A-Za-z0-9._-]+$'
-          description: '`aad#<Speech resource id>#<Microsoft Entra access token>`, ready for `SpeechConfig.fromAuthorizationToken` and for `recognizer.authorizationToken` on refresh. A secret while it lives - held in memory only, never stored, logged or put in a URL.'
+          pattern: '^[A-Za-z0-9._-]+$'
+          description: 'The Speech STS token the Speech resource issued (`sts/v1.0/issueToken`), valid about 10 minutes, ready for `SpeechConfig.fromAuthorizationToken(token, region)` and for `recognizer.authorizationToken` on refresh. Never the Entra token, which stays on the server. A secret while it lives - held in memory only, never stored, logged or put in a URL.'
         region:
           type: string
           const: francecentral
@@ -5187,7 +5187,7 @@ components:
         expiresAt:
           type: string
           format: date-time
-          description: When the access token expires. The Studio requests a new token at least 5 minutes before, and at every microphone start, and sets it on the running recogniser.
+          description: When the Speech token expires, about 10 minutes after it is issued. The Studio requests a new token at least 5 minutes before, and at every microphone start, and sets it on the running recogniser.
         language:
           type: string
           enum: [en-GB, en-US]

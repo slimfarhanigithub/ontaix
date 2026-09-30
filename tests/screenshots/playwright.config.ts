@@ -12,6 +12,8 @@ export const STUDIO_PORT = 4787;
 export default defineConfig({
   testDir: here,
   outputDir: resolve(here, 'output/test-results'),
+  // Studio-only baselines (teachbar.spec.ts), one set per platform, since fonts rasterise differently.
+  snapshotPathTemplate: '{testDir}/baselines/{arg}-{platform}{ext}',
   // Each test opens its own pages, so CI shards the suite test by test (`--shard`); one worker per machine.
   fullyParallel: true,
   workers: 1,

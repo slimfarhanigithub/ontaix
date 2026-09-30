@@ -9,6 +9,12 @@ name is required and nullable elsewhere would need a path-aware mapping instead.
 `drop_optional_empties` does the same for empty strings and lists, which a model whose
 structured outputs keep optional properties optional writes for properties it means to leave
 out.
+
+`to_required_form` is a variant for providers that cap the number of union-typed properties a
+schema may hold (Claude allows 16): every property is required too, but an optional string or
+array property keeps its type and is written empty when unset (an enum also accepts ""), and
+only the other optional properties become nullable. `drop_optional_nulls` and
+`drop_optional_empties` together map its answers back.
 """
 
 from __future__ import annotations
@@ -22,6 +28,13 @@ def to_strict(schema: dict[str, Any]) -> tuple[dict[str, Any], frozenset[str]]:
     optional: set[str] = set()
     strict = _strict_node(copy.deepcopy(schema), optional)
     return strict, frozenset(optional)
+
+
+def to_required_form(schema: dict[str, Any]) -> tuple[dict[str, Any], frozenset[str]]:
+    """The required form of `schema` and the names of the properties that were optional."""
+    optional: set[str] = set()
+    required = _strict_node(copy.deepcopy(schema), optional, empty_when_unset=True)
+    return required, frozenset(optional)
 
 
 def drop_optional_nulls(value: Any, optional: frozenset[str]) -> Any:
@@ -51,28 +64,38 @@ def drop_optional_empties(value: Any, optional: frozenset[str]) -> Any:
     return value
 
 
-def _strict_node(node: Any, optional: set[str]) -> Any:
+def _strict_node(node: Any, optional: set[str], empty_when_unset: bool = False) -> Any:
     if isinstance(node, list):
-        return [_strict_node(item, optional) for item in node]
+        return [_strict_node(item, optional, empty_when_unset) for item in node]
     if not isinstance(node, dict):
         return node
     for key in ("properties", "$defs"):
         if isinstance(node.get(key), dict):
-            node[key] = {name: _strict_node(sub, optional) for name, sub in node[key].items()}
+            node[key] = {
+                name: _strict_node(sub, optional, empty_when_unset)
+                for name, sub in node[key].items()
+            }
     for key, sub in list(node.items()):
         if key not in ("properties", "$defs"):
-            node[key] = _strict_node(sub, optional)
+            node[key] = _strict_node(sub, optional, empty_when_unset)
     properties = node.get("properties")
     if isinstance(properties, dict):
         required = set(node.get("required", ()))
         for name, sub in properties.items():
             if name not in required:
                 optional.add(name)
-                if not _nullable(sub):
+                if empty_when_unset and _can_be_empty(sub):
+                    if "enum" in sub and "" not in sub["enum"]:
+                        sub["enum"] = [*sub["enum"], ""]
+                elif not _nullable(sub):
                     properties[name] = {"anyOf": [sub, {"type": "null"}]}
         node["required"] = list(properties)
         node["additionalProperties"] = False
     return node
+
+
+def _can_be_empty(schema: Any) -> bool:
+    return isinstance(schema, dict) and schema.get("type") in ("string", "array")
 
 
 def _nullable(schema: Any) -> bool:

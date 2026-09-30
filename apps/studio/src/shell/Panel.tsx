@@ -2,10 +2,14 @@
  * The proposed-changes panel: nothing enters the model without approval here. Markup from
  * reference/ontaix-studio-reference.html lines 209-213; rows from `renderProps` (lines 587-592).
  * `Approve branch`, on a ready concept or specialisation with open proposals below it, is an
- * owner addition absent from the reference, in the row's existing button style.
+ * owner addition absent from the reference, in the row's existing button style. `Reject all`, and
+ * `Reject` on a proposal with open proposals below it, ask first in the reference's own
+ * `confirmDialog`, as neither can be undone.
  */
+import { confirmDialog } from '../admin/actions';
 import type { Proposal } from '../api/types';
 import { NEUTRAL } from '../canvas/constants';
+import { BusyButton } from './busy';
 import { refStyle, useStore } from './dom';
 import { sanitizeHtml } from './sanitize';
 
@@ -18,6 +22,28 @@ const KIND: Record<Proposal['type'], string> = {
   bind: 'Binding',
   attr: 'Attribute',
 };
+
+/** `n proposal` or `n proposals`. */
+const countOf = (n: number) => `${n} proposal${n === 1 ? '' : 's'}`;
+
+/** Asks before rejecting every pending proposal. */
+export function confirmRejectAll(count: number, rejectAll: () => Promise<void>): void {
+  confirmDialog(`Reject ${countOf(count)}?`, 'Every pending proposal is discarded. This cannot be undone.', 'Reject all', rejectAll, true);
+}
+
+/** Rejects a proposal, asking first when the open proposals below it go with it. */
+export function rejectWithBranch(p: Proposal, reject: (p: Proposal) => Promise<void>): Promise<void> | void {
+  const below = p.openBelow ?? 0;
+  if (below <= 0) return reject(p);
+  const rest = below === 1 ? 'the proposal below it' : `the ${below} proposals below it`;
+  confirmDialog(
+    `Reject ${p.title} and ${rest}?`,
+    'Every proposal that grows from it is rejected with it. This cannot be undone.',
+    'Reject',
+    () => reject(p),
+    true,
+  );
+}
 
 /** The proposals `Approve branch` decides, the proposal itself included; 0 when the button is not offered. */
 export function branchSize(p: Proposal): number {
@@ -44,12 +70,12 @@ export function Panel() {
         </button>
       </h2>
       <div className="bulk">
-        <button id="approveAll" disabled={!proposals.some((p) => p.ready)} onClick={() => void st.approveAll()}>
+        <BusyButton id="approveAll" disabled={!proposals.some((p) => p.ready)} onClick={() => st.approveAll()}>
           Approve all
-        </button>
-        <button id="rejectAll" disabled={!proposals.length} onClick={() => void st.rejectAll()}>
+        </BusyButton>
+        <BusyButton id="rejectAll" disabled={!proposals.length} onClick={() => confirmRejectAll(proposals.length, () => st.rejectAll())}>
           Reject all
-        </button>
+        </BusyButton>
       </div>
       <div className="list" id="propList">
         {!proposals.length ? (
@@ -72,16 +98,16 @@ export function Panel() {
                 <div className="what" dangerouslySetInnerHTML={{ __html: sanitizeHtml(p.html) }} />
                 {p.why ? <div className="why">{p.why}</div> : null}
                 <div className="act">
-                  <button className="ok" disabled={!ok} onClick={() => void st.approve(p)}>
+                  <BusyButton className="ok" disabled={!ok} onClick={() => st.approve(p)}>
                     Approve
-                  </button>
-                  <button className="no" onClick={() => void st.reject(p)}>
+                  </BusyButton>
+                  <BusyButton className="no" onClick={() => rejectWithBranch(p, (q) => st.reject(q))}>
                     Reject
-                  </button>
+                  </BusyButton>
                   {branchSize(p) ? (
-                    <button className="branch" onClick={() => void st.approveBranch(p)}>
+                    <BusyButton className="branch" onClick={() => st.approveBranch(p)}>
                       {`Approve branch (${branchSize(p)})`}
-                    </button>
+                    </BusyButton>
                   ) : null}
                   {ok ? null : <span className="wait">{`after ${p.waitFor || 'a previous item'}`}</span>}
                 </div>
