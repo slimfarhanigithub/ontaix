@@ -6,7 +6,8 @@ one item under the row its `parent` names by `id`, else by `label`; an empty par
 With level columns `Level 1`, `Level 2` and so on, each non-empty cell is one item under the
 nearest cell to its left, carried down from earlier rows when this row leaves it empty; a
 repeated path is one item. A row's source is `row <n>`, its 1-based line or sheet row. At most
-200,000 rows.
+200,000 rows. `is_csv_hierarchy` and `is_xlsx_hierarchy` read the header row alone, to tell a
+hierarchy table from a document table.
 """
 
 from __future__ import annotations
@@ -36,22 +37,49 @@ Row = tuple[int, dict[int, str]]
 
 
 def read_csv_hierarchy(data: bytes) -> ParsedOntology:
-    text = decode_text(data)
-    try:
-        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
-    except csv.Error:
-        dialect = csv.excel
-    rows = (
-        (number, {i: c.strip() for i, c in enumerate(cells) if c.strip()})
-        for number, cells in enumerate(csv.reader(io.StringIO(text), dialect), start=1)
-    )
-    return _read(rows, "csv")
+    return _read(_csv_rows(decode_text(data)), "csv")
 
 
 def read_xlsx_hierarchy(data: bytes) -> ParsedOntology:
     with OoxmlArchive(data, "the workbook") as archive:
         rows = [(r.row, r.cells) for r in sheet_rows(archive, first_sheet_only=True)]
     return _read(rows, "xlsx")
+
+
+def is_csv_hierarchy(data: bytes) -> bool:
+    """True when the first non-empty row of the CSV text is a hierarchy header."""
+    try:
+        text = decode_text(data)
+    except UnicodeDecodeError:
+        return False
+    header = next((cells for _, cells in _csv_rows(text) if cells), None)
+    return header is not None and _is_header(header)
+
+
+def is_xlsx_hierarchy(data: bytes) -> bool:
+    """True when the first non-empty row of the workbook's first sheet is a hierarchy header."""
+    with OoxmlArchive(data, "the workbook") as archive:
+        header = next(
+            (r.cells for r in sheet_rows(archive, first_sheet_only=True) if r.cells), None
+        )
+    return header is not None and _is_header(header)
+
+
+def _csv_rows(text: str) -> Iterator[Row]:
+    try:
+        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+    return (
+        (number, {i: c.strip() for i, c in enumerate(cells) if c.strip()})
+        for number, cells in enumerate(csv.reader(io.StringIO(text), dialect), start=1)
+    )
+
+
+def _is_header(cells: dict[int, str]) -> bool:
+    """Label and parent columns, or at least one `Level <n>` column."""
+    names = {name.strip().lower() for name in cells.values()}
+    return {"label", "parent"} <= names or any(_LEVEL.match(name) for name in names)
 
 
 def _read(rows: Iterable[Row], fmt: OntologyFormat) -> ParsedOntology:

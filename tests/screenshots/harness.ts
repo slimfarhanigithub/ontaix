@@ -49,16 +49,6 @@ const STORY_ONLY_CSS = '#sceneNum,#sceneName,#next,#finalise{display:none!import
  * other actions and each proposal's row lay out as the reference's.
  */
 const OWNER_ADDITIONS_CSS = '#drExpand,#drDelete,.prop .act .branch{display:none!important}';
-/**
- * The import mode pill, an owner addition shown in every scene: the Studio's `#imMode` at its
- * default, added to the reference after `#importFile` before its first layout, so both tool rows
- * hold it from the start and every other pixel still compares against the reference.
- */
-export const IMPORT_MODE_PILL =
-  '<button type="button" id="imMode" title="How the next imported document is read" aria-pressed="false"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"></path></svg>Sentences</button>';
-const ADD_IMPORT_MODE_PILL = `document.addEventListener('DOMContentLoaded', () => {
-  if (!document.getElementById('imMode')) document.getElementById('importFile')?.insertAdjacentHTML('afterend', ${JSON.stringify(IMPORT_MODE_PILL)});
-}, { once: true });`;
 /** The caption, hidden while the reference still shows the story's opening caption. */
 const OPENING_CAPTION_CSS = '.caption{visibility:hidden!important}';
 /** The teach placeholder, made transparent in one-company scenes with live teaching on, where the reference shows story text. */
@@ -118,8 +108,8 @@ export async function revealCaption(page: Page): Promise<void> {
 }
 
 /**
- * Brings both pages to the compared form just before the screenshot: the reference's import mode
- * pill checked equal to the Studio's and shown or hidden with its Import button, the hint without its story fragments
+ * Brings both pages to the compared form just before the screenshot: the Studio checked to show
+ * no import reading pill, the hint without its story fragments
  * (asserted equal as text), the teach bar and caption hidden in both pages, and the teach
  * placeholder made transparent in both pages when the reference has one company and live
  * teaching on, where it still shows story text.
@@ -133,17 +123,8 @@ export async function beforeScreenshot(ref: Page, studio: Page): Promise<void> {
       style.textContent = css;
       document.head.appendChild(style);
     }, TEACH_BAR_CSS);
-  const pill = await studio.evaluate(() => {
-    const copy = document.getElementById('imMode')?.cloneNode(true) as HTMLElement | undefined;
-    copy?.removeAttribute('style');
-    return copy?.outerHTML ?? '';
-  });
-  expect(pill, 'the reference holds the same import mode pill as the Studio').toBe(IMPORT_MODE_PILL);
-  await ref.evaluate(() => {
-    const added = document.getElementById('imMode');
-    const importBtn = document.getElementById('importBtn');
-    if (added && importBtn) added.style.display = importBtn.style.display;
-  });
+  // `#imAs`, an owner addition, appears only once a file has been imported, which no scene does.
+  expect(await studio.evaluate(() => !document.getElementById('imAs')), 'no scene shows the import reading pill').toBe(true);
   await ref.evaluate(stripHintStory);
   await studio.evaluate(stripHintStory);
   const hints = await Promise.all([ref, studio].map((p) => p.evaluate(() => document.querySelector('.hint')?.textContent ?? '')));
@@ -212,7 +193,6 @@ export async function alignClock(page: Page): Promise<void> {
 
 export async function openReference(page: Page): Promise<void> {
   await prepare(page, { seedMathRandom: true });
-  await page.addInitScript(ADD_IMPORT_MODE_PILL);
   await page.goto(REFERENCE_URL);
   await page.waitForSelector('canvas#brain');
   await alignClock(page);

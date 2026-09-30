@@ -1,15 +1,15 @@
 /**
  * The tool row above the teach bar. Markup from reference/ontaix-studio-reference.html lines
  * 194-201 without the Finalise all button; behaviours from lines 548-565 (arrange, coverage,
- * skip), 616 (add a company) and 904-906 (import, drag and drop). The file is read with the
- * mode `#imMode` shows.
+ * skip), 616 (add a company) and 904-906 (import, drag and drop). The file is read the way
+ * its detection says; `#imAs` reads it another way.
  */
 import { useEffect, useRef } from 'react';
 
-import { importDocument } from '../teach/teach';
+import { importFile } from '../teach/importFile';
 import { openAddCompany } from './AddCompany';
 import { useDelayed } from './busy';
-import { IMPORT_ACCEPT, ImportModePill, importMode } from './ImportMode';
+import { IMPORT_ACCEPT, ImportAsPill } from './ImportAs';
 import { useStore } from './dom';
 
 export function Tools() {
@@ -23,7 +23,7 @@ export function Tools() {
     const drop = (e: DragEvent) => {
       e.preventDefault();
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) void importDocument(f, importMode());
+      if (f) void importFile(f);
     };
     addEventListener('dragover', over);
     addEventListener('drop', drop);
@@ -74,10 +74,10 @@ export function Tools() {
         onChange={(e) => {
           const f = e.currentTarget.files?.[0];
           e.currentTarget.value = '';
-          if (f) void importDocument(f, importMode());
+          if (f) void importFile(f);
         }}
       />
-      <ImportModePill hidden={!!settings && !settings.importDocs} />
+      <ImportAsPill hidden={!!settings && !settings.importDocs} />
       <button type="button" id="arrange" title={st.arrangeTitle()} onClick={() => st.arrange()}>
         <svg viewBox="0 0 16 16">
           <circle cx="8" cy="3" r="1.6" />
