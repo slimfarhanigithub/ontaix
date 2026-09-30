@@ -4,11 +4,15 @@ The teach pipeline sees an ordinary `LlmClient`. Each case runs in its own async
 opens its own recording with `record_calls()`; the calls made while serving that case land in
 that list, so cases can run concurrently against one shared client. Every call's cost is
 charged to the run's `Budget`; once it is spent, calls are refused as a provider error that
-names the budget, and no further case is started.
+names the budget, and no further case is started. A call the provider refuses with status 429
+(its rate limit, a property of the deployment's quota, not of the model) is recorded and tried
+again after a pause, up to RATE_LIMIT_RETRIES times, so a small quota does not turn into
+comprehension failures; the recorded calls keep the refusals countable.
 """
 
 from __future__ import annotations
 
+import asyncio
 from contextvars import ContextVar
 from dataclasses import dataclass
 
@@ -21,6 +25,8 @@ from app.clients.llm_client import (
 )
 
 BUDGET_REASON = "budget"
+RATE_LIMIT_RETRIES = 4
+RATE_LIMIT_PAUSE_SECONDS = 15.0
 
 
 @dataclass
@@ -73,21 +79,28 @@ class RecordingLlmClient:
             if calls is not None:
                 calls.append(RecordedCall(0, 0, 0.0, 0, BUDGET_REASON))
             raise LlmProviderError(BUDGET_REASON)
-        try:
-            answer = await self.inner.complete(request)
-        except LlmCallError as exc:
-            self._budget.charge(exc.cost_eur)
-            if calls is not None:
-                calls.append(
-                    RecordedCall(
-                        exc.input_tokens,
-                        exc.output_tokens,
-                        exc.cost_eur,
-                        exc.latency_ms,
-                        f"{type(exc).__name__}: {exc}",
+        attempt = 0
+        while True:
+            try:
+                answer = await self.inner.complete(request)
+                break
+            except LlmCallError as exc:
+                self._budget.charge(exc.cost_eur)
+                limited = _rate_limited(exc)
+                if calls is not None:
+                    calls.append(
+                        RecordedCall(
+                            exc.input_tokens,
+                            exc.output_tokens,
+                            exc.cost_eur,
+                            exc.latency_ms,
+                            f"{type(exc).__name__}: {'rate limited' if limited else exc}",
+                        )
                     )
-                )
-            raise
+                if not limited or attempt >= RATE_LIMIT_RETRIES:
+                    raise
+            attempt += 1
+            await asyncio.sleep(RATE_LIMIT_PAUSE_SECONDS * attempt)
         self._budget.charge(answer.cost_eur)
         if calls is not None:
             calls.append(
@@ -96,3 +109,8 @@ class RecordingLlmClient:
                 )
             )
         return answer
+
+
+def _rate_limited(exc: LlmCallError) -> bool:
+    """Whether the provider refused the call with status 429."""
+    return getattr(exc.__cause__, "status_code", None) == 429

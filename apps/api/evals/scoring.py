@@ -11,16 +11,22 @@ parents (an ontology class may have several). The path is right when every step 
 concept up to the company root goes through a parent the case accepts for that step, so a
 concept placed under an invented or missing intermediate has a wrong path even when its label
 and verb are right. The parent is right at the right depth when it is accepted and the concept
-sits at its expected level in the drafted tree. A drafted concept that matches nothing expected,
-optional or pre-existing is invented; one that repeats a pre-existing concept or an earlier
-draft is invented too and listed as a duplicate. A missing branch is a missed concept whose
-parent was found (or is the root): the top of a subtree the drafts never reached.
+sits in the drafted tree at a level one of its accepted paths from the root gives it, so a
+concept with several accepted parents at different levels is right under any of them. A
+drafted concept that matches nothing expected, optional or pre-existing is invented; one that
+repeats a pre-existing concept or an earlier draft is invented too and listed as a duplicate.
+A missing branch is a missed concept whose parent was found (or is the root): the top of a
+subtree the drafts never reached.
 
 Relations: a drafted relation matches an expected one when it joins the same two concepts, in
 either direction; the action is checked against `action` read forward or `inverse` read
 backward. An expected relation may also be satisfied by a drafted concept born from one end with
 the other as its label, which is how the pipeline records a relation to a concept that did not
 exist yet.
+
+Attributes: a drafted taught attribute matches an expected one when it is on the same concept
+with an accepted value (normalised like a label); its name is not compared. The others are
+invented attributes, and expected ones never drafted are missed attributes.
 
 Levels: an expected concept's level is its shortest distance from the company root; a drafted
 concept's level is its distance in the tree the drafts build on top of the existing concepts.
@@ -38,7 +44,7 @@ from dataclasses import dataclass, field
 from functools import cache
 
 from app.utilities.teach_parser import singular
-from evals.teach_case import ExpectedConcept, ExpectedRelation, TeachCase
+from evals.teach_case import ExpectedAttribute, ExpectedConcept, ExpectedRelation, TeachCase
 
 _LEADING_WORDS = frozenset({"the", "a", "an", "our", "its", "their", "each", "every", "all"})
 _NOT_WORD = re.compile(r"[^\w\s]")
@@ -92,6 +98,15 @@ class PredictedRelation:
     action: str
 
 
+@dataclass(frozen=True)
+class PredictedAttribute:
+    """A drafted taught attribute: its concept's label, its name and its value."""
+
+    concept: str
+    name: str
+    value: str
+
+
 @dataclass
 class LevelScore:
     """One tree level of one case. `correct` counts expected concepts of this level that were
@@ -141,6 +156,11 @@ class CaseScore:
     relation_action_correct: int = 0
     invented_relations: list[str] = field(default_factory=list)
     missed_relations: list[str] = field(default_factory=list)
+    attributes_expected: int = 0
+    attributes_predicted: int = 0
+    attributes_matched: int = 0
+    invented_attributes: list[str] = field(default_factory=list)
+    missed_attributes: list[str] = field(default_factory=list)
     depth_expected: int = 0
     depth_achieved: int = 0
     levels: dict[int, LevelScore] = field(default_factory=dict)
@@ -196,6 +216,7 @@ def score_case(
     concepts: list[PredictedConcept],
     relations: list[PredictedRelation],
     source_text: str,
+    attributes: list[PredictedAttribute] | None = None,
 ) -> CaseScore:
     """The case's score; the case must carry expectations."""
     if case.expected is None:
@@ -216,6 +237,7 @@ def score_case(
     score.relations_predicted = len(relations)
 
     satisfying = _score_relations(case.expected.relations, concepts, relations, canon, score)
+    _score_attributes(case.expected.attributes, attributes or [], canon, score)
 
     matched: dict[str, PredictedConcept] = {}
     counted: list[str] = []
@@ -238,6 +260,7 @@ def score_case(
 
     drafted = _drafted_parents(canon, case, concepts)
     expected_level = _levels(canon, accepted)
+    possible_levels = _possible_levels(canon, accepted)
     drafted_level = _levels(canon, {k: {v} for k, v in drafted.items()})
     right_path: set[str] = set()
     for n, e in expected.items():
@@ -247,11 +270,12 @@ def score_case(
             continue
         if canon.of(p.parent) in accepted[n]:
             score.parent_correct += 1
-            if drafted_level(n) == expected_level(n):
+            want = possible_levels(n)
+            if drafted_level(n) in want:
                 score.parent_at_depth += 1
             else:
                 score.wrong_depth.append(
-                    f"{e.label}: level {drafted_level(n)}, want {expected_level(n)}"
+                    f"{e.label}: level {drafted_level(n)}, want {' or '.join(map(str, want))}"
                 )
         else:
             score.wrong_parent.append(f"{e.label}: got {p.parent}, want {' | '.join(e.parent)}")
@@ -361,6 +385,28 @@ def _levels(canon: _Canon, parents: dict[str, set[str]]) -> Callable[[str], int]
     return level
 
 
+def _possible_levels(canon: _Canon, parents: dict[str, set[str]]) -> Callable[[str], list[int]]:
+    """A function giving every level a label can have through `parents`, one per accepted path
+    from the root, ascending; a parent the tree does not know counts as the root, and a path
+    through a cycle gives no level."""
+    memo: dict[str, frozenset[int]] = {canon.root: frozenset({0})}
+    visiting: set[str] = set()
+
+    def levels(n: str) -> frozenset[int]:
+        if n in memo:
+            return memo[n]
+        if n in visiting:
+            return frozenset()
+        visiting.add(n)
+        ups = [p for p in parents.get(n, set()) if p in parents or p == canon.root]
+        found = frozenset(level + 1 for p in ups for level in levels(p)) if ups else {1}
+        visiting.discard(n)
+        memo[n] = frozenset(found)
+        return memo[n]
+
+    return lambda n: sorted(levels(n))
+
+
 def _path_ok(canon: _Canon, n: str, drafted: dict[str, str], accepted: dict[str, set[str]]) -> bool:
     node, seen = n, {n}
     while node != canon.root:
@@ -443,6 +489,33 @@ def _score_relations(
     score.relation_precision = _ratio(score.relations_matched, predicted)
     score.relation_recall = _ratio(score.relations_matched, len(expected))
     return satisfying
+
+
+def _score_attributes(
+    expected: list[ExpectedAttribute],
+    attributes: list[PredictedAttribute],
+    canon: _Canon,
+    score: CaseScore,
+) -> None:
+    open_: list[ExpectedAttribute] = list(expected)
+    score.attributes_expected = len(expected)
+    score.attributes_predicted = len(attributes)
+    for a in attributes:
+        concept, value = canon.of(a.concept), normalise_label(a.value)
+        found = next(
+            (
+                e
+                for e in open_
+                if canon.of(e.concept) == concept and value in {normalise_label(v) for v in e.value}
+            ),
+            None,
+        )
+        if found is None:
+            score.invented_attributes.append(f"{a.concept} {a.name} {a.value}")
+            continue
+        open_.remove(found)
+        score.attributes_matched += 1
+    score.missed_attributes = [f"{e.concept} {e.value[0]}" for e in open_]
 
 
 def _take(open_: list[ExpectedRelation], canon: _Canon, a: str, b: str) -> ExpectedRelation | None:

@@ -16,6 +16,7 @@ from evals.input_modes import DocumentCache, InputMode, ModeUnavailable
 from evals.recording_llm_client import RecordedCall, record_calls
 from evals.scoring import (
     CaseScore,
+    PredictedAttribute,
     PredictedConcept,
     PredictedRelation,
     drafted_depth,
@@ -42,6 +43,7 @@ class CaseResult:
     usage: CaseUsage = field(default_factory=CaseUsage)
     concepts: list[PredictedConcept] = field(default_factory=list)
     relations: list[PredictedRelation] = field(default_factory=list)
+    attributes: list[PredictedAttribute] = field(default_factory=list)
     other_drafts: int = 0
     score: CaseScore | None = None
     drafted_depth: int = 0
@@ -74,9 +76,12 @@ async def run_case(
         result.units, result.document = output.units, output.document
         labels = await ws.labels()
         drafts = [d for u in output.units for d in u.drafts]
-        result.concepts, result.relations, result.other_drafts = predictions(drafts, labels)
+        predicted = predictions(drafts, labels)
+        result.concepts, result.relations, result.attributes, result.other_drafts = predicted
         if case.expected is not None:
-            result.score = score_case(case, result.concepts, result.relations, output.source_text)
+            result.score = score_case(
+                case, result.concepts, result.relations, output.source_text, result.attributes
+            )
         result.drafted_depth = drafted_depth(case, result.concepts)
     except ModeUnavailable as exc:
         result.skipped = str(exc)
@@ -91,10 +96,12 @@ async def run_case(
 
 def predictions(
     drafts: list[dict[str, Any]], labels: dict[str, str]
-) -> tuple[list[PredictedConcept], list[PredictedRelation], int]:
-    """Drafted concepts, specs and relations with every id turned into its label."""
+) -> tuple[list[PredictedConcept], list[PredictedRelation], list[PredictedAttribute], int]:
+    """Drafted concepts, specs, relations and taught attributes with every id turned into its
+    label."""
     concepts: list[PredictedConcept] = []
     relations: list[PredictedRelation] = []
+    attributes: list[PredictedAttribute] = []
     other = 0
 
     def label(concept_id: str | None, fallback: str | None) -> str:
@@ -122,9 +129,17 @@ def predictions(
                     d.get("action") or "",
                 )
             )
+        elif kind == "attr" and d.get("value") is not None:
+            attributes.append(
+                PredictedAttribute(
+                    label(d.get("conceptId"), d.get("conceptLabel")),
+                    d.get("name") or "",
+                    d["value"],
+                )
+            )
         else:
             other += 1
-    return concepts, relations, other
+    return concepts, relations, attributes, other
 
 
 def usage_of(result: CaseResult) -> CaseUsage:

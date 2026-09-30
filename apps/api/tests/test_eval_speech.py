@@ -8,11 +8,14 @@ import uuid
 import httpx
 import pytest
 
+from app.clients.llm_client import LlmAnswer, LlmProviderError, LlmRequest
+from evals import recording_llm_client
 from evals.candidate import RunConfig
 from evals.case_runner import CaseResult
 from evals.input_modes import DocumentCache, SpeechMode
+from evals.recording_llm_client import Budget, RecordingLlmClient, record_calls
 from evals.report import RunRecord, markdown, speech_rows
-from evals.scoring import PredictedConcept, score_case
+from evals.scoring import PredictedAttribute, PredictedConcept, score_case
 from evals.stages import ConfigRun, StageResult
 from evals.teach_bakeoff import _eligibility
 from evals.teach_case import MAX_SPOKEN_SENTENCE_CHARS, TeachCase
@@ -135,3 +138,69 @@ def test_the_markdown_report_lists_speech_rows() -> None:
     record = RunRecord("now", True, 1.0, 0.0, {}, [RECORDING], [], [], [stage])
 
     assert "### Screening Speech Comprehension" in markdown(record)
+
+
+def test_attributes_score_by_concept_and_value() -> None:
+    data = RECORDING.model_dump(by_alias=True)
+    data["expected"]["attributes"] = [
+        {"concept": "Cold store", "value": ["minus 20 degrees"]},
+        {"concept": "Depot", "value": ["monthly"]},
+    ]
+    case = TeachCase.model_validate(data)
+    drafted = [
+        PredictedAttribute("Cold store", "temperature", "Minus 20 degrees"),
+        PredictedAttribute("Chilled bays", "billing", "monthly"),
+    ]
+
+    score = score_case(case, [], [], " ".join(case.input), drafted)
+
+    assert (score.attributes_expected, score.attributes_matched) == (2, 1)
+    assert score.invented_attributes == ["Chilled bays billing monthly"]
+    assert score.missed_attributes == ["Depot monthly"]
+
+
+class _Throttled(Exception):
+    status_code = 429
+
+
+class _Inner:
+    provider = "fake"
+    model = "fake"
+
+    def __init__(self, refusals: int) -> None:
+        self.refusals = refusals
+
+    def estimate_input_tokens(self, request: LlmRequest) -> int:
+        return 1
+
+    async def complete(self, request: LlmRequest) -> LlmAnswer:
+        if self.refusals:
+            self.refusals -= 1
+            raise LlmProviderError("status") from _Throttled()
+        return LlmAnswer("{}", 10, 5, 0.001, 3)
+
+
+async def test_a_rate_limited_call_is_recorded_and_tried_again(monkeypatch) -> None:
+    monkeypatch.setattr(recording_llm_client, "RATE_LIMIT_PAUSE_SECONDS", 0)
+    calls = record_calls()
+    client = RecordingLlmClient(_Inner(refusals=2), Budget(1.0))
+
+    answer = await client.complete(LlmRequest("s", "u", {}, 10, 1.0))
+
+    assert answer.text == "{}"
+    assert [c.error for c in calls] == [
+        "LlmProviderError: rate limited",
+        "LlmProviderError: rate limited",
+        None,
+    ]
+
+
+async def test_rate_limit_retries_are_bounded(monkeypatch) -> None:
+    monkeypatch.setattr(recording_llm_client, "RATE_LIMIT_PAUSE_SECONDS", 0)
+    record_calls()
+    client = RecordingLlmClient(
+        _Inner(refusals=recording_llm_client.RATE_LIMIT_RETRIES + 1), Budget(1.0)
+    )
+
+    with pytest.raises(LlmProviderError):
+        await client.complete(LlmRequest("s", "u", {}, 10, 1.0))

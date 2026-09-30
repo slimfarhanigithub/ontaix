@@ -3207,101 +3207,6 @@
    }
   },
   {
-   "id": "goodrelations-location-examples",
-   "source": {
-    "set": "benchmark",
-    "id": "goodrelations"
-   },
-   "tags": [
-    "document",
-    "benchmark",
-    "is-a",
-    "reuse"
-   ],
-   "input": {
-    "mode": "document",
-    "company": "GoodRelations",
-    "sentence": "A location is a point or area of interest from which a particular product or service is available, e.g. a store, a bus stop, a gas station, or a ticket booth.",
-    "candidates": [
-     {
-      "handle": "c0",
-      "label": "GoodRelations",
-      "parent": null
-     },
-     {
-      "handle": "c1",
-      "label": "Location",
-      "parent": "c0"
-     }
-    ]
-   },
-   "output": {
-    "intents": [
-     {
-      "kind": "spec",
-      "subject": {
-       "newLabel": "Store"
-      },
-      "object": {
-       "candidate": "c1"
-      },
-      "confidence": 0.9,
-      "span": "a store",
-      "source": {
-       "start": 104,
-       "end": 111
-      }
-     },
-     {
-      "kind": "spec",
-      "subject": {
-       "newLabel": "Bus stop"
-      },
-      "object": {
-       "candidate": "c1"
-      },
-      "confidence": 0.9,
-      "span": "a bus stop",
-      "source": {
-       "start": 113,
-       "end": 123
-      }
-     },
-     {
-      "kind": "spec",
-      "subject": {
-       "newLabel": "Gas station"
-      },
-      "object": {
-       "candidate": "c1"
-      },
-      "confidence": 0.9,
-      "span": "a gas station",
-      "source": {
-       "start": 125,
-       "end": 138
-      }
-     },
-     {
-      "kind": "spec",
-      "subject": {
-       "newLabel": "Ticket booth"
-      },
-      "object": {
-       "candidate": "c1"
-      },
-      "confidence": 0.9,
-      "span": "a ticket booth",
-      "source": {
-       "start": 143,
-       "end": 157
-      }
-     }
-    ],
-    "unresolved": []
-   }
-  },
-  {
    "id": "goodrelations-location-parts",
    "source": {
     "set": "benchmark",
@@ -3477,72 +3382,6 @@
    }
   },
   {
-   "id": "goodrelations-identifier",
-   "source": {
-    "set": "benchmark",
-    "id": "goodrelations"
-   },
-   "tags": [
-    "document",
-    "benchmark",
-    "reuse"
-   ],
-   "input": {
-    "mode": "document",
-    "company": "GoodRelations",
-    "sentence": "The Global Location Number is a thirteen-digit number used to identify parties and physical locations.",
-    "candidates": [
-     {
-      "handle": "c0",
-      "label": "GoodRelations",
-      "parent": null
-     },
-     {
-      "handle": "c1",
-      "label": "Global Location Number",
-      "parent": "c0"
-     }
-    ]
-   },
-   "output": {
-    "intents": [
-     {
-      "kind": "rel",
-      "subject": {
-       "candidate": "c1"
-      },
-      "action": "identifies",
-      "object": {
-       "newLabel": "Parties"
-      },
-      "confidence": 0.9,
-      "span": "The Global Location Number is a thirteen-digit number used to identify parties",
-      "source": {
-       "start": 0,
-       "end": 78
-      }
-     },
-     {
-      "kind": "rel",
-      "subject": {
-       "candidate": "c1"
-      },
-      "action": "identifies",
-      "object": {
-       "newLabel": "Physical locations"
-      },
-      "confidence": 0.9,
-      "span": "physical locations",
-      "source": {
-       "start": 83,
-       "end": 101
-      }
-     }
-    ],
-    "unresolved": []
-   }
-  },
-  {
    "id": "goodrelations-warranty-promise",
    "source": {
     "set": "benchmark",
@@ -3625,7 +3464,7 @@
     "speech",
     "back-reference",
     "multi-turn",
-    "property",
+    "attribute",
     "fillers"
    ],
    "input": {
@@ -3682,6 +3521,22 @@
    "output": {
     "intents": [
      {
+      "kind": "attr",
+      "subject": {
+       "candidate": "c3"
+      },
+      "attributeName": "billing",
+      "attributeValue": "per hour",
+      "confidence": 0.85,
+      "explanation": "the coaching sessions: Coaching from the earlier turn",
+      "span": "the coaching sessions are billed per hour",
+      "source": {
+       "start": 0,
+       "end": 41
+      },
+      "segment": 0
+     },
+     {
       "kind": "rel",
       "subject": {
        "newLabel": "Brenmoor College"
@@ -3718,17 +3573,7 @@
       "segment": 1
      }
     ],
-    "unresolved": [
-     {
-      "text": "the coaching sessions are billed per hour",
-      "reason": "not_understood",
-      "segment": 0,
-      "source": {
-       "start": 0,
-       "end": 41
-      }
-     }
-    ],
+    "unresolved": [],
     "segments": [
      {
       "index": 0,
@@ -3861,6 +3706,345 @@
       "index": 0,
       "start": 0,
       "end": 64
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-possessive-after-buyer-and-attribute",
+   "source": {
+    "set": "case",
+    "id": "en-speech-recording-billing-drilldown"
+   },
+   "tags": [
+    "speech",
+    "back-reference",
+    "multi-turn",
+    "attribute",
+    "role-pattern",
+    "grouping",
+    "fillers"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Halden Labs",
+    "sentence": "the field ones are charged per visit and um its plants Kelso and Brant buy lab tests",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Halden Labs",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Testing services",
+      "parent": "c0",
+      "pending": true
+     },
+     {
+      "handle": "c2",
+      "label": "Lab tests",
+      "parent": "c1",
+      "pending": true
+     },
+     {
+      "handle": "c3",
+      "label": "Field tests",
+      "parent": "c1",
+      "pending": true
+     },
+     {
+      "handle": "c4",
+      "label": "Arkwright Water",
+      "parent": "c2",
+      "pending": true
+     }
+    ],
+    "sessionTurns": [
+     {
+      "sentence": "Halden Labs sells testing services to its clients",
+      "referenced": [
+       "c0"
+      ],
+      "introduced": [
+       "c1",
+       "Clients"
+      ]
+     },
+     {
+      "sentence": "the testing services are split into lab tests and field tests",
+      "referenced": [
+       "c1"
+      ],
+      "introduced": [
+       "c2",
+       "c3"
+      ]
+     },
+     {
+      "sentence": "Arkwright Water buys both of them",
+      "referenced": [
+       "c2",
+       "c3"
+      ],
+      "introduced": [
+       "c4"
+      ]
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "attr",
+      "subject": {
+       "candidate": "c3"
+      },
+      "attributeName": "charge",
+      "attributeValue": "per visit",
+      "confidence": 0.85,
+      "explanation": "the field ones: Field tests from an earlier turn",
+      "span": "the field ones are charged per visit",
+      "source": {
+       "start": 0,
+       "end": 36
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c4"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Plants"
+      },
+      "members": [
+       {
+        "newLabel": "Kelso"
+       },
+       {
+        "newLabel": "Brant"
+       }
+      ],
+      "memberAction": "includes",
+      "confidence": 0.85,
+      "explanation": "its: Arkwright Water, the buyer of the previous turn, not Halden Labs",
+      "span": "its plants Kelso and Brant",
+      "source": {
+       "start": 44,
+       "end": 70
+      },
+      "segment": 1
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Kelso"
+      },
+      "action": "buys",
+      "object": {
+       "candidate": "c2"
+      },
+      "confidence": 0.9,
+      "span": "Kelso and Brant buy lab tests",
+      "source": {
+       "start": 55,
+       "end": 84
+      },
+      "segment": 1
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Brant"
+      },
+      "action": "buys",
+      "object": {
+       "candidate": "c2"
+      },
+      "confidence": 0.9,
+      "span": "Brant buy lab tests",
+      "source": {
+       "start": 65,
+       "end": 84
+      },
+      "segment": 1
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 0,
+      "end": 36
+     },
+     {
+      "index": 1,
+      "start": 44,
+      "end": 84
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-each-of-them-and-back-up",
+   "source": {
+    "set": "case",
+    "id": "en-speech-recording-under-each"
+   },
+   "tags": [
+    "speech",
+    "back-reference",
+    "multi-turn",
+    "deep-chain",
+    "fillers"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Maresby Printing",
+    "sentence": "each of them has a press operator and uh going back to the bindery it does folding and stitching",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Maresby Printing",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Press hall",
+      "parent": "c0",
+      "pending": true
+     },
+     {
+      "handle": "c2",
+      "label": "Bindery",
+      "parent": "c0",
+      "pending": true
+     },
+     {
+      "handle": "c3",
+      "label": "Sheet presses",
+      "parent": "c1",
+      "pending": true
+     },
+     {
+      "handle": "c4",
+      "label": "Web presses",
+      "parent": "c1",
+      "pending": true
+     }
+    ],
+    "sessionTurns": [
+     {
+      "sentence": "Maresby Printing runs a press hall and a bindery",
+      "referenced": [
+       "c0"
+      ],
+      "introduced": [
+       "c1",
+       "c2"
+      ]
+     },
+     {
+      "sentence": "under the press hall there are sheet presses and web presses",
+      "referenced": [
+       "c1"
+      ],
+      "introduced": [
+       "c3",
+       "c4"
+      ]
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c3"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Press operator"
+      },
+      "confidence": 0.85,
+      "explanation": "each of them: Sheet presses and Web presses from the previous turn",
+      "span": "each of them has a press operator",
+      "source": {
+       "start": 0,
+       "end": 33
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c4"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Press operator"
+      },
+      "confidence": 0.85,
+      "explanation": "each of them: Sheet presses and Web presses from the previous turn",
+      "span": "each of them has a press operator",
+      "source": {
+       "start": 0,
+       "end": 33
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "does",
+      "object": {
+       "newLabel": "Folding"
+      },
+      "confidence": 0.9,
+      "explanation": "going back to the bindery: the speaker returns to Bindery",
+      "span": "the bindery it does folding",
+      "source": {
+       "start": 55,
+       "end": 82
+      },
+      "segment": 1
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "does",
+      "object": {
+       "newLabel": "Stitching"
+      },
+      "confidence": 0.9,
+      "explanation": "going back to the bindery: the speaker returns to Bindery",
+      "span": "the bindery it does folding and stitching",
+      "source": {
+       "start": 55,
+       "end": 96
+      },
+      "segment": 1
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 0,
+      "end": 33
+     },
+     {
+      "index": 1,
+      "start": 41,
+      "end": 96
      }
     ]
    }

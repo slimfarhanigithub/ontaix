@@ -4,9 +4,13 @@ One Messages API call per request, with the answer constrained to the request's 
 (structured outputs). `complete_messages` holds the call so that the Foundry-hosted Claude
 client makes it the same way. The wall clock of a call - DNS, connect, TLS, sending and reading
 the last byte - is bounded by `asyncio.timeout` on top of the SDK's own timeout, and the SDK's
-retries are 0, so a call never takes longer than the configured timeout. Structured outputs
-keep optional properties optional, and Claude writes an empty string or list for one it means
-to leave out; those are removed from the answer, so it has the shape the API validates. The
+retries are 0, so a call never takes longer than the configured timeout. The schema is sent in
+its required form: every property required, an optional string or list written empty when
+unset and any other optional property nullable, within Claude's cap of 16 union-typed
+properties. With optional properties left optional, Claude drops properties it needs (a `rel`
+intent without its `object`) and fills others with invented values, so most answers fail
+validation. The `null` values and the empty strings and lists written for unset optional
+properties are removed from the answer, so it has the shape the API validates. The
 system prompt carries a `cache_control` breakpoint, so a provider holding it in its prompt
 cache reads it at a tenth of the input price instead of processing it again; cache writes cost
 1.25 times the input price. The SDK and HTTP loggers are held at WARNING and filtered, so
@@ -35,7 +39,11 @@ from app.clients.llm_client import (
 )
 from app.clients.llm_log_redaction import protect_loggers
 from app.config import ModelPrice
-from app.utilities.strict_json_schema import drop_optional_empties, to_strict
+from app.utilities.strict_json_schema import (
+    drop_optional_empties,
+    drop_optional_nulls,
+    to_required_form,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +88,9 @@ async def complete_messages(
     thinking and effort parameters of the caller's model. Any client of the Anthropic SDK
     (first-party or Foundry) is used the same way."""
     started = time.monotonic()
+    required, _ = to_required_form(request.output_schema)
     output_config: dict[str, Any] = {
-        "format": {"type": "json_schema", "schema": request.output_schema},
+        "format": {"type": "json_schema", "schema": required},
         **options.get("output_config", {}),
     }
     extra = {k: v for k, v in options.items() if k != "output_config"}
@@ -144,14 +153,15 @@ async def complete_messages(
 
 
 def _without_optional_empties(text: str, schema: dict[str, Any]) -> str:
-    """The answer without the empty strings and lists Claude writes for optional properties it
-    leaves unset; text that is not JSON is returned as is."""
+    """The answer without the `null` values, empty strings and empty lists Claude writes for
+    optional properties it leaves unset; text that is not JSON is returned as is."""
     try:
         data = json.loads(text)
     except ValueError:
         return text
-    _, optional = to_strict(schema)
-    return json.dumps(drop_optional_empties(data, optional), ensure_ascii=False)
+    _, optional = to_required_form(schema)
+    kept = drop_optional_empties(drop_optional_nulls(data, optional), optional)
+    return json.dumps(kept, ensure_ascii=False)
 
 
 def cached_cost_eur(

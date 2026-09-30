@@ -1,5 +1,5 @@
 {
-  "rule": "LEARN: the GoodRelations, PROV-O and DCAT 3 benchmarks and a stratified half of the non-private bake-off cases (short cases and documents). TEST: the W3C Organization, SOSA/SSN, Time Ontology and ValueFlows benchmarks, the other half, and everything under tests/private. Strata are (kind, language, primary stress tag); inside a stratum ids are ordered by SHA-256 of the id and alternate between the sets, the first going to the set with fewer members of that kind. Cases whose text the extraction instructions already quote are LEARN; the adversarial documents and the multi-sentence spoken recordings are TEST. Worked examples come from LEARN only. Benchmarks are named by their folder under evals/benchmarks; each yields one case, benchmarks-<folder>-<document name>.",
+  "rule": "LEARN: the GoodRelations, PROV-O and DCAT 3 benchmarks and a stratified half of the non-private bake-off cases (short cases and documents). TEST: the W3C Organization, SOSA/SSN, Time Ontology and ValueFlows benchmarks, the other half, and everything under tests/private. Strata are (kind, language, primary stress tag); inside a stratum ids are ordered by SHA-256 of the id and alternate between the sets, the first going to the set with fewer members of that kind. Cases whose text the extraction instructions already quote are LEARN; the adversarial documents and the multi-sentence spoken recordings of teach_cases.yaml are TEST. The spoken narrations of evals/cases/speech_recordings.yaml follow their benchmark's set; the owner's own recording (which the extraction instructions quote) and the two recordings written for tuning are LEARN. Worked examples come from LEARN only. Benchmarks are named by their folder under evals/benchmarks; each yields one case, benchmarks-<folder>-<document name>.",
   "learn": {
     "benchmarks": [
       "goodrelations",
@@ -17,8 +17,14 @@
       "en-speech-grouping-offerings",
       "en-speech-grouping-teams-corrected",
       "en-speech-hesitation-month-end",
+      "en-speech-narration-dcat-catalogs",
+      "en-speech-narration-goodrelations-offerings",
+      "en-speech-narration-prov-o-starting-points",
       "en-speech-owner-adnoc-client",
+      "en-speech-owner-financial-services",
       "en-speech-product-structure",
+      "en-speech-recording-billing-drilldown",
+      "en-speech-recording-under-each",
       "en-speech-retail-monologue",
       "en-text-adr-owner-sentences",
       "en-text-back-reference-those",
@@ -70,6 +76,9 @@
       "en-speech-grouping-count-corrected",
       "en-speech-is-a-elliptical",
       "en-speech-it-relations",
+      "en-speech-narration-org-structure",
+      "en-speech-narration-ssn-observations",
+      "en-speech-narration-valueflows-processes",
       "en-speech-question-aside",
       "en-speech-recording-correction",
       "en-speech-recording-depot",

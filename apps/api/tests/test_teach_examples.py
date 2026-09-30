@@ -159,24 +159,13 @@ def test_no_example_comes_from_test_material() -> None:
 
 
 def test_no_example_shares_a_phrase_with_test_material() -> None:
-    import yaml
-
-    cases = yaml.safe_load((EVALS / "cases" / "teach_cases.yaml").read_text(encoding="utf-8"))
-    held_out: list[str] = []
-    for case in cases["cases"]:
-        if case["id"] in SPLIT["test"]["cases"]:
-            given = case["input"]
-            held_out.extend([given] if isinstance(given, str) else given)
-    for name in SPLIT["test"]["cases"]:
-        document = EVALS / "documents" / f"{name}.md"
-        if document.is_file():
-            held_out.append(document.read_text(encoding="utf-8"))
-    for benchmark in SPLIT["test"]["benchmarks"]:
-        for document in sorted((EVALS / "benchmarks" / benchmark).glob("*.md")):
-            held_out.append(document.read_text(encoding="utf-8"))
+    held_out = _held_out()
     held = set().union(*(_shingles(t) for t in held_out))
     for example in ALL_EXAMPLES:
-        assert not _shingles(example["input"]["sentence"]) & held, example["id"]
+        # Every turn a multi-turn example shows, not only its final sentence.
+        turns = [t["sentence"] for t in example["input"].get("sessionTurns", [])]
+        for text in [*turns, example["input"]["sentence"]]:
+            assert not _shingles(text) & held, (example["id"], text)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -206,6 +195,30 @@ async def test_the_prefix_is_byte_stable_and_the_examples_follow_it(
         bare = LlmRequest(request.system, without, request.output_schema, 0, 0)
         added = sum(example_tokens(e) for e in data["examples"])
         assert estimate_tokens(request) >= estimate_tokens(bare) + added - len(data["examples"]) * 2
+
+
+def test_the_instructions_share_no_phrase_with_test_material() -> None:
+    held = set().union(*(_shingles(t) for t in _held_out()))
+    assert not _shingles(teach_extraction._INSTRUCTIONS) & held
+
+
+def _held_out() -> list[str]:
+    import yaml
+
+    held_out: list[str] = []
+    for path in sorted((EVALS / "cases").glob("*.yaml")):
+        for case in yaml.safe_load(path.read_text(encoding="utf-8"))["cases"]:
+            if case["id"] in SPLIT["test"]["cases"]:
+                given = case["input"]
+                held_out.extend([given] if isinstance(given, str) else given)
+    for name in SPLIT["test"]["cases"]:
+        document = EVALS / "documents" / f"{name}.md"
+        if document.is_file():
+            held_out.append(document.read_text(encoding="utf-8"))
+    for benchmark in SPLIT["test"]["benchmarks"]:
+        for document in sorted((EVALS / "benchmarks" / benchmark).glob("*.md")):
+            held_out.append(document.read_text(encoding="utf-8"))
+    return held_out
 
 
 def _shingles(text: str, n: int = 6) -> set[tuple[str, ...]]:

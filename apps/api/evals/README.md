@@ -59,7 +59,11 @@ Documents: txt, md, html, docx, pdf, scanned pdf (OCR when `candidates.yaml` nam
 
 ## Speech Comprehension
 
-Each stage of the report has a Speech Comprehension table, and the JSON record a `speechComprehension` list, with one row per speech case, configuration and repeat, scored on the recording's final drafts: parent correctness (expected concepts drafted under an accepted parent at the expected level), verb accuracy (matched concepts with an accepted verb), relation accuracy (expected relations drafted with an accepted verb), depth reached against the gold depth, and the invented and missed labels.
+Each stage of the report has a Speech Comprehension table, and the JSON record a `speechComprehension` list, with one row per speech case, configuration and repeat, scored on the recording's final drafts: parent correctness (expected concepts drafted under an accepted parent at a level one of its accepted paths gives it), verb accuracy (matched concepts with an accepted verb), relation accuracy (expected relations drafted with an accepted verb), attribute accuracy (expected taught attributes, `expected.attributes` with `concept` and accepted `value`s, drafted on the right concept with an accepted value), depth reached against the gold depth, and the invented and missed labels.
+
+`evals/cases/speech_recordings.yaml` holds the speech tuning set: spoken narrations of sections of the org, ssn and valueflows benchmarks (TEST), and as LEARN the owner's own recording, narrations of the goodrelations, prov-o and dcat benchmarks and two recordings written for tuning. `app/ai/examples/split.json` assigns each case to LEARN or TEST.
+
+A call the provider refuses with status 429 (the deployment's rate limit) is recorded and tried again after a pause, up to 4 times, so a small quota does not show as a comprehension failure; the refusals stay in each case's recorded calls. `gpt-6-sol` in the dev resource refuses most calls at `--concurrency 4`; use `--concurrency 1` for it.
 
 ## Cost Of A Full Run
 
