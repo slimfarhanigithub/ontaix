@@ -84,6 +84,12 @@ def body(company_id: uuid.UUID, sentence: str, origin: str = "text") -> dict:
     return {"companyId": str(company_id), "text": sentence, "origin": origin}
 
 
+def same_parse(result: dict) -> dict:
+    """The result without `parseId`: the streamed parse and the plain one are two parses, each
+    recorded for usage learning on its own."""
+    return {k: v for k, v in result.items() if k != "parseId"}
+
+
 async def plain(client: httpx.AsyncClient, tenant: TenantFixture, request: dict) -> dict:
     response = await client.post("/teach/parse", json=request, headers=tenant.builder.headers)
     assert response.status_code == 200, response.text
@@ -126,7 +132,9 @@ async def test_the_stream_ends_with_the_plain_result_and_streams_its_drafts(
     events = await streamed(client, tenant, request)
 
     assert fake_llm.streamed == 1
-    assert events[-1] == {"type": "result", "result": expected}
+    assert events[-1]["type"] == "result"
+    assert same_parse(events[-1]["result"]) == same_parse(expected)
+    assert events[-1]["result"]["parseId"] not in (None, expected["parseId"])
     assert [e["type"] for e in events[:-1]] == ["draft"] * (len(events) - 1)
     assert [e["index"] for e in events[:-1]] == list(range(len(events) - 1))
     assert expected["llmOutcome"] == "used" and expected["drafts"]
@@ -197,7 +205,8 @@ async def test_a_refused_answer_retracts_every_streamed_draft(
     drafts = [e for e in events if e["type"] == "draft"]
     assert [d["draft"]["label"] for d in drafts] == ["Services"]
     assert events[-2] == {"type": "retract", "indexes": [0]}
-    assert events[-1] == {"type": "result", "result": expected}
+    assert events[-1]["type"] == "result"
+    assert same_parse(events[-1]["result"]) == same_parse(expected)
 
 
 async def test_notes_the_whole_answer_completes_come_with_the_result_and_the_drafts_stand(
@@ -214,7 +223,8 @@ async def test_notes_the_whole_answer_completes_come_with_the_result_and_the_dra
     expected = await plain(client, tenant, request)
     events = await streamed(client, tenant, request)
 
-    assert events[-1] == {"type": "result", "result": expected}
+    assert events[-1]["type"] == "result"
+    assert same_parse(events[-1]["result"]) == same_parse(expected)
     assert standing(events) == expected["drafts"]
 
 
@@ -231,7 +241,8 @@ async def test_a_retried_attempt_starts_the_reading_again_without_repeating_draf
     expected = await plain(client, tenant, request)
     events = await streamed(client, tenant, request)
 
-    assert events[-1] == {"type": "result", "result": expected}
+    assert events[-1]["type"] == "result"
+    assert same_parse(events[-1]["result"]) == same_parse(expected)
     drafts = [e["draft"] for e in events if e["type"] == "draft"]
     assert drafts == expected["drafts"]
 
@@ -295,7 +306,8 @@ async def test_a_sentence_without_a_model_step_streams_its_result_alone(
     expected = await plain(client, tenant, request)
     events = await streamed(client, tenant, request)
 
-    assert events == [{"type": "result", "result": expected}]
+    assert [e["type"] for e in events] == ["result"]
+    assert same_parse(events[0]["result"]) == same_parse(expected)
     assert fake_llm.requests == []
 
 
