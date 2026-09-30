@@ -19,6 +19,7 @@ from app.models.storage.proposal import Proposal
 from app.models.storage.relation import Relation
 from app.repositories import concept_repository, relation_repository
 from app.services import outbox_service
+from app.services.domain_membership_service import domain_product_for
 from app.services.ontology_view_service import OntologyView
 from app.services.proposal_store_service import (
     ISA_ACTION,
@@ -48,14 +49,14 @@ async def propose_concept(
     enforce: bool,
     provenance: Provenance = TYPED_TEXT,
 ) -> Proposal:
-    company, parent, product = _resolve_birth(
-        view, draft.company_id, draft.parent_id, draft.parent_label, draft.domain_key
+    company, parent, product = await _resolve_birth(
+        session, view, draft.company_id, draft.parent_id, draft.parent_label, draft.domain_key
     )
     if enforce:
         ensure_can_propose(caller, Scope(company.id, product.template_key))
     await ensure_label_free(session, view, company.id, draft.label)
     await ensure_still_live(session, view, parent)
-    template = view.templates[product.template_key]
+    template = view.domains[product.template_key]
     action = normalise_action(draft.action)
     if not action:
         raise validation_failed("action", "an action needs at least one word")
@@ -72,11 +73,7 @@ async def propose_concept(
         reverse=draft.reverse,
         seed=draft.seed,
     )
-    label, parent_label, pred = esc(draft.label), esc(parent.label), esc(action)
-    if draft.reverse:
-        html_text = f"<b>{label}</b> <i>· {label} <b>{pred}</b> {parent_label}</i>"
-    else:
-        html_text = f"<b>{label}</b> <i>· {parent_label} <b>{pred}</b> {label}</i>"
+    html_text = concept_panel_html(draft.label, parent.label, action, draft.reverse)
     proposal = await store(
         session,
         proposer,
@@ -114,14 +111,14 @@ async def propose_spec(
     enforce: bool,
     provenance: Provenance = TYPED_TEXT,
 ) -> Proposal:
-    company, parent, product = _resolve_birth(
-        view, draft.company_id, draft.parent_id, draft.parent_label, draft.domain_key
+    company, parent, product = await _resolve_birth(
+        session, view, draft.company_id, draft.parent_id, draft.parent_label, draft.domain_key
     )
     if enforce:
         ensure_can_propose(caller, Scope(company.id, product.template_key))
     await ensure_label_free(session, view, company.id, draft.label)
     await ensure_still_live(session, view, parent)
-    template = view.templates[product.template_key]
+    template = view.domains[product.template_key]
     concept, relation = await _divide(
         session,
         view,
@@ -149,7 +146,7 @@ async def propose_spec(
         parent_label=parent.label,
         deps=[parent.label],
         wait_for=parent.label,
-        html=f"<b>{esc(draft.label)}</b> <i>is a {esc(parent.label)}</i>",
+        html=spec_panel_html(draft.label, parent.label),
         why=why,
         caption=draft.caption,
         payload={},
@@ -161,6 +158,19 @@ async def propose_spec(
     )
     await _emit_born(session, proposer, view, proposal, concept, relation)
     return proposal
+
+
+def concept_panel_html(label: str, parent_label: str, action: str, reverse: bool) -> str:
+    """The panel text of a concept proposal: the label and its birth sentence."""
+    label, parent_label, pred = esc(label), esc(parent_label), esc(action)
+    if reverse:
+        return f"<b>{label}</b> <i>· {label} <b>{pred}</b> {parent_label}</i>"
+    return f"<b>{label}</b> <i>· {parent_label} <b>{pred}</b> {label}</i>"
+
+
+def spec_panel_html(label: str, parent_label: str) -> str:
+    """The panel text of a specialisation proposal."""
+    return f"<b>{esc(label)}</b> <i>is a {esc(parent_label)}</i>"
 
 
 async def _divide(
@@ -179,7 +189,7 @@ async def _divide(
 ) -> tuple[Concept, Relation]:
     """Write the pending cell born from `parent` and its pending birth relation."""
     rng, clock = get_randomness(), get_clock()
-    template = view.templates[product.template_key]
+    template = view.domains[product.template_key]
     company_xy = company_centre(company.position, len(view.companies))
     x, y = birth_position(
         (parent.x, parent.y), domain_centre(company_xy, template.position), rng.next()
@@ -221,13 +231,16 @@ async def _divide(
     return concept, relation
 
 
-def _resolve_birth(
+async def _resolve_birth(
+    session: AsyncSession,
     view: OntologyView,
     company_id: uuid.UUID,
     parent_id: uuid.UUID | None,
     parent_label: str | None,
     domain_key: str,
 ) -> tuple[Company, Concept, Any]:
+    """The company, the parent and the domain product the cell is born into; the product is
+    written when the company has none for that domain yet."""
     company = view.companies.get(company_id)
     if company is None or company.dying_at is not None:
         raise not_found("company")
@@ -239,9 +252,7 @@ def _resolve_birth(
         parent = view.find_label(company.id, parent_label or "")
         if parent is None:
             raise not_found(f"parent concept {parent_label!r}")
-    product = view.domain_product_by_key(company.id, domain_key)
-    if product is None:
-        raise validation_failed("domainKey", f"unknown domain key {domain_key!r}")
+    product = await domain_product_for(session, view, company.id, domain_key)
     return company, parent, product
 
 

@@ -40,7 +40,9 @@ def _contract_ddl() -> str:
         )
     statements = [
         line
-        for line in path.read_text(encoding="utf-8").splitlines()
+        # Split on newlines only: str.splitlines() would also split on the U+2028 and U+2029
+        # characters that the label CHECKs list inside their regular expressions.
+        for line in path.read_text(encoding="utf-8").split("\n")
         if line.strip() not in {"BEGIN;", "COMMIT;"}
     ]
     return "\n".join(statements)

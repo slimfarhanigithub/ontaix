@@ -1,4 +1,4 @@
-"""Domain products: reads and the immediate, audited visibility switch."""
+"""Domain products: reads, the immediate, audited visibility switch, and the deletion proposal."""
 
 from __future__ import annotations
 
@@ -9,10 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
 from app.models.api.domain_product import DomainProduct as DomainProductDto
+from app.models.api.drafts import ChangeDraft, ChangePayload
+from app.models.api.proposal import Proposal as ProposalDto
 from app.repositories import domain_product_repository
-from app.services import audit_service, outbox_service
+from app.services import audit_service, outbox_service, proposal_service
 from app.services.company_service import readable_companies
 from app.services.ontology_view_service import load_view
+from app.services.rate_limit_service import charge_proposals
+from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.permissions import can_read
 from app.utilities.problems import forbidden, not_found
 
@@ -75,3 +79,21 @@ async def set_hidden(
         company_ids=[product.company_id],
     )
     return dto
+
+
+async def propose_delete(
+    session: AsyncSession, caller: Caller, domain_product_id: uuid.UUID
+) -> ProposalDto:
+    """A `delete_domain` change proposal for one company's domain product."""
+    await charge_proposals(caller)
+    view = await load_view(session, caller.tenant_id)
+    product = view.domain_products.get(domain_product_id)
+    if product is None or not can_read(caller.grants, product.company_id):
+        raise not_found("domain product")
+    draft = ChangeDraft(
+        change_kind="delete_domain", payload=ChangePayload(domain_product_id=product.id)
+    )
+    proposal = await proposal_service.create(session, caller, view, draft)
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )

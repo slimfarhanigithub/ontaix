@@ -63,6 +63,11 @@ class ChangeKind(enum.StrEnum):
     REMOVE_COMPANY = "remove_company"
     RESOLVE_CONFLICT = "resolve_conflict"
     REMOVE_CROSS_COMPANY_LINKS = "remove_cross_company_links"
+    CREATE_DOMAIN = "create_domain"
+    EDIT_DOMAIN = "edit_domain"
+    DELETE_DOMAIN = "delete_domain"
+    MOVE_CONCEPT_DOMAIN = "move_concept_domain"
+    DELETE_BULK = "delete_bulk"
 
 
 class AttributeType(enum.StrEnum):

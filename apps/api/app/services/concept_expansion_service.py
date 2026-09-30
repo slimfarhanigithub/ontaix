@@ -303,7 +303,7 @@ def _context(view: OntologyView, concept: Concept, body: ExpansionRequest, budge
         "domainLabels": domain_labels,
         "domainTemplates": [
             {"key": key, "name": t.name}
-            for key, t in sorted(view.templates.items(), key=lambda kv: kv[1].position)
+            for key, t in sorted(view.domains.items(), key=lambda kv: kv[1].position)
         ],
         "focus": body.focus,
         "depth": body.depth,
@@ -342,6 +342,8 @@ def _interpret(
             raise _InvalidAnswer("a key repeats")
         if s.parent != ROOT_HANDLE and s.parent not in keys:
             raise _InvalidAnswer("a parent is neither e0 nor an earlier key")
+        if s.domain_key is not None and s.domain_key not in view.domains:
+            raise _InvalidAnswer("a suggestion names a domain key the tenant does not hold")
         keys.add(s.key)
         _check_text(s.label, s.action, s.rationale)
     for link in answer.links:

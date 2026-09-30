@@ -29,6 +29,7 @@ from app.routers import (
     concepts,
     cost,
     domain_products,
+    domains,
     expansions,
     extractions,
     health,
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
     for module in (
         scene,
         companies,
+        domains,
         domain_products,
         concepts,
         relations,

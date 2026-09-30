@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -87,33 +88,22 @@ async def propose_relation(
         pending=True,
     )
     view.register_relation(relation)
-    company_a, company_b = view.companies[a.company_id], view.companies[b.company_id]
-    a_text = esc(a.label) + (f" <i>({esc(company_a.name)})</i>" if cross_company else "")
-    b_text = esc(b.label) + (f" <i>({esc(company_b.name)})</i>" if cross_company else "")
-    if cross_company:
-        why = f"across companies: {company_a.name} ↔ {company_b.name}"
-    elif cross_domain:
-        why = (
-            f"across domain products: {view.domain_name(a) or 'company'}"
-            f" → {view.domain_name(b) or 'company'}"
-        )
-    else:
-        why = f"inside {view.domain_name(a) or 'the company'}"
+    texts = relation_texts(view, a, b, action)
     proposal = await store(
         session,
         proposer,
         view,
         type=ProposalType.RELATION,
         change_kind=None,
-        title=f"{a.label} {action} {b.label}",
+        title=texts.title,
         color=NEUTRAL_COLOR,
         company_id=None if cross_company else a.company_id,
         domain_product_id=None if cross_company else a.domain_product_id,
         parent_label=None,
         deps=[PREDICATE_BOTH_ENDS_APPROVED],
-        wait_for=f"{a.label} and {b.label}",
-        html=f"{a_text} <b>{esc(action)}</b> {b_text}",
-        why=why,
+        wait_for=texts.wait_for,
+        html=texts.html,
+        why=texts.why,
         caption=draft.caption,
         payload={},
         touched_company_ids=[a.company_id, b.company_id],
@@ -135,6 +125,38 @@ async def propose_relation(
         bulk=bulk,
     )
     return proposal
+
+
+@dataclass(frozen=True)
+class RelationTexts:
+    """The texts of a relation proposal between `a` and `b` with one action."""
+
+    title: str
+    html: str
+    why: str
+    wait_for: str
+
+
+def relation_texts(view: OntologyView, a: Concept, b: Concept, action: str) -> RelationTexts:
+    cross_company = a.company_id != b.company_id
+    company_a, company_b = view.companies[a.company_id], view.companies[b.company_id]
+    a_text = esc(a.label) + (f" <i>({esc(company_a.name)})</i>" if cross_company else "")
+    b_text = esc(b.label) + (f" <i>({esc(company_b.name)})</i>" if cross_company else "")
+    if cross_company:
+        why = f"across companies: {company_a.name} ↔ {company_b.name}"
+    elif a.domain_product_id != b.domain_product_id:
+        why = (
+            f"across domain products: {view.domain_name(a) or 'company'}"
+            f" → {view.domain_name(b) or 'company'}"
+        )
+    else:
+        why = f"inside {view.domain_name(a) or 'the company'}"
+    return RelationTexts(
+        title=f"{a.label} {action} {b.label}",
+        html=f"{a_text} <b>{esc(action)}</b> {b_text}",
+        why=why,
+        wait_for=f"{a.label} and {b.label}",
+    )
 
 
 def _resolve_end(

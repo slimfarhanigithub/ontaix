@@ -7,6 +7,9 @@ import math
 CELL = 24.0
 DOMAIN_COUNT = 9
 DOMAIN_R = max(470.0, DOMAIN_COUNT * 74.0)
+# Custom domains (ring positions 9 to 63) sit nine per ring on rings this far apart, outside
+# the templates' ring, offset by half a slot so each sits between two of the ring inside.
+CUSTOM_RING_STEP = 300.0
 COMPANY_GAP = 2 * DOMAIN_R + 1100
 BIRTH_DISTANCE = CELL * 3.1
 BIRTH_ANGLE_NOISE = 1.2
@@ -27,12 +30,23 @@ def company_centre(position: int, company_count: int) -> tuple[float, float]:
     return ((position - (company_count - 1) / 2) * COMPANY_GAP, 0.0)
 
 
-def domain_centre(company_xy: tuple[float, float], template_position: int) -> tuple[float, float]:
-    """Domain products sit on a ring around the company, Production at the top."""
-    angle = -math.pi / 2 + template_position * 2 * math.pi / DOMAIN_COUNT
+def domain_centre(company_xy: tuple[float, float], position: int) -> tuple[float, float]:
+    """Domain products sit on a ring around the company, Production at the top.
+
+    The nine templates keep the reference's ring and angles whatever else the tenant holds; a
+    custom domain (position 9 and up) sits on an outer ring, nine per ring, between two slots
+    of the ring inside, so no template moves.
+    """
+    if position < DOMAIN_COUNT:
+        angle = -math.pi / 2 + position * 2 * math.pi / DOMAIN_COUNT
+        radius = DOMAIN_R
+    else:
+        ring, slot = divmod(position - DOMAIN_COUNT, DOMAIN_COUNT)
+        angle = -math.pi / 2 + (slot + 0.5) * 2 * math.pi / DOMAIN_COUNT
+        radius = DOMAIN_R + ring * CUSTOM_RING_STEP
     return (
-        company_xy[0] + math.cos(angle) * DOMAIN_R,
-        company_xy[1] + math.sin(angle) * DOMAIN_R,
+        company_xy[0] + math.cos(angle) * radius,
+        company_xy[1] + math.sin(angle) * radius,
     )
 
 

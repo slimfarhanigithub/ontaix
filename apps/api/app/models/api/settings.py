@@ -22,6 +22,7 @@ class Settings(ApiModel):
     auto_attrs: bool
     notify_owners: bool
     multi_company: bool
+    company_creation: bool
     cross_company: bool
     animations: bool
     coverage_default: bool

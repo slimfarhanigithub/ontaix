@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.ai.prompts.teach_extraction import DOMAIN_KEYS
 from app.utilities.teach_parser import VERBS_LEX
 
 # Output tokens allowed per draft the run may keep: a compact suggestion with a 120-character
@@ -55,8 +54,8 @@ Return suggestions and links:
   present-tense verb phrase such as has, includes, uses or produces. When one of these
   canonical actions has the same meaning, use it: {_CANONICAL_ACTIONS}.
 - "is a" and "equivalent to" are never actions.
-- domainKey only for a child of e0 when e0 is the company root: the domain template the new
-  concept belongs to. Otherwise leave it null.
+- domainKey only for a child of e0 when e0 is the company root: the domain the new concept
+  belongs to, one of the keys in domainTemplates and no other. Otherwise leave it null.
 - confidence is between 0 and 1: how likely the concept belongs to this business. rationale is
   one short plain-text line, at most 120 characters, saying why.
 - links are further relations, each between two of e0 and the suggestions of this answer,
@@ -75,7 +74,7 @@ _SUGGESTION: dict[str, Any] = {
         "parent": {"type": "string"},
         "label": {"type": "string"},
         "action": {"type": "string"},
-        "domainKey": {"anyOf": [{"type": "string", "enum": list(DOMAIN_KEYS)}, {"type": "null"}]},
+        "domainKey": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "confidence": {"type": "number"},
         "rationale": {"type": "string"},
     },

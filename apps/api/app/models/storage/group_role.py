@@ -22,6 +22,11 @@ class GroupRole(Base):
             ["company.tenant_id", "company.id"],
             ondelete="CASCADE",
         ),
+        ForeignKeyConstraint(
+            ["tenant_id", "scope_domain_key"],
+            ["tenant_domain.tenant_id", "tenant_domain.key"],
+            ondelete="CASCADE",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -32,7 +37,8 @@ class GroupRole(Base):
     role: Mapped[RoleName] = mapped_column(pg_enum(RoleName, "role_name"))
     scope_kind: Mapped[ScopeKind] = mapped_column(pg_enum(ScopeKind, "scope_kind"))
     scope_company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
-    scope_domain_key: Mapped[str | None] = mapped_column(ForeignKey("domain_template.key"))
+    # A tenant domain key (template or custom) of the same tenant; the role goes with the domain.
+    scope_domain_key: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )

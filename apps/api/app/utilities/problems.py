@@ -49,6 +49,10 @@ TITLES: dict[str, str] = {
     "rate_limited": "Rate limited",
     "duplicate_attribute": "Duplicate attribute",
     "duplicate_agent": "Duplicate agent",
+    "proposal_changed": "Proposal changed",
+    "proposal_not_editable": "Proposal not editable",
+    "company_creation_disabled": "Company creation disabled",
+    "domain_limit": "Domain limit",
 }
 
 
