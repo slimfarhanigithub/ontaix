@@ -1,6 +1,6 @@
 # ADR 0012: Ontology Import
 
-Status: Accepted. The feature is an owner decision, final (decision row 113); the derived choices (rows 114 and 115, and row 119 from the PR #21 review) are approved under owner delegation (2026-09-29).
+Status: Accepted. The feature is an owner decision, final (decision row 113); the derived choices (rows 114 and 115, and row 119 from the PR #21 review) are approved under owner delegation (2026-09-29; amended by row 142 for the round trip of Ontaix OWL exports, ADR 0016).
 
 ## Context
 
@@ -67,6 +67,8 @@ Deterministic, in file order after a stable sort by source identifier, so the sa
 | `owl:equivalentClass`, `owl:sameAs`, `skos:exactMatch` | Skipped, `equivalence_not_imported` |
 | Datatype properties, annotations other than labels | Skipped, `datatype_property` or not reported |
 | Unions, intersections, cardinalities, property chains, other axioms | Skipped, `unsupported_axiom` |
+
+Ontaix annotations (row 142): when the file declares the `https://ontaix.dev/ns#` vocabulary, as an Ontaix OWL export (ADR 0016) does, `ox:bornFrom`, `ox:birthAction` and `ox:birthReverse` place a class under its birth parent with that action, `ox:domain` sets its domain when the tenant has that domain (else the parent's domain and the skip reason `unknown_domain`), and annotation assertions of properties typed by `ox:attributeType` become taught attributes; a `someValuesFrom` restriction that repeats a birth relation is not drafted twice. An OWL export of a company therefore round-trips into the same model, which a contract test checks.
 
 Verbs: the property's chosen label, or its local name split at camel case and underscores, lower-cased, whitespace collapsed, at most 60 characters, normalised as every action (NFKC); a verb that normalises to `is a` or `equivalent to` is skipped (`forbidden_action`). The `action` column of a CSV or XLSX hierarchy goes through the same normalisation and check: a forbidden value is reported `forbidden_action` and the row is born with `includes`, so specialisation comes only from `subClassOf` or `is_a`. XLSX hierarchies are read with the OOXML sniffing and byte-bounded decompression of ADR 0011. Domains: `domainKey` when given, else the parent's domain, else `production`; a hierarchy row's `domain` column, when it names a template key, wins. Cycles in the class hierarchy are broken at the first repeated class (`cycle`).
 

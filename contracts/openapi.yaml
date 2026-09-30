@@ -64,6 +64,8 @@ tags:
     description: Agent registry and cost management.
   - name: Settings
     description: Tenant settings, the companies-may-interact switch and appearance.
+  - name: Export
+    description: The ontology as OWL, SKOS or a Word document (ADR 0016).
   - name: Audit
     description: Append-only audit log.
   - name: System
@@ -273,7 +275,7 @@ paths:
     post:
       tags: [Companies]
       summary: Add a company
-      description: 'Immediate and audited (kind `company`). Creates the nine domain products and the root cell. With `start` set to `starter_vocabulary` the thirteen starter concepts are created as proposals, awaiting approval.'
+      description: 'Immediate and audited (kind `company`). Refused with `409 company_creation_disabled` while the `companyCreation` setting is off. Creates the domain products of the tenant''s domains and the root cell. With `start` set to `starter_vocabulary` the thirteen starter concepts are created as proposals, awaiting approval.'
       operationId: createCompany
       x-ontaix-permission: company.create
       requestBody:
@@ -324,7 +326,7 @@ paths:
     delete:
       tags: [Companies]
       summary: Propose removing a company
-      description: Creates a `change` proposal (`remove_company`). The home company cannot be removed (`409 home_company`).
+      description: Creates a `change` proposal (`remove_company`). The home company cannot be removed (`409 home_company`). The proposal names what goes, from `POST /deletion-impact` with `wholeCompany` - concepts, relations (cross-company ones counted separately), sources, bindings and attributes (ADR 0015). On approval, every open proposal touching the company is rejected by cascade, every cross-company relation and equivalence to it is removed, the company is marked dying and then purged with its concepts, relations, domain products, sources, bindings, attributes, document imports, expansions and extraction jobs; audit entries stay. Proposed with `proposal.create` in the company's scope; approved by an Owner of the company or a Governor.
       operationId: proposeRemoveCompany
       x-ontaix-permission: proposal.create
       responses:
@@ -340,6 +342,285 @@ paths:
           $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/Busy'
+
+  /domains:
+    get:
+      tags: [Companies]
+      summary: List the tenant's domains
+      description: Every domain of the tenant (ADR 0015) - the nine templates, possibly renamed, and custom domains - with effective colour, owner, revision and position. Tenant-wide; readable by any role.
+      operationId: listDomains
+      x-ontaix-permission: model.read
+      responses:
+        '200':
+          description: The domains in ring order.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 64
+                items:
+                  $ref: '#/components/schemas/TenantDomain'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Companies]
+      summary: Propose a new domain
+      description: Creates a `change` proposal (`create_domain`). On approval the domain joins the tenant with its name, owner and colour, available to every company; a company's domain product for it is created when its first concept joins it. The key is derived from the name (lower case, ASCII letters, digits and `_`, made unique). At most 64 domains per tenant (`409 domain_limit`); a name equal to an existing domain's, case-insensitive, is `409 duplicate_label`. Tenant scope - proposed with `proposal.create` at tenant scope (Builder or Agent at tenant scope), approved by a Governor at tenant scope.
+      operationId: proposeCreateDomain
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomainInput'
+      responses:
+        '202':
+          $ref: '#/components/responses/ProposalAccepted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
+
+  /domains/{domainKey}:
+    parameters:
+      - name: domainKey
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/DomainKey'
+    patch:
+      tags: [Companies]
+      summary: Propose renaming or recolouring a domain
+      description: Creates a `change` proposal (`edit_domain`) with a new `name`, `color` and/or `owner`. A domain is tenant-wide, so on approval it changes in every company - every concept of the domain takes the new colour, as the UI contract requires a domain's colour to be the same everywhere. Approval writes the colour into the tenant's appearance colours (the value Appearance edits immediately), increments the domain's revision, records `tenant_domain_revision`, and emits `domain.changed` and `appearance.changed`. Scope - the domain scope for that key, proposed by an Owner or Builder with a domain or tenant scope covering it, approved by an Owner of that domain or a Governor. `409 duplicate_label` for a taken name.
+      operationId: proposeEditDomain
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 60
+                color:
+                  $ref: '#/components/schemas/Hex'
+                owner:
+                  type: string
+                  maxLength: 60
+      responses:
+        '202':
+          $ref: '#/components/responses/ProposalAccepted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
+
+  /concepts/{conceptId}/move:
+    parameters:
+      - $ref: '#/components/parameters/ConceptId'
+    post:
+      tags: [Concepts]
+      summary: Propose moving a concept to another domain
+      description: Creates a `change` proposal (`move_concept_domain`). On approval the concept joins the company's domain product for `domainKey` (created when the company has none yet), takes that domain's colour and cluster on the canvas, and both domain products' revisions increment; its children, relations and bindings stay as they are. Not for the company root (`409 root_concept`) or a pending concept (`409 concept_pending`); the same domain is `422`. The caller must be able to propose in both the source and the target domain scope; approval needs approval rights in both.
+      operationId: proposeMoveConcept
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [domainKey]
+              properties:
+                domainKey:
+                  $ref: '#/components/schemas/DomainKey'
+      responses:
+        '202':
+          $ref: '#/components/responses/ProposalAccepted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
+
+  /deletion-impact:
+    post:
+      tags: [Proposals]
+      summary: What a deletion would remove
+      description: Pure. For a set of concepts and/or domain products of one company, or for a whole company, returns what approving the deletion would remove - the descendants (live concepts born from them transitively through the parent chain, as `descendants_of`), the relations (every live relation touching any of them, each counted once, bindings excluded, cross-company relations counted separately), bindings, taught and source attributes, and open proposals that would be rejected by cascade - with at most 6 names per list. The Studio's confirmations for concept, domain, bulk and company deletion all read it. Only what the caller may read is counted; `404` for anything the caller may not read.
+      operationId: getDeletionImpact
+      x-ontaix-permission: model.read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletionTarget'
+      responses:
+        '200':
+          description: The impact.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionImpact'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /proposals/bulk-delete:
+    post:
+      tags: [Proposals]
+      summary: Propose deleting several concepts and domains at once
+      description: Creates one `change` proposal (`delete_bulk`) for up to 200 concepts and up to 20 domain products of one company (`422` when they span companies, or when the list is empty). Approval deletes them all at once, all or nothing - each concept with its descendants and relations, as `delete_concept`; each domain product with its concepts, their descendants and relations, as `delete_domain` - and rejects by cascade the open proposals that touch them. The proposal names what goes, from the same computation as `POST /deletion-impact`. The company root cannot be in the list (`409 root_concept`). The caller must be able to propose in every item's scope; approval needs approval rights in every item's scope (`403` otherwise, nothing applied).
+      operationId: proposeBulkDelete
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [companyId]
+              properties:
+                companyId:
+                  $ref: '#/components/schemas/Id'
+                conceptIds:
+                  type: array
+                  maxItems: 200
+                  uniqueItems: true
+                  items:
+                    $ref: '#/components/schemas/Id'
+                domainProductIds:
+                  type: array
+                  maxItems: 20
+                  uniqueItems: true
+                  items:
+                    $ref: '#/components/schemas/Id'
+      responses:
+        '202':
+          $ref: '#/components/responses/ProposalAccepted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
+
+  /export:
+    get:
+      tags: [Export]
+      summary: Export the ontology
+      description: |
+        Export (ADR 0016). Generated server-side, synchronously, from the approved model only - pending concepts, relations and attributes are left out. Scope - `scope=company` with `companyId`, `scope=domain` with `domainProductId` (one company's domain product), or `scope=all` (every company the caller may read). Only what the caller may read is exported; a cross-company relation or equivalence is included only when the caller may read both companies. Formats - OWL 2 is first-class: `owl` is OWL 2 in RDF/XML (`application/rdf+xml`, file `.owl`), the primary format; `owx` is OWL 2 in OWL/XML (`application/owl+xml`, `.owx`); `turtle` is OWL 2 in Turtle (`text/turtle`, `.ttl`); `jsonld` is OWL 2 in JSON-LD (`application/ld+json`, `.jsonld`). `skos` is the SKOS mapping in Turtle (`.skos.ttl`). `docx` is a Word document describing the scope. The class and property mapping is documented in ADR 0016; every OWL format carries the same axioms and annotations, and an OWL export of a company imports back through `POST /ontology-imports` into the same concepts, hierarchy, actions, relations, specialisations, domains and taught attributes (a contract test checks the round trip). Limits - at most `ONTAIX_EXPORT_MAX_CONCEPTS` concepts (default 20,000; `413` above), generated in a child process within 60 seconds (`503 unavailable` past it). Rate limit - one unit of the hourly `export` budget (default 20 per caller). Audited (kind `export`, the scope and format, never the content). The response carries `Content-Disposition: attachment` with a file name made from the scope and the date, and `Cache-Control: no-store`.
+      operationId: exportOntology
+      x-ontaix-permission: model.read
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [company, domain, all]
+        - name: companyId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: domainProductId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [owl, owx, turtle, jsonld, skos, docx]
+      responses:
+        '200':
+          description: The export file.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            text/turtle:
+              schema:
+                type: string
+            application/rdf+xml:
+              schema:
+                type: string
+            application/ld+json:
+              schema:
+                type: object
+            application/owl+xml:
+              schema:
+                type: string
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                contentMediaType: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Problem'
 
   /domain-products:
     get:
@@ -417,6 +698,26 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Companies]
+      summary: Propose deleting a company's domain with its concepts
+      description: Creates a `change` proposal (`delete_domain`, ADR 0015). Approval deletes every concept of this domain product in its company with their descendants (whatever their domain) and every relation touching them, rejecting by cascade the open proposals that touch them; the tenant domain itself stays available. The proposal names what goes, from `POST /deletion-impact`. Proposed with `proposal.create` in the domain product's scope; approved by an Owner of the company or domain, or a Governor.
+      operationId: proposeDeleteDomain
+      x-ontaix-permission: proposal.create
+      responses:
+        '202':
+          $ref: '#/components/responses/ProposalAccepted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Busy'
 
   # ---------------------------------------------------------------- Concepts
   /concepts:
@@ -1477,6 +1778,54 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+    patch:
+      tags: [Proposals]
+      summary: Edit a pending proposal's draft in place
+      description: |
+        Editing (ADR 0015). Changes the label and/or the action of a `pending` `concept`, `spec` or `relation` proposal without a new proposal and without an approval of its own - the edit changes the proposal, which is still approved or rejected as a whole. `label` applies to `concept` and `spec` (the pending concept's label), `action` to `concept` (birth action) and `relation`. The body carries the `revision` the editor saw; a different current revision is `409 proposal_changed`. Anything other than a `pending` proposal of those types is `409 proposal_not_editable` (a `half_approved` proposal cannot be edited, since one approval was given to its content). Checks as on creation - label rules and uniqueness (`409 duplicate_label`), action normalisation, never `is a` or `equivalent to` for `relation`. On success the proposal's `revision` increments, its `title`, `html` and pending artefacts are rebuilt, the `deps` and `waitFor` of open proposals of the same company that named the old label are rewritten, and `proposal.changed` plus `concept.changed` or `relation.changed` are emitted. Audited (kind `edit`, old and new text). Permission - the proposer, or anyone with `proposal.create` in the proposal's scope. Takes the tenant decision lock, so an edit and a decision never interleave.
+      operationId: editPendingProposal
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision]
+              minProperties: 2
+              properties:
+                revision:
+                  type: integer
+                  minimum: 0
+                label:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                action:
+                  type: string
+                  minLength: 1
+                  maxLength: 60
+      responses:
+        '200':
+          description: The edited proposal.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '503':
+          $ref: '#/components/responses/Busy'
+
   /proposals/{proposalId}/approve:
     parameters:
       - $ref: '#/components/parameters/ProposalId'
@@ -1486,6 +1835,13 @@ paths:
       description: Requires Owner in scope or Governor in an enclosing scope. Refused when not ready (`409 proposal_not_ready`). When `twoApprovers` is on and the type is `change`, the proposal moves to `half_approved` and needs `second-approve` by a different user; calling this endpoint on a `half_approved` proposal behaves as `second-approve`. Otherwise it is applied - pending cleared, domain revision incremented, audit entry written, events emitted. A `rename` or `rename_source` re-checks label uniqueness at approval and is refused with `409 duplicate_label` when the label was taken meanwhile.
       operationId: approveProposal
       x-ontaix-permission: proposal.approve
+      parameters:
+        - name: expectedRevision
+          in: query
+          description: The proposal `revision` the approver reviewed. When given and the proposal was edited since, the approval is refused with `409 proposal_changed`, so nobody approves text they did not see. The Studio always sends it.
+          schema:
+            type: integer
+            minimum: 0
       responses:
         '200':
           description: The result, including the artefacts that changed.
@@ -2002,6 +2358,8 @@ paths:
       summary: Map an ontology or hierarchy file to a draft tree
       description: |
         Ontology import (ADR 0012). Deterministic - no language model is called. Reads one OWL ontology (RDF/XML, Turtle, OWL/XML, JSON-LD or N-Triples, SKOS vocabularies included), one OBO file, or a CSV or XLSX hierarchy, maps it to one draft tree in `companyId` under `parentConceptId` (default the company root), stores the tree for 24 hours and returns it. Writes no ontology row and no proposal; `POST /ontology-imports/{ontologyImportId}/proposals` turns a selection into proposals with origin `ontology_import`, reviewed branch by branch like a whole-document tree (ADR 0010).
+
+        Ontaix annotations (ADR 0016, decision row 142) - when the file declares the `https://ontaix.dev/ns#` vocabulary, as an Ontaix OWL export does, `ox:bornFrom` with `ox:birthAction` and `ox:birthReverse` places a class under its birth parent with that action (instead of under `parentConceptId`), `ox:domain` sets its domain when the tenant has that domain, and annotation assertions of properties typed by `ox:attributeType` become taught attributes; `someValuesFrom` restrictions that repeat a birth relation are not drafted twice. So an OWL export of a company round-trips into the same model.
 
         Mapping - named classes (`owl:Class`, `rdfs:Class`), SKOS concepts and OBO terms become concepts: `rdfs:subClassOf` and OBO `is_a` give the parent path as specialisation drafts, `skos:broader` gives a concept born from its broader concept with action `includes`; a class with no named parent in the file is born under `parentConceptId`; further named parents become `is a` relation drafts. Object properties with a domain and a range, `someValuesFrom` and `allValuesFrom` restrictions on a named property, and OBO `relationship` lines become relation drafts whose action is the property's label, normalised (camel case split, lower-cased, at most 60 characters) and refused when it normalises to `is a` or `equivalent to`. CSV and XLSX hierarchies use either `label` and `parent` columns (optional `id`, `action`, `domain`) or level columns `Level 1`, `Level 2` and so on, as many as the file has; an `action` cell is normalised like a property verb and skipped as `forbidden_action` when it normalises to `is a` or `equivalent to` (the row is then born with `includes`), so specialisation comes only from `subClassOf` or `is_a`. XLSX files follow the OOXML sniffing and decompression bounds of `POST /import/sentences`. Individuals become concepts under their class with action `has instance` when `individuals` is `as_concepts`, and are skipped otherwise. There is no depth limit.
 
@@ -3176,6 +3534,10 @@ components:
             - duplicate_agent
             - unavailable
             - busy
+            - proposal_changed
+            - proposal_not_editable
+            - company_creation_disabled
+            - domain_limit
         errors:
           type: array
           items:
@@ -3214,7 +3576,8 @@ components:
 
     DomainKey:
       type: string
-      enum: [production, supply, sales, logistics, quality, maintenance, finance, people, engineering]
+      pattern: '^[a-z][a-z0-9_]{1,39}$'
+      description: A tenant domain key (ADR 0015) - one of the nine templates `production`, `supply`, `sales`, `logistics`, `quality`, `maintenance`, `finance`, `people`, `engineering`, or a custom domain's key. A key that is not a domain of the tenant is `422`.
 
     RoleName:
       type: string
@@ -3941,7 +4304,7 @@ components:
           $ref: '#/components/schemas/ImportRef'
         changeKind:
           type: string
-          enum: [rename, delete_concept, edit_relation, remove_relation, unbind, rename_source, remove_source, remove_company, resolve_conflict]
+          enum: [rename, delete_concept, edit_relation, remove_relation, unbind, rename_source, remove_source, remove_company, resolve_conflict, create_domain, edit_domain, delete_domain, move_concept_domain, delete_bulk]
         payload:
           type: object
           properties:
@@ -3969,6 +4332,31 @@ components:
               type: array
               minItems: 2
               maxItems: 2
+              items:
+                $ref: '#/components/schemas/Id'
+            domainKey:
+              $ref: '#/components/schemas/DomainKey'
+            domainProductId:
+              $ref: '#/components/schemas/Id'
+            name:
+              type: string
+              minLength: 1
+              maxLength: 60
+            color:
+              $ref: '#/components/schemas/Hex'
+            owner:
+              type: string
+              maxLength: 60
+            conceptIds:
+              type: array
+              maxItems: 200
+              uniqueItems: true
+              items:
+                $ref: '#/components/schemas/Id'
+            domainProductIds:
+              type: array
+              maxItems: 20
+              uniqueItems: true
               items:
                 $ref: '#/components/schemas/Id'
         caption:
@@ -4072,7 +4460,7 @@ components:
           enum: [concept, spec, relation, source, bind, attr, change]
         changeKind:
           type: [string, 'null']
-          enum: [rename, delete_concept, edit_relation, remove_relation, unbind, rename_source, remove_source, remove_company, resolve_conflict, remove_cross_company_links, null]
+          enum: [rename, delete_concept, edit_relation, remove_relation, unbind, rename_source, remove_source, remove_company, resolve_conflict, remove_cross_company_links, create_domain, edit_domain, delete_domain, move_concept_domain, delete_bulk, null]
         state:
           type: string
           enum: [pending, half_approved, approved, rejected]
@@ -4158,6 +4546,10 @@ components:
                 format: date-time
         bulk:
           type: boolean
+        revision:
+          type: integer
+          minimum: 0
+          description: Incremented by every in-place edit of a pending draft (`PATCH /proposals/{proposalId}`); 0 when never edited.
         openBelow:
           type: integer
           minimum: 0
@@ -4992,7 +5384,7 @@ components:
                 description: The chosen label, only when it passed the label rules; absent for `invalid_label`, whose refused text is never echoed.
               reason:
                 type: string
-                enum: [already_known, reused_existing, invalid_label, duplicate_label, remote_import_not_fetched, unsupported_axiom, equivalence_not_imported, datatype_property, individual_skipped, forbidden_action, cycle, unknown_parent]
+                enum: [already_known, reused_existing, invalid_label, duplicate_label, remote_import_not_fetched, unsupported_axiom, equivalence_not_imported, datatype_property, individual_skipped, forbidden_action, cycle, unknown_parent, unknown_domain]
                 description: '`reused_existing` is informational - the item matched an existing concept, which is reused and receives the item''s children. `equivalence_not_imported` - `owl:equivalentClass`, `owl:sameAs` and `skos:exactMatch` are not imported (equivalences are cross-company links proposed through the relationship dialog). `unsupported_axiom` - anything other than the mapped constructs (unions, intersections, cardinalities, property chains and so on), which is never reasoned over.'
 
     OntologyImportNote:
@@ -5044,6 +5436,113 @@ components:
           type: string
           enum: [en-GB, en-US]
           description: The recognition language the deployment is configured for (`ONTAIX_SPEECH_LANGUAGE`, default `en-GB`). English only.
+
+    TenantDomain:
+      type: object
+      additionalProperties: false
+      required: [key, name, owner, color, defaultColor, template, position, revision]
+      properties:
+        key:
+          $ref: '#/components/schemas/DomainKey'
+        name:
+          type: string
+          maxLength: 60
+        owner:
+          type: string
+          maxLength: 60
+        color:
+          $ref: '#/components/schemas/Hex'
+        defaultColor:
+          $ref: '#/components/schemas/Hex'
+        template:
+          type: boolean
+          description: True for the nine templates, false for a custom domain.
+        position:
+          type: integer
+          minimum: 0
+          maximum: 63
+        revision:
+          type: integer
+          minimum: 0
+
+    DomainInput:
+      type: object
+      additionalProperties: false
+      required: [name, color]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+          description: No markup, control or format characters and no surrounding space (`422`).
+        color:
+          $ref: '#/components/schemas/Hex'
+        owner:
+          type: string
+          maxLength: 60
+
+    DeletionTarget:
+      type: object
+      additionalProperties: false
+      description: Exactly one of a company (`companyId` alone, for company removal) or a set of concepts and domain products of one company.
+      required: [companyId]
+      properties:
+        companyId:
+          $ref: '#/components/schemas/Id'
+        wholeCompany:
+          type: boolean
+          default: false
+        conceptIds:
+          type: array
+          maxItems: 200
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+        domainProductIds:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+
+    DeletionImpact:
+      type: object
+      additionalProperties: false
+      required: [concepts, descendants, relations, crossCompanyRelations, bindings, attributes, sources, cascadedProposals, names]
+      properties:
+        concepts:
+          type: integer
+          minimum: 0
+          description: The concepts named directly, plus every concept of the named domain products.
+        descendants:
+          type: integer
+          minimum: 0
+        relations:
+          type: integer
+          minimum: 0
+        crossCompanyRelations:
+          type: integer
+          minimum: 0
+          description: Relations and equivalences to other companies among `relations`.
+        bindings:
+          type: integer
+          minimum: 0
+        attributes:
+          type: integer
+          minimum: 0
+        sources:
+          type: integer
+          minimum: 0
+          description: Company removal only - the company's data sources.
+        cascadedProposals:
+          type: integer
+          minimum: 0
+        names:
+          type: array
+          maxItems: 6
+          description: Up to six labels of what goes, named concepts first, then descendants. Rendered as text.
+          items:
+            type: string
 
     CurrentUser:
       type: object
@@ -5356,7 +5855,7 @@ components:
 
     Settings:
       type: object
-      required: [voice, importDocs, liveTeaching, everyoneTeaches, approvalRequired, twoApprovers, autoAttrs, notifyOwners, multiCompany, crossCompany, animations, coverageDefault, legend, readOnlyConnectors, refresh, agentAccess, costCap, llmMonthlyTokenCap, ocrMonthlyPageCap]
+      required: [voice, importDocs, liveTeaching, everyoneTeaches, approvalRequired, twoApprovers, autoAttrs, notifyOwners, multiCompany, crossCompany, animations, coverageDefault, legend, readOnlyConnectors, refresh, agentAccess, costCap, llmMonthlyTokenCap, ocrMonthlyPageCap, companyCreation]
       properties:
         voice:
           type: boolean
@@ -5378,6 +5877,9 @@ components:
           type: boolean
         multiCompany:
           type: boolean
+        companyCreation:
+          type: boolean
+          description: When false, `POST /companies` is refused with `409 company_creation_disabled` for every caller, and the Studio hides Add company (ADR 0015). Administrator only (`settings.write`), audited. Default true. Unlike `multiCompany`, which only shows or hides the Company button, this is enforced by the API.
         crossCompany:
           type: boolean
         animations:
@@ -5429,6 +5931,9 @@ components:
           type: boolean
         multiCompany:
           type: boolean
+        companyCreation:
+          type: boolean
+          description: When false, `POST /companies` is refused with `409 company_creation_disabled` for every caller, and the Studio hides Add company (ADR 0015). Administrator only (`settings.write`), audited. Default true. Unlike `multiCompany`, which only shows or hides the Company button, this is enforced by the API.
         crossCompany:
           type: boolean
           description: May only be turned on here, or off when no cross-company relation exists.
@@ -5570,7 +6075,7 @@ components:
           $ref: '#/components/schemas/Actor'
         kind:
           type: string
-          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`, `speech` (a speech recognition token was issued, ADR 0013).
+          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`, `speech` (a speech recognition token was issued, ADR 0013), `edit` (a pending proposal edited in place, ADR 0015), `export` (an export, ADR 0016).
         what:
           type: string
         ok:
