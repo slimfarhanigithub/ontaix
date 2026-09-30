@@ -57,7 +57,7 @@ SALES_ANSWER = json.dumps(
 
 
 async def rows(sql: str, **params: object) -> list[dict]:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         result = await s.execute(text(sql), params)
         return [dict(r._mapping) for r in result]
 
@@ -198,7 +198,7 @@ async def test_expansion_suggests_a_branch_of_any_depth_and_proposes_a_selection
     )
     assert again.status_code == 409 and again.json()["code"] == "expansion_submitted"
 
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         turns = await teach_session_turn_repository.recent(
             s,
             SessionKey(
@@ -282,7 +282,7 @@ async def test_without_a_model_or_budget_expansion_answers_without_calling(
     response = await expand(client, tenant, str(tenant.root_id))
     assert response.json()["llmOutcome"] == "not_configured"
 
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         await s.execute(
             text(
                 "UPDATE ontaix.tenant_settings SET llm_monthly_token_cap = 0 WHERE tenant_id = :t"
@@ -351,7 +351,7 @@ async def test_an_expansion_belongs_to_its_user_and_expires(
     )
     assert other.status_code == 404
 
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         await s.execute(
             text(
                 "UPDATE ontaix.concept_expansion SET created_at = now() - interval '2 hours',"

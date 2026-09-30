@@ -11,7 +11,7 @@ import asyncio
 import logging
 import sys
 
-from app.clients.db_client import configure_engine, dispose_engine, get_session_factory
+from app.clients.db_client import configure_engine, dispose_engine, platform_session
 from app.config import SeedMode, get_settings
 from app.migrations.runner import upgrade_to_head
 from app.services.seed_service import seed_demo_tenant, seed_empty_tenant
@@ -23,7 +23,7 @@ async def _run(database_url: str, mode: SeedMode) -> int:
     configure_engine(database_url)
     seed = seed_empty_tenant if mode == "empty" else seed_demo_tenant
     try:
-        async with get_session_factory()() as session:
+        async with platform_session() as session:
             created = await seed(session)
             await session.commit()
     finally:

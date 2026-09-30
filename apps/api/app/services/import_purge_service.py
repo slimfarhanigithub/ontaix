@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import platform_session
 from app.services import import_service, ontology_import_service
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ PURGE_INTERVAL_SECONDS = 15 * 60
 
 async def purge_once() -> int:
     """One purge round in its own transaction; returns how many imports were deleted."""
-    async with get_session_factory()() as session:
+    async with platform_session() as session:
         deleted = await import_service.purge_expired(session)
         deleted += await ontology_import_service.purge_expired(session)
         await session.commit()

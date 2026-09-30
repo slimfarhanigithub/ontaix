@@ -81,7 +81,7 @@ async def mint(
 
 
 async def speech_audit(tenant: TenantFixture) -> list[AuditEntry]:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         rows = await s.scalars(
             select(AuditEntry).where(
                 AuditEntry.tenant_id == tenant.tenant_id, AuditEntry.kind == "speech"
@@ -231,4 +231,7 @@ async def test_only_the_dedicated_identity_mints_in_every_environment() -> None:
 
 
 def settings_for(environment: str, **values: str) -> Settings:
-    return Settings(_env_file=None, ONTAIX_ENVIRONMENT=environment, **values)  # type: ignore[call-arg]
+    # The test process accepts the dev identity header; a production Settings must not.
+    return Settings(  # type: ignore[call-arg]
+        _env_file=None, ONTAIX_ENVIRONMENT=environment, dev_identity_header=False, **values
+    )

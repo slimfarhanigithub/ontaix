@@ -907,3 +907,136 @@ export interface RefreshAllResult {
   sources: number;
   bindings: number;
 }
+
+// ------------------------------------------------------------ sign-in, sessions and the platform
+
+export interface OrganizationRef {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+/** `GET /auth/session`: the browser's live session; a member names its organization, a platform account none. */
+export interface Session {
+  kind: 'member' | 'platform';
+  account: { id: string; email: string; name: string };
+  organization?: OrganizationRef | null;
+  userId?: string | null;
+  platformRoles?: 'super_admin'[];
+  /** The open read-only support session of a super admin, else null. */
+  support?: { organization: OrganizationRef; until: string; reason: string } | null;
+  /** Sent back as `X-CSRF-Token` on every POST, PUT, PATCH and DELETE while the session lives. */
+  csrfToken: string;
+  mustChangePassword: boolean;
+  idleExpiresAt: string;
+  absoluteExpiresAt: string;
+}
+
+export interface SignInRequest {
+  email: string;
+  password: string;
+}
+
+export interface PasswordChange {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface PasswordReset {
+  newPassword: string;
+}
+
+/** `single` caps the organization at one company; `multiple` leaves it to the organization's own setting. */
+export type CompanyMode = 'single' | 'multiple';
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  companyMode: CompanyMode;
+  status: 'active' | 'disabled';
+  companies: number;
+  /** Accounts of the organization, disabled included. */
+  users: number;
+  createdAt: string;
+  disabledAt?: string | null;
+}
+
+export interface OrganizationCreate {
+  name: string;
+  companyMode: CompanyMode;
+}
+
+export interface OrganizationUpdate {
+  name?: string;
+  companyMode?: CompanyMode;
+}
+
+export interface OrganizationUser {
+  id: string;
+  accountId: string;
+  email: string;
+  name: string;
+  department?: string | null;
+  status: 'active' | 'disabled';
+  mustChangePassword: boolean;
+  /** The email is inside a 15-minute sign-in lock. */
+  locked: boolean;
+  groups: { id: string; name: string }[];
+  createdAt: string;
+  lastSignInAt?: string | null;
+}
+
+export interface OrganizationUserCreate {
+  email: string;
+  name: string;
+  department?: string | null;
+  password: string;
+  groupIds: string[];
+}
+
+export interface OrganizationUserUpdate {
+  name?: string;
+  department?: string | null;
+  groupIds?: string[];
+}
+
+export interface SupportSessionStart {
+  reason: string;
+}
+
+export type PlatformAuditAction =
+  | 'sign_in'
+  | 'sign_in_failed'
+  | 'sign_in_locked'
+  | 'sign_out'
+  | 'session_expired'
+  | 'password_changed'
+  | 'password_change_failed'
+  | 'password_reset'
+  | 'account_created'
+  | 'account_updated'
+  | 'account_disabled'
+  | 'account_enabled'
+  | 'organization_created'
+  | 'organization_renamed'
+  | 'organization_company_mode'
+  | 'organization_disabled'
+  | 'organization_enabled'
+  | 'support_session_started'
+  | 'support_session_ended'
+  | 'super_admin_created'
+  | 'super_admin_password_set';
+
+export interface PlatformAuditEntry {
+  id: number;
+  at: string;
+  /** The account that acted; null for a failed sign-in with an unknown email and for the system. */
+  actor?: { accountId: string; email: string } | null;
+  action: PlatformAuditAction;
+  ok: boolean;
+  organization?: OrganizationRef | null;
+  targetAccountId?: string | null;
+  what: string;
+  clientIp?: string | null;
+}

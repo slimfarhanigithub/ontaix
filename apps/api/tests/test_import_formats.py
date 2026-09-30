@@ -75,7 +75,7 @@ class FakeOcr:
 
 
 async def ocr_calls(tenant: TenantFixture) -> list[dict]:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         rows = await s.execute(
             text(
                 "SELECT purpose, model, pages, outcome, cost_eur FROM ontaix.llm_call "
@@ -277,7 +277,7 @@ async def test_scanned_pages_are_recognised_and_joined_in_page_order(
     assert body["positions"] == [{"unit": "page", "index": 1}] * 2 + [{"unit": "page", "index": 2}]
     assert [r.pages for r in fake.requests] == [[1]]
     assert len(PdfReader(io.BytesIO(fake.requests[0].pdf)).pages) == 1
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         row = await s.get(DocumentImport, uuid.UUID(body["importId"]))
         assert row is not None and row.ocr_pages == 1
     [call] = await ocr_calls(tenant)
@@ -374,7 +374,7 @@ async def test_the_hourly_ocr_budget_is_charged_per_page(
 
 
 async def _import_count(tenant: TenantFixture) -> int:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         return int(
             await s.scalar(
                 text("SELECT count(*) FROM ontaix.document_import WHERE tenant_id = :t"),

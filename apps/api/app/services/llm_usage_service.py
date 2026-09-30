@@ -15,7 +15,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import platform_session, tenant_session
 from app.models.api.cost import LlmPurposeUsage, LlmUsage
 from app.repositories import llm_call_repository, llm_month_usage_repository
 from app.repositories.llm_call_repository import CallRecord
@@ -42,7 +42,7 @@ class Reservation:
 async def reserve(tenant_id: uuid.UUID, tokens: int, cap: int) -> Reservation | None:
     """Count `tokens` against this month's cap and commit; None when the cap would pass."""
     month = month_of(get_clock().now())
-    async with get_session_factory()() as session:
+    async with tenant_session(tenant_id) as session:
         counted = await llm_month_usage_repository.reserve(session, tenant_id, month, tokens, cap)
         await session.commit()
     return Reservation(tenant_id, month, tokens) if counted is not None else None
@@ -51,7 +51,7 @@ async def reserve(tenant_id: uuid.UUID, tokens: int, cap: int) -> Reservation | 
 async def settle(reservation: Reservation, record: CallRecord) -> None:
     """Settle the reservation to the call's actual tokens and store its cost record."""
     actual = record.input_tokens + record.output_tokens
-    async with get_session_factory()() as session:
+    async with tenant_session(reservation.tenant_id) as session:
         await llm_month_usage_repository.settle(
             session, reservation.tenant_id, reservation.month, reservation.tokens, actual
         )
@@ -62,7 +62,7 @@ async def settle(reservation: Reservation, record: CallRecord) -> None:
 async def reserve_pages(tenant_id: uuid.UUID, pages: int, cap: int) -> Reservation | None:
     """Count OCR `pages` against this month's page cap and commit; None when it would pass."""
     month = month_of(get_clock().now())
-    async with get_session_factory()() as session:
+    async with tenant_session(tenant_id) as session:
         counted = await llm_month_usage_repository.reserve_pages(
             session, tenant_id, month, pages, cap
         )
@@ -72,7 +72,7 @@ async def reserve_pages(tenant_id: uuid.UUID, pages: int, cap: int) -> Reservati
 
 async def settle_pages(reservation: Reservation, record: CallRecord) -> None:
     """Settle a page reservation to the pages the provider processed and store the cost record."""
-    async with get_session_factory()() as session:
+    async with tenant_session(reservation.tenant_id) as session:
         await llm_month_usage_repository.settle_pages(
             session, reservation.tenant_id, reservation.month, reservation.tokens, record.pages or 0
         )
@@ -84,7 +84,7 @@ async def month_usage(tenant_id: uuid.UUID, month: date, cap: int, page_cap: int
     """The month's calls, tokens, OCR pages and estimated cost, by purpose."""
     start = datetime(month.year, month.month, 1, tzinfo=get_clock().now().tzinfo)
     end = _next_month(start)
-    async with get_session_factory()() as session:
+    async with tenant_session(tenant_id) as session:
         totals = await llm_call_repository.totals_by_purpose(session, tenant_id, start, end)
         counted = await llm_month_usage_repository.tokens_for(session, tenant_id, month)
         pages = await llm_month_usage_repository.pages_for(session, tenant_id, month)
@@ -108,7 +108,7 @@ async def month_usage(tenant_id: uuid.UUID, month: date, cap: int, page_cap: int
 
 async def purge_old_calls() -> int:
     """Delete cost records older than 400 days, across tenants, in its own transaction."""
-    async with get_session_factory()() as session:
+    async with platform_session() as session:
         deleted = await llm_call_repository.delete_older_than(
             session, get_clock().now() - RETENTION
         )

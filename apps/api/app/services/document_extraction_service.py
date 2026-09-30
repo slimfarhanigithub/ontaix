@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import platform_session
 from app.config import get_settings
 from app.models.api.document_extraction import (
     DocumentDraftNote,
@@ -168,7 +168,7 @@ async def propose(
 async def purge_expired() -> int:
     """Delete results more than 24 hours past their expiry and failed or cancelled jobs 48 hours
     after they ended, in their own transaction."""
-    async with get_session_factory()() as session:
+    async with platform_session() as session:
         deleted = await document_extraction_job_repository.delete_expired(
             session, get_clock().now()
         )

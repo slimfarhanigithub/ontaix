@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.prompts.concept_expansion import OUTPUT_SCHEMA, OUTPUT_TOKENS_PER_DRAFT, SYSTEM_PROMPT
 from app.auth import Caller
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import platform_session, tenant_session
 from app.clients.llm_client import (
     LlmCallError,
     LlmRefused,
@@ -106,7 +106,7 @@ async def expand(
     assert interpretation is not None
     expansion_id = expires_at = None
     if interpretation.drafts:
-        async with get_session_factory()() as write:
+        async with tenant_session(caller.tenant_id) as write:
             row = await concept_expansion_repository.create(
                 write,
                 tenant_id=caller.tenant_id,
@@ -135,7 +135,7 @@ async def expand(
 
 async def purge_expired() -> int:
     """Delete expansions more than 24 hours past their expiry, in their own transaction."""
-    async with get_session_factory()() as session:
+    async with platform_session() as session:
         deleted = await concept_expansion_repository.delete_expired_before(
             session, get_clock().now() - PURGE_AFTER_EXPIRY
         )
