@@ -14,6 +14,7 @@ import httpx
 from evals.aggregate import CaseUsage
 from evals.input_modes import DocumentCache, InputMode, ModeUnavailable
 from evals.recording_llm_client import RecordedCall, record_calls
+from evals.review_pass import Reviewer, ReviewResult
 from evals.scoring import (
     CaseScore,
     PredictedAttribute,
@@ -48,6 +49,8 @@ class CaseResult:
     score: CaseScore | None = None
     drafted_depth: int = 0
     document: dict[str, Any] | None = None
+    # The deeper model's review of a scored speech case, when the run has a reviewer.
+    review: ReviewResult | None = None
     skipped: str | None = None
     error: str | None = None
     wall_ms: int = 0
@@ -64,8 +67,10 @@ async def run_case(
     docs: DocumentCache,
     run_key: str,
     repeat: int,
+    reviewer: Reviewer | None = None,
 ) -> CaseResult:
-    """Never raises: a failure is recorded on the result."""
+    """Never raises: a failure is recorded on the result. With `reviewer`, a scored speech
+    case is reviewed after its own score, and the review's scores and cost are kept apart."""
     result = CaseResult(case.id, case.kind, case.origin, mode.name, run_key, repeat)
     result.calls = record_calls()
     started = time.monotonic()
@@ -83,6 +88,10 @@ async def run_case(
                 case, result.concepts, result.relations, output.source_text, result.attributes
             )
         result.drafted_depth = drafted_depth(case, result.concepts)
+        if reviewer is not None and result.score is not None and case.kind == "speech":
+            result.review = await reviewer.review(
+                case, result.concepts, result.relations, result.attributes, output.source_text
+            )
     except ModeUnavailable as exc:
         result.skipped = str(exc)
     except Exception as exc:

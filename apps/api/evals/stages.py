@@ -29,6 +29,7 @@ from evals.case_runner import CaseResult, run_case
 from evals.composite import Composite, Paired, composites, mean_std, paired
 from evals.input_modes import DocumentCache, modes_for
 from evals.recording_llm_client import BUDGET_REASON, Budget
+from evals.review_pass import Reviewer
 from evals.teach_case import TeachCase
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,7 @@ async def run_stage(
     budget: Budget,
     concurrency: int,
     eligible: Eligibility,
+    reviewer: Reviewer | None = None,
 ) -> StageResult:
     stage = StageResult(name)
     for config in configs:
@@ -101,7 +103,7 @@ async def run_stage(
             probe = install(config)
             allowed = [c for c in cases if eligible(config, c)]
             run = await _run_config(
-                config, repeat, allowed, document_modes, client, docs, budget, concurrency
+                config, repeat, allowed, document_modes, client, docs, budget, concurrency, reviewer
             )
             run.withheld = [c.id for c in cases if not eligible(config, c)]
             run.capabilities = probe()
@@ -180,6 +182,7 @@ async def _run_config(
     docs: DocumentCache,
     budget: Budget,
     concurrency: int,
+    reviewer: Reviewer | None = None,
 ) -> ConfigRun:
     run = ConfigRun(config, repeat, [])
     gate = asyncio.Semaphore(concurrency)
@@ -190,7 +193,7 @@ async def _run_config(
             if budget.exhausted:
                 run.stopped_by_budget = True
                 return None
-            result = await run_case(client, case, mode, docs, config.key, repeat)
+            result = await run_case(client, case, mode, docs, config.key, repeat, reviewer)
             if any(c.error == BUDGET_REASON for c in result.calls):
                 run.stopped_by_budget = True
                 result.skipped = "budget spent during the case"

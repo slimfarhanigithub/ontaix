@@ -42,6 +42,10 @@ The default `--plan smart` is shown above; each effort falls back to the closest
 - Grounding ceiling: the share of expected labels found whole-word in the source; recall is reported against all expected concepts and against groundable ones only.
 - Finals pair each configuration with the baseline case by case (concept F1 against groundable concepts, each case's mean over repeats): mean difference, 95 % CI, wins/ties/losses, sign test.
 
+## Review Pass
+
+`--review <deployment> [--review-effort low]` names a second, deeper model that reviews each scored speech case after the run's own model: it reads the recording's sentences and the drafted tree and returns corrections (rename to the recording's words, delete a concept the recording does not state or that repeats another, move under another parent, add a stated concept). The harness applies them to the predicted tree, grounding every new or renamed label in the recording and refusing what it cannot place, scores the recording again and reports both scores with the review's own tokens, cost and latency (Review Pass table; `reviewPass` in the JSON). The review touches no proposal and no product code: it measures what a background review by the deep profile would be worth, and its cost per reviewed sentence, before one is built.
+
 ## Cases
 
 | Origin | Where | Notes |

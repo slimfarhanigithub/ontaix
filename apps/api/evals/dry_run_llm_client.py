@@ -3,7 +3,8 @@
 It reads the call's data like a model would, takes the first sentence of the text as one
 segment, and answers that the company root `has` the last long word of that sentence. The
 answer passes the pipeline's validation and grounding, so a dry run exercises the whole path
-(seeding, parse, drafts, submit, scoring, cost) without measuring anything about a model.
+(seeding, parse, drafts, submit, scoring, cost) without measuring anything about a model. As a
+reviewer it returns no correction.
 """
 
 from __future__ import annotations
@@ -32,7 +33,10 @@ class DryRunLlmClient:
 
     async def complete(self, request: LlmRequest) -> LlmAnswer:
         data = json.loads(request.user)
-        text = _answer(data["sentence"], data["mode"] == "speech")
+        if "corrections" in request.output_schema.get("properties", {}):
+            text = json.dumps({"corrections": []})
+        else:
+            text = _answer(data["sentence"], data["mode"] == "speech")
         tokens_in, tokens_out = estimate_tokens(request), max(1, len(text) // 4)
         cost = cost_eur(self._price, tokens_in, tokens_out) if self._price else 0.0
         return LlmAnswer(text, tokens_in, tokens_out, cost, 0)

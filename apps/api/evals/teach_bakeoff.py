@@ -58,6 +58,7 @@ from evals.dry_run_llm_client import DryRunLlmClient
 from evals.input_modes import DocumentCache, modes_for
 from evals.recording_llm_client import Budget, CallGate, RecordingLlmClient
 from evals.report import RunRecord, write
+from evals.review_pass import Reviewer
 from evals.stages import (
     SCREENING_SHARE,
     StageResult,
@@ -146,6 +147,12 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="let global (non EU data zone) models read tests/private documents",
     )
+    p.add_argument(
+        "--review",
+        help="a candidate deployment that reviews each scored speech case's drafts after the "
+        "run's own model; its corrections are scored apart (default effort low)",
+    )
+    p.add_argument("--review-effort", default="low", help="the reviewer's reasoning effort")
     p.add_argument("--out", type=Path, default=Path("bakeoff-results.json"))
     p.add_argument("--verbose", action="store_true")
     return p
@@ -206,6 +213,7 @@ async def _main(args: argparse.Namespace) -> int:
         app = _app(database.url, args)
         docs = DocumentCache(ocr=_ocr(args, file))
         install = _installer(args, budget)
+        reviewer = _reviewer(args, file, budget)
         eligible = _eligibility(args.allow_global_for_private)
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
@@ -226,6 +234,7 @@ async def _main(args: argparse.Namespace) -> int:
                         budget,
                         args.concurrency,
                         eligible,
+                        reviewer,
                     )
 
                 screening = await screen("screening", configs)
@@ -247,6 +256,7 @@ async def _main(args: argparse.Namespace) -> int:
                     budget,
                     args.concurrency,
                     eligible,
+                    reviewer,
                 )
                 compare_with_baseline(finals, baseline)
                 stages.append(finals)
@@ -297,35 +307,43 @@ def _app(database_url: str, args: argparse.Namespace):
     return create_app()
 
 
+def _reviewer(args: argparse.Namespace, file: CandidateFile, budget: Budget) -> Reviewer | None:
+    """The deeper model that reviews each scored speech case, when `--review` names one."""
+    if not args.review:
+        return None
+    (candidate,) = candidates_named(file, [args.review])
+    config = at_effort(candidate, args.review_effort)
+    return Reviewer(_inner_client(args, config), budget)
+
+
+def _inner_client(args: argparse.Namespace, config: RunConfig) -> LlmClient:
+    """The provider client of one configuration, or the dry-run client."""
+    price = config.price or ZERO_PRICE
+    endpoint = config.endpoint or get_settings().foundry_endpoint
+    if args.dry_run:
+        return DryRunLlmClient(config.deployment, price)
+    if not endpoint:
+        raise SystemExit(
+            f"{config.deployment}: no endpoint in candidates.yaml and ONTAIX_FOUNDRY_ENDPOINT "
+            "is not set; use --dry-run"
+        )
+    if config.provider == "anthropic_foundry":
+        return AnthropicFoundryLlmClient(
+            foundry_messages_url(endpoint), config.deployment, price, config.reasoning_effort
+        )
+    return FoundryLlmClient(
+        endpoint, config.deployment, config.deployment, price, config.reasoning_effort
+    )
+
+
 def _installer(
     args: argparse.Namespace, budget: Budget
 ) -> Callable[[RunConfig], Callable[[], dict[str, object]]]:
     """Installs a configuration's model client; returns a probe of what the model accepted."""
-    default_endpoint = get_settings().foundry_endpoint
 
     def install(config: RunConfig) -> Callable[[], dict[str, object]]:
         get_settings().llm_reasoning_allowance_tokens = REASONING_ALLOWANCE[config.effort]
-        price = config.price or ZERO_PRICE
-        endpoint = config.endpoint or default_endpoint
-        inner: LlmClient
-        if args.dry_run:
-            inner = DryRunLlmClient(config.deployment, price)
-        elif not endpoint:
-            raise SystemExit(
-                f"{config.deployment}: no endpoint in candidates.yaml and ONTAIX_FOUNDRY_ENDPOINT "
-                "is not set; use --dry-run"
-            )
-        elif config.provider == "anthropic_foundry":
-            inner = AnthropicFoundryLlmClient(
-                foundry_messages_url(endpoint),
-                config.deployment,
-                price,
-                config.reasoning_effort,
-            )
-        else:
-            inner = FoundryLlmClient(
-                endpoint, config.deployment, config.deployment, price, config.reasoning_effort
-            )
+        inner = _inner_client(args, config)
         set_llm_client(RecordingLlmClient(inner, budget, CallGate(args.concurrency)))
 
         def probe() -> dict[str, object]:
