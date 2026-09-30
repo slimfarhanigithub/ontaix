@@ -33,8 +33,12 @@ async def test_a_transcript_is_asked_for_segments_and_typed_text_is_not(
     spoken, typed = (r.output_schema for r in fake_llm.requests)
     assert spoken is SPEECH_OUTPUT_SCHEMA and typed is OUTPUT_SCHEMA
     assert "segments" in spoken["required"]
-    assert "segment" in spoken["properties"]["intents"]["items"]["required"]
-    assert "segment" not in typed["properties"]["intents"]["items"]["required"]
+    assert all(
+        "segment" in k["required"] for k in spoken["properties"]["intents"]["items"]["anyOf"]
+    )
+    assert all(
+        "segment" not in k["required"] for k in typed["properties"]["intents"]["items"]["anyOf"]
+    )
 
 
 def test_the_speech_format_refuses_a_transcript_answer_without_segments() -> None:

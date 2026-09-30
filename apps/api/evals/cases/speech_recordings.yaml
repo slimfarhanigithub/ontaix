@@ -1,0 +1,303 @@
+# Teach bake-off: spoken recordings, sentence by sentence, for tuning speech comprehension.
+#
+# Format: `evals/teach_case.py` (TeachCase), the same as `teach_cases.yaml`. Each `input` item is
+# one finished spoken sentence, sent in order in one session as the Studio microphone sends it.
+# `expected.attributes` lists taught attributes ("billed monthly") by concept and accepted value.
+#
+# - `en-speech-owner-financial-services` is the owner's own recording, word for word.
+# - The `narration` cases retell sections of the public benchmarks in evals/benchmarks as natural
+#   speech with fillers, back-references and multi-level drill-down. Their labels are the
+#   benchmark's class names; the gold follows the tree the narration states, with the
+#   benchmark's own property names among the accepted verbs.
+# - The learn/test assignment of every case is in app/ai/examples/split.json: the org, ssn and
+#   valueflows narrations are TEST; the owner's recording, the goodrelations, prov-o and dcat
+#   narrations and the two other recordings are LEARN.
+#
+# All narration text is original, written for Ontaix on 2026-09-30.
+
+cases:
+  # ---------------------------------------------------------------- LEARN: the owner's recording
+  - id: en-speech-owner-financial-services
+    kind: speech
+    company: Insight
+    description: The owner's recording; back-references, a level jump to ADNOC and its subsidiaries, and billing attributes.
+    tags: [en, speech, recording, back-reference, deep-chain, attribute, role-pattern, fillers, owner]
+    input:
+      - "Insight sells financial services to its customers"
+      - "these services are split in advisory and um managed services"
+      - "the managed ones are billed monthly"
+      - "advisory is billed per day"
+      - "ADNOC buys them both"
+      - "its subsidiaries XRG and Drilling buy advisory"
+    expected:
+      concepts:
+        - {label: Financial services, parent: [Insight], action: [sells, offers, provides]}
+        - {label: Customers, parent: [Insight, Financial services], action: [has, serves, sells to, is sold to, sold to, buys]}
+        - {label: Advisory, parent: [Financial services], action: [is split in, is split into, includes, has]}
+        - {label: Managed services, parent: [Financial services], action: [is split in, is split into, includes, has]}
+        - {label: ADNOC, parent: [Customers, Advisory, Managed services], action: [buys, includes, has]}
+        - {label: Subsidiaries, parent: [ADNOC], action: [has, owns]}
+        - {label: XRG, parent: [Subsidiaries], action: [includes, has]}
+        - {label: Drilling, parent: [Subsidiaries], action: [includes, has]}
+      relations:
+        - {from: Financial services, to: Customers, action: [is sold to, sold to], inverse: [buys, purchases]}
+        - {from: ADNOC, to: Advisory, action: [buys], inverse: [is bought by]}
+        - {from: ADNOC, to: Managed services, action: [buys], inverse: [is bought by]}
+        - {from: XRG, to: Advisory, action: [buys], inverse: [is bought by]}
+        - {from: Drilling, to: Advisory, action: [buys], inverse: [is bought by]}
+      attributes:
+        - {concept: Managed services, value: [monthly]}
+        - {concept: Advisory, value: [per day, daily]}
+    optional: [Customer]
+
+  # ---------------------------------------------------------------- TEST
+  - id: en-speech-narration-valueflows-processes
+    kind: speech
+    company: ValueFlows
+    description: The ValueFlows process pattern retold as speech; inputs and outputs, plans, fulfilment and agents.
+    tags: [en, speech, recording, narration, benchmark, back-reference, deep-chain, is-a, fillers]
+    input:
+      - "okay so um ValueFlows is basically built around processes and economic resources"
+      - "a process has inputs and outputs and uh those are all economic events"
+      - "each economic event has an action and it affects an economic resource"
+      - "the resources they conform to a resource specification"
+      - "and a process is based on a process specification"
+      - "processes are planned within a plan and uh the plan includes commitments and intents"
+      - "an economic event fulfills a commitment"
+      - "and agents so persons and organizations they provide and receive the events"
+    expected:
+      concepts:
+        - {label: Process, parent: [ValueFlows], action: [is built around, has, includes, models, covers]}
+        - {label: Economic Resource, parent: [ValueFlows], action: [is built around, has, includes, models, covers]}
+        - {label: Economic Event, parent: [Process, ValueFlows], action: [has input, has output, has, is, input of, output of, includes]}
+        - {label: Action, parent: [Economic Event], action: [has, action]}
+        - {label: Resource Specification, parent: [Economic Resource], action: [conforms to]}
+        - {label: Process Specification, parent: [Process], action: [is based on, based on]}
+        - {label: Plan, parent: [Process, ValueFlows], action: [is planned within, planned within, has, includes]}
+        - {label: Commitment, parent: [Plan], action: [includes, plan includes, has]}
+        - {label: Intent, parent: [Plan], action: [includes, plan includes, has]}
+        - {label: Agent, parent: [ValueFlows, Economic Event], action: [has, provides, receives, provides and receives, includes]}
+        - {label: Person, parent: [Agent], action: [is a, includes, has]}
+        - {label: Organization, parent: [Agent], action: [is a, includes, has]}
+      relations:
+        - {from: Economic Event, to: Economic Resource, action: [affects], inverse: [is affected by]}
+        - {from: Economic Event, to: Commitment, action: [fulfills, fulfils], inverse: [is fulfilled by]}
+        - {from: Agent, to: Economic Event, action: [provides, receives, provides and receives], inverse: [provider, receiver, has provider, has receiver, is provided by, is received by]}
+    optional: [Inputs, Outputs, Input, Output, Input/Output]
+
+  - id: en-speech-narration-org-structure
+    kind: speech
+    company: Org Ontology
+    description: The W3C Organization Ontology retold as speech; is-a chains, units, sites, posts and memberships.
+    tags: [en, speech, recording, narration, benchmark, back-reference, deep-chain, is-a, fillers]
+    input:
+      - "right so the org ontology is about organizations um and the agents that work in them"
+      - "a formal organization is a kind of organization and uh a business entity is a kind of formal organization"
+      - "formal organizations have organizational units"
+      - "an organization also has sites and one of them is its primary site"
+      - "it has posts too and each post is held by an agent"
+      - "and um the organization has memberships and each membership has a role"
+      - "so basically an agent is a member of an organization"
+    expected:
+      concepts:
+        - {label: Organization, parent: [Org Ontology], action: [is about, has, covers, includes, describes]}
+        - {label: Agent, parent: [Org Ontology, Organization], action: [is about, has, covers, includes, describes, has member]}
+        - {label: Formal Organization, parent: [Organization], action: [is a]}
+        - {label: Business Entity, parent: [Formal Organization], action: [is a]}
+        - {label: OrganizationalUnit, parent: [Formal Organization], action: [has, has unit], aliases: [Organizational unit]}
+        - {label: Site, parent: [Organization], action: [has, has site]}
+        - {label: Post, parent: [Organization], action: [has, post]}
+        - {label: Membership, parent: [Organization], action: [has, membership]}
+        - {label: Role, parent: [Membership], action: [has, role]}
+      relations:
+        - {from: Post, to: Agent, action: [is held by, held by], inverse: [holds]}
+        - {from: Agent, to: Organization, action: [is a member of, member of, is member of], inverse: [has member, has]}
+    optional: [Primary site]
+
+  - id: en-speech-narration-ssn-observations
+    kind: speech
+    company: Sensor Network Ontology
+    description: SOSA and SSN retold as speech; kinds of system, observations, features of interest, platforms and deployments.
+    tags: [en, speech, recording, narration, benchmark, back-reference, deep-chain, is-a, descriptive-list, fillers]
+    input:
+      - "okay so the sensor network ontology um is about systems observations and features of interest"
+      - "there are three kinds of systems sensors actuators and samplers"
+      - "a sensor observes an observable property and uh it makes observations"
+      - "each observation has a result and it's about a feature of interest"
+      - "the feature of interest has properties and um observable properties are one kind of property"
+      - "systems are hosted by platforms and a platform is used in a deployment"
+      - "and each system implements a procedure"
+    expected:
+      concepts:
+        - {label: System, parent: [Sensor Network Ontology], action: [is about, has, covers, includes]}
+        - {label: Observation, parent: [Sensor Network Ontology], action: [is about, has, covers, includes]}
+        - {label: Feature Of Interest, parent: [Sensor Network Ontology], action: [is about, has, covers, includes]}
+        - {label: Sensor, parent: [System], action: [is a, includes, has]}
+        - {label: Actuator, parent: [System], action: [is a, includes, has]}
+        - {label: Sampler, parent: [System], action: [is a, includes, has]}
+        - {label: Observable Property, parent: [Sensor], action: [observes]}
+        - {label: Result, parent: [Observation], action: [has, has result]}
+        - {label: Property, parent: [Feature Of Interest], action: [has, has property]}
+        - {label: Platform, parent: [System], action: [is hosted by, hosted by]}
+        - {label: Deployment, parent: [Platform], action: [is used in, in deployment, has, is deployed in]}
+        - {label: Procedure, parent: [System], action: [implements]}
+      relations:
+        - {from: Sensor, to: Observation, action: [makes, made observation], inverse: [made by sensor, is made by]}
+        - {from: Observation, to: Feature Of Interest, action: [is about, has feature of interest, has], inverse: []}
+        - {from: Observable Property, to: Property, action: [is a], inverse: []}
+    optional: [Kinds]
+
+  # ---------------------------------------------------------------- LEARN
+  - id: en-speech-narration-goodrelations-offerings
+    kind: speech
+    company: GoodRelations
+    description: GoodRelations retold as speech; business entities, offerings, price specifications, warranties and products.
+    tags: [en, speech, recording, narration, benchmark, back-reference, deep-chain, is-a, fillers]
+    input:
+      - "so GoodRelations is really about offerings and business entities"
+      - "a business entity is either a person or an organization"
+      - "and uh the business entity offers the offerings"
+      - "an offering has a price specification and um it accepts payment methods"
+      - "there are three types of price specification unit price specifications delivery charge specifications and payment charge specifications"
+      - "the offering also has a warranty promise and the warranty promise has a warranty scope"
+      - "and it includes a product or service which has a brand"
+    expected:
+      concepts:
+        - {label: Offering, parent: [GoodRelations], action: [is about, has, covers, includes]}
+        - {label: Business entity, parent: [GoodRelations], action: [is about, has, covers, includes]}
+        - {label: Person, parent: [Business entity], action: [is a, includes, has]}
+        - {label: Organization, parent: [Business entity], action: [is a, includes, has]}
+        - {label: Price specification, parent: [Offering], action: [has, has price specification]}
+        - {label: Payment method, parent: [Offering], action: [accepts, accepted payment methods]}
+        - {label: Unit price specification, parent: [Price specification], action: [is a, includes, has]}
+        - {label: Delivery charge specification, parent: [Price specification], action: [is a, includes, has]}
+        - {label: Payment charge specification, parent: [Price specification], action: [is a, includes, has]}
+        - {label: Warranty promise, parent: [Offering], action: [has, has warranty promise]}
+        - {label: Warranty scope, parent: [Warranty promise], action: [has, has warranty scope]}
+        - {label: Product or service, parent: [Offering], action: [includes, has]}
+        - {label: Brand, parent: [Product or service], action: [has, has brand]}
+      relations:
+        - {from: Business entity, to: Offering, action: [offers], inverse: [is offered by]}
+    optional: [Types]
+
+  - id: en-speech-narration-prov-o-starting-points
+    kind: speech
+    company: Provenance Ontology
+    description: PROV-O retold as speech; the three starting points, their relations, agent kinds, entity kinds and qualified associations.
+    tags: [en, speech, recording, narration, benchmark, back-reference, deep-chain, is-a, descriptive-list, fillers]
+    input:
+      - "um so the provenance ontology has three starting points entities activities and agents"
+      - "an activity uses entities and uh it generates entities too"
+      - "an entity is attributed to an agent"
+      - "and agents are persons organizations or software agents"
+      - "a plan is a kind of entity and so is a collection and an empty collection is a kind of collection"
+      - "each activity has an association and the association has a role"
+      - "oh and revisions and quotations they're both kinds of derivation"
+    expected:
+      concepts:
+        - {label: Entity, parent: [Provenance Ontology], action: [has, includes]}
+        - {label: Activity, parent: [Provenance Ontology], action: [has, includes]}
+        - {label: Agent, parent: [Provenance Ontology], action: [has, includes]}
+        - {label: Person, parent: [Agent], action: [is a, includes, has]}
+        - {label: Organization, parent: [Agent], action: [is a, includes, has]}
+        - {label: SoftwareAgent, parent: [Agent], action: [is a, includes, has], aliases: [Software agent]}
+        - {label: Plan, parent: [Entity], action: [is a]}
+        - {label: Collection, parent: [Entity], action: [is a]}
+        - {label: EmptyCollection, parent: [Collection], action: [is a], aliases: [Empty collection]}
+        - {label: Association, parent: [Activity], action: [has, qualified association]}
+        - {label: Role, parent: [Association], action: [has, had role]}
+        - {label: Derivation, parent: [Provenance Ontology], action: [has]}
+        - {label: Revision, parent: [Derivation], action: [is a]}
+        - {label: Quotation, parent: [Derivation], action: [is a]}
+      relations:
+        - {from: Activity, to: Entity, action: [uses, used], inverse: [was used by]}
+        - {from: Activity, to: Entity, action: [generates, generated], inverse: [was generated by]}
+        - {from: Entity, to: Agent, action: [is attributed to, was attributed to], inverse: []}
+    optional: [Starting points]
+
+  - id: en-speech-narration-dcat-catalogs
+    kind: speech
+    company: Data Catalog Vocabulary
+    description: DCAT retold as speech; a five-level drill-down from catalogs to relationship roles.
+    tags: [en, speech, recording, narration, benchmark, back-reference, deep-chain, is-a, fillers]
+    input:
+      - "okay so DCAT is basically about catalogs"
+      - "a catalog has catalog records datasets and um data services"
+      - "each dataset has one or more distributions and uh a dataset series is a kind of dataset"
+      - "the data services they serve datasets"
+      - "and each catalog record has a primary topic which is a catalogued resource"
+      - "under the catalogued resource there are relationships and each of them has a role"
+    expected:
+      concepts:
+        - {label: Catalog, parent: [Data Catalog Vocabulary], action: [is about, has, covers, includes]}
+        - {label: Catalog Record, parent: [Catalog], action: [has, record]}
+        - {label: Dataset, parent: [Catalog], action: [has, dataset]}
+        - {label: Data service, parent: [Catalog], action: [has, service]}
+        - {label: Distribution, parent: [Dataset], action: [has, distribution]}
+        - {label: Dataset series, parent: [Dataset], action: [is a]}
+        - {label: Catalogued resource, parent: [Catalog Record], action: [has primary topic, primary topic, has, is]}
+        - {label: Relationship, parent: [Catalogued resource], action: [has, qualified relation]}
+        - {label: Role, parent: [Relationship], action: [has, had role]}
+      relations:
+        - {from: Data service, to: Dataset, action: [serves, serves dataset], inverse: [is served by]}
+    optional: [Primary topic]
+
+  - id: en-speech-recording-billing-drilldown
+    kind: speech
+    company: Northbeam Consulting
+    description: A recording shaped like the owner's; a service line split in two, billing attributes, a buyer of both and its divisions.
+    tags: [en, speech, recording, back-reference, deep-chain, attribute, role-pattern, fillers]
+    input:
+      - "Northbeam Consulting sells cloud services to its clients"
+      - "the cloud services are split into hosting and uh support"
+      - "hosting is billed monthly"
+      - "and the support ones are charged per hour"
+      - "Brightline Retail buys both of them"
+      - "its divisions Stores and Online buy hosting"
+    expected:
+      concepts:
+        - {label: Cloud services, parent: [Northbeam Consulting], action: [sells, offers, provides]}
+        - {label: Clients, parent: [Northbeam Consulting, Cloud services], action: [has, serves, sells to, is sold to, sold to, buys]}
+        - {label: Hosting, parent: [Cloud services], action: [is split into, includes, has]}
+        - {label: Support, parent: [Cloud services], action: [is split into, includes, has]}
+        - {label: Brightline Retail, parent: [Clients, Hosting, Support], action: [buys, includes, has]}
+        - {label: Divisions, parent: [Brightline Retail], action: [has, owns]}
+        - {label: Stores, parent: [Divisions], action: [includes, has]}
+        - {label: Online, parent: [Divisions], action: [includes, has]}
+      relations:
+        - {from: Cloud services, to: Clients, action: [is sold to, sold to], inverse: [buys, purchases]}
+        - {from: Brightline Retail, to: Hosting, action: [buys], inverse: [is bought by]}
+        - {from: Brightline Retail, to: Support, action: [buys], inverse: [is bought by]}
+        - {from: Stores, to: Hosting, action: [buys], inverse: [is bought by]}
+        - {from: Online, to: Hosting, action: [buys], inverse: [is bought by]}
+      attributes:
+        - {concept: Hosting, value: [monthly]}
+        - {concept: Support, value: [per hour, hourly]}
+    optional: [Client]
+
+  - id: en-speech-recording-under-each
+    kind: speech
+    company: Corvel Foods
+    description: A recording that drills down with "under X there are", "each of them has" and "is split into", and jumps back up a level. "Plants" reads either way (grouping or descriptive noun), so the plants also accept the company as parent.
+    tags: [en, speech, recording, back-reference, deep-chain, fillers]
+    input:
+      - "so Corvel Foods runs two plants a bakery and a dairy"
+      - "under the bakery there are um mixing lines and packing lines"
+      - "each of them has a line supervisor"
+      - "the packing lines are split into bagging and uh boxing"
+      - "and going back to the dairy it makes yoghurt and cheese"
+      - "the cheese is aged in a cellar"
+    expected:
+      concepts:
+        - {label: Plants, parent: [Corvel Foods], action: [runs, has, operates]}
+        - {label: Bakery, parent: [Plants, Corvel Foods], action: [includes, has, runs]}
+        - {label: Dairy, parent: [Plants, Corvel Foods], action: [includes, has, runs]}
+        - {label: Mixing lines, parent: [Bakery], action: [has, includes, contains]}
+        - {label: Packing lines, parent: [Bakery], action: [has, includes, contains]}
+        - {label: Line supervisor, parent: [Mixing lines, Packing lines], action: [has]}
+        - {label: Bagging, parent: [Packing lines], action: [is split into, includes, has]}
+        - {label: Boxing, parent: [Packing lines], action: [is split into, includes, has]}
+        - {label: Yoghurt, parent: [Dairy], action: [makes, produces]}
+        - {label: Cheese, parent: [Dairy], action: [makes, produces]}
+        - {label: Cellar, parent: [Cheese], action: [is aged in, ages in]}
+    optional: []

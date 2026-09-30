@@ -74,9 +74,24 @@ class ExpectedRelation(_Model):
         return _as_list(value)
 
 
+class ExpectedAttribute(_Model):
+    """A taught attribute of one concept ("managed services are billed monthly"): `concept` is
+    its label, `value` every acceptable value as spoken. The attribute's name is not scored,
+    since the speaker's word ("billed", "charged") gives several fair names."""
+
+    concept: str
+    value: list[str] = Field(min_length=1)
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def _listed(cls, value: object) -> object:
+        return _as_list(value)
+
+
 class Expected(_Model):
     concepts: list[ExpectedConcept] = Field(default_factory=list)
     relations: list[ExpectedRelation] = Field(default_factory=list)
+    attributes: list[ExpectedAttribute] = Field(default_factory=list)
 
 
 class TeachCase(_Model):

@@ -89,11 +89,16 @@ def strict_answer(name: str) -> str:
     answer = json.loads(recorded(name))
     for key in strict["properties"]:
         answer.setdefault(key, None)
-    for group in ("intents", "unresolved"):
-        keys = strict["properties"][group]["items"]["properties"]
-        for item in answer[group]:
-            for key in keys:
-                item.setdefault(key, None)
+    shapes = {
+        k["properties"]["kind"]["enum"][0]: k["properties"]
+        for k in strict["properties"]["intents"]["items"]["anyOf"]
+    }
+    for item in answer["intents"]:
+        for key in shapes[item["kind"]]:
+            item.setdefault(key, None)
+    for item in answer["unresolved"]:
+        for key in strict["properties"]["unresolved"]["items"]["properties"]:
+            item.setdefault(key, None)
     return json.dumps(answer)
 
 
@@ -174,7 +179,7 @@ def test_the_strict_form_requires_every_property_and_keeps_the_answers_valid() -
     for node in objects(strict):
         assert node["required"] == list(node["properties"])
         assert node["additionalProperties"] is False
-    assert {"action", "rule", "domainKey", "segments", "segment"} <= optional
+    assert {"rule", "domainKey", "segments", "segment"} <= optional
     assert "kind" not in optional and "candidate" not in optional
     jsonschema.Draft202012Validator(strict).validate(
         json.loads(strict_answer("services_offerings"))
