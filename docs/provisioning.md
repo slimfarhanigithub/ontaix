@@ -105,7 +105,7 @@ Only when `ONTAIX_LLM_PROVIDER` is `anthropic` (with `ONTAIX_LLM_MODEL` set to a
 The key is never in settings, API responses, events, audit entries, logs, tests, fixtures, commits or documentation, and no agent asks the owner for it in a conversation. This provider sends prompts to Anthropic outside Azure, with no EU residency guarantee (ADR 0008, Data Residency).
 
 ## Sign-In and Organizations
-Users sign in with an email and a password held by Ontaix (ADR 0017, decision row 135). There is no sign-up: the only default account is the super admin, created once by the owner from a terminal attached to the API image, so the password travels only over his own TTY and never enters chat, code, logs, commits or Key Vault:
+Users sign in with an email and a password held by Ontaix (ADR 0017, decision row 140). There is no sign-up: the only default account is the super admin, created once by the owner from a terminal attached to the API image, so the password travels only over his own TTY and never enters chat, code, logs, commits or Key Vault:
 
 ```bash
 kubectl exec -it <api pod> -- python -m app.admin create-super-admin slim.farhani@outlook.com   # prompts twice, no echo

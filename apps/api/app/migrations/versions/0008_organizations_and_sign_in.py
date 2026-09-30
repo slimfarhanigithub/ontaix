@@ -1,6 +1,6 @@
 """Organizations and sign-in: accounts, sessions, company mode and row-level security.
 
-Brings a database of revision 0006 to the current `contracts/schema.sql`: the actor kind
+Brings a database of revision 0007 to the current `contracts/schema.sql`: the actor kind
 `platform`; the enums of the sign-in tables; `tenant.disabled_at`, `tenant.updated_at`, the slug
 and name checks and the case-insensitive unique name; `organization_settings`; `account`,
 `password_credential`, `platform_role_assignment`, `auth_session`, `sign_in_throttle` and the
@@ -16,7 +16,7 @@ Every statement is idempotent, so on a database revision 0001 already created fr
 contract this revision changes nothing. The DDL is the contract's text, so constraint names and
 definitions match a database loaded from it.
 
-Revision ID: 0007
+Revision ID: 0008
 Revises: 0006
 Create Date: 2026-09-30
 """
@@ -25,8 +25,8 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "0007"
-down_revision = "0006"
+revision = "0008"
+down_revision = "0007"
 branch_labels = None
 depends_on = None
 
@@ -406,4 +406,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise NotImplementedError("revision 0007 is one-way")
+    raise NotImplementedError("revision 0008 is one-way")

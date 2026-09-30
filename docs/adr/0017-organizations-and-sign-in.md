@@ -1,6 +1,6 @@
 # ADR 0017: Organizations and Sign-In
 
-Status: Accepted. Password sign-in is an owner decision — final (Slim, 2026-09-30); every other choice here is approved under owner delegation (decision row 135).
+Status: Accepted. Password sign-in is an owner decision — final (Slim, 2026-09-30); every other choice here is approved under owner delegation (decision row 140).
 
 ## Context
 
@@ -189,7 +189,7 @@ The `X-Ontaix-User` path remains for development and tests only. It is accepted 
 
 ### 11. Migration of the Demo Tenant
 
-Migration `0007_organizations_and_sign_in`:
+Migration `0008_organizations_and_sign_in`:
 
 1. Adds the enum value `actor_kind.platform`, the new enums, `tenant.disabled_at` and `tenant.updated_at`, and `audit_entry.actor_account_id` with its check. Existing rows all have actor kinds other than `platform`, so the check holds.
 2. Creates `organization_settings`, `account`, `password_credential`, `platform_role_assignment`, `auth_session`, `sign_in_throttle`, `platform_audit_entry`, `resolve_session()`, the company-mode triggers, the two roles, the RLS policies and the grants.
@@ -204,5 +204,5 @@ Every new organization-scoped request path must set `ontaix.tenant_id` before it
 - The permission vocabulary of ADR 0003 gains `platform.admin`, held only through the `super_admin` platform role and declared on every `/admin` operation. `authenticated` also covers `/auth/sign-out`, `/auth/session` and `/auth/password`.
 - One email means one account in one organization. Serving the same person in two organizations needs two emails, or a later decision to add an organization picker.
 - Losing the super admin's password is recovered only through `set-password` in a terminal with platform database access. That is deliberate: no remote path resets the platform role.
-- The UI gains screens that the reference does not have (sign-in, password, platform portal, account controls). They are built only from the reference's own classes and tokens, and they are recorded as deliberate differences in decision row 135.
+- The UI gains screens that the reference does not have (sign-in, password, platform portal, account controls). They are built only from the reference's own classes and tokens, and they are recorded as deliberate differences in decision row 140.
 - Turning OIDC on later is additive: a `tenant_identity_provider` row and a bearer-token path that resolves to an `app_user` of that organization. Sessions, RLS and roles stay as they are.
