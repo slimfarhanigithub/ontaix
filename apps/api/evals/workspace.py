@@ -56,6 +56,8 @@ class UnitResult:
     outcome: str | None = None
     unresolved: list[dict[str, Any]] = field(default_factory=list)
     drafts: list[dict[str, Any]] = field(default_factory=list)
+    # A whole-document reading's note per draft: pass, confidence, depth, grounding sentence.
+    notes: list[dict[str, Any]] = field(default_factory=list)
     statements: list[str] = field(default_factory=list)
     submitted: int = 0
     submit_error: str | None = None
@@ -207,6 +209,7 @@ class Workspace:
             return unit, figures
         body = result.json()
         unit.drafts = body.get("drafts") or []
+        unit.notes = body.get("notes") or []
         unit.unresolved = body.get("unresolved") or []
         unit.outcome = "understood" if unit.drafts else "not_understood"
         if unit.drafts:

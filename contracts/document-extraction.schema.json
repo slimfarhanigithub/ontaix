@@ -222,41 +222,13 @@
         "sentenceIndex",
         "span"
       ],
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "rel"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "action"
-            ],
-            "not": {
-              "required": [
-                "rule"
-              ]
-            }
-          },
-          "else": {
-            "not": {
-              "required": [
-                "action"
-              ]
-            }
-          }
-        }
-      ],
       "properties": {
         "kind": {
           "enum": [
             "rel",
             "spec"
           ],
-          "description": "As in teach extraction: rel is subject action object; spec is subject is a kind of object, both ends in the import's company."
+          "description": "As in teach extraction: rel is subject action object, with an action and no rule; spec is subject is a kind of object, with an optional rule and no action; both ends in the import's company. The API reads an intent whose fields disagree with its kind by its fields instead of refusing the chunk: an action meaning is a makes a spec without an action, any other action makes a rel with that action and no rule, and a rel without an action or an action equivalent to is listed as not_understood."
         },
         "subject": {
           "$ref": "#/$defs/intentRef"

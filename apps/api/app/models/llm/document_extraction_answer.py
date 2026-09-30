@@ -106,10 +106,8 @@ class SectionIntent(_Strict):
 
     @model_validator(mode="after")
     def _kind_fields(self) -> SectionIntent:
-        if self.kind == "rel" and (self.action is None or self.rule is not None):
-            raise ValueError("a rel intent has an action and no rule")
-        if self.kind == "spec" and self.action is not None:
-            raise ValueError("a spec intent has no action")
+        if self.kind == "spec" and self.rule is not None and self.action is not None:
+            raise ValueError("a spec intent with a rule has no action")
         return self
 
 

@@ -1,0 +1,5025 @@
+{
+  "started_at": "2026-09-30T21:22:23+00:00",
+  "dry_run": false,
+  "budget_eur": 0.3,
+  "spent_eur": 0.07111,
+  "estimate": {
+    "cases": 1,
+    "screeningCases": 1,
+    "configurations": [
+      "gpt-6-sol@none"
+    ],
+    "stages": {
+      "screening": {
+        "configurations": 1,
+        "cases": 1,
+        "repeats": 1,
+        "calls": 1,
+        "inputTokens": 14280,
+        "outputTokens": 1200,
+        "eur": 0.02,
+        "eurByConfiguration": {
+          "gpt-6-sol@none": 0.02
+        }
+      }
+    },
+    "ocrPages": 0,
+    "ocrEur": 0.0,
+    "totalEur": 0.02,
+    "budgetEur": 0.3,
+    "unpriced": []
+  },
+  "cases": [
+    {
+      "id": "documents-documents-structure_ostrava_mutual_claims.md",
+      "kind": "document",
+      "origin": "documents",
+      "company": "Ostrava Mutual",
+      "description": "Claims handling standard of a fictional property and motor insurer pasted from a policy document; headings, bullet and numbered lists, a step table and an authority-limits table carry facts that the collapse-then-split import merges into dropped runs.",
+      "tags": [
+        "document",
+        "document-structure",
+        "insurance",
+        "en",
+        "documents"
+      ],
+      "existing": [],
+      "input": [],
+      "document": "C:\\Users\\Slim\\source\\Ontaix\\.claude\\worktrees\\extract-document\\apps\\api\\evals\\documents\\structure_ostrava_mutual_claims.md",
+      "expected": {
+        "concepts": [
+          {
+            "label": "Claims handling",
+            "parent": [
+              "Ostrava Mutual"
+            ],
+            "action": [
+              "operates",
+              "runs",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Delegated authority",
+            "parent": [
+              "Ostrava Mutual"
+            ],
+            "action": [
+              "operates",
+              "runs",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "First notification of loss",
+            "parent": [
+              "Claims handling"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "consists of"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Triage",
+            "parent": [
+              "Claims handling"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "consists of"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Assessment",
+            "parent": [
+              "Claims handling"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "consists of"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Settlement",
+            "parent": [
+              "Claims handling"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "consists of"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Recovery",
+            "parent": [
+              "Claims handling"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "consists of"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Fraud referral",
+            "parent": [
+              "Claims handling"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "consists of"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Notification channels",
+            "parent": [
+              "First notification of loss"
+            ],
+            "action": [
+              "accepts notifications through",
+              "uses",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Loss registration",
+            "parent": [
+              "First notification of loss"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "consists of"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Telephone notification",
+            "parent": [
+              "Notification channels"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Online claim form",
+            "parent": [
+              "Notification channels"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Broker notification",
+            "parent": [
+              "Notification channels"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Assistance line referral",
+            "parent": [
+              "Notification channels"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Policy verification",
+            "parent": [
+              "Loss registration"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Coverage check",
+            "parent": [
+              "Loss registration"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Claim number allocation",
+            "parent": [
+              "Loss registration"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Acknowledgement letter",
+            "parent": [
+              "Loss registration"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Handling tracks",
+            "parent": [
+              "Triage"
+            ],
+            "action": [
+              "allocates to",
+              "has",
+              "uses"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Fast track",
+            "parent": [
+              "Handling tracks",
+              "Triage"
+            ],
+            "action": [
+              "includes",
+              "allocates to",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Standard track",
+            "parent": [
+              "Handling tracks",
+              "Triage"
+            ],
+            "action": [
+              "includes",
+              "allocates to",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Complex loss track",
+            "parent": [
+              "Handling tracks",
+              "Triage"
+            ],
+            "action": [
+              "includes",
+              "allocates to",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Straight-through payment",
+            "parent": [
+              "Fast track"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Loss adjuster appointment",
+            "parent": [
+              "Complex loss track"
+            ],
+            "action": [
+              "arranges",
+              "requires",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Reserve review",
+            "parent": [
+              "Complex loss track"
+            ],
+            "action": [
+              "carries out",
+              "requires",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Claims plan",
+            "parent": [
+              "Complex loss track"
+            ],
+            "action": [
+              "agrees",
+              "requires",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Initial reserve",
+            "parent": [
+              "Complex loss track"
+            ],
+            "action": [
+              "sets",
+              "requires",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Motor assessment",
+            "parent": [
+              "Assessment"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Property assessment",
+            "parent": [
+              "Assessment"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Vehicle inspection",
+            "parent": [
+              "Motor assessment"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Total loss evaluation",
+            "parent": [
+              "Motor assessment"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Repair authorisation",
+            "parent": [
+              "Motor assessment"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Repair estimate",
+            "parent": [
+              "Vehicle inspection"
+            ],
+            "action": [
+              "produces",
+              "creates",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Photo evidence",
+            "parent": [
+              "Vehicle inspection"
+            ],
+            "action": [
+              "produces",
+              "creates",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Site visit",
+            "parent": [
+              "Property assessment"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Emergency repairs",
+            "parent": [
+              "Property assessment"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Scope of works",
+            "parent": [
+              "Property assessment"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Moisture survey",
+            "parent": [
+              "Site visit"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Liability decision",
+            "parent": [
+              "Settlement"
+            ],
+            "action": [
+              "consists of",
+              "follows",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Quantum agreement",
+            "parent": [
+              "Settlement"
+            ],
+            "action": [
+              "consists of",
+              "follows",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Settlement offer",
+            "parent": [
+              "Settlement"
+            ],
+            "action": [
+              "consists of",
+              "follows",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Payment release",
+            "parent": [
+              "Settlement"
+            ],
+            "action": [
+              "consists of",
+              "follows",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Decision letter",
+            "parent": [
+              "Liability decision"
+            ],
+            "action": [
+              "produces",
+              "outputs",
+              "creates"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Agreed loss figure",
+            "parent": [
+              "Quantum agreement"
+            ],
+            "action": [
+              "produces",
+              "outputs",
+              "creates"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Offer letter",
+            "parent": [
+              "Settlement offer"
+            ],
+            "action": [
+              "produces",
+              "outputs",
+              "creates"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Payment confirmation",
+            "parent": [
+              "Payment release"
+            ],
+            "action": [
+              "produces",
+              "outputs",
+              "creates"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Claim closure",
+            "parent": [
+              "Settlement"
+            ],
+            "action": [
+              "consists of",
+              "follows",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Settlement methods",
+            "parent": [
+              "Settlement"
+            ],
+            "action": [
+              "offers",
+              "uses",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Cash settlement",
+            "parent": [
+              "Settlement methods"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Repair in kind",
+            "parent": [
+              "Settlement methods"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Replacement in kind",
+            "parent": [
+              "Settlement methods"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Total loss payment",
+            "parent": [
+              "Cash settlement"
+            ],
+            "action": [
+              "is a",
+              "is a kind of",
+              "is a type of"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Subrogation",
+            "parent": [
+              "Recovery"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "consists of"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Salvage",
+            "parent": [
+              "Recovery"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "consists of"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Excess recovery",
+            "parent": [
+              "Recovery"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "consists of"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Third-party identification",
+            "parent": [
+              "Subrogation"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Letter of claim",
+            "parent": [
+              "Subrogation"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Recovery proceedings",
+            "parent": [
+              "Subrogation"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Salvage auction",
+            "parent": [
+              "Salvage"
+            ],
+            "action": [
+              "is disposed of through",
+              "uses",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Fraud indicators",
+            "parent": [
+              "Fraud referral"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "SIU investigation",
+            "parent": [
+              "Fraud referral"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Late notification",
+            "parent": [
+              "Fraud indicators"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Inconsistent account",
+            "parent": [
+              "Fraud indicators"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Recent policy inception",
+            "parent": [
+              "Fraud indicators"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Prior claims history",
+            "parent": [
+              "Fraud indicators"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Desktop review",
+            "parent": [
+              "SIU investigation"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Recorded interview",
+            "parent": [
+              "SIU investigation"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Field investigation",
+            "parent": [
+              "SIU investigation"
+            ],
+            "action": [
+              "consists of",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Tiers",
+            "parent": [
+              "Delegated authority"
+            ],
+            "action": [
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Desk authority",
+            "parent": [
+              "Tiers",
+              "Delegated authority"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "grants"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Senior handler authority",
+            "parent": [
+              "Tiers",
+              "Delegated authority"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "grants"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Team leader authority",
+            "parent": [
+              "Tiers",
+              "Delegated authority"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "grants"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Claims manager authority",
+            "parent": [
+              "Tiers",
+              "Delegated authority"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "grants"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Claims committee authority",
+            "parent": [
+              "Tiers",
+              "Delegated authority"
+            ],
+            "action": [
+              "includes",
+              "has",
+              "grants"
+            ],
+            "aliases": []
+          }
+        ],
+        "relations": [
+          {
+            "from": "Fraud referral",
+            "to": "Settlement",
+            "action": [
+              "suspends",
+              "holds"
+            ],
+            "inverse": [
+              "is suspended by"
+            ]
+          },
+          {
+            "from": "Triage",
+            "to": "Fraud indicators",
+            "action": [
+              "applies",
+              "uses",
+              "checks"
+            ],
+            "inverse": [
+              "is applied by"
+            ]
+          },
+          {
+            "from": "Settlement offer",
+            "to": "Delegated authority",
+            "action": [
+              "must never exceed",
+              "is limited by",
+              "respects"
+            ],
+            "inverse": [
+              "limits"
+            ]
+          },
+          {
+            "from": "Subrogation",
+            "to": "Liability decision",
+            "action": [
+              "relies on",
+              "uses",
+              "depends on"
+            ],
+            "inverse": [
+              "is relied on by"
+            ]
+          },
+          {
+            "from": "Total loss evaluation",
+            "to": "Salvage auction",
+            "action": [
+              "triggers",
+              "starts"
+            ],
+            "inverse": [
+              "is triggered by"
+            ]
+          },
+          {
+            "from": "SIU investigation",
+            "to": "Liability decision",
+            "action": [
+              "informs",
+              "feeds"
+            ],
+            "inverse": [
+              "is informed by"
+            ]
+          }
+        ],
+        "attributes": []
+      },
+      "optional": [
+        "Closed file",
+        "Claims handler",
+        "Senior claims handler",
+        "Claims team leader",
+        "Claims manager",
+        "Claims Committee",
+        "Head of Claims",
+        "Special Investigations Unit",
+        "Policy administration system",
+        "Loss adjuster",
+        "Approved repairer",
+        "Exceptions register",
+        "Claims payments team",
+        "Recovery team"
+      ],
+      "source_report": {}
+    }
+  ],
+  "notes": [],
+  "documents": [
+    {
+      "path": "C:\\Users\\Slim\\source\\Ontaix\\.claude\\worktrees\\extract-document\\apps\\api\\evals\\documents\\structure_ostrava_mutual_claims.md",
+      "format": "md",
+      "words": 1925,
+      "pages": null,
+      "ocr": null
+    }
+  ],
+  "stages": [
+    {
+      "name": "screening",
+      "runs": [
+        {
+          "config": {
+            "deployment": "gpt-6-sol",
+            "effort": "none",
+            "price": {
+              "inputEurPerMTok": "1.0",
+              "outputEurPerMTok": "8.0"
+            },
+            "provider": "azure_foundry",
+            "residency": "eu_data_zone",
+            "family": "gpt",
+            "endpoint": null
+          },
+          "repeat": 0,
+          "results": [
+            {
+              "case_id": "documents-documents-structure_ostrava_mutual_claims.md",
+              "kind": "document",
+              "origin": "documents",
+              "mode": "whole",
+              "run_key": "gpt-6-sol@none",
+              "repeat": 0,
+              "units": [
+                {
+                  "text": "whole document (import 19928553-7405-4f2a-a198-06a2cd9bdbd7)",
+                  "status": 200,
+                  "wall_ms": 34516,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "understood",
+                  "unresolved": [
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 0,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 3,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 8,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 12,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 17,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 22,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 36,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 39,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 45,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 51,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 54,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 55,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 62,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 70,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 73,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 78,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 81,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 83,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 87,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 0,
+                      "sentenceIndex": 93,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 1,
+                      "sentenceIndex": 99,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 1,
+                      "sentenceIndex": 103,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 1,
+                      "sentenceIndex": 104,
+                      "reason": "not_a_statement"
+                    },
+                    {
+                      "chunk": 1,
+                      "sentenceIndex": 112,
+                      "reason": "not_a_statement"
+                    }
+                  ],
+                  "drafts": [
+                    {
+                      "type": "concept",
+                      "label": "Claims handling",
+                      "action": "operates",
+                      "reverse": false,
+                      "parentId": "db636f29-3cc5-4043-938b-9bfa67abdcf1",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Delegated authority",
+                      "action": "operates",
+                      "reverse": false,
+                      "parentId": "db636f29-3cc5-4043-938b-9bfa67abdcf1",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "First notification of loss",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Claims handling"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Notification Channels",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "First notification of loss"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Telephone notification",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Notification Channels"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Online claim form",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Notification Channels"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Broker notification",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Notification Channels"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Assistance line referral",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Notification Channels"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Loss registration",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "First notification of loss"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Policy verification",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Loss registration"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Coverage check",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Loss registration"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Claim number allocation",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Loss registration"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Acknowledgement letter",
+                      "action": "issues",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Loss registration"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Triage",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Claims handling"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Fast track",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Triage"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Straight-through payment",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Fast track"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Standard track",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Triage"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Complex loss track",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Triage"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Loss adjuster appointment",
+                      "action": "schedules",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Complex loss track"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Claims plan",
+                      "action": "plans",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Complex loss track"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Initial reserve",
+                      "action": "sets",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Complex loss track"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Reserve review",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Complex loss track"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Assessment",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Claims handling"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Motor assessment",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Assessment"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Vehicle inspection",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Motor assessment"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Repair estimate",
+                      "action": "produces",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Vehicle inspection"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Photo evidence",
+                      "action": "produces",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Vehicle inspection"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Total loss evaluation",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Motor assessment"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Repair authorisation",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Motor assessment"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Property assessment",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Assessment"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Site visit",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Property assessment"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Moisture survey",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Site visit"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Emergency repairs",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Property assessment"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Scope of works",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Property assessment"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Settlement",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Claims handling"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Liability decision",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Settlement"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Decision letter",
+                      "action": "produces",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Liability decision"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Quantum agreement",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Settlement"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Agreed loss figure",
+                      "action": "produces",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Quantum agreement"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Settlement offer",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Settlement"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Offer letter",
+                      "action": "produces",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Settlement offer"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Payment release",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Settlement"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Payment confirmation",
+                      "action": "produces",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Payment release"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Claim closure",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Settlement"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Closed file",
+                      "action": "produces",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Claim closure"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Settlement Methods",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Settlement"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Cash settlement",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Settlement Methods"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Total loss payment",
+                      "action": "is a type of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Cash settlement"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Repair in kind",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Settlement Methods"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Replacement in kind",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Settlement Methods"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Recovery",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Claims handling"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Subrogation",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Recovery"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Third-party identification",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Subrogation"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Letter of claim",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Subrogation"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Recovery proceedings",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Subrogation"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Salvage",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Recovery"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Salvage auction",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Salvage"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Excess recovery",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Recovery"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Fraud referral",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Claims handling"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Fraud indicators",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Fraud referral"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Late notification",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Fraud indicators"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Inconsistent account",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Fraud indicators"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Recent policy inception",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Fraud indicators"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Prior claims history",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Fraud indicators"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "SIU investigation",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Fraud referral"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Desktop review",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "SIU investigation"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Recorded interview",
+                      "action": "consists of",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "SIU investigation"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Field investigation",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "SIU investigation"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Desk authority",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Delegated authority"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Senior handler authority",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Delegated authority"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Team leader authority",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Delegated authority"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Claims manager authority",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Delegated authority"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Claims committee authority",
+                      "action": "includes",
+                      "reverse": false,
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Delegated authority"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Document Control",
+                      "action": "includes",
+                      "reverse": false,
+                      "parentId": "db636f29-3cc5-4043-938b-9bfa67abdcf1",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Head of Claims",
+                      "action": "is owned by",
+                      "caption": "Head of Claims is kept. Claims handling is owned by Head of Claims.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "people",
+                      "parentLabel": "Claims handling"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Claims handler",
+                      "action": "is executed by",
+                      "caption": "Claims handler is kept. Loss registration is executed by Claims handler.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "people",
+                      "parentLabel": "Loss registration"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Policy administration system",
+                      "action": "checks",
+                      "caption": "Policy administration system is kept. Policy verification checks Policy administration system.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "engineering",
+                      "parentLabel": "Policy verification"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Team leader",
+                      "action": "is approved by",
+                      "caption": "Team leader is kept. Reserve review is approved by Team leader.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "people",
+                      "parentLabel": "Reserve review"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Approved engineer",
+                      "action": "is executed by",
+                      "caption": "Approved engineer is kept. Motor assessment is executed by Approved engineer.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "people",
+                      "parentLabel": "Motor assessment"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Claims surveyor",
+                      "action": "is executed by",
+                      "caption": "Claims surveyor is kept. Property assessment is executed by Claims surveyor.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "people",
+                      "parentLabel": "Property assessment"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Loss adjuster",
+                      "action": "is executed by",
+                      "caption": "Loss adjuster is kept. Property assessment is executed by Loss adjuster.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "people",
+                      "parentLabel": "Property assessment"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Special Investigations Unit",
+                      "action": "is executed by",
+                      "caption": "Special Investigations Unit is kept. SIU investigation is executed by Special Investigations Unit.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "people",
+                      "parentLabel": "SIU investigation"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Claim file",
+                      "action": "checks",
+                      "caption": "Claim file is kept. Desktop review checks Claim file.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Desktop review"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Open-source records",
+                      "action": "checks",
+                      "caption": "Open-source records is kept. Desktop review checks Open-source records.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Desktop review"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Industry databases",
+                      "action": "checks",
+                      "caption": "Industry databases is kept. Desktop review checks Industry databases.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Desktop review"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Customer",
+                      "action": "records",
+                      "caption": "Customer is kept. Recorded interview records Customer.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Recorded interview"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Consent",
+                      "action": "requires",
+                      "caption": "Consent is kept. Recorded interview requires Consent.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Recorded interview"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Copy of the recording",
+                      "action": "provides",
+                      "caption": "Copy of the recording is kept. Recorded interview provides Copy of the recording.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Recorded interview"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Claims Manager",
+                      "action": "has",
+                      "parentId": "db636f29-3cc5-4043-938b-9bfa67abdcf1",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "people"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Claims",
+                      "action": "declines",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "people",
+                      "parentLabel": "Claims Manager"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Highest amount",
+                      "action": "limits",
+                      "caption": "Highest amount is kept. Delegated authority limits Highest amount.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "finance",
+                      "parentLabel": "Delegated authority"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Senior claims handler",
+                      "action": "is held by",
+                      "caption": "Senior claims handler is kept. Senior handler authority is held by Senior claims handler.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "people",
+                      "parentLabel": "Senior handler authority"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Claims team leader",
+                      "action": "is held by",
+                      "caption": "Claims team leader is kept. Team leader authority is held by Claims team leader.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "people",
+                      "parentLabel": "Team leader authority"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Claims committee",
+                      "action": "is held by",
+                      "caption": "Claims committee is kept. Claims committee authority is held by Claims committee.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "people",
+                      "parentLabel": "Claims committee authority"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Exceptions to this standard",
+                      "action": "approves",
+                      "caption": "Exceptions to this standard is kept. Claims committee authority approves Exceptions to this standard.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Claims committee authority"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Review cycle",
+                      "action": "has",
+                      "caption": "Review cycle is kept. Document Control has Review cycle.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Document Control"
+                    },
+                    {
+                      "type": "concept",
+                      "label": "Next review",
+                      "action": "schedules",
+                      "caption": "Next review is kept. Document Control schedules Next review.",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919",
+                      "domainKey": "production",
+                      "parentLabel": "Document Control"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Delegated authority",
+                      "action": "limits",
+                      "bLabel": "Settlement offer",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Triage",
+                      "action": "applies to",
+                      "bLabel": "Fraud indicators",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Straight-through payment",
+                      "action": "depends on",
+                      "bLabel": "Coverage check",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Repair authorisation",
+                      "action": "depends on",
+                      "bLabel": "Repair estimate",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Repair authorisation",
+                      "action": "depends on",
+                      "bLabel": "Photo evidence",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Liability decision",
+                      "action": "precedes",
+                      "bLabel": "Quantum agreement",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Quantum agreement",
+                      "action": "precedes",
+                      "bLabel": "Settlement offer",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Settlement offer",
+                      "action": "precedes",
+                      "bLabel": "Payment release",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Payment release",
+                      "action": "precedes",
+                      "bLabel": "Claim closure",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Settlement offer",
+                      "action": "is limited by",
+                      "bLabel": "Delegated authority",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Subrogation",
+                      "action": "depends on",
+                      "bLabel": "Liability decision",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Total loss evaluation",
+                      "action": "triggers",
+                      "bLabel": "Salvage auction",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "SIU investigation",
+                      "action": "is part of",
+                      "bLabel": "Fraud referral",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "SIU investigation",
+                      "action": "supports",
+                      "bLabel": "Liability decision",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Head of Claims",
+                      "action": "approves",
+                      "bLabel": "Delegated authority",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Desk authority",
+                      "action": "is held by",
+                      "bLabel": "Claims handler",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Desk authority",
+                      "action": "approves",
+                      "bLabel": "Straight-through payment",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Senior handler authority",
+                      "action": "approves",
+                      "bLabel": "Loss adjuster appointment",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Team leader authority",
+                      "action": "approves",
+                      "bLabel": "Reserve review",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Claims manager authority",
+                      "action": "is held by",
+                      "bLabel": "Claims Manager",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Delegated authority",
+                      "action": "reports to",
+                      "bLabel": "Claims committee authority",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    },
+                    {
+                      "type": "relation",
+                      "aLabel": "Document Control",
+                      "action": "is owned by",
+                      "bLabel": "Head of Claims",
+                      "companyId": "72ce1bd6-f2dd-4472-9602-754e834b9919"
+                    }
+                  ],
+                  "notes": [
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "process",
+                      "depth": 1,
+                      "requires": [],
+                      "sentenceIndex": 5,
+                      "sourceSpan": {
+                        "start": 24,
+                        "end": 39
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.94,
+                      "role": "process",
+                      "depth": 1,
+                      "requires": [],
+                      "sentenceIndex": 5,
+                      "sourceSpan": {
+                        "start": 116,
+                        "end": 135
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "subprocess",
+                      "depth": 2,
+                      "requires": [
+                        0
+                      ],
+                      "sentenceIndex": 10,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 28
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.96,
+                      "role": "group",
+                      "depth": 3,
+                      "requires": [
+                        2
+                      ],
+                      "sentenceIndex": 17,
+                      "sourceSpan": {
+                        "start": 8,
+                        "end": 29
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.98,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        3
+                      ],
+                      "sentenceIndex": 18,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 24
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.98,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        3
+                      ],
+                      "sentenceIndex": 19,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 19
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.98,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        3
+                      ],
+                      "sentenceIndex": 20,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 21
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.98,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        3
+                      ],
+                      "sentenceIndex": 21,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 26
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "subprocess",
+                      "depth": 3,
+                      "requires": [
+                        2
+                      ],
+                      "sentenceIndex": 14,
+                      "sourceSpan": {
+                        "start": 113,
+                        "end": 130
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        8
+                      ],
+                      "sentenceIndex": 24,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 22
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        8
+                      ],
+                      "sentenceIndex": 25,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 17
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        8
+                      ],
+                      "sentenceIndex": 26,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 26
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.97,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        8
+                      ],
+                      "sentenceIndex": 27,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 25
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "subprocess",
+                      "depth": 2,
+                      "requires": [
+                        0
+                      ],
+                      "sentenceIndex": 28,
+                      "sourceSpan": {
+                        "start": 0,
+                        "end": 6
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "group",
+                      "depth": 3,
+                      "requires": [
+                        13
+                      ],
+                      "sentenceIndex": 30,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 12
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        14
+                      ],
+                      "sentenceIndex": 33,
+                      "sourceSpan": {
+                        "start": 24,
+                        "end": 48
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "group",
+                      "depth": 3,
+                      "requires": [
+                        13
+                      ],
+                      "sentenceIndex": 31,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 16
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "group",
+                      "depth": 3,
+                      "requires": [
+                        13
+                      ],
+                      "sentenceIndex": 32,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 20
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.96,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        17
+                      ],
+                      "sentenceIndex": 34,
+                      "sourceSpan": {
+                        "start": 108,
+                        "end": 133
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.95,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        17
+                      ],
+                      "sentenceIndex": 34,
+                      "sourceSpan": {
+                        "start": 178,
+                        "end": 189
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.97,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        17
+                      ],
+                      "sentenceIndex": 34,
+                      "sourceSpan": {
+                        "start": 270,
+                        "end": 285
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.98,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        17
+                      ],
+                      "sentenceIndex": 35,
+                      "sourceSpan": {
+                        "start": 16,
+                        "end": 30
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "subprocess",
+                      "depth": 2,
+                      "requires": [
+                        0
+                      ],
+                      "sentenceIndex": 37,
+                      "sourceSpan": {
+                        "start": 0,
+                        "end": 10
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "subprocess",
+                      "depth": 3,
+                      "requires": [
+                        22
+                      ],
+                      "sentenceIndex": 38,
+                      "sourceSpan": {
+                        "start": 20,
+                        "end": 36
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        23
+                      ],
+                      "sentenceIndex": 41,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 21
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 5,
+                      "requires": [
+                        24
+                      ],
+                      "sentenceIndex": 44,
+                      "sourceSpan": {
+                        "start": 34,
+                        "end": 49
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 5,
+                      "requires": [
+                        24
+                      ],
+                      "sentenceIndex": 44,
+                      "sourceSpan": {
+                        "start": 54,
+                        "end": 68
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        23
+                      ],
+                      "sentenceIndex": 42,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 24
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        23
+                      ],
+                      "sentenceIndex": 43,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 23
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "subprocess",
+                      "depth": 3,
+                      "requires": [
+                        22
+                      ],
+                      "sentenceIndex": 38,
+                      "sourceSpan": {
+                        "start": 41,
+                        "end": 60
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        29
+                      ],
+                      "sentenceIndex": 47,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 13
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "step",
+                      "depth": 5,
+                      "requires": [
+                        30
+                      ],
+                      "sentenceIndex": 50,
+                      "sourceSpan": {
+                        "start": 26,
+                        "end": 41
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        29
+                      ],
+                      "sentenceIndex": 48,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 20
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        29
+                      ],
+                      "sentenceIndex": 49,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 17
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "subprocess",
+                      "depth": 2,
+                      "requires": [
+                        0
+                      ],
+                      "sentenceIndex": 52,
+                      "sourceSpan": {
+                        "start": 0,
+                        "end": 10
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 3,
+                      "requires": [
+                        34
+                      ],
+                      "sentenceIndex": 56,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 24
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        35
+                      ],
+                      "sentenceIndex": 56,
+                      "sourceSpan": {
+                        "start": 44,
+                        "end": 59
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 3,
+                      "requires": [
+                        34
+                      ],
+                      "sentenceIndex": 57,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 23
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        37
+                      ],
+                      "sentenceIndex": 57,
+                      "sourceSpan": {
+                        "start": 60,
+                        "end": 78
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 3,
+                      "requires": [
+                        34
+                      ],
+                      "sentenceIndex": 58,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 22
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        39
+                      ],
+                      "sentenceIndex": 58,
+                      "sourceSpan": {
+                        "start": 58,
+                        "end": 70
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 3,
+                      "requires": [
+                        34
+                      ],
+                      "sentenceIndex": 59,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 21
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        41
+                      ],
+                      "sentenceIndex": 59,
+                      "sourceSpan": {
+                        "start": 47,
+                        "end": 67
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 3,
+                      "requires": [
+                        34
+                      ],
+                      "sentenceIndex": 60,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 19
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        43
+                      ],
+                      "sentenceIndex": 60,
+                      "sourceSpan": {
+                        "start": 39,
+                        "end": 50
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.98,
+                      "role": "group",
+                      "depth": 3,
+                      "requires": [
+                        34
+                      ],
+                      "sentenceIndex": 62,
+                      "sourceSpan": {
+                        "start": 8,
+                        "end": 26
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        45
+                      ],
+                      "sentenceIndex": 64,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 17
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 5,
+                      "requires": [
+                        46
+                      ],
+                      "sentenceIndex": 67,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 20
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        45
+                      ],
+                      "sentenceIndex": 65,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 16
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        45
+                      ],
+                      "sentenceIndex": 66,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 21
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "subprocess",
+                      "depth": 2,
+                      "requires": [
+                        0
+                      ],
+                      "sentenceIndex": 71,
+                      "sourceSpan": {
+                        "start": 0,
+                        "end": 8
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "subprocess",
+                      "depth": 3,
+                      "requires": [
+                        50
+                      ],
+                      "sentenceIndex": 72,
+                      "sourceSpan": {
+                        "start": 18,
+                        "end": 29
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        51
+                      ],
+                      "sentenceIndex": 75,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 29
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        51
+                      ],
+                      "sentenceIndex": 76,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 18
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        51
+                      ],
+                      "sentenceIndex": 77,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 23
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "subprocess",
+                      "depth": 3,
+                      "requires": [
+                        50
+                      ],
+                      "sentenceIndex": 72,
+                      "sourceSpan": {
+                        "start": 31,
+                        "end": 38
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        55
+                      ],
+                      "sentenceIndex": 80,
+                      "sourceSpan": {
+                        "start": 35,
+                        "end": 50
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "subprocess",
+                      "depth": 3,
+                      "requires": [
+                        50
+                      ],
+                      "sentenceIndex": 72,
+                      "sourceSpan": {
+                        "start": 43,
+                        "end": 58
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "subprocess",
+                      "depth": 2,
+                      "requires": [
+                        0
+                      ],
+                      "sentenceIndex": 11,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 16
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "group",
+                      "depth": 3,
+                      "requires": [
+                        58
+                      ],
+                      "sentenceIndex": 86,
+                      "sourceSpan": {
+                        "start": 28,
+                        "end": 44
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        59
+                      ],
+                      "sentenceIndex": 89,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 19
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.98,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        59
+                      ],
+                      "sentenceIndex": 90,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 22
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        59
+                      ],
+                      "sentenceIndex": 91,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 25
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "entity",
+                      "depth": 4,
+                      "requires": [
+                        59
+                      ],
+                      "sentenceIndex": 92,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 22
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "subprocess",
+                      "depth": 3,
+                      "requires": [
+                        58
+                      ],
+                      "sentenceIndex": 86,
+                      "sourceSpan": {
+                        "start": 53,
+                        "end": 70
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        64
+                      ],
+                      "sentenceIndex": 95,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 17
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 1.0,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        64
+                      ],
+                      "sentenceIndex": 96,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 21
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "step",
+                      "depth": 4,
+                      "requires": [
+                        64
+                      ],
+                      "sentenceIndex": 97,
+                      "sourceSpan": {
+                        "start": 3,
+                        "end": 22
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 2,
+                      "requires": [
+                        1
+                      ],
+                      "sentenceIndex": 105,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 20
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 2,
+                      "requires": [
+                        1
+                      ],
+                      "sentenceIndex": 106,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 30
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 2,
+                      "requires": [
+                        1
+                      ],
+                      "sentenceIndex": 107,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 27
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 2,
+                      "requires": [
+                        1
+                      ],
+                      "sentenceIndex": 108,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 30
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.99,
+                      "role": "entity",
+                      "depth": 2,
+                      "requires": [
+                        1
+                      ],
+                      "sentenceIndex": 109,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 32
+                      }
+                    },
+                    {
+                      "pass": "outline",
+                      "confidence": 0.97,
+                      "role": "process",
+                      "depth": 1,
+                      "requires": [],
+                      "sentenceIndex": 112,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 22
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.99,
+                      "explanation": "The document names the process owner.",
+                      "depth": 2,
+                      "requires": [
+                        0
+                      ],
+                      "sentenceIndex": 5,
+                      "sourceSpan": {
+                        "start": 84,
+                        "end": 98
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.98,
+                      "explanation": "The handler taking the notification completes registration.",
+                      "depth": 4,
+                      "requires": [
+                        8
+                      ],
+                      "sentenceIndex": 23,
+                      "sourceSpan": {
+                        "start": 79,
+                        "end": 93
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.93,
+                      "explanation": "Policy verification checks against this system.",
+                      "depth": 5,
+                      "requires": [
+                        9
+                      ],
+                      "sentenceIndex": 24,
+                      "sourceSpan": {
+                        "start": 35,
+                        "end": 63
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.95,
+                      "explanation": "The team leader signs off each reserve review.",
+                      "depth": 5,
+                      "requires": [
+                        21
+                      ],
+                      "sentenceIndex": 35,
+                      "sourceSpan": {
+                        "start": 153,
+                        "end": 164
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.98,
+                      "explanation": "An approved engineer carries out motor assessment.",
+                      "depth": 4,
+                      "requires": [
+                        23
+                      ],
+                      "sentenceIndex": 40,
+                      "sourceSpan": {
+                        "start": 68,
+                        "end": 85
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.97,
+                      "explanation": "A claims surveyor may carry out property assessment.",
+                      "depth": 4,
+                      "requires": [
+                        29
+                      ],
+                      "sentenceIndex": 46,
+                      "sourceSpan": {
+                        "start": 70,
+                        "end": 85
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.97,
+                      "explanation": "A loss adjuster may carry out property assessment.",
+                      "depth": 4,
+                      "requires": [
+                        29
+                      ],
+                      "sentenceIndex": 46,
+                      "sourceSpan": {
+                        "start": 91,
+                        "end": 104
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.99,
+                      "explanation": "The unit carries out the investigation.",
+                      "depth": 4,
+                      "requires": [
+                        64
+                      ],
+                      "sentenceIndex": 94,
+                      "sourceSpan": {
+                        "start": 76,
+                        "end": 103
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.88,
+                      "explanation": "The desktop review examines the claim file.",
+                      "depth": 5,
+                      "requires": [
+                        65
+                      ],
+                      "sentenceIndex": 95,
+                      "sourceSpan": {
+                        "start": 25,
+                        "end": 35
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.88,
+                      "explanation": "The desktop review examines open-source records.",
+                      "depth": 5,
+                      "requires": [
+                        65
+                      ],
+                      "sentenceIndex": 95,
+                      "sourceSpan": {
+                        "start": 37,
+                        "end": 56
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.88,
+                      "explanation": "The desktop review examines industry databases.",
+                      "depth": 5,
+                      "requires": [
+                        65
+                      ],
+                      "sentenceIndex": 95,
+                      "sourceSpan": {
+                        "start": 61,
+                        "end": 79
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.87,
+                      "explanation": "The recorded interview is with the customer.",
+                      "depth": 5,
+                      "requires": [
+                        66
+                      ],
+                      "sentenceIndex": 96,
+                      "sourceSpan": {
+                        "start": 31,
+                        "end": 39
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.92,
+                      "explanation": "The interview is held with consent.",
+                      "depth": 5,
+                      "requires": [
+                        66
+                      ],
+                      "sentenceIndex": 96,
+                      "sourceSpan": {
+                        "start": 51,
+                        "end": 58
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.84,
+                      "explanation": "A copy of the recording is offered.",
+                      "depth": 5,
+                      "requires": [
+                        66
+                      ],
+                      "sentenceIndex": 96,
+                      "sourceSpan": {
+                        "start": 70,
+                        "end": 91
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.92,
+                      "explanation": "Only this role may decline a claim for fraud.",
+                      "depth": 1,
+                      "requires": [],
+                      "sentenceIndex": 98,
+                      "sourceSpan": {
+                        "start": 67,
+                        "end": 81
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.92,
+                      "explanation": "Only this role may decline a claim for fraud.",
+                      "depth": 2,
+                      "requires": [
+                        88
+                      ],
+                      "sentenceIndex": 98,
+                      "sourceSpan": {
+                        "start": 67,
+                        "end": 81
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.91,
+                      "explanation": "Delegated authority sets the maximum each role may commit on one claim.",
+                      "depth": 2,
+                      "requires": [
+                        1
+                      ],
+                      "sentenceIndex": 100,
+                      "sourceSpan": {
+                        "start": 29,
+                        "end": 43
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.98,
+                      "explanation": "The table names the senior-handler-authority holder.",
+                      "depth": 3,
+                      "requires": [
+                        69
+                      ],
+                      "sentenceIndex": 106,
+                      "sourceSpan": {
+                        "start": 33,
+                        "end": 54
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.98,
+                      "explanation": "The table names the team-leader-authority holder.",
+                      "depth": 3,
+                      "requires": [
+                        70
+                      ],
+                      "sentenceIndex": 107,
+                      "sourceSpan": {
+                        "start": 30,
+                        "end": 48
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.98,
+                      "explanation": "The table names the committee-authority holder.",
+                      "depth": 3,
+                      "requires": [
+                        72
+                      ],
+                      "sentenceIndex": 109,
+                      "sourceSpan": {
+                        "start": 35,
+                        "end": 51
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.96,
+                      "explanation": "The committee may approve exceptions to the standard.",
+                      "depth": 3,
+                      "requires": [
+                        72
+                      ],
+                      "sentenceIndex": 109,
+                      "sourceSpan": {
+                        "start": 74,
+                        "end": 101
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.91,
+                      "explanation": "Document control specifies an annual review cycle.",
+                      "depth": 2,
+                      "requires": [
+                        73
+                      ],
+                      "sentenceIndex": 114,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 14
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.9,
+                      "explanation": "The next review is scheduled for September 2027.",
+                      "depth": 2,
+                      "requires": [
+                        73
+                      ],
+                      "sentenceIndex": 115,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 13
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.96,
+                      "explanation": "Delegated authority limits what a handler may offer.",
+                      "depth": null,
+                      "requires": [
+                        1,
+                        39
+                      ],
+                      "sentenceIndex": 5,
+                      "sourceSpan": {
+                        "start": 116,
+                        "end": 135
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.97,
+                      "explanation": "Triage applies fraud indicators before setting a track.",
+                      "depth": null,
+                      "requires": [
+                        13,
+                        59
+                      ],
+                      "sentenceIndex": 29,
+                      "sourceSpan": {
+                        "start": 19,
+                        "end": 35
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.97,
+                      "explanation": "Payment occurs once the coverage check passes.",
+                      "depth": null,
+                      "requires": [
+                        15,
+                        10
+                      ],
+                      "sentenceIndex": 33,
+                      "sourceSpan": {
+                        "start": 127,
+                        "end": 141
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.97,
+                      "explanation": "The repair estimate is attached before authorisation.",
+                      "depth": null,
+                      "requires": [
+                        28,
+                        25
+                      ],
+                      "sentenceIndex": 44,
+                      "sourceSpan": {
+                        "start": 34,
+                        "end": 49
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.97,
+                      "explanation": "Photo evidence is attached before authorisation.",
+                      "depth": null,
+                      "requires": [
+                        28,
+                        26
+                      ],
+                      "sentenceIndex": 44,
+                      "sourceSpan": {
+                        "start": 54,
+                        "end": 68
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.99,
+                      "explanation": "The settlement table orders these steps.",
+                      "depth": null,
+                      "requires": [
+                        35,
+                        37
+                      ],
+                      "sentenceIndex": 56,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 24
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.99,
+                      "explanation": "The settlement table orders these steps.",
+                      "depth": null,
+                      "requires": [
+                        37,
+                        39
+                      ],
+                      "sentenceIndex": 57,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 23
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.99,
+                      "explanation": "The settlement table orders these steps.",
+                      "depth": null,
+                      "requires": [
+                        39,
+                        41
+                      ],
+                      "sentenceIndex": 58,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 22
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.99,
+                      "explanation": "The settlement table orders these steps.",
+                      "depth": null,
+                      "requires": [
+                        41,
+                        43
+                      ],
+                      "sentenceIndex": 59,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 21
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.99,
+                      "explanation": "An offer cannot exceed the maker's delegated authority.",
+                      "depth": null,
+                      "requires": [
+                        39,
+                        1
+                      ],
+                      "sentenceIndex": 61,
+                      "sourceSpan": {
+                        "start": 2,
+                        "end": 18
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.98,
+                      "explanation": "Subrogation uses the liability decision to identify the responsible party.",
+                      "depth": null,
+                      "requires": [
+                        51,
+                        35
+                      ],
+                      "sentenceIndex": 74,
+                      "sourceSpan": {
+                        "start": 26,
+                        "end": 44
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.98,
+                      "explanation": "Total loss evaluation automatically triggers the auction after acceptance and transfer.",
+                      "depth": null,
+                      "requires": [
+                        27,
+                        56
+                      ],
+                      "sentenceIndex": 80,
+                      "sourceSpan": {
+                        "start": 96,
+                        "end": 117
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.99,
+                      "explanation": "The investigation is included under fraud referral.",
+                      "depth": null,
+                      "requires": [
+                        64,
+                        58
+                      ],
+                      "sentenceIndex": 86,
+                      "sourceSpan": {
+                        "start": 53,
+                        "end": 70
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.97,
+                      "explanation": "The SIU investigation informs the liability decision.",
+                      "depth": null,
+                      "requires": [
+                        64,
+                        35
+                      ],
+                      "sentenceIndex": 98,
+                      "sourceSpan": {
+                        "start": 4,
+                        "end": 52
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.86,
+                      "explanation": "The Head of Claims grants personal authority in writing.",
+                      "depth": null,
+                      "requires": [
+                        74,
+                        1
+                      ],
+                      "sentenceIndex": 101,
+                      "sourceSpan": {
+                        "start": 52,
+                        "end": 66
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.98,
+                      "explanation": "The table names the desk-authority holder.",
+                      "depth": null,
+                      "requires": [
+                        68,
+                        75
+                      ],
+                      "sentenceIndex": 105,
+                      "sourceSpan": {
+                        "start": 23,
+                        "end": 37
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.82,
+                      "explanation": "Desk authority permits approval of fast-track payments.",
+                      "depth": null,
+                      "requires": [
+                        68,
+                        15
+                      ],
+                      "sentenceIndex": 105,
+                      "sourceSpan": {
+                        "start": 50,
+                        "end": 77
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.84,
+                      "explanation": "This tier permits appointment of loss adjusters.",
+                      "depth": null,
+                      "requires": [
+                        69,
+                        18
+                      ],
+                      "sentenceIndex": 106,
+                      "sourceSpan": {
+                        "start": 67,
+                        "end": 89
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.9,
+                      "explanation": "This tier can sign off reserve reviews.",
+                      "depth": null,
+                      "requires": [
+                        70,
+                        21
+                      ],
+                      "sentenceIndex": 107,
+                      "sourceSpan": {
+                        "start": 63,
+                        "end": 87
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.98,
+                      "explanation": "The table names the claims-manager-authority holder.",
+                      "depth": null,
+                      "requires": [
+                        71,
+                        88
+                      ],
+                      "sentenceIndex": 108,
+                      "sourceSpan": {
+                        "start": 6,
+                        "end": 20
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.8,
+                      "explanation": "Breaches of delegated authority are reported to the committee.",
+                      "depth": null,
+                      "requires": [
+                        1,
+                        72
+                      ],
+                      "sentenceIndex": 111,
+                      "sourceSpan": {
+                        "start": 4,
+                        "end": 69
+                      }
+                    },
+                    {
+                      "pass": "section",
+                      "confidence": 0.96,
+                      "explanation": "Document control identifies the owner.",
+                      "depth": null,
+                      "requires": [
+                        73,
+                        74
+                      ],
+                      "sentenceIndex": 113,
+                      "sourceSpan": {
+                        "start": 9,
+                        "end": 23
+                      }
+                    }
+                  ],
+                  "statements": [],
+                  "submitted": 119,
+                  "submit_error": null,
+                  "error": null
+                }
+              ],
+              "calls": [
+                {
+                  "input_tokens": 4374,
+                  "output_tokens": 3212,
+                  "cost_eur": 0.03007,
+                  "latency_ms": 15360,
+                  "error": null
+                },
+                {
+                  "input_tokens": 3449,
+                  "output_tokens": 352,
+                  "cost_eur": 0.006265,
+                  "latency_ms": 2014,
+                  "error": null
+                },
+                {
+                  "input_tokens": 6102,
+                  "output_tokens": 1571,
+                  "cost_eur": 0.01867,
+                  "latency_ms": 8203,
+                  "error": null
+                },
+                {
+                  "input_tokens": 3737,
+                  "output_tokens": 1546,
+                  "cost_eur": 0.016105,
+                  "latency_ms": 8546,
+                  "error": null
+                }
+              ],
+              "usage": {
+                "units": 1,
+                "calls": 4,
+                "input_tokens": 17662,
+                "output_tokens": 6681,
+                "cost_eur": 0.07111,
+                "latencies_ms": [
+                  15360,
+                  2014,
+                  8203,
+                  8546
+                ],
+                "degraded_units": 0,
+                "unresolved": 24,
+                "llm_outcomes": {
+                  "used": 1
+                },
+                "extractors": {
+                  "llm": 1
+                },
+                "error": null
+              },
+              "concepts": [
+                {
+                  "label": "Claims handling",
+                  "parent": "Ostrava Mutual",
+                  "action": "operates",
+                  "reverse": false
+                },
+                {
+                  "label": "Delegated authority",
+                  "parent": "Ostrava Mutual",
+                  "action": "operates",
+                  "reverse": false
+                },
+                {
+                  "label": "First notification of loss",
+                  "parent": "Claims handling",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Notification Channels",
+                  "parent": "First notification of loss",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Telephone notification",
+                  "parent": "Notification Channels",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Online claim form",
+                  "parent": "Notification Channels",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Broker notification",
+                  "parent": "Notification Channels",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Assistance line referral",
+                  "parent": "Notification Channels",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Loss registration",
+                  "parent": "First notification of loss",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Policy verification",
+                  "parent": "Loss registration",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Coverage check",
+                  "parent": "Loss registration",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Claim number allocation",
+                  "parent": "Loss registration",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Acknowledgement letter",
+                  "parent": "Loss registration",
+                  "action": "issues",
+                  "reverse": false
+                },
+                {
+                  "label": "Triage",
+                  "parent": "Claims handling",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Fast track",
+                  "parent": "Triage",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Straight-through payment",
+                  "parent": "Fast track",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Standard track",
+                  "parent": "Triage",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Complex loss track",
+                  "parent": "Triage",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Loss adjuster appointment",
+                  "parent": "Complex loss track",
+                  "action": "schedules",
+                  "reverse": false
+                },
+                {
+                  "label": "Claims plan",
+                  "parent": "Complex loss track",
+                  "action": "plans",
+                  "reverse": false
+                },
+                {
+                  "label": "Initial reserve",
+                  "parent": "Complex loss track",
+                  "action": "sets",
+                  "reverse": false
+                },
+                {
+                  "label": "Reserve review",
+                  "parent": "Complex loss track",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Assessment",
+                  "parent": "Claims handling",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Motor assessment",
+                  "parent": "Assessment",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Vehicle inspection",
+                  "parent": "Motor assessment",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Repair estimate",
+                  "parent": "Vehicle inspection",
+                  "action": "produces",
+                  "reverse": false
+                },
+                {
+                  "label": "Photo evidence",
+                  "parent": "Vehicle inspection",
+                  "action": "produces",
+                  "reverse": false
+                },
+                {
+                  "label": "Total loss evaluation",
+                  "parent": "Motor assessment",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Repair authorisation",
+                  "parent": "Motor assessment",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Property assessment",
+                  "parent": "Assessment",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Site visit",
+                  "parent": "Property assessment",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Moisture survey",
+                  "parent": "Site visit",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Emergency repairs",
+                  "parent": "Property assessment",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Scope of works",
+                  "parent": "Property assessment",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Settlement",
+                  "parent": "Claims handling",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Liability decision",
+                  "parent": "Settlement",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Decision letter",
+                  "parent": "Liability decision",
+                  "action": "produces",
+                  "reverse": false
+                },
+                {
+                  "label": "Quantum agreement",
+                  "parent": "Settlement",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Agreed loss figure",
+                  "parent": "Quantum agreement",
+                  "action": "produces",
+                  "reverse": false
+                },
+                {
+                  "label": "Settlement offer",
+                  "parent": "Settlement",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Offer letter",
+                  "parent": "Settlement offer",
+                  "action": "produces",
+                  "reverse": false
+                },
+                {
+                  "label": "Payment release",
+                  "parent": "Settlement",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Payment confirmation",
+                  "parent": "Payment release",
+                  "action": "produces",
+                  "reverse": false
+                },
+                {
+                  "label": "Claim closure",
+                  "parent": "Settlement",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Closed file",
+                  "parent": "Claim closure",
+                  "action": "produces",
+                  "reverse": false
+                },
+                {
+                  "label": "Settlement Methods",
+                  "parent": "Settlement",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Cash settlement",
+                  "parent": "Settlement Methods",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Total loss payment",
+                  "parent": "Cash settlement",
+                  "action": "is a type of",
+                  "reverse": false
+                },
+                {
+                  "label": "Repair in kind",
+                  "parent": "Settlement Methods",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Replacement in kind",
+                  "parent": "Settlement Methods",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Recovery",
+                  "parent": "Claims handling",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Subrogation",
+                  "parent": "Recovery",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Third-party identification",
+                  "parent": "Subrogation",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Letter of claim",
+                  "parent": "Subrogation",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Recovery proceedings",
+                  "parent": "Subrogation",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Salvage",
+                  "parent": "Recovery",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Salvage auction",
+                  "parent": "Salvage",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Excess recovery",
+                  "parent": "Recovery",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Fraud referral",
+                  "parent": "Claims handling",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Fraud indicators",
+                  "parent": "Fraud referral",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Late notification",
+                  "parent": "Fraud indicators",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Inconsistent account",
+                  "parent": "Fraud indicators",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Recent policy inception",
+                  "parent": "Fraud indicators",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Prior claims history",
+                  "parent": "Fraud indicators",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "SIU investigation",
+                  "parent": "Fraud referral",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Desktop review",
+                  "parent": "SIU investigation",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Recorded interview",
+                  "parent": "SIU investigation",
+                  "action": "consists of",
+                  "reverse": false
+                },
+                {
+                  "label": "Field investigation",
+                  "parent": "SIU investigation",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Desk authority",
+                  "parent": "Delegated authority",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Senior handler authority",
+                  "parent": "Delegated authority",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Team leader authority",
+                  "parent": "Delegated authority",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Claims manager authority",
+                  "parent": "Delegated authority",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Claims committee authority",
+                  "parent": "Delegated authority",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Document Control",
+                  "parent": "Ostrava Mutual",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Head of Claims",
+                  "parent": "Claims handling",
+                  "action": "is owned by",
+                  "reverse": false
+                },
+                {
+                  "label": "Claims handler",
+                  "parent": "Loss registration",
+                  "action": "is executed by",
+                  "reverse": false
+                },
+                {
+                  "label": "Policy administration system",
+                  "parent": "Policy verification",
+                  "action": "checks",
+                  "reverse": false
+                },
+                {
+                  "label": "Team leader",
+                  "parent": "Reserve review",
+                  "action": "is approved by",
+                  "reverse": false
+                },
+                {
+                  "label": "Approved engineer",
+                  "parent": "Motor assessment",
+                  "action": "is executed by",
+                  "reverse": false
+                },
+                {
+                  "label": "Claims surveyor",
+                  "parent": "Property assessment",
+                  "action": "is executed by",
+                  "reverse": false
+                },
+                {
+                  "label": "Loss adjuster",
+                  "parent": "Property assessment",
+                  "action": "is executed by",
+                  "reverse": false
+                },
+                {
+                  "label": "Special Investigations Unit",
+                  "parent": "SIU investigation",
+                  "action": "is executed by",
+                  "reverse": false
+                },
+                {
+                  "label": "Claim file",
+                  "parent": "Desktop review",
+                  "action": "checks",
+                  "reverse": false
+                },
+                {
+                  "label": "Open-source records",
+                  "parent": "Desktop review",
+                  "action": "checks",
+                  "reverse": false
+                },
+                {
+                  "label": "Industry databases",
+                  "parent": "Desktop review",
+                  "action": "checks",
+                  "reverse": false
+                },
+                {
+                  "label": "Customer",
+                  "parent": "Recorded interview",
+                  "action": "records",
+                  "reverse": false
+                },
+                {
+                  "label": "Consent",
+                  "parent": "Recorded interview",
+                  "action": "requires",
+                  "reverse": false
+                },
+                {
+                  "label": "Copy of the recording",
+                  "parent": "Recorded interview",
+                  "action": "provides",
+                  "reverse": false
+                },
+                {
+                  "label": "Claims Manager",
+                  "parent": "Ostrava Mutual",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Claims",
+                  "parent": "Claims Manager",
+                  "action": "declines",
+                  "reverse": false
+                },
+                {
+                  "label": "Highest amount",
+                  "parent": "Delegated authority",
+                  "action": "limits",
+                  "reverse": false
+                },
+                {
+                  "label": "Senior claims handler",
+                  "parent": "Senior handler authority",
+                  "action": "is held by",
+                  "reverse": false
+                },
+                {
+                  "label": "Claims team leader",
+                  "parent": "Team leader authority",
+                  "action": "is held by",
+                  "reverse": false
+                },
+                {
+                  "label": "Claims committee",
+                  "parent": "Claims committee authority",
+                  "action": "is held by",
+                  "reverse": false
+                },
+                {
+                  "label": "Exceptions to this standard",
+                  "parent": "Claims committee authority",
+                  "action": "approves",
+                  "reverse": false
+                },
+                {
+                  "label": "Review cycle",
+                  "parent": "Document Control",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Next review",
+                  "parent": "Document Control",
+                  "action": "schedules",
+                  "reverse": false
+                }
+              ],
+              "relations": [
+                {
+                  "source": "Delegated authority",
+                  "target": "Settlement offer",
+                  "action": "limits"
+                },
+                {
+                  "source": "Triage",
+                  "target": "Fraud indicators",
+                  "action": "applies to"
+                },
+                {
+                  "source": "Straight-through payment",
+                  "target": "Coverage check",
+                  "action": "depends on"
+                },
+                {
+                  "source": "Repair authorisation",
+                  "target": "Repair estimate",
+                  "action": "depends on"
+                },
+                {
+                  "source": "Repair authorisation",
+                  "target": "Photo evidence",
+                  "action": "depends on"
+                },
+                {
+                  "source": "Liability decision",
+                  "target": "Quantum agreement",
+                  "action": "precedes"
+                },
+                {
+                  "source": "Quantum agreement",
+                  "target": "Settlement offer",
+                  "action": "precedes"
+                },
+                {
+                  "source": "Settlement offer",
+                  "target": "Payment release",
+                  "action": "precedes"
+                },
+                {
+                  "source": "Payment release",
+                  "target": "Claim closure",
+                  "action": "precedes"
+                },
+                {
+                  "source": "Settlement offer",
+                  "target": "Delegated authority",
+                  "action": "is limited by"
+                },
+                {
+                  "source": "Subrogation",
+                  "target": "Liability decision",
+                  "action": "depends on"
+                },
+                {
+                  "source": "Total loss evaluation",
+                  "target": "Salvage auction",
+                  "action": "triggers"
+                },
+                {
+                  "source": "SIU investigation",
+                  "target": "Fraud referral",
+                  "action": "is part of"
+                },
+                {
+                  "source": "SIU investigation",
+                  "target": "Liability decision",
+                  "action": "supports"
+                },
+                {
+                  "source": "Head of Claims",
+                  "target": "Delegated authority",
+                  "action": "approves"
+                },
+                {
+                  "source": "Desk authority",
+                  "target": "Claims handler",
+                  "action": "is held by"
+                },
+                {
+                  "source": "Desk authority",
+                  "target": "Straight-through payment",
+                  "action": "approves"
+                },
+                {
+                  "source": "Senior handler authority",
+                  "target": "Loss adjuster appointment",
+                  "action": "approves"
+                },
+                {
+                  "source": "Team leader authority",
+                  "target": "Reserve review",
+                  "action": "approves"
+                },
+                {
+                  "source": "Claims manager authority",
+                  "target": "Claims Manager",
+                  "action": "is held by"
+                },
+                {
+                  "source": "Delegated authority",
+                  "target": "Claims committee authority",
+                  "action": "reports to"
+                },
+                {
+                  "source": "Document Control",
+                  "target": "Head of Claims",
+                  "action": "is owned by"
+                }
+              ],
+              "attributes": [],
+              "other_drafts": 0,
+              "score": {
+                "case_id": "documents-documents-structure_ostrava_mutual_claims.md",
+                "kind": "document",
+                "concepts_expected": 74,
+                "concepts_groundable": 74,
+                "concepts_predicted": 97,
+                "concepts_matched": 72,
+                "matched_groundable": 72,
+                "concept_precision": 0.8275862068965517,
+                "concept_recall": 0.972972972972973,
+                "concept_f1": 0.8944099378881988,
+                "grounding_ceiling": 1.0,
+                "concept_recall_groundable": 0.972972972972973,
+                "concept_f1_groundable": 0.8944099378881988,
+                "parent_correct": 72,
+                "parent_at_depth": 72,
+                "action_correct": 69,
+                "path_correct": 72,
+                "invented": [
+                  "Document Control",
+                  "Team leader",
+                  "Approved engineer",
+                  "Claims surveyor",
+                  "Claim file",
+                  "Open-source records",
+                  "Industry databases",
+                  "Customer",
+                  "Consent",
+                  "Copy of the recording",
+                  "Claims",
+                  "Highest amount",
+                  "Exceptions to this standard",
+                  "Review cycle",
+                  "Next review"
+                ],
+                "duplicates": [],
+                "missed": [
+                  "Handling tracks",
+                  "Tiers"
+                ],
+                "missing_branches": [
+                  "Handling tracks (1 nodes)",
+                  "Tiers (1 nodes)"
+                ],
+                "optional_drafted": [
+                  "Closed file",
+                  "Head of Claims",
+                  "Claims handler",
+                  "Policy administration system",
+                  "Loss adjuster",
+                  "Special Investigations Unit",
+                  "Claims Manager",
+                  "Senior claims handler",
+                  "Claims team leader",
+                  "Claims committee"
+                ],
+                "wrong_parent": [],
+                "wrong_action": [
+                  "Acknowledgement letter: got issues, want consists of | includes | has",
+                  "Loss adjuster appointment: got schedules, want arranges | requires | includes",
+                  "Claims plan: got plans, want agrees | requires | includes"
+                ],
+                "wrong_path": [],
+                "wrong_depth": [],
+                "relations_expected": 6,
+                "relations_predicted": 22,
+                "relations_matched": 5,
+                "relation_precision": 0.22727272727272727,
+                "relation_recall": 0.8333333333333334,
+                "relation_action_correct": 3,
+                "invented_relations": [
+                  "Straight-through payment depends on Coverage check",
+                  "Repair authorisation depends on Repair estimate",
+                  "Repair authorisation depends on Photo evidence",
+                  "Liability decision precedes Quantum agreement",
+                  "Quantum agreement precedes Settlement offer",
+                  "Settlement offer precedes Payment release",
+                  "Payment release precedes Claim closure",
+                  "Settlement offer is limited by Delegated authority",
+                  "SIU investigation is part of Fraud referral",
+                  "Head of Claims approves Delegated authority",
+                  "Desk authority is held by Claims handler",
+                  "Desk authority approves Straight-through payment",
+                  "Senior handler authority approves Loss adjuster appointment",
+                  "Team leader authority approves Reserve review",
+                  "Claims manager authority is held by Claims Manager",
+                  "Delegated authority reports to Claims committee authority",
+                  "Document Control is owned by Head of Claims"
+                ],
+                "missed_relations": [
+                  "Fraud referral suspends Settlement"
+                ],
+                "attributes_expected": 0,
+                "attributes_predicted": 0,
+                "attributes_matched": 0,
+                "invented_attributes": [],
+                "missed_attributes": [],
+                "depth_expected": 5,
+                "depth_achieved": 5,
+                "levels": {
+                  "1": {
+                    "expected": 2,
+                    "groundable": 2,
+                    "predicted": 3,
+                    "correct": 2,
+                    "correct_groundable": 2
+                  },
+                  "2": {
+                    "expected": 12,
+                    "groundable": 12,
+                    "predicted": 15,
+                    "correct": 11,
+                    "correct_groundable": 11
+                  },
+                  "3": {
+                    "expected": 19,
+                    "groundable": 19,
+                    "predicted": 19,
+                    "correct": 18,
+                    "correct_groundable": 18
+                  },
+                  "4": {
+                    "expected": 37,
+                    "groundable": 37,
+                    "predicted": 39,
+                    "correct": 37,
+                    "correct_groundable": 37
+                  },
+                  "5": {
+                    "expected": 4,
+                    "groundable": 4,
+                    "predicted": 11,
+                    "correct": 4,
+                    "correct_groundable": 4
+                  }
+                }
+              },
+              "drafted_depth": 5,
+              "document": {
+                "format": "md",
+                "words": 1925,
+                "pages": null,
+                "sentences": 116,
+                "job": {
+                  "chunks": 2,
+                  "outlineNodes": 74,
+                  "tokensUsed": 24343,
+                  "degraded": false,
+                  "failureReason": null
+                }
+              },
+              "skipped": null,
+              "error": null,
+              "wall_ms": 40905
+            }
+          ],
+          "capabilities": {
+            "outputMode": "json_schema",
+            "reasoningEffort": "none"
+          },
+          "stopped_by_budget": false,
+          "withheld": []
+        }
+      ],
+      "summaries": {
+        "gpt-6-sol@none": {
+          "all": {
+            "run_key": "gpt-6-sol@none",
+            "suite": "all",
+            "cases": 1,
+            "scored": 1,
+            "concept_precision": 0.8275862068965517,
+            "concept_recall": 0.972972972972973,
+            "concept_f1": 0.8944099378881988,
+            "recall_groundable": 0.972972972972973,
+            "f1_groundable": 0.8944099378881988,
+            "grounding_ceiling": 1.0,
+            "parent_accuracy": 1.0,
+            "action_accuracy": 0.9583333333333334,
+            "path_accuracy": 1.0,
+            "relation_precision": 0.22727272727272727,
+            "relation_recall": 0.8333333333333334,
+            "relation_f1": 0.35714285714285715,
+            "invented": 15,
+            "duplicates": 0,
+            "missed": 2,
+            "depth_ratio": 1.0,
+            "levels": {
+              "1": {
+                "expected": 2,
+                "groundable": 2,
+                "predicted": 3,
+                "correct": 2,
+                "precision": 0.6666666666666666,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 0.8
+              },
+              "2": {
+                "expected": 12,
+                "groundable": 12,
+                "predicted": 15,
+                "correct": 11,
+                "precision": 0.7333333333333333,
+                "recall": 0.9166666666666666,
+                "recall_groundable": 0.9166666666666666,
+                "f1": 0.8148148148148148
+              },
+              "3": {
+                "expected": 19,
+                "groundable": 19,
+                "predicted": 19,
+                "correct": 18,
+                "precision": 0.9473684210526315,
+                "recall": 0.9473684210526315,
+                "recall_groundable": 0.9473684210526315,
+                "f1": 0.9473684210526315
+              },
+              "4": {
+                "expected": 37,
+                "groundable": 37,
+                "predicted": 39,
+                "correct": 37,
+                "precision": 0.9487179487179487,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 0.9736842105263158
+              },
+              "5": {
+                "expected": 4,
+                "groundable": 4,
+                "predicted": 11,
+                "correct": 4,
+                "precision": 0.36363636363636365,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 0.5333333333333333
+              }
+            },
+            "mean_level_f1": 0.8138401559454191,
+            "degraded_units": 0,
+            "unresolved": 24,
+            "errors": 0,
+            "calls": 4,
+            "input_tokens": 17662,
+            "output_tokens": 6681,
+            "cost_eur": 0.07111,
+            "cost_per_case": 0.07111,
+            "mean_latency_s": 8.53075,
+            "p95_latency_s": 15.36,
+            "llm_outcomes": {
+              "used": 1
+            }
+          },
+          "documents:whole": {
+            "run_key": "gpt-6-sol@none",
+            "suite": "documents:whole",
+            "cases": 1,
+            "scored": 1,
+            "concept_precision": 0.8275862068965517,
+            "concept_recall": 0.972972972972973,
+            "concept_f1": 0.8944099378881988,
+            "recall_groundable": 0.972972972972973,
+            "f1_groundable": 0.8944099378881988,
+            "grounding_ceiling": 1.0,
+            "parent_accuracy": 1.0,
+            "action_accuracy": 0.9583333333333334,
+            "path_accuracy": 1.0,
+            "relation_precision": 0.22727272727272727,
+            "relation_recall": 0.8333333333333334,
+            "relation_f1": 0.35714285714285715,
+            "invented": 15,
+            "duplicates": 0,
+            "missed": 2,
+            "depth_ratio": 1.0,
+            "levels": {
+              "1": {
+                "expected": 2,
+                "groundable": 2,
+                "predicted": 3,
+                "correct": 2,
+                "precision": 0.6666666666666666,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 0.8
+              },
+              "2": {
+                "expected": 12,
+                "groundable": 12,
+                "predicted": 15,
+                "correct": 11,
+                "precision": 0.7333333333333333,
+                "recall": 0.9166666666666666,
+                "recall_groundable": 0.9166666666666666,
+                "f1": 0.8148148148148148
+              },
+              "3": {
+                "expected": 19,
+                "groundable": 19,
+                "predicted": 19,
+                "correct": 18,
+                "precision": 0.9473684210526315,
+                "recall": 0.9473684210526315,
+                "recall_groundable": 0.9473684210526315,
+                "f1": 0.9473684210526315
+              },
+              "4": {
+                "expected": 37,
+                "groundable": 37,
+                "predicted": 39,
+                "correct": 37,
+                "precision": 0.9487179487179487,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 0.9736842105263158
+              },
+              "5": {
+                "expected": 4,
+                "groundable": 4,
+                "predicted": 11,
+                "correct": 4,
+                "precision": 0.36363636363636365,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 0.5333333333333333
+              }
+            },
+            "mean_level_f1": 0.8138401559454191,
+            "degraded_units": 0,
+            "unresolved": 24,
+            "errors": 0,
+            "calls": 4,
+            "input_tokens": 17662,
+            "output_tokens": 6681,
+            "cost_eur": 0.07111,
+            "cost_per_case": 0.07111,
+            "mean_latency_s": 8.53075,
+            "p95_latency_s": 15.36,
+            "llm_outcomes": {
+              "used": 1
+            }
+          }
+        }
+      },
+      "composites": {
+        "gpt-6-sol@none": {
+          "run_key": "gpt-6-sol@none",
+          "precision": 0.9033764367816092,
+          "recall": 0.8934065644591961,
+          "efficiency": 1.0,
+          "total": 0.9197101877285634
+        }
+      },
+      "repeat_totals": {
+        "gpt-6-sol@none": [
+          0.9197101877285634
+        ]
+      },
+      "spread": {
+        "gpt-6-sol@none": [
+          0.9197101877285634,
+          0.0
+        ]
+      },
+      "paired": [],
+      "stopped_by_budget": false
+    }
+  ],
+  "speechComprehension": {
+    "screening": []
+  }
+}

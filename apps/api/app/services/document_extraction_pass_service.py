@@ -32,6 +32,7 @@ from app.models.llm.document_extraction_answer import (
     OutlineAnswer,
     PathRef,
     SectionAnswer,
+    SectionIntent,
 )
 from app.models.storage.base import NodeKind
 from app.models.storage.concept import Concept
@@ -46,6 +47,9 @@ logger = logging.getLogger(__name__)
 INTENT = "intent"
 MAX_CANDIDATES = 200
 MIN_CONFIDENCE = 0.4
+MAX_ERRORS_SHOWN = 5
+# Actions a `spec` intent may carry and still be a specialisation.
+SPEC_ACTIONS = frozenset({"is a", "is a kind of", "is a type of", "is one of", "is kind of"})
 DEFAULT_DOMAIN = "production"
 REFUSED_ACTIONS = frozenset({"is a", "equivalent to"})
 MAX_UNRESOLVED_LABEL = 120
@@ -289,7 +293,7 @@ def read_outline_answer(raw: str, outline: Outline, handles: Handles, chunk: Chu
     try:
         answer = OutlineAnswer.model_validate_json(raw)
     except ValidationError as exc:
-        raise InvalidAnswer(f"{exc.error_count()} schema errors") from None
+        raise InvalidAnswer(_schema_errors(exc)) from None
     keys: set[str] = set()
     for node in answer.nodes:
         if node.key in keys:
@@ -346,7 +350,7 @@ def read_section_answer(raw: str, outline: Outline, handles: Handles, chunk: Chu
     try:
         answer = SectionAnswer.model_validate_json(raw)
     except ValidationError as exc:
-        raise InvalidAnswer(f"{exc.error_count()} schema errors") from None
+        raise InvalidAnswer(_schema_errors(exc)) from None
     for intent in answer.intents:
         for ref in (intent.subject, intent.object):
             if isinstance(ref, KeyRef):
@@ -356,9 +360,7 @@ def read_section_answer(raw: str, outline: Outline, handles: Handles, chunk: Chu
             _check_texts(*_path_of(ref), ref.new_label if isinstance(ref, NewLabelRef) else None)
         if intent.subject == intent.object:
             raise InvalidAnswer("an intent joins a concept to itself")
-        if intent.action is not None:
-            _check_action(intent.action)
-        _check_texts(intent.span, intent.rule, intent.explanation)
+        _check_texts(intent.action, intent.span, intent.rule, intent.explanation)
         _check_sentence(chunk, intent.sentence_index)
     for item in answer.unresolved:
         _check_sentence(chunk, item.sentence_index)
@@ -368,6 +370,7 @@ def read_section_answer(raw: str, outline: Outline, handles: Handles, chunk: Chu
         sentence = chunk.text_of(intent.sentence_index)
         assert sentence is not None
         try:
+            kind, action, rule = _read_kind(intent)
             if intent.confidence < MIN_CONFIDENCE:
                 raise _Dropped("low_confidence")
             subject = _intent_end(intent.subject, outline, handles, sentence)
@@ -382,11 +385,11 @@ def read_section_answer(raw: str, outline: Outline, handles: Handles, chunk: Chu
         span = quote_range(sentence, intent.span)
         entry = {
             "kind": INTENT,
-            "type": intent.kind,
+            "type": kind,
             "subject": subject,
             "object": obj,
-            "action": normalise_action(intent.action) if intent.action else None,
-            "rule": intent.rule,
+            "action": action,
+            "rule": rule,
             "domainKey": intent.domain_key,
             "confidence": intent.confidence,
             "explanation": intent.explanation,
@@ -394,11 +397,35 @@ def read_section_answer(raw: str, outline: Outline, handles: Handles, chunk: Chu
             "span": list(span) if span else None,
             "chunk": chunk.number,
         }
-        outline.entries.append(entry)
         result.entries.append(entry)
     for item in answer.unresolved:
         result.unresolved.append(_unresolved(chunk.number, item.sentence_index, item.reason))
     return result
+
+
+def _read_kind(intent: SectionIntent) -> tuple[str, str | None, str | None]:
+    """The intent's kind, normalised action and rule, read by its fields when they disagree
+    with its kind rather than refusing the chunk: an action that says `is a` makes a spec
+    without one, any other action makes a `rel` with that action and no rule, a `rel` without
+    an action and an `equivalent to` action are not understood."""
+    action = normalise_action(intent.action) if intent.action else None
+    if action in SPEC_ACTIONS:
+        return "spec", None, intent.rule
+    if action in REFUSED_ACTIONS or (intent.kind == "rel" and action is None):
+        raise _Dropped("not_understood")
+    if action is not None:
+        return "rel", action, None
+    return "spec", None, intent.rule
+
+
+def _schema_errors(exc: ValidationError) -> str:
+    """The count of schema errors with the field and kind of the first few, never a value the
+    model wrote, so a refusal names what the answer got wrong."""
+    shown = [
+        f"{'.'.join(str(part) for part in error['loc'])}: {error['type']}"
+        for error in exc.errors()[:MAX_ERRORS_SHOWN]
+    ]
+    return f"{exc.error_count()} schema errors ({'; '.join(shown)})"
 
 
 def label_key(label: str) -> str:
