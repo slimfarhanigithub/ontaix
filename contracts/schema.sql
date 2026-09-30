@@ -382,10 +382,11 @@ CREATE TABLE group_role (
   role              role_name NOT NULL,
   scope_kind        scope_kind NOT NULL,
   scope_company_id  uuid,
-  scope_domain_key  text REFERENCES domain_template(key),
+  scope_domain_key  text,
   created_at        timestamptz NOT NULL DEFAULT now(),
   FOREIGN KEY (tenant_id, group_id) REFERENCES user_group(tenant_id, id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, scope_company_id) REFERENCES company(tenant_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, scope_domain_key) REFERENCES tenant_domain(tenant_id, key) ON DELETE CASCADE,
   CONSTRAINT group_role_scope_shape CHECK (
     (scope_kind = 'tenant'  AND scope_company_id IS NULL     AND scope_domain_key IS NULL) OR
     (scope_kind = 'company' AND scope_company_id IS NOT NULL AND scope_domain_key IS NULL) OR
@@ -399,7 +400,7 @@ CREATE UNIQUE INDEX group_role_unique ON group_role (
   coalesce(scope_company_id, '00000000-0000-0000-0000-000000000000'::uuid),
   coalesce(scope_domain_key, '')
 );
-COMMENT ON TABLE group_role IS 'A role held by a group on one scope: the tenant, one company, or one domain product family (a template key, covering that domain product in every company); duplicates are refused.';
+COMMENT ON TABLE group_role IS 'A role held by a group on one scope: the tenant, one company, or one domain (a tenant_domain key, a template or a custom domain, covering that domain product in every company); duplicates are refused. A role on a domain goes with the domain (CASCADE), never widening to another scope.';
 
 CREATE TABLE agent (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -409,7 +410,7 @@ CREATE TABLE agent (
   issuer       text NOT NULL,
   subject      text NOT NULL,
   company_id   uuid,
-  domain_key   text REFERENCES domain_template(key),
+  domain_key   text,
   owner_text   text NOT NULL DEFAULT '',
   access       boolean NOT NULL DEFAULT true,
   created_at   timestamptz NOT NULL DEFAULT now(),
@@ -417,10 +418,11 @@ CREATE TABLE agent (
   UNIQUE (tenant_id, id),
   UNIQUE (tenant_id, name),
   UNIQUE (issuer, subject),
-  FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE SET NULL (company_id)
+  FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE SET NULL (company_id),
+  FOREIGN KEY (tenant_id, domain_key) REFERENCES tenant_domain(tenant_id, key) ON DELETE RESTRICT
 );
 CREATE INDEX agent_by_platform ON agent (tenant_id, platform);
-COMMENT ON TABLE agent IS 'A machine identity from any platform: its token (issuer, subject) maps to this row; company_id null means tenant-wide scope; access can be switched off.';
+COMMENT ON TABLE agent IS 'A machine identity from any platform: its token (issuer, subject) maps to this row; company_id null means tenant-wide scope; domain_key narrows it to one tenant domain and is RESTRICT, because clearing it would widen the agent''s scope; access can be switched off.';
 
 CREATE TABLE agent_month_usage (
   tenant_id  uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
@@ -852,8 +854,9 @@ CREATE TABLE audit_entry (
   proposal_id     uuid,
   origin          proposal_origin,
   company_ids     uuid[] NOT NULL DEFAULT '{}',
-  domain_key      text REFERENCES domain_template(key),
+  domain_key      text,
   CHECK (array_position(company_ids, NULL) IS NULL),
+  FOREIGN KEY (tenant_id, domain_key) REFERENCES tenant_domain(tenant_id, key) ON DELETE SET NULL (domain_key),
   CONSTRAINT audit_entry_origin_only_for_proposal CHECK (origin IS NULL OR proposal_id IS NOT NULL)
 );
 CREATE INDEX audit_entry_by_tenant_time ON audit_entry (tenant_id, at DESC);
@@ -888,7 +891,7 @@ CREATE TABLE outbox (
   subject       text NOT NULL,
   visibility    text NOT NULL CHECK (visibility IN ('model.read', 'audit.read', 'group.manage', 'agent.manage')),
   company_ids   uuid[] NOT NULL DEFAULT '{}',
-  domain_key    text REFERENCES domain_template(key),
+  domain_key    text,
   recipient_user_id uuid,
   actor_kind    actor_kind NOT NULL,
   actor_id      uuid,
@@ -898,6 +901,7 @@ CREATE TABLE outbox (
   published_at  timestamptz,
   CHECK (array_position(company_ids, NULL) IS NULL),
   CONSTRAINT outbox_domain_key_only_for_audit CHECK (domain_key IS NULL OR visibility = 'audit.read'),
+  FOREIGN KEY (tenant_id, domain_key) REFERENCES tenant_domain(tenant_id, key) ON DELETE SET NULL (domain_key),
   CONSTRAINT outbox_recipient_iff_extraction CHECK ((aggregate = 'extraction') = (recipient_user_id IS NOT NULL)),
   CONSTRAINT outbox_extraction_shape CHECK (aggregate <> 'extraction' OR (visibility = 'model.read' AND cardinality(company_ids) = 1))
 );
@@ -921,7 +925,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-COMMENT ON COLUMN audit_entry.domain_key IS 'The template key of the domain product of the proposal the entry records, when that proposal has one; null for every other entry. A holder of audit.read on the domain scope with this key reads the entry whatever its company_ids, because that scope covers the domain product in every company and matches the proposals it may decide.';
+COMMENT ON COLUMN audit_entry.domain_key IS 'The tenant domain key (template or custom, same tenant through the composite foreign key; ON DELETE SET NULL, which the append-only trigger refuses, so a tenant domain still named by the log cannot be deleted - domains are never deleted in any case) of the domain product of the proposal the entry records, when that proposal has one; null for every other entry. A holder of audit.read on the domain scope with this key reads the entry whatever its company_ids, because that scope covers the domain product in every company and matches the proposals it may decide.';
 COMMENT ON FUNCTION company_ids_belong_to_tenant() IS 'Composite tenant safety for company_ids arrays, which cannot carry a foreign key: every listed company must exist in the row''s tenant when the row is inserted. A removed company is marked dying before its row is deleted, so its removal events and audit entries still pass.';
 
 CREATE TRIGGER outbox_company_ids_in_tenant

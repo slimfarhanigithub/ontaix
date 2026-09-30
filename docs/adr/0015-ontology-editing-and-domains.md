@@ -71,6 +71,8 @@ Recolouring keeps the do-not rule, since a domain has one colour everywhere. App
 
 `POST /proposals/bulk-delete` creates one `delete_bulk` proposal for up to 200 concepts and up to 20 domain products of one company. Approval applies all or nothing, with the semantics of `delete_concept` and `delete_domain` for each item, and needs approval rights over every item. The proposal and the Studio confirmation name what goes from `POST /deletion-impact`. The Studio offers selection in the admin portal's Entities and Domain products tables (a checkbox column and `Delete selected`); selection on the canvas is not part of this decision.
 
+Decision row 143 adds canvas selection under owner delegation: Shift+click or Ctrl+click selects approved cells, shown as the reference's sticky focus set, and a selection bar offers `Delete selected (n)` for the same bulk proposal.
+
 ### Admin Portal
 
 The reference's Entities page already renames, deletes and shows relationship counts, and its Relationships page edits and deletes relationships; both keep their markup and send the proposals above. Additions, each a recorded deviation hidden from the screenshot suite by the injected stylesheet (`[data-ox-new] { display: none }` in both pages, header and cells together, so table layout is the reference's):
@@ -87,7 +89,7 @@ Exact texts are in `docs/ui-contract.md` when the Studio work starts.
 
 ## Contract Gaps Named
 
-1. Domains were fixed: the `DomainKey` enum in OpenAPI and the three model schemas, and `domain_product.template_key` referencing `domain_template`. Fixed here by `tenant_domain` and the pattern; a migration copies the nine templates into `tenant_domain` for every existing tenant before the new foreign key applies.
+1. Domains were fixed: the `DomainKey` enum in OpenAPI and the three model schemas, and `domain_product.template_key`, `group_role.scope_domain_key`, `agent.domain_key`, `audit_entry.domain_key` and `outbox.domain_key` referencing `domain_template`. Fixed here by `tenant_domain` and the pattern; every one of those columns now references `tenant_domain (tenant_id, key)` compositely, so it names a domain of its own tenant, custom domains included. On delete: a domain-scoped role goes with the domain (CASCADE); an agent's domain scope is RESTRICT, since clearing it would widen the agent's scope; audit and outbox history are SET NULL, which for `audit_entry` the append-only trigger refuses, so a domain named by the log cannot be deleted - and a tenant domain is never deleted by any operation (`delete_domain` removes one company's domain product only); a migration copies the nine templates into `tenant_domain` for every existing tenant before the new foreign key applies.
 2. Domain colour is tenant-wide by the UI contract; per-company recolouring would break an owner do-not rule. Resolved as tenant-wide editing.
 3. There was no way to edit a pending proposal and no guard against approving text that changed; added `revision`, `expectedRevision` and `proposal.changed`.
 4. `deps` and `waitFor` hold labels, so a pending rename must rewrite dependants' texts.
