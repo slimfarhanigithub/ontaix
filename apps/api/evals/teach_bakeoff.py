@@ -56,7 +56,7 @@ from evals.doc_formats.loaded_document import LoadedDocument
 from evals.doc_formats.ocr_client import AzureMistralOcrClient, FakeOcrClient, OcrClient
 from evals.dry_run_llm_client import DryRunLlmClient
 from evals.input_modes import DocumentCache, modes_for
-from evals.recording_llm_client import Budget, RecordingLlmClient
+from evals.recording_llm_client import Budget, CallGate, RecordingLlmClient
 from evals.report import RunRecord, write
 from evals.stages import (
     SCREENING_SHARE,
@@ -132,7 +132,12 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--origins", help="comma-separated: dataset,documents,benchmarks,private")
     p.add_argument("--only", help="comma-separated case ids")
     p.add_argument("--document-modes", default="sentences", help="comma-separated: sentences,whole")
-    p.add_argument("--concurrency", type=int, default=4)
+    p.add_argument(
+        "--concurrency",
+        type=int,
+        default=4,
+        help="cases at once; model calls at once start here and halve on each 429",
+    )
     p.add_argument("--timeout-seconds", type=float, help="per call; default the API's")
     p.add_argument("--speech-timeout-seconds", type=float, help="default the API's")
     p.add_argument("--ocr-deployment", help="default from candidates.yaml")
@@ -319,7 +324,7 @@ def _installer(
             inner = FoundryLlmClient(
                 endpoint, config.deployment, config.deployment, price, config.reasoning_effort
             )
-        set_llm_client(RecordingLlmClient(inner, budget))
+        set_llm_client(RecordingLlmClient(inner, budget, CallGate(args.concurrency)))
 
         def probe() -> dict[str, object]:
             if args.dry_run:

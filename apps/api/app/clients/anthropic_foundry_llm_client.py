@@ -7,7 +7,8 @@ from the process-wide token cache, which calls `DefaultAzureCredential` only whe
 valid token. Each client keeps one HTTP connection pool whose idle connections live for
 `KEEPALIVE_SECONDS`, so a call made a minute after the last one skips DNS, TCP and TLS; `warm`
 acquires the token and opens a connection without a model call. The call itself, its
-structured output, prompt caching, timeout, zero retries and token accounting (thinking tokens
+structured output, prompt caching, timeout, zero SDK retries with bounded 429 and 503
+retries, and token accounting (thinking tokens
 counted as output) are those of the first-party Anthropic client.
 
 Reasoning effort maps to Claude's thinking settings: `None` sends no thinking or effort

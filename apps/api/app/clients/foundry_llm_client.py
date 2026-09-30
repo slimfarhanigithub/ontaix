@@ -11,8 +11,10 @@ mode needs every property listed as required, so the request's schema is sent in
 (optional properties nullable) and the `null` values the model writes for them are removed from
 the answer before it is returned. The wall clock of a call - token acquisition, DNS, connect,
 TLS, sending and reading the last byte - is bounded by `asyncio.timeout` on top of the SDK's own
-timeout, and the SDK's retries are 0. Token counts are the response's `usage`: `prompt_tokens`
-as input (cached tokens included) and `completion_tokens` as output (reasoning tokens included).
+timeout. The SDK's retries are 0; a 429 or 503 is retried by `call_with_retries` within that
+same wall clock, and only the answering attempt reports tokens. Token counts are the response's
+`usage`: `prompt_tokens` as input (cached tokens included) and `completion_tokens` as output
+(reasoning tokens included).
 The SDK, Azure and HTTP loggers are held at WARNING and filtered, so prompts, answers and tokens
 never reach a log.
 """
@@ -26,6 +28,7 @@ import time
 from collections.abc import Awaitable, Callable
 
 import openai
+from openai.types.chat import ChatCompletion
 
 from app.clients.llm_client import (
     LlmAnswer,
@@ -38,6 +41,7 @@ from app.clients.llm_client import (
     estimate_tokens,
 )
 from app.clients.llm_log_redaction import protect_loggers
+from app.clients.llm_retry import call_with_retries
 from app.config import ModelPrice, ReasoningEffort
 from app.utilities.strict_json_schema import drop_optional_nulls, to_strict
 
@@ -90,23 +94,29 @@ class FoundryLlmClient:
     async def complete(self, request: LlmRequest) -> LlmAnswer:
         started = time.monotonic()
         schema, optional = to_strict(request.output_schema)
+
+        async def attempt(remaining: float) -> ChatCompletion:
+            client = self._client.with_options(timeout=openai.Timeout(remaining, connect=remaining))
+            return await client.chat.completions.create(
+                model=self._deployment,
+                messages=[
+                    {"role": "system", "content": request.system},
+                    {"role": "user", "content": request.user},
+                ],
+                max_completion_tokens=request.max_output_tokens,
+                reasoning_effort=self._reasoning_effort,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {"name": SCHEMA_NAME, "strict": True, "schema": schema},
+                },
+                store=False,
+            )
+
         try:
             limit = request.timeout_seconds
-            client = self._client.with_options(timeout=openai.Timeout(limit, connect=limit))
             async with asyncio.timeout(limit):
-                completion = await client.chat.completions.create(
-                    model=self._deployment,
-                    messages=[
-                        {"role": "system", "content": request.system},
-                        {"role": "user", "content": request.user},
-                    ],
-                    max_completion_tokens=request.max_output_tokens,
-                    reasoning_effort=self._reasoning_effort,
-                    response_format={
-                        "type": "json_schema",
-                        "json_schema": {"name": SCHEMA_NAME, "strict": True, "schema": schema},
-                    },
-                    store=False,
+                completion = await call_with_retries(
+                    attempt, started + limit, openai.APIStatusError
                 )
         except (TimeoutError, openai.APITimeoutError) as exc:
             raise LlmTimeout("timeout", latency_ms=elapsed_ms(started)) from exc

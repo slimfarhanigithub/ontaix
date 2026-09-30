@@ -63,7 +63,7 @@ Each stage of the report has a Speech Comprehension table, and the JSON record a
 
 `evals/cases/speech_recordings.yaml` holds the speech tuning set: spoken narrations of sections of the org, ssn and valueflows benchmarks (TEST), and as LEARN the owner's own recording, narrations of the goodrelations, prov-o and dcat benchmarks and two recordings written for tuning. `app/ai/examples/split.json` assigns each case to LEARN or TEST.
 
-A call the provider refuses with status 429 (the deployment's rate limit) is recorded and tried again after a pause, up to 4 times, so a small quota does not show as a comprehension failure; the refusals stay in each case's recorded calls. `gpt-6-sol` in the dev resource refuses most calls at `--concurrency 4`; use `--concurrency 1` for it.
+The model clients retry a 429 or 503 up to twice within the call's timeout, honouring `retry-after` (capped at 4 s), as the API does. A call still refused with status 429 (the deployment's rate limit) is recorded and tried again after a pause, up to 4 times, so a small quota does not show as a comprehension failure; those refusals stay in each case's recorded calls. Each such refusal also halves the number of model calls the run makes at once (from `--concurrency` down to 1), so a run against a small quota such as `gpt-6-sol` in the dev resource slows to what it accepts; `--concurrency 1` starts there.
 
 ## Cost Of A Full Run
 

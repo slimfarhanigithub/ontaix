@@ -4,7 +4,8 @@ One Messages API call per request, with the answer constrained to the request's 
 (structured outputs). `complete_messages` holds the call so that the Foundry-hosted Claude
 client makes it the same way. The wall clock of a call - DNS, connect, TLS, sending and reading
 the last byte - is bounded by `asyncio.timeout` on top of the SDK's own timeout, and the SDK's
-retries are 0, so a call never takes longer than the configured timeout. The schema is sent in
+retries are 0, so a call never takes longer than the configured timeout; a 429 or 503 is
+retried by `call_with_retries` within that same wall clock. The schema is sent in
 its required form: every property required, an optional string or list written empty when
 unset and any other optional property nullable, within Claude's cap of 16 union-typed
 properties. With optional properties left optional, Claude drops properties it needs (a `rel`
@@ -27,6 +28,7 @@ from decimal import Decimal
 from typing import Any
 
 import anthropic
+from anthropic.types import Message
 
 from app.clients.llm_client import (
     LlmAnswer,
@@ -38,6 +40,7 @@ from app.clients.llm_client import (
     estimate_tokens,
 )
 from app.clients.llm_log_redaction import protect_loggers
+from app.clients.llm_retry import call_with_retries
 from app.config import ModelPrice
 from app.utilities.strict_json_schema import (
     drop_optional_empties,
@@ -94,24 +97,28 @@ async def complete_messages(
         **options.get("output_config", {}),
     }
     extra = {k: v for k, v in options.items() if k != "output_config"}
+
+    async def attempt(remaining: float) -> Message:
+        timed = client.with_options(timeout=anthropic.Timeout(remaining, connect=remaining))
+        return await timed.messages.create(
+            model=model,
+            max_tokens=request.max_output_tokens,
+            system=[
+                {
+                    "type": "text",
+                    "text": request.system,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[{"role": "user", "content": request.user}],
+            output_config=output_config,
+            **extra,
+        )
+
     try:
         limit = request.timeout_seconds
-        timed = client.with_options(timeout=anthropic.Timeout(limit, connect=limit))
         async with asyncio.timeout(limit):
-            message = await timed.messages.create(
-                model=model,
-                max_tokens=request.max_output_tokens,
-                system=[
-                    {
-                        "type": "text",
-                        "text": request.system,
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                ],
-                messages=[{"role": "user", "content": request.user}],
-                output_config=output_config,
-                **extra,
-            )
+            message = await call_with_retries(attempt, started + limit, anthropic.APIStatusError)
     except (TimeoutError, anthropic.APITimeoutError) as exc:
         raise LlmTimeout("timeout", latency_ms=elapsed_ms(started)) from exc
     except anthropic.APIStatusError as exc:
