@@ -154,9 +154,12 @@ export function mediaTypeOf(fileName: string, contentType: string): ImportMediaT
   );
 }
 
-export async function extractDocument(rawName: string, contentType: string, bytes: Uint8Array): Promise<Extracted> {
+/** `chosen` is the media type to read the file as, in place of its extension and declared type. */
+export async function extractDocument(rawName: string, contentType: string, bytes: Uint8Array, chosen?: string): Promise<Extracted> {
   const fileName = checkedFileName(rawName);
-  const mediaType = mediaTypeOf(fileName, contentType);
+  if (chosen !== undefined && !MEDIA_TYPES.has(chosen))
+    throw new ExtractRefusal(422, 'validation_failed', 'text, Markdown, CSV, JSON, HTML, Word, PowerPoint, Excel and PDF documents are supported');
+  const mediaType = chosen ? (chosen as ImportMediaType) : mediaTypeOf(fileName, contentType);
   if (bytes.length > IMPORT_MAX_BYTES) throw tooLarge('the document is larger than 10 MiB');
   const mismatch = await contentMismatch(bytes, mediaType);
   if (mismatch) throw new ExtractRefusal(415, 'unsupported_media_type', mismatch);
@@ -184,7 +187,8 @@ export async function contentMismatch(bytes: Uint8Array, mediaType: ImportMediaT
   return sniffed === mediaType ? null : 'the file is not the type its name says';
 }
 
-async function sniff(bytes: Uint8Array): Promise<ImportMediaType | 'text' | 'refused'> {
+/** The type the bytes are, as the API sniffs it: a document media type, `text` for other text, or `refused`. */
+export async function sniff(bytes: Uint8Array): Promise<ImportMediaType | 'text' | 'refused'> {
   const ole = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
   if (ole.every((b, i) => bytes[i] === b)) return 'refused';
   if (new TextDecoder('latin1').decode(bytes.subarray(0, 1024)).includes('%PDF-')) return 'application/pdf';
@@ -304,6 +308,21 @@ async function pptxSlides(bytes: Uint8Array): Promise<ExtractedSentence[]> {
 
 /** One unit per non-empty row, cached values joined by `, `; at most 50 sheets. */
 async function xlsxRows(bytes: Uint8Array): Promise<ExtractedSentence[]> {
+  const out: ExtractedSentence[] = [];
+  for (const { sheet, row, values } of await sheetRows(bytes, false)) {
+    const text = values.join(', ').replace(/\s+/g, ' ');
+    if (text.length > 12 && text.length < 400) out.push({ text, position: { unit: 'sheet', index: sheet, row } });
+  }
+  return out;
+}
+
+/** The cell values of the first non-empty row of a workbook's first sheet, empty when none. */
+export async function xlsxHeader(bytes: Uint8Array): Promise<string[]> {
+  return (await sheetRows(bytes, true))[0]?.values || [];
+}
+
+/** The non-empty rows of a workbook, or of its first sheet only: 1-based sheet, row number and trimmed non-empty cell values. */
+async function sheetRows(bytes: Uint8Array, firstSheetOnly: boolean): Promise<{ sheet: number; row: number | undefined; values: string[] }[]> {
   const rels = await relationships(bytes, 'xl/workbook.xml');
   const sheets = Array.from(xml(await zipMember(bytes, 'xl/workbook.xml')).getElementsByTagNameNS(SHEET_NS, 'sheet'));
   if (sheets.length > 50) throw tooLarge('the workbook holds more than 50 sheets');
@@ -315,8 +334,8 @@ async function xlsxRows(bytes: Uint8Array): Promise<ExtractedSentence[]> {
           .join(''),
       )
     : [];
-  const out: ExtractedSentence[] = [];
-  for (const [i, sheet] of sheets.entries()) {
+  const out: { sheet: number; row: number | undefined; values: string[] }[] = [];
+  for (const [i, sheet] of (firstSheetOnly ? sheets.slice(0, 1) : sheets).entries()) {
     const part = rels.get(sheet.getAttribute('r:id') || '') || '';
     if (!zipNames(bytes).includes(part)) continue;
     for (const row of Array.from(xml(await zipMember(bytes, part)).getElementsByTagNameNS(SHEET_NS, 'row'))) {
@@ -331,10 +350,7 @@ async function xlsxRows(bytes: Uint8Array): Promise<ExtractedSentence[]> {
         })
         .map((v) => v.trim())
         .filter(Boolean);
-      if (!values.length) continue;
-      const text = values.join(', ').replace(/\s+/g, ' ');
-      if (text.length > 12 && text.length < 400)
-        out.push({ text, position: { unit: 'sheet', index: i + 1, row: Number(row.getAttribute('r')) || undefined } });
+      if (values.length) out.push({ sheet: i + 1, row: Number(row.getAttribute('r')) || undefined, values });
     }
   }
   return out;

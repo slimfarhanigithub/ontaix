@@ -247,8 +247,10 @@ def context(
     chunks: int,
     company_name: str,
     pass_name: Literal["outline", "section"],
+    learning: dict[str, Any] | None = None,
 ) -> str:
-    """The user message: the chunk and the handles as JSON data, no id of any kind."""
+    """The user message: the chunk and the handles as JSON data, no id of any kind; the
+    company's learning (`learning`, as data fields) comes last."""
     handle_of = {c.id: f"c{i}" for i, c in enumerate(handles.candidates)}
     view = outline.view
 
@@ -285,6 +287,7 @@ def context(
             for key, t in sorted(view.templates.items(), key=lambda kv: kv[1].position)
         ],
     }
+    data.update(learning or {})
     return json.dumps(data, ensure_ascii=False)
 
 

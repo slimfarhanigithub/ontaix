@@ -451,37 +451,6 @@ describe('leaving out what the canvas already holds', () => {
   });
 });
 
-describe('Ontology import mode', () => {
-  afterEach(() => vi.restoreAllMocks());
-
-  it('sends the file to ontology import, not to sentence extraction', async () => {
-    const before = store.s.activeCompany;
-    store.s.activeCompany = { sid: 'company-a' } as typeof before;
-    vi.spyOn(store, 'refreshProposals').mockResolvedValue();
-    const upload = vi.spyOn(api, 'importSentences');
-    const mapping = vi.spyOn(api, 'importOntology').mockResolvedValue({
-      ontologyImportId: 'oi-1',
-      expiresAt: '2026-09-30T12:00:00Z',
-      companyId: 'company-a',
-      parentConceptId: null,
-      format: 'rdf_xml',
-      languages: ['en'],
-      individuals: 'skip',
-      drafts: [],
-      notes: [],
-      skipped: [],
-    });
-    try {
-      await importDocument(new File(['a'], 'model.owl'), 'ontology');
-    } finally {
-      store.s.activeCompany = before;
-    }
-    expect(mapping).toHaveBeenCalledTimes(1);
-    expect(upload).not.toHaveBeenCalled();
-    expect(store.ui.importing).toBe(false);
-  });
-});
-
 describe('importing a document', () => {
   afterEach(() => vi.restoreAllMocks());
 

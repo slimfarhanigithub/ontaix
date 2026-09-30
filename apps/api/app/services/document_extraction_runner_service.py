@@ -55,7 +55,7 @@ from app.repositories import (
     document_import_sentence_repository,
 )
 from app.repositories.llm_call_repository import CallRecord
-from app.services import import_service, llm_usage_service
+from app.services import import_service, learning_service, llm_usage_service
 from app.services.document_extraction_mapping_service import map_tree
 from app.services.document_extraction_pass_service import (
     Chunk,
@@ -316,6 +316,12 @@ class _Run:
         )
         outline_pass = pass_name == "outline"
         bound = OUTLINE_MAX_OUTPUT_TOKENS if outline_pass else SECTION_MAX_OUTPUT_TOKENS
+        learning = await learning_service.context_for(
+            view,
+            self.job.company_id,
+            " ".join(s.text for s in chunk.sentences),
+            "extraction",
+        )
         request = LlmRequest(
             system=OUTLINE_SYSTEM_PROMPT if outline_pass else SECTION_SYSTEM_PROMPT,
             user=context(
@@ -325,6 +331,7 @@ class _Run:
                 total,
                 company_name,
                 "outline" if outline_pass else "section",
+                learning.as_data() if learning else {},
             ),
             output_schema=OUTLINE_SCHEMA if outline_pass else SECTION_SCHEMA,
             max_output_tokens=bound + self.settings.llm_profile(DEEP).reasoning_allowance_tokens,

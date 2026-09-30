@@ -124,7 +124,7 @@ The result arrives as one proposal tree:
 4. Reject by branch needs nothing new: rejecting a proposal already cascades to its descendants, as in the reference.
 5. Approve all and Reject all keep their meaning over everything open.
 
-Studio (recorded deviation, row 109): the panel's `.prop .act` row gets a third button, `Approve branch (<n>)`, after `Reject`, in the existing `.prop .act button` style, shown only when `openBelow` is above 0 and the proposal is ready; the import dialog gets a choice between `Sentence by sentence` (default, today's path) and `Whole document` as two `.chk` radio rows (`#imMode`); while a job runs, the existing `.caption` shows its progress. Exact texts and screenshot handling are in `docs/ui-contract.md`.
+Studio (recorded deviation, row 109): the panel's `.prop .act` row gets a third button, `Approve branch (<n>)`, after `Reject`, in the existing `.prop .act button` style, shown only when `openBelow` is above 0 and the proposal is ready; the import dialog gets a choice between `Sentence by sentence` (default, today's path) and `Whole document` as two `.chk` radio rows (`#imMode`), replaced by the detected reading and the `#imAs` pill (rows 126 and 135); while a job runs, the existing `.caption` shows its progress. Exact texts and screenshot handling are in `docs/ui-contract.md`.
 
 ### Data Residency
 

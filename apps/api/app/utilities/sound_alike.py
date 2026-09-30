@@ -9,6 +9,8 @@ capitalised, so a single leading capital says nothing about a name.
 
 A heard label then sounds like the name when both have the same number of words and every word
 that differs is a long word whose consonant skeleton and spelling are both close to the name's.
+A heard label can also start with the company's name misheard and go on with more words
+("Inside sales" for "Insight sales"): the speaker meant the company's own <rest>.
 The test compares spelling only; it never calls anything outside its arguments.
 """
 
@@ -28,6 +30,7 @@ MIN_SPELLING_RATIO = 0.6
 _LETTERS = re.compile(r"[^\W\d_]+")
 _SOUNDS = (("ph", "f"), ("ck", "k"), ("q", "k"), ("c", "k"), ("z", "s"), ("x", "ks"))
 _SILENT = frozenset("aeiouyhw")
+_SILENT_GH = re.compile(r"(?<=[aeiouy])gh")
 
 
 def sounds_like_name(heard: str, known: str, *, company_names: Collection[str]) -> bool:
@@ -40,6 +43,23 @@ def sounds_like_name(heard: str, known: str, *, company_names: Collection[str]) 
         return False
     differing = [(x, y) for x, y in zip(a, b, strict=True) if singular(x) != singular(y)]
     return bool(differing) and all(_close(x, y) for x, y in differing)
+
+
+def company_possessive_rest(heard: str, company_name: str) -> str | None:
+    """The words of `heard` after a leading run that sounds like, but is not spelled as,
+    `company_name` ("sales" for "Inside sales" and Insight), keeping their spelling; None when
+    `heard` does not start so or has no word after that run."""
+    words = heard.split()
+    name = _word_list(company_name)
+    if not name or len(words) <= len(name):
+        return None
+    lead = _word_list(" ".join(words[: len(name)]))
+    if len(lead) != len(name):
+        return None
+    differing = [(x, y) for x, y in zip(lead, name, strict=True) if singular(x) != singular(y)]
+    if not differing or not all(_close(x, y) for x, y in differing):
+        return None
+    return " ".join(words[len(name) :])
 
 
 def is_proper_name(label: str, company_names: Collection[str]) -> bool:
@@ -67,7 +87,8 @@ def _close(a: str, b: str) -> bool:
 
 def _skeleton(word: str) -> str:
     """The word's first letter, then its consonants, with spellings of one sound merged and
-    doubled letters collapsed."""
+    doubled letters collapsed; a "gh" after a vowel is silent ("insight" as "insit")."""
+    word = _SILENT_GH.sub("", word)
     for spelled, sound in _SOUNDS:
         word = word.replace(spelled, sound)
     kept = word[0] + "".join(c for c in word[1:] if c not in _SILENT)
