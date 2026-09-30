@@ -215,7 +215,7 @@ async def test_a_recorded_structured_output_maps_to_the_answer(monkeypatch) -> N
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_a_failed_status_is_one_attempt_and_a_provider_error(monkeypatch) -> None:
-    seen = install(monkeypatch, responding({"error": {"message": "busy"}}, status=429))
+    seen = install(monkeypatch, responding({"error": {"message": "bad request"}}, status=400))
 
     with pytest.raises(LlmProviderError) as raised:
         await adapter().complete(request())
