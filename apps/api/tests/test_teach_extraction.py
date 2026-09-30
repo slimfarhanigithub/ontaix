@@ -222,7 +222,7 @@ async def test_a_zero_cap_is_off_and_sends_nothing(
     assert fake_llm.requests == []
 
 
-async def test_an_exhausted_monthly_cap_degrades_to_the_grammar(
+async def test_an_exhausted_monthly_cap_drafts_nothing_and_sends_nothing(
     client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
 ) -> None:
     company_id, _ = await add_company(tenant, "Insight")

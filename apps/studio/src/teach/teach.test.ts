@@ -2,7 +2,16 @@ import { api } from '../api/client';
 import { ApiError, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
 import { addCompany, addLink, addNode } from '../canvas/state';
 import { store } from '../store/store';
-import { SPEECH_PARSE_TIMEOUT_MS, importDocument, skippedText, speechStream, teach, teachSessionId, withoutKnown } from './teach';
+import {
+  SPEECH_PARSE_TIMEOUT_MS,
+  importDocument,
+  notUnderstoodText,
+  skippedText,
+  speechStream,
+  teach,
+  teachSessionId,
+  withoutKnown,
+} from './teach';
 
 const result: TeachResult = {
   outcome: 'not_understood',
@@ -20,6 +29,48 @@ const result: TeachResult = {
   unresolved: [],
   segments: [{ index: 0, span: { start: 0, end: 9 } }],
 };
+
+describe('a sentence the model did not answer', () => {
+  const unanswered = (llmOutcome: TeachResult['llmOutcome'], origin: TeachResult['origin'] = 'text'): TeachResult => ({
+    ...result,
+    origin,
+    llmOutcome,
+    degraded: true,
+    unresolved: [{ text: 'Insight sells services', reason: 'model_unavailable' }],
+  });
+
+  it('says why for each outcome of a model step that is on', () => {
+    expect(notUnderstoodText(unanswered('budget_exhausted'))).toBe(
+      'The monthly model allowance is used up. Ask an administrator to raise it.',
+    );
+    expect(notUnderstoodText(unanswered('rate_limited', 'speech'))).toBe('The model is busy. Try again in a moment.');
+    for (const outcome of ['timeout', 'provider_error'] as const)
+      expect(notUnderstoodText(unanswered(outcome))).toBe('The model is unavailable right now. Your sentence is kept, send it again.');
+  });
+
+  it('keeps the hint when the model is not configured, answered, or read a document', () => {
+    expect(notUnderstoodText(unanswered('not_configured'))).toBe('Try again');
+    expect(notUnderstoodText(unanswered('invalid_output'))).toBe('Try again');
+    expect(notUnderstoodText(unanswered('provider_error', 'document'))).toBe('Try again');
+    expect(notUnderstoodText(result)).toBe('Try again');
+  });
+
+  it('captions the typed sentence with the reason and keeps it for sending again', async () => {
+    vi.spyOn(api, 'teachParse').mockResolvedValue(unanswered('rate_limited'));
+    const captions: string[][] = [];
+    vi.spyOn(store, 'caption').mockImplementation((kicker, text) => void captions.push([kicker, text]));
+
+    const before = store.s.activeCompany;
+    store.s.activeCompany = { sid: 'company-a' } as typeof before;
+    try {
+      expect(await teach('Insight sells services')).toBe(false);
+    } finally {
+      store.s.activeCompany = before;
+      vi.restoreAllMocks();
+    }
+    expect(captions).toEqual([['Not understood', 'The model is busy. Try again in a moment.']]);
+  });
+});
 
 describe('teach sessions', () => {
   afterEach(() => vi.restoreAllMocks());
