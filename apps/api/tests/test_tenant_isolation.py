@@ -25,6 +25,7 @@ from app.clients import db_client
 from app.main import API_PREFIX, app
 from tests.auth_helpers import create_member, group_ids, ready_member, signed_in
 from tests.conftest import AccountFixture, Browser, TenantFixture, make_tenant
+from tests.test_domains import created_domain
 from tests.test_usage_learning import batch, decide, parse
 
 EXCLUDED_PREFIXES = (f"{API_PREFIX}/auth", f"{API_PREFIX}/admin", f"{API_PREFIX}/healthz")
@@ -48,6 +49,8 @@ PLATFORM_ROLE_MODULES = {
 PLATFORM_NAMES = {"platform_session", "get_platform_session_factory", "platform_session_dependency"}
 # The usage-learning tables, every one of them scoped by tenant_id like the others.
 LEARNING_TABLES = ("teach_parse", "proposal_learning_source", "learning_example", "company_alias")
+# The tenant domain tables, scoped by tenant_id like the others.
+DOMAIN_TABLES = ("tenant_domain", "tenant_domain_revision")
 
 
 @dataclass(frozen=True)
@@ -355,6 +358,53 @@ async def test_the_learning_of_b_is_invisible_to_a(
             assert seen == 0, table
     read = await client.get(f"/companies/{b.company_id}/learning", headers=tenant.admin.headers)
     assert read.status_code == 404, read.text
+
+
+async def test_the_domains_of_b_are_invisible_to_a(
+    client: httpx.AsyncClient, tenant: TenantFixture, organization_b: OrganizationB
+) -> None:
+    """B's tenant domains - the templates and a custom one - are read, changed and weighed by
+    nobody in A: not through A's API, not through A's organization session."""
+    b = organization_b.tenant
+    secret = await created_domain(client, b, "Secret Ops")
+    listed = await client.get("/domains", headers=tenant.governor.headers)
+    assert listed.status_code == 200, listed.text
+    assert secret["key"] not in {d["key"] for d in listed.json()}
+    assert "Secret Ops" not in {d["name"] for d in listed.json()}
+    renamed = await client.patch(
+        f"/domains/{secret['key']}", json={"name": "Hijacked"}, headers=tenant.builder.headers
+    )
+    assert renamed.status_code == 404, renamed.text
+    weighed = await client.post(
+        "/deletion-impact",
+        json={"companyId": str(b.company_id), "wholeCompany": True},
+        headers=tenant.governor.headers,
+    )
+    assert weighed.status_code == 404, weighed.text
+    async with db_client.platform_session() as s:
+        for table in DOMAIN_TABLES:
+            rows = (
+                await s.execute(
+                    text(f"SELECT count(*) FROM ontaix.{table} WHERE tenant_id = :b"),
+                    {"b": b.tenant_id},
+                )
+            ).scalar_one()
+            assert rows >= 10, table
+    async with db_client.tenant_session(tenant.tenant_id) as s:
+        for table in DOMAIN_TABLES:
+            seen = (
+                await s.execute(
+                    text(f"SELECT count(*) FROM ontaix.{table} WHERE tenant_id = :b"),
+                    {"b": b.tenant_id},
+                )
+            ).scalar_one()
+            assert seen == 0, table
+        changed = await s.execute(
+            text("UPDATE ontaix.tenant_domain SET name = 'Hijacked' WHERE tenant_id = :b"),
+            {"b": b.tenant_id},
+        )
+        assert changed.rowcount == 0
+        await s.rollback()
 
 
 def test_only_the_listed_modules_use_the_platform_role() -> None:
