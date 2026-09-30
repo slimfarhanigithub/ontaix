@@ -59,14 +59,18 @@ export function withSeed<D extends ProposalDraft>(draft: D): D {
   return draft;
 }
 
-/** Teaches the active company one typed or spoken sentence; an empty submission does nothing. */
-export async function teach(text: string, origin: InputOrigin = 'text'): Promise<void> {
+/**
+ * Teaches the active company one typed or spoken sentence. Resolves true once the sentence is
+ * understood, wholly or partly, and false when it is not understood, the parse or its proposals
+ * are refused, or there is nothing to teach.
+ */
+export async function teach(text: string, origin: InputOrigin = 'text'): Promise<boolean> {
   text = text.trim();
   const co = store.s.activeCompany;
-  if (!text || !co || !co.sid) return;
+  if (!text || !co || !co.sid) return false;
   const end = beginProcessing();
   try {
-    await parseAndPropose({ companyId: co.sid, text, origin, sessionId: teachSessionId(co.sid) });
+    return await parseAndPropose({ companyId: co.sid, text, origin, sessionId: teachSessionId(co.sid) });
   } finally {
     end();
   }
@@ -187,9 +191,10 @@ function speechPieces(text: string): string[] {
   return pieces;
 }
 
-async function parseAndPropose(request: TeachRequest): Promise<void> {
+/** Parses and proposes one sentence; true when it is understood and its proposals are accepted. */
+async function parseAndPropose(request: TeachRequest): Promise<boolean> {
   const result = await parse(request);
-  if (result) await propose(result);
+  return result ? propose(result) : false;
 }
 
 /** Parses one sentence; a refusal is shown and yields null. */
@@ -202,20 +207,24 @@ async function parse(request: TeachRequest): Promise<TeachResult | null> {
   }
 }
 
-/** Proposes a parse's drafts and captions its outcome. */
-async function propose(result: TeachResult): Promise<void> {
+/**
+ * Proposes a parse's drafts and captions its outcome; true when the sentence is understood and
+ * its batch, if any, is accepted.
+ */
+async function propose(result: TeachResult): Promise<boolean> {
   // All drafts of one parse leave as one all-or-nothing batch.
-  if (result.drafts.length) await submitBatch(result.drafts.map(withSeed));
+  const accepted = result.drafts.length ? await submitBatch(result.drafts.map(withSeed)) : true;
   if (result.outcome === 'understood') {
     const n = result.statements?.length ?? result.drafts.length;
     store.caption(`Understood ${n === 1 ? 'one statement' : n + ' statements'}`, result.caption);
-    return;
+    return accepted;
   }
   if (result.outcome === 'partly_understood') {
     store.caption('Partly understood', result.caption);
-    return;
+    return accepted;
   }
   store.caption('Not understood', result.caption);
+  return false;
 }
 
 /** The refusals of a batch that name a fact the model already holds. */
@@ -225,33 +234,40 @@ const DUPLICATE_CODES = new Set(['duplicate_label', 'duplicate_relation']);
  * after its `Retry-After` when that is short, never split. A batch refused because a draft
  * restates a fact already in the model is sent once more without the drafts the canvas shows
  * as already there, so the new facts of the parse are still proposed; a toast names what was
- * left out. */
-async function submitBatch(drafts: ProposalDraft[]): Promise<void> {
+ * left out. Resolves false when the batch ends refused. */
+async function submitBatch(drafts: ProposalDraft[]): Promise<boolean> {
   try {
     await api.createProposalBatch(drafts);
+    return true;
   } catch (err) {
     if (err instanceof ApiError && err.status === 409 && DUPLICATE_CODES.has(err.problem.code)) {
       const plan = withoutKnown(drafts);
       if (!plan.fresh.length || !plan.known.length) {
         store.refused(err);
-        return;
+        return false;
       }
       try {
         await api.createProposalBatch(plan.fresh);
       } catch (e) {
         store.refused(e);
-        return;
+        return false;
       }
       store.toast2('Already there', leftOutText(plan));
-      return;
+      return true;
     }
     const wait = err instanceof ApiError && err.status === 429 ? err.retryAfter : null;
     if (wait === null || wait > BATCH_RETRY_MAX_S) {
       store.refused(err);
-      return;
+      return false;
     }
     await new Promise((r) => setTimeout(r, wait * 1000));
-    await api.createProposalBatch(drafts).catch((e) => store.refused(e));
+    return api.createProposalBatch(drafts).then(
+      () => true,
+      (e) => {
+        store.refused(e);
+        return false;
+      },
+    );
   }
 }
 

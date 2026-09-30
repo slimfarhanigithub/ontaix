@@ -7,7 +7,6 @@ import { useEffect } from 'react';
 import { AdminOverlay } from './shell/AdminOverlay';
 import { NewBox, LinkBox } from './shell/Boxes';
 import { CanvasView } from './shell/CanvasView';
-import { Caption } from './shell/Caption';
 import { Dialog } from './shell/Dialog';
 import { DomainsCard } from './shell/DomainsCard';
 import { Drawer } from './shell/Drawer';
@@ -32,7 +31,6 @@ export function App() {
       <Header />
       <Toasts />
       <AdminOverlay />
-      <Caption />
       <Tools />
       <TeachBar />
       <Panel />

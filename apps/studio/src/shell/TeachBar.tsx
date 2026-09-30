@@ -7,16 +7,27 @@
  * words still being recognised only show in the input. On stop, words never finished join the
  * queue as the last sentence and the queue drains.
  *
+ * The bar is one line: the caption as a disclosure button, the company selector, the input, the
+ * Processing status, the microphone and Teach. Opened, it grows upward with the last captions and
+ * the whole current sentence in a text area of up to five lines; Escape closes it and gives focus
+ * back to the disclosure button. Whether it is open is remembered per browser. A typed sentence
+ * stays in the input until its parse answers: it clears once taught, and when the model did not
+ * understand it or the API refused it, it is put back, selected, to be fixed.
+ *
  * Recognition runs on Azure AI Speech (../teach/azureSpeech) with the company's labels as a
  * phrase list; when the API has no Speech resource, the network fails or the SDK cannot run, the
  * recording uses the browser's recogniser instead. Both show and queue words the same way.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 
-import { ApiError, type InputOrigin } from '../api/types';
+import { ApiError } from '../api/types';
 import { speechPhrases, startAzureSpeech } from '../teach/azureSpeech';
 import { speechStream, teach } from '../teach/teach';
+import { Caption } from './Caption';
 import { useStore } from './dom';
+import { readExpanded, writeExpanded } from './teachBarState';
+import { TeachLog } from './TeachLog';
+import { TeachStatus } from './TeachStatus';
 
 interface SpeechRecognitionLike {
   lang: string;
@@ -36,6 +47,8 @@ type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 const SILENCE_MS = 1500;
 /** Silence at the start of an Azure recording that ends it; the browser's recogniser ends itself. */
 const NO_SPEECH_MS = 8000;
+/** Lines the open bar's text area grows to before it scrolls. */
+const MAX_LINES = 5;
 
 interface Recording {
   stop(): void;
@@ -55,6 +68,50 @@ export function TeachBar() {
   const [errorPlaceholder, setErrorPlaceholder] = useState<string | null>(null);
   const mic = useRef<HTMLButtonElement>(null);
   const silence = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [expanded, setExpanded] = useState(readExpanded);
+  const [heard, setHeard] = useState('');
+  const form = useRef<HTMLFormElement>(null);
+  const more = useRef<HTMLButtonElement>(null);
+  const field = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  /** Typed sentences whose parse has not answered yet. */
+  const pending = useRef(new Set<string>());
+  /** Bumped to select the input's text once it is rendered. */
+  const [selectSeq, setSelectSeq] = useState(0);
+
+  const toggle = () => {
+    writeExpanded(!expanded);
+    setExpanded(!expanded);
+  };
+
+  // The tools row sits above the bar and follows its height through --teach-h.
+  useEffect(() => {
+    const el = form.current;
+    if (!el) return;
+    const measure = () => document.documentElement.style.setProperty('--teach-h', `${el.offsetHeight}px`);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // The open bar's text area grows with its text up to MAX_LINES, then scrolls.
+  useLayoutEffect(() => {
+    const el = field.current;
+    if (!el || el.tagName !== 'TEXTAREA') return;
+    const css = getComputedStyle(el);
+    const line = parseFloat(css.lineHeight) || 21;
+    const pad = (parseFloat(css.paddingTop) || 0) + (parseFloat(css.paddingBottom) || 0);
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, line * MAX_LINES + pad)}px`;
+  }, [say, expanded]);
+
+  // A sentence put back after a failed teach is selected, ready to be fixed.
+  useEffect(() => {
+    if (!selectSeq) return;
+    field.current?.focus();
+    field.current?.select();
+  }, [selectSeq]);
 
   useEffect(() => {
     mounted.current = true;
@@ -96,6 +153,7 @@ export function TeachBar() {
     starting.current = true;
     startAzureSpeech(companyId, speechPhrases(st.s), {
       started() {
+        setHeard('');
         st.ui.listening = true;
         st.bump();
         quiet(NO_SPEECH_MS);
@@ -108,6 +166,7 @@ export function TeachBar() {
       final(sentence) {
         heard = true;
         stream.sentence(sentence);
+        setHeard(sentence.trim());
         done += `${sentence} `;
         st.setSay(done);
         quiet(SILENCE_MS);
@@ -150,6 +209,7 @@ export function TeachBar() {
     let heard = false;
     let ended = false;
     r.onstart = () => {
+      setHeard('');
       st.ui.listening = true;
       st.bump();
     };
@@ -162,6 +222,7 @@ export function TeachBar() {
         if (i < finished) continue;
         if (ev.results[i].isFinal && i === finished) {
           stream.sentence(words);
+          setHeard(words.trim());
           finished++;
         } else pending += words;
       }
@@ -185,24 +246,62 @@ export function TeachBar() {
     r.start();
   };
 
-  const submit = (text: string, origin: InputOrigin) => {
-    void teach(text, origin);
+  /** Teaches the typed sentence; it leaves the input once taught and comes back, selected, when not. */
+  const submit = async (text: string) => {
+    if (!text.trim() || pending.current.has(text)) return;
+    pending.current.add(text);
+    let taught: boolean | void;
+    try {
+      taught = await teach(text, 'text');
+    } finally {
+      pending.current.delete(text);
+    }
+    if (!mounted.current) return;
+    const now = st.ui.say;
+    if (taught === false) {
+      if (now !== text && now.trim()) return;
+      st.setSay(text);
+      setSelectSeq((n) => n + 1);
+    } else if (now === text) st.setSay('');
+  };
+
+  /** Escape closes the open bar, hands focus back to the disclosure button and goes no further. */
+  const onKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== 'Escape' || !expanded) return;
+    e.preventDefault();
+    e.stopPropagation();
+    writeExpanded(false);
+    setExpanded(false);
+    more.current?.focus();
   };
 
   const liveTeaching = !settings || settings.liveTeaching;
   const placeholder = !liveTeaching ? 'Live teaching is disabled in the admin portal' : errorPlaceholder || sayPlaceholder;
 
+  const fieldProps = {
+    id: 'say',
+    ref: field,
+    placeholder,
+    'aria-label': 'Teach the model',
+    value: say,
+    disabled: !liveTeaching,
+    onChange: (e: { target: { value: string } }) => st.setSay(e.target.value),
+  };
+
   return (
     <form
-      className="bar"
+      className={`bar${expanded ? ' open' : ''}`}
       id="bar-form"
       autoComplete="off"
+      ref={form}
+      onKeyDown={onKeyDown}
       onSubmit={(e) => {
         e.preventDefault();
-        submit(say, 'text');
-        st.setSay('');
+        void submit(say);
       }}
     >
+      <Caption expanded={expanded} onToggle={toggle} heard={heard} buttonRef={more} />
+      <span className="sep" aria-hidden="true"></span>
       <select
         id="companySel"
         aria-label="Company being taught"
@@ -217,15 +316,21 @@ export function TeachBar() {
           </option>
         ))}
       </select>
-      <input
-        id="say"
-        type="text"
-        placeholder={placeholder}
-        aria-label="Teach the model"
-        value={say}
-        disabled={!liveTeaching}
-        onChange={(e) => st.setSay(e.target.value)}
-      />
+      {expanded ? (
+        <textarea
+          {...fieldProps}
+          rows={1}
+          readOnly={listening}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            form.current?.requestSubmit();
+          }}
+        />
+      ) : (
+        <input {...fieldProps} type="text" />
+      )}
+      <TeachStatus />
       <button
         type="button"
         className={`mic${listening ? ' on' : ''}`}
@@ -244,6 +349,7 @@ export function TeachBar() {
       <button type="submit" id="teach">
         Teach
       </button>
+      <TeachLog expanded={expanded} />
     </form>
   );
 }

@@ -1,10 +1,15 @@
 /**
  * The administration portal frame: backdrop, window and header with the theme switch. Markup
  * from reference/ontaix-studio-reference.html line 192; open, close and theme behaviour from
- * lines 948-952. The navigation and the pages come from the admin module.
+ * lines 948-952. The navigation and the pages come from the admin module. While it is open, Tab
+ * stays inside the window unless a dialog above it holds the focus, and closing it gives focus
+ * back to the element that had it before.
  */
+import { useEffect, useRef } from 'react';
+
 import { invalidateDirectory } from '../admin/adminData';
 import { AdminMain, AdminNav } from '../admin/AdminPortal';
+import { trapTab, useFocusReturn } from './Dialog';
 import { refStyle, useStore } from './dom';
 
 export function AdminOverlay() {
@@ -13,20 +18,31 @@ export function AdminOverlay() {
   const sub =
     st.s.companies.map((c) => c.name).join(' · ') +
     (proposals.length ? ` · ${proposals.length} proposal${proposals.length === 1 ? '' : 's'} waiting on the canvas` : '');
+  const win = useRef<HTMLDivElement>(null);
+  useFocusReturn(adminOpen, win);
+  useEffect(() => {
+    if (!adminOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || document.activeElement?.closest('.dlg-back')) return;
+      trapTab(e, win.current);
+    };
+    addEventListener('keydown', onKey);
+    return () => removeEventListener('keydown', onKey);
+  }, [adminOpen]);
   return (
     <div
       className={`admin${adminOpen ? ' on' : ''}`}
       id="admin"
       role="dialog"
       aria-modal="true"
-      aria-label="Administration portal"
+      aria-labelledby="adminTitle"
       onClick={(e) => {
         if (e.target === e.currentTarget) st.closeAdmin();
       }}
     >
-      <div className="win">
+      <div className="win" ref={win}>
         <div className="head">
-          Ontaix admin portal <span id="adminSub">{sub}</span>
+          <div id="adminTitle">Ontaix admin portal</div> <span id="adminSub">{sub}</span>
           <button
             className="btn"
             id="themeBtn"
