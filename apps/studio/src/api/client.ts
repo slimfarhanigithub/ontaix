@@ -39,6 +39,8 @@ import {
   type CompanyCreated,
   type DecisionResult,
   type DomainProduct,
+  type ImportDetection,
+  type ImportMediaType,
   type ImportResult,
   type OntologyImportRequest,
   type OntologyImportResult,
@@ -52,6 +54,8 @@ import {
   type SpeechToken,
   type TeachRequest,
   type TeachResult,
+  type TeachStreamEvent,
+  type TeachStreamListener,
   type ViewState,
 } from './types';
 
@@ -76,6 +80,13 @@ const BUSY_RETRY_CAP_MS = 3000;
 const BUSY_RETRY_DEFAULT_MS = 1000;
 
 async function call<R>(method: string, path: string, body?: unknown): Promise<R> {
+  const res = await answered(method, path, body);
+  if (res.status === 204) return undefined as R;
+  return (await res.json()) as R;
+}
+
+/** The successful response of a request; a refusal is thrown as an ApiError, after one resend for `busy`. */
+async function answered(method: string, path: string, body?: unknown): Promise<Response> {
   let res = await send(method, path, body);
   let problem = res.ok ? null : await problemOf(res);
   if (problem?.code === 'busy') {
@@ -84,8 +95,55 @@ async function call<R>(method: string, path: string, body?: unknown): Promise<R>
     problem = res.ok ? null : await problemOf(res);
   }
   if (problem) throw new ApiError(res.status, problem, retryAfterSeconds(res.headers.get('Retry-After')));
-  if (res.status === 204) return undefined as R;
-  return (await res.json()) as R;
+  return res;
+}
+
+/** A stream that ends without its result line: nothing was lost on the server, so the sentence is taught again. */
+const UNFINISHED: Problem = {
+  title: 'Unavailable',
+  status: 503,
+  code: 'unavailable',
+  detail: 'The sentence could not be read to the end; teach it again.',
+};
+
+/**
+ * `POST /teach/parse/stream`: hands each draft and retract line to `listen` as it arrives and
+ * resolves with the result line, the body `POST /teach/parse` answers. An error line is thrown as
+ * an ApiError, like a refusal. A listener that fails never stops the parse.
+ */
+async function teachParseStream(body: TeachRequest, listen: TeachStreamListener): Promise<TeachResult> {
+  const res = await answered('POST', '/teach/parse/stream', body);
+  let result: TeachResult | null = null;
+  const take = (line: string): void => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line) as TeachStreamEvent;
+    if (event.type === 'result') result = event.result;
+    else if (event.type === 'error') throw new ApiError(event.problem.status, event.problem);
+    else
+      try {
+        listen(event);
+      } catch (err) {
+        console.error('a streamed draft could not be shown', err);
+      }
+  };
+  const reader = res.body?.getReader();
+  if (!reader) {
+    for (const line of (await res.text()).split('\n')) take(line);
+  } else {
+    const decoder = new TextDecoder();
+    let rest = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      rest += done ? decoder.decode() : decoder.decode(value, { stream: true });
+      const lines = rest.split('\n');
+      rest = lines.pop() ?? '';
+      for (const line of lines) take(line);
+      if (done) break;
+    }
+    take(rest);
+  }
+  if (!result) throw new ApiError(UNFINISHED.status, UNFINISHED);
+  return result;
 }
 
 /** A form body goes as multipart with the boundary the browser picks; anything else as JSON. */
@@ -142,8 +200,11 @@ export const api = {
   getScene: () => call<Scene>('GET', '/scene'),
   listProposals: () => call<Page & { items: Proposal[] }>('GET', '/proposals'),
   createProposal: (draft: ProposalDraft) => call<Proposal>('POST', '/proposals', contractDraft(draft)),
-  createProposalBatch: (drafts: ProposalDraft[]) =>
-    call<Proposal[]>('POST', '/proposals/batch', { drafts: drafts.map(contractDraft) }),
+  createProposalBatch: (drafts: ProposalDraft[], parseId?: string | null) =>
+    call<Proposal[]>('POST', '/proposals/batch', {
+      drafts: drafts.map(contractDraft),
+      ...(parseId ? { parseId } : {}),
+    }),
   approve: (id: string) => call<DecisionResult>('POST', `/proposals/${id}/approve`),
   secondApprove: (id: string) => call<DecisionResult>('POST', `/proposals/${id}/second-approve`),
   reject: (id: string, reason?: string) =>
@@ -168,12 +229,21 @@ export const api = {
   patchSettings: (patch: SettingsPatch) => call<Settings>('PATCH', '/settings', patch),
   patchAppearance: (patch: AppearancePatch) => call<Appearance>('PATCH', '/appearance', patch),
   putViewState: (state: Partial<ViewState>) => call<ViewState>('PUT', '/view-state', state),
-  teachParse: (body: TeachRequest) => call<TeachResult>('POST', '/teach/parse', body),
+  /** Parses one sentence. With `listen`, the model's answer is streamed (`POST /teach/parse/stream`) and
+   * `listen` receives each draft as soon as it is known; the result is the same either way. */
+  teachParse: (body: TeachRequest, listen?: TeachStreamListener) =>
+    listen ? teachParseStream(body, listen) : call<TeachResult>('POST', '/teach/parse', body),
   speechToken: (companyId: string) => call<SpeechToken>('POST', '/speech/token', { companyId }),
-  importSentences: (file: File) => {
+  importSentences: (file: File, mediaType?: ImportMediaType) => {
     const form = new FormData();
     form.append('file', file, file.name);
+    if (mediaType) form.append('mediaType', mediaType);
     return call<ImportResult>('POST', '/import/sentences', form);
+  },
+  detectImport: (file: File) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return call<ImportDetection>('POST', '/import/detect', form);
   },
   importOntology: (file: File, body: OntologyImportRequest) => {
     const form = new FormData();

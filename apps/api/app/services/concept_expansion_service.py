@@ -51,7 +51,7 @@ from app.models.storage.base import NodeKind
 from app.models.storage.concept import Concept
 from app.repositories import concept_expansion_repository
 from app.repositories.llm_call_repository import CallRecord
-from app.services import llm_usage_service
+from app.services import learning_service, llm_usage_service
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.rate_limit_service import Budget, charge, try_charge
 from app.utilities.action_text import has_refused_character, normalise_action
@@ -189,9 +189,18 @@ async def _call(
     answer_bound = min(
         OUTPUT_TOKENS_PER_DRAFT * config.expand_max_nodes, config.expand_max_output_tokens
     )
+    learning = await learning_service.context_for(
+        view, concept.company_id, f"Expand {concept.label} {body.focus or ''}".strip(), "expand"
+    )
     request = LlmRequest(
         system=SYSTEM_PROMPT,
-        user=_context(view, concept, body, config.expand_context_labels),
+        user=_context(
+            view,
+            concept,
+            body,
+            config.expand_context_labels,
+            learning.as_data() if learning else {},
+        ),
         output_schema=OUTPUT_SCHEMA,
         max_output_tokens=answer_bound + config.llm_profile(DEEP).reasoning_allowance_tokens,
         timeout_seconds=config.expand_timeout_seconds,
@@ -249,8 +258,15 @@ async def _call(
             logger.exception("settling a language model call failed; its reservation stays")
 
 
-def _context(view: OntologyView, concept: Concept, body: ExpansionRequest, budget: int) -> str:
-    """The user message: the call's data as JSON, labels only, nearest to e0 first."""
+def _context(
+    view: OntologyView,
+    concept: Concept,
+    body: ExpansionRequest,
+    budget: int,
+    learning: dict[str, Any] | None = None,
+) -> str:
+    """The user message: the call's data as JSON, labels only, nearest to e0 first; the
+    company's learning (`learning`, as data fields) comes last."""
     company = view.companies[concept.company_id]
     is_root = concept.kind is NodeKind.ROOT
     remaining = budget
@@ -309,6 +325,7 @@ def _context(view: OntologyView, concept: Concept, body: ExpansionRequest, budge
         "depth": body.depth,
         "maxChildren": body.max_children,
     }
+    data.update(learning or {})
     return json.dumps(data, ensure_ascii=False)
 
 

@@ -44,6 +44,11 @@ RULES_NOTE = DraftNote(extractor="rules", confidence=1)
 # Appended to the statement of an intent that restates a relation the model already holds; such
 # an intent is kept and drafts nothing.
 ALREADY_KNOWN = " (already in the model)"
+# Actions that order two steps of one sequence; a new step is born beside the step it is ordered
+# against, never under it.
+SEQUENCE_ACTIONS = frozenset(
+    {"precedes", "follows", "is followed by", "comes before", "comes after"}
+)
 
 
 @dataclass(frozen=True)
@@ -99,6 +104,9 @@ class Drafter:
         # New concepts earlier model intents of this result introduce: label key (see
         # `label_key`) to label and domain key.
         self.introduced: dict[str, tuple[str, str]] = {}
+        # Where each of those new concepts is born, by the same key: parent reference and birth
+        # action.
+        self.placements: dict[str, tuple[dict[str, str], str]] = {}
         self.mine = sorted(
             (c for c in view.live_concepts() if c.company_id == company_id),
             key=lambda c: (c.born_at, str(c.id)),
@@ -324,7 +332,10 @@ class Drafter:
         """A model `rel` intent; an end naming a concept an earlier intent of the same answer
         introduces is cited by label instead of being born a second time."""
         a_in, b_in = self._introduced(a_end), self._introduced(b_end)
-        if a_in is None and b_in is None:
+        step = self._sequence_step(a_end, b_end, a_in, b_in, pred, note, domain_hint)
+        if step is not None:
+            planned = step
+        elif a_in is None and b_in is None:
             planned = self.rel(a_end, b_end, pred, note, domain_hint=domain_hint)
         else:
             planned = self._rel_by_label(a_end, b_end, a_in, b_in, pred, note, domain_hint)
@@ -434,6 +445,102 @@ class Drafter:
             _ids(a_end, b_end),
         )
 
+    def _sequence_step(
+        self,
+        a_end: End,
+        b_end: End,
+        a_in: tuple[str, str] | None,
+        b_in: tuple[str, str] | None,
+        pred: str,
+        note: DraftNote,
+        domain_hint: str | None,
+    ) -> PlannedIntent | None:
+        """`A precedes B` or `B follows A` with a new step: the new step is born beside the known
+        one, under the same parent with the same birth action, and the order is a relation
+        between the two, so a chain of steps stays one level deep. With both steps new, both
+        are born from the company root with `has`. None for any other action, for two known
+        steps, or when the known step has no placement to share (the root, an `is a` or a
+        reversed birth)."""
+        if normalise_action(pred) not in SEQUENCE_ACTIONS:
+            return None
+        a_known = a_end.concept is not None or a_in is not None
+        b_known = b_end.concept is not None or b_in is not None
+        if a_known and b_known:
+            return None
+        root = ({"parentId": str(self.root.id)}, "has", self.view.domain_key(self.root))
+        if not a_known and not b_known:
+            fresh = [a_end, b_end]
+            place = root
+        else:
+            anchor = a_end if a_known else b_end
+            fresh = [b_end if a_known else a_end]
+            found = self._placement(anchor)
+            if found is None:
+                return None
+            place = found
+        parent, action, domain = place
+        company = str(self.company_id)
+        drafts = [
+            self.draft(
+                type="concept",
+                companyId=company,
+                **parent,
+                label=end.label,
+                domainKey=self.key(domain_hint or domain),
+                action=action,
+                caption=f"{end.label} is kept, beside the step before or after it.",
+            )
+            for end in fresh
+        ]
+        a_label = a_in[0] if a_in else a_end.label
+        b_label = b_in[0] if b_in else b_end.label
+        ends: dict[str, Any] = {}
+        ends.update({"aId": str(a_end.concept.id)} if a_end.concept else {"aLabel": a_label})
+        ends.update({"bId": str(b_end.concept.id)} if b_end.concept else {"bLabel": b_label})
+        drafts.append(self.draft(type="relation", companyId=company, action=pred, **ends))
+        a_name = a_end.concept.label if a_end.concept else a_label
+        b_name = b_end.concept.label if b_end.concept else b_label
+        intent = Intent(
+            kind="rel",
+            subject=a_end.text,
+            predicate=pred,
+            object=b_end.text,
+            rule="llm",
+            subject_resolved=a_end.concept.id if a_end.concept else None,
+            object_resolved=b_end.concept.id if b_end.concept else None,
+        )
+        a_new = " (new)" if any(end is a_end for end in fresh) else ""
+        b_new = " (new)" if any(end is b_end for end in fresh) else ""
+        return PlannedIntent(
+            intent,
+            drafts,
+            [f"{a_name}{a_new} {pred} {b_name}{b_new}"],
+            note,
+            _identity(a_end, normalise_action(pred), b_end),
+            None,
+            _ids(a_end, b_end),
+        )
+
+    def _placement(self, end: End) -> tuple[dict[str, str], str, str | None] | None:
+        """The parent reference, birth action and domain a sibling of `end` is born with, or
+        None when `end` is the root or was born by `is a` or in reverse."""
+        concept = end.concept
+        if concept is not None:
+            if concept.parent_id is None or concept.birth_reverse:
+                return None
+            if concept.birth_action in ("is a", "is a kind of"):
+                return None
+            return (
+                {"parentId": str(concept.parent_id)},
+                concept.birth_action or "has",
+                self.view.domain_key(concept),
+            )
+        placed = self.placements.get(label_key(end.label))
+        if placed is None:
+            return None
+        parent, action = placed
+        return parent, action, self.introduced[label_key(end.label)][1]
+
     def introduced_label(self, label: str) -> str | None:
         """The label of the new concept an earlier intent of this result introduces under
         `label`, exactly or by singular and plural of any word, or None."""
@@ -497,6 +604,13 @@ class Drafter:
         for d in planned.drafts:
             if d.get("type") in ("concept", "spec"):
                 self.introduced.setdefault(label_key(d["label"]), (d["label"], d["domainKey"]))
+            if d.get("type") == "concept" and not d.get("reverse"):
+                parent = (
+                    {"parentId": d["parentId"]}
+                    if "parentId" in d
+                    else {"parentLabel": d["parentLabel"]}
+                )
+                self.placements.setdefault(label_key(d["label"]), (parent, d["action"]))
 
     def draft(self, **fields: Any) -> dict[str, Any]:
         return {**self.extras, **fields}

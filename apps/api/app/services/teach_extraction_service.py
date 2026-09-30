@@ -6,10 +6,12 @@ charged; the call's upper bound is reserved against the monthly cap and committe
 calls the model with nothing but the sentence, the session's recent turns, the company name, up
 to 200 candidate concepts as per-call handles (`c0` is the company root), the domain templates,
 the action guidance and up to three worked examples from the example library, picked by lexical
-likeness to the text; the reservation's estimate counts those examples. The reservation is
+likeness to the text, then the company's own lessons, negatives, speech aliases and habits
+learnt from its people's decisions; the reservation's estimate counts all of it. The reservation is
 settled and a cost record stored whatever happens. A valid answer is mapped to drafts with the
 grammar's mapping; anything else leaves the grammar's result standing and the step reports why.
-The step never raises.
+A streamed call reads each part of the answer as it arrives with the same checks, for the
+client to show early; only the whole answer decides the step. The step never raises.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ import re
 import time
 import unicodedata
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -41,8 +43,10 @@ from app.ai.prompts.teach_extraction import (
 from app.auth import Caller
 from app.clients.llm_client import (
     LlmCallError,
+    LlmClient,
     LlmRequest,
     LlmTimeout,
+    TextListener,
     estimate_tokens,
     get_llm_client,
 )
@@ -63,15 +67,17 @@ from app.models.llm.teach_extraction_answer import (
 from app.models.storage.concept import Concept
 from app.repositories.llm_call_repository import CallRecord
 from app.repositories.teach_session_turn_repository import StoredTurn
-from app.services import llm_usage_service
+from app.services import learning_service, llm_usage_service
 from app.services.ontology_view_service import OntologyView
 from app.services.rate_limit_service import Budget, try_charge
 from app.services.teach_draft_service import Drafter, End, PlannedIntent, phrase_in
 from app.utilities.action_text import has_refused_character, normalise_action
 from app.utilities.example_selection import most_similar, within_budget
 from app.utilities.label_forms import label_key, singular_word
+from app.utilities.learning_structure import fold
 from app.utilities.permissions import can_read
-from app.utilities.sound_alike import sounds_like_name
+from app.utilities.sound_alike import company_possessive_rest, sounds_like_name
+from app.utilities.streamed_json import closed_items
 from app.utilities.teach_parser import singular, title
 
 logger = logging.getLogger(__name__)
@@ -150,6 +156,10 @@ class ModelStep:
     segments: list[tuple[int, int]] = field(default_factory=list)
 
 
+# Receives the step that the part of a streamed answer received so far gives.
+PartialListener = Callable[[ModelStep], Awaitable[None]]
+
+
 class _InvalidAnswer(Exception):
     """The answer failed the schema or a check the schema cannot express."""
 
@@ -212,11 +222,18 @@ async def run(
     reading: Reading | None = None,
     *,
     profile: LlmProfile,
+    on_partial: PartialListener | None = None,
 ) -> ModelStep:
     """The model step for `sentence` (`text` is the sentence after its domain prefix), on the
-    caller's model profile. Budgets and the monthly cap are the same for every profile."""
+    caller's model profile. Budgets and the monthly cap are the same for every profile.
+
+    With `on_partial` the answer is streamed, and each time it closes another intent the answer
+    so far is read as a step and handed to `on_partial` (see `_partials`); the step returned is
+    the one the whole answer gives, exactly as without it."""
     try:
-        return await _run(caller, drafter, sentence, text, turns, reading or Reading(), profile)
+        return await _run(
+            caller, drafter, sentence, text, turns, reading or Reading(), profile, on_partial
+        )
     except Exception:
         logger.exception("the teach extraction step failed; the grammar's result stands")
         return ModelStep("provider_error")
@@ -230,6 +247,7 @@ async def _run(
     turns: list[StoredTurn],
     reading: Reading,
     profile: LlmProfile,
+    on_partial: PartialListener | None,
 ) -> ModelStep:
     client = get_llm_client(profile)
     if client is None:
@@ -244,11 +262,15 @@ async def _run(
         return ModelStep("rate_limited")
     stages.mark("budget")
     handles = _candidates(caller, drafter, text, turns)
+    learning = await learning_service.context_for(drafter.view, drafter.company_id, text, "teach")
+    aliases = learning.aliases if learning else []
     config = get_settings()
     allowance = config.llm_profile(profile).reasoning_allowance_tokens
     request = LlmRequest(
         system=SYSTEM_PROMPT,
-        user=_context(drafter, text, turns, handles, reading),
+        user=_context(
+            drafter, text, turns, handles, reading, learning.as_data() if learning else {}
+        ),
         output_schema=SPEECH_OUTPUT_SCHEMA if reading.speech else OUTPUT_SCHEMA,
         # The answer bound plus the reasoning allowance: a provider's output bound counts
         # reasoning tokens too. The answer's own size is bounded by its validation.
@@ -286,7 +308,13 @@ async def _run(
     outcome, usage = "invalid_output", (0, 0, 0.0, 0)
     try:
         try:
-            answer = await client.complete(request)
+            if on_partial is None:
+                answer = await client.complete(request)
+            else:
+                partials = _partials(
+                    client, request, handles, drafter, sentence, text, reading, on_partial
+                )
+                answer = await client.stream(request, partials)
         except LlmCallError as exc:
             outcome = "timeout" if isinstance(exc, LlmTimeout) else "provider_error"
             usage = (exc.input_tokens, exc.output_tokens, exc.cost_eur, exc.latency_ms)
@@ -298,7 +326,7 @@ async def _run(
         usage = (answer.input_tokens, answer.output_tokens, answer.cost_eur, answer.latency_ms)
         stages.mark("model")
         try:
-            step = _interpret(answer.text, handles, drafter, sentence, text, reading)
+            step = _interpret(answer.text, handles, drafter, sentence, text, reading, aliases)
         except _InvalidAnswer as exc:
             logger.info("the teach extraction answer was refused: %s", exc)
             return ModelStep("invalid_output")
@@ -318,6 +346,67 @@ async def _run(
             upper_bound - request.max_output_tokens,
             stages,
         )
+
+
+def _partials(
+    client: LlmClient,
+    request: LlmRequest,
+    handles: list[Concept],
+    drafter: Drafter,
+    sentence: str,
+    text: str,
+    reading: Reading,
+    on_partial: PartialListener,
+) -> TextListener:
+    """The listener of a streamed answer. Each time the text received so far closes another
+    intent (or another segment), the answer so far - its closed intents, segments and phrases -
+    goes through `_interpret`, the reading of a whole answer, on a drafter of its own, and the
+    step it gives goes to `on_partial`. A part that fails a check gives no step; the whole
+    answer decides. A failure here never reaches the call: the listener stops instead."""
+    seen = (0, 0)
+    received = 0
+    stopped = False
+
+    async def listen(raw: str) -> None:
+        nonlocal seen, received, stopped
+        if stopped:
+            return
+        if len(raw) < received:
+            # A retried attempt starts its answer again.
+            seen = (0, 0)
+            received = 0
+        grown = raw[received:]
+        received = len(raw)
+        if "}" not in grown:
+            return
+        items = closed_items(raw)
+        intents = items.get("intents", [])
+        counts = (len(intents), len(items.get("segments", [])))
+        if not intents or counts == seen:
+            return
+        seen = counts
+        part: dict[str, Any] = {"intents": intents, "unresolved": items.get("unresolved", [])}
+        if "segments" in items:
+            part["segments"] = items["segments"]
+        own = Drafter(
+            drafter.view, drafter.company_id, drafter.root, drafter.dom_key, drafter.extras
+        )
+        try:
+            answer = client.answer_text(json.dumps(part, ensure_ascii=False), request)
+            step = _interpret(answer, handles, own, sentence, text, reading)
+        except _InvalidAnswer:
+            return
+        except Exception:
+            logger.exception("reading part of a streamed teach extraction answer failed")
+            stopped = True
+            return
+        try:
+            await on_partial(step)
+        except Exception:
+            logger.exception("handing on part of a streamed teach extraction answer failed")
+            stopped = True
+
+    return listen
 
 
 async def _settle(reservation: llm_usage_service.Reservation, record: CallRecord) -> None:
@@ -404,8 +493,11 @@ def _context(
     turns: list[StoredTurn],
     handles: list[Concept],
     reading: Reading,
+    learning: dict[str, Any] | None = None,
 ) -> str:
-    """The user message: the call's data as JSON, with handles in place of every id."""
+    """The user message: the call's data as JSON, with handles in place of every id. The
+    company's learning (`learning`, as data fields) comes last, after the static examples and
+    the call's own data."""
     view = drafter.view
     handle_of = {c.id: f"c{i}" for i, c in enumerate(handles)}
 
@@ -447,7 +539,10 @@ def _context(
     if reading.mode == "document":
         data["neighbours"] = {"before": list(reading.before), "after": list(reading.after)}
     # The retrieved examples come first, after the fixed prefix and before the caller's text.
-    return json.dumps({"examples": examples_for(text, reading.mode), **data}, ensure_ascii=False)
+    return json.dumps(
+        {"examples": examples_for(text, reading.mode), **data, **(learning or {})},
+        ensure_ascii=False,
+    )
 
 
 def examples_for(text: str, mode: str) -> list[dict[str, Any]]:
@@ -485,8 +580,10 @@ def _interpret(
     sentence: str,
     text: str,
     reading: Reading,
+    aliases: Sequence[tuple[str, str]] = (),
 ) -> ModelStep:
-    """Validates the whole answer, then maps each confident intent to drafts."""
+    """Validates the whole answer, then maps each confident intent to drafts. `aliases` are the
+    company's (heard, meant) speech aliases whose heard form occurs in the text."""
     try:
         answer = TeachExtractionAnswer.model_validate_json(raw)
     except ValidationError as exc:
@@ -519,7 +616,7 @@ def _interpret(
         # caller's words inside the source range; the self-join checks run after that. An
         # ungrounded subject or object sinks the intent; an ungrounded member is left out alone.
         raw = [intent.subject, intent.object, *(intent.members or [])]
-        placed = [_end(ref, handles, sent, drafter, text, source, earlier) for ref in raw]
+        placed = [_end(ref, handles, sent, drafter, text, source, earlier, aliases) for ref in raw]
         # Speech recognition mishears names: a new label that sounds like the name of one of
         # the company's concepts is never drafted beside it; the phrase is listed instead. Each
         # end left out keeps its own reason.
@@ -530,6 +627,8 @@ def _interpret(
             for i, end in enumerate(placed):
                 if end is not None and _misheard(end, drafter):
                     placed[i], reasons[i] = None, "ambiguous_reference"
+                elif end is not None:
+                    placed[i] = _company_possessive(end, drafter) or end
         grounded = placed[0] is not None and placed[1] is not None
         dropped = sum(1 for end in placed[2:] if end is None)
         ends = [end for end in placed if end is not None]
@@ -1203,12 +1302,14 @@ def _end(
     text: str,
     source: tuple[int, int],
     earlier: list[str] | None = None,
+    aliases: Sequence[tuple[str, str]] = (),
 ) -> End | None:
     """An intent end: a cited candidate; a new label naming a candidate sent in this call,
     reused as is; or a new label grounded in the caller's words - inside this intent's range,
-    or as a label another intent of the same answer grounded in its own range (`earlier`) - and
-    then resolved to an existing concept of the company when one has that label. None when a
-    new label is ungrounded."""
+    as a label another intent of the same answer grounded in its own range (`earlier`), or as
+    the meant label of a company alias whose heard form is in the range - and then resolved to
+    an existing concept of the company when one has that label. None when a new label is
+    ungrounded."""
     if isinstance(ref, CandidateRef):
         index = int(ref.candidate[1:])
         if index >= len(handles):
@@ -1219,10 +1320,28 @@ def _end(
     reused = drafter.resolve(label)
     if reused is not None and reused.id in sent:
         return End(reused, reused.label, reused.label)
-    spoken = _ground(label, text, source) or _repeated(label, earlier or [])
+    spoken = (
+        _ground(label, text, source)
+        or _repeated(label, earlier or [])
+        or alias_grounding(label, text, source, aliases)
+    )
     if spoken is None:
         return None
     return End(drafter.resolve(spoken), spoken, spoken, cited_new=True)
+
+
+def alias_grounding(
+    label: str, text: str, source: tuple[int, int], aliases: Sequence[tuple[str, str]]
+) -> str | None:
+    """The meant label of a company alias that `label` equals, when the alias's heard form is
+    grounded in the caller's words inside `text[source]`; None otherwise. The alias came from a
+    person's approved correction in the same company, and the caller's own words must still
+    carry the heard form, so this is the one case where a label is not the caller's words."""
+    wanted = fold(label)
+    for heard, meant in aliases:
+        if fold(meant) == wanted and _ground(heard, text, source) is not None:
+            return meant
+    return None
 
 
 def _misheard(end: End, drafter: Drafter) -> bool:
@@ -1232,6 +1351,18 @@ def _misheard(end: End, drafter: Drafter) -> bool:
         return False
     companies = [company.name for company in drafter.view.companies.values()]
     return any(sounds_like_name(end.label, c.label, company_names=companies) for c in drafter.mine)
+
+
+def _company_possessive(end: End, drafter: Drafter) -> End | None:
+    """A new label that starts with the taught company's name misheard ("Inside sales" for
+    Insight) as the company's own rest of the label: the existing concept it names (Sales), or
+    a new label of those words alone. None when `end` is not such a label."""
+    if end.concept is not None:
+        return None
+    rest = company_possessive_rest(end.label, drafter.view.companies[drafter.company_id].name)
+    if rest is None:
+        return None
+    return End(drafter.resolve(rest), title(rest), rest, cited_new=True)
 
 
 def _distinct(reasons: list[UnresolvedReason | None]) -> tuple[UnresolvedReason, ...]:

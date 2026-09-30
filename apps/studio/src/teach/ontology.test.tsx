@@ -1,8 +1,5 @@
-import { fireEvent, render } from '@testing-library/react';
-
 import { api } from '../api/client';
 import { ApiError, type OntologyImportResult, type Proposal } from '../api/types';
-import { ImportModePill, importMode } from '../shell/ImportMode';
 import { store } from '../store/store';
 import { browserLanguages, importOntology } from './ontology';
 
@@ -72,18 +69,5 @@ describe('ontology import', () => {
     expect(browserLanguages(['fr-CA', 'fr', 'FR', 'not a tag', 'en'])).toBe('fr-CA,fr,en');
     expect(browserLanguages([])).toBe('en');
     expect(browserLanguages(Array.from({ length: 12 }, (_, i) => `x${String.fromCharCode(97 + i)}`)).split(',')).toHaveLength(10);
-  });
-});
-
-describe('#imMode', () => {
-  it('cycles Sentences, Whole document and Ontology', () => {
-    const { container } = render(<ImportModePill hidden={false} />);
-    const pill = container.querySelector('#imMode') as HTMLButtonElement;
-    const seen = [importMode()];
-    for (let i = 0; i < 3; i++) {
-      fireEvent.click(pill);
-      seen.push(importMode());
-    }
-    expect(seen).toEqual(['sentences', 'document', 'ontology', 'sentences']);
   });
 });
