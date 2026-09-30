@@ -38,12 +38,16 @@ def naming(labels: Iterable[str]) -> list[str]:
     multi = [label for label in kept if len(label.split()) > 1]
     if multi:
         title_case = sum(1 for label in multi if all(w[:1].isupper() for w in label.split()))
-        sentence_case = sum(1 for label in multi if not any(w[:1].isupper() for w in label.split()[1:]))
+        sentence_case = sum(
+            1 for label in multi if not any(w[:1].isupper() for w in label.split()[1:])
+        )
         if title_case >= MIN_SHARE * len(multi):
             out.append("every word of a label is capitalised")
         elif sentence_case >= MIN_SHARE * len(multi):
             out.append("only the first word of a label is capitalised")
-    acronyms = [w for label in kept for w in label.split() if len(w) >= 2 and w.isalpha() and w.isupper()]
+    acronyms = [
+        w for label in kept for w in label.split() if len(w) >= 2 and w.isalpha() and w.isupper()
+    ]
     if acronyms:
         out.append("acronyms kept upper-case")
     short = sum(1 for label in kept if len(label.split()) <= 2)

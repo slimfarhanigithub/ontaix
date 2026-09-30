@@ -576,6 +576,8 @@ export type LlmOutcome =
   | 'invalid_output';
 
 export interface TeachResult {
+  /** Set when the parse was recorded for usage learning; sent back with the drafts' batch. */
+  parseId?: string | null;
   outcome: 'understood' | 'partly_understood' | 'not_understood';
   domainKey: DomainKey | null;
   intents: Intent[];

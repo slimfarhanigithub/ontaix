@@ -115,9 +115,11 @@ def fold(label: str) -> str:
 
 def draft_key(draft: dict[str, Any]) -> str:
     """A draft's statement as one comparable string: every key but the presentation keys,
-    unset values dropped, keys sorted."""
+    unset values (None, an empty string, false) dropped, keys sorted."""
     kept = {
-        k: v for k, v in draft.items() if k not in PRESENTATION_KEYS and v is not None and v != ""
+        k: v
+        for k, v in draft.items()
+        if k not in PRESENTATION_KEYS and v is not None and v != "" and v is not False
     }
     return json.dumps(kept, sort_keys=True, ensure_ascii=False)
 

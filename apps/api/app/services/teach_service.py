@@ -32,7 +32,12 @@ from app.models.api.teach import (
     TeachResult,
     UnresolvedPhrase,
 )
-from app.services import import_service, teach_extraction_service, teach_session_service
+from app.services import (
+    import_service,
+    learning_capture_service,
+    teach_extraction_service,
+    teach_session_service,
+)
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.rate_limit_service import Budget, charge
 from app.services.teach_draft_service import (
@@ -152,6 +157,9 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
             segments = step.segments or whole
             result, kept = _with_model(grammar, step, replace, sentence, dom_key, source, segments)
     await teach_session_service.store_turns(key, result.extractor, _turns(source, result, kept))
+    result.parse_id = await learning_capture_service.record_parse(
+        caller, company, body.session_id, source.origin, sentence, result
+    )
     logger.debug(
         "teach parse (%s, %s): view %d ms, total %d ms",
         result.extractor,

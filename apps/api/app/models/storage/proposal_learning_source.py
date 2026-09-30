@@ -18,7 +18,9 @@ class ProposalLearningSource(Base):
             ["tenant_id", "proposal_id"], ["proposal.tenant_id", "proposal.id"], ondelete="CASCADE"
         ),
         ForeignKeyConstraint(
-            ["tenant_id", "parse_id"], ["teach_parse.tenant_id", "teach_parse.id"], ondelete="CASCADE"
+            ["tenant_id", "parse_id"],
+            ["teach_parse.tenant_id", "teach_parse.id"],
+            ondelete="CASCADE",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "expansion_id"],

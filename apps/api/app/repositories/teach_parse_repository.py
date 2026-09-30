@@ -40,7 +40,9 @@ async def create(
     return row
 
 
-async def get(session: AsyncSession, tenant_id: uuid.UUID, parse_id: uuid.UUID) -> TeachParse | None:
+async def get(
+    session: AsyncSession, tenant_id: uuid.UUID, parse_id: uuid.UUID
+) -> TeachParse | None:
     return await session.scalar(
         select(TeachParse).where(TeachParse.tenant_id == tenant_id, TeachParse.id == parse_id)
     )
