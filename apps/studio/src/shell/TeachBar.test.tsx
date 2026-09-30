@@ -192,7 +192,7 @@ describe('the microphone', () => {
 
 describe('the microphone on Azure Speech', () => {
   const TOKEN = {
-    token: 'aad#/subscriptions/s#eyJ.token',
+    token: 'eyJhbGciOiJIUzI1NiJ9.eyJyZWdpb24iOiJmcmFuY2VjZW50cmFsIn0.sts',
     region: 'francecentral',
     expiresAt: '2099-01-01T00:00:00Z',
     language: 'en-GB' as const,

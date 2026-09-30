@@ -2,9 +2,12 @@
 
 The rest of the API sees only this module. A request carries the system instructions, one user
 message and the JSON schema the answer must follow; the answer carries the raw JSON text, token
-counts, the estimated euro cost and the latency. A timeout or a provider failure raises
-`LlmTimeout` or `LlmProviderError` (`LlmRefused` for a content filter or a declining model),
-each with the tokens the provider reported (0 when none).
+counts, the estimated euro cost and the latency. `stream` makes the same call with the answer
+streamed: it hands the caller the raw text received so far after every fragment, then returns
+the same answer `complete` would; `answer_text` maps a raw JSON text, whole or a part the caller
+assembled, to the shape `complete` returns. A timeout or a provider failure raises `LlmTimeout`
+or `LlmProviderError` (`LlmRefused` for a content filter or a declining model), each with the
+tokens the provider reported (0 when none).
 No provider type, SDK class or credential leaves the implementation modules.
 """
 
@@ -14,6 +17,7 @@ import hashlib
 import json
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Protocol
@@ -92,6 +96,11 @@ class LlmConfigurationError(RuntimeError):
     """The configured provider cannot run: raised at start-up, never during a request."""
 
 
+# Receives the raw text of the answer received so far. A retried attempt starts again, so the
+# text of a later call need not extend the text of an earlier one.
+TextListener = Callable[[str], Awaitable[None]]
+
+
 class LlmClient(Protocol):
     provider: str
     model: str
@@ -99,6 +108,10 @@ class LlmClient(Protocol):
     def estimate_input_tokens(self, request: LlmRequest) -> int: ...
 
     async def complete(self, request: LlmRequest) -> LlmAnswer: ...
+
+    async def stream(self, request: LlmRequest, on_text: TextListener) -> LlmAnswer: ...
+
+    def answer_text(self, raw: str, request: LlmRequest) -> str: ...
 
 
 # Clients installed per profile by tests; a profile without one is built from configuration.

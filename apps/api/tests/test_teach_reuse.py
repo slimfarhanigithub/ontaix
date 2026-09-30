@@ -161,8 +161,11 @@ async def test_a_concept_the_sentence_names_is_sent_even_when_session_turns_fill
 ) -> None:
     company_id, _ = await with_approved_services(client, tenant)
     session_id = uuid.uuid4()
+    # The grammar seeds the session with the step off.
+    await configure(tenant, llm_monthly_token_cap=0)
     seeded = await teach(client, tenant, company_id, "A plant has machines", session_id)
     await submit(client, tenant, seeded["drafts"])
+    await configure(tenant)
     monkeypatch.setattr(teach_extraction_service, "MAX_CANDIDATES", 2)
     fake_llm.answer(recorded("insight_has_services_split"))
 
