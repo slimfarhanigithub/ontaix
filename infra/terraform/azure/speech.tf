@@ -50,3 +50,20 @@ resource "azurerm_role_assignment" "owner_speech_user" {
   principal_id         = var.owner_principal_id
   principal_type       = "User"
 }
+
+# Cognitive Services User on the Speech resource only: it grants the resource's
+# sts/v1.0/issueToken operation, which Cognitive Services Speech User does not, so the API can
+# exchange its Entra token for a Speech-only token and the Entra token stays on the server.
+resource "azurerm_role_assignment" "speech_identity_cognitive_user" {
+  scope                = azurerm_cognitive_account.speech.id
+  role_definition_name = "Cognitive Services User"
+  principal_id         = azurerm_user_assigned_identity.speech.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "owner_speech_cognitive_user" {
+  scope                = azurerm_cognitive_account.speech.id
+  role_definition_name = "Cognitive Services User"
+  principal_id         = var.owner_principal_id
+  principal_type       = "User"
+}

@@ -1,9 +1,9 @@
 import { createScene } from '../canvas/state';
 import type { Company, Domain, Node } from '../canvas/types';
-import { FakeRecognizer, fakeSpeechSdk, resetFakeRecognizer } from './speechSdkFake';
+import { FakeRecognizer, fakeSpeechSdk, resetFakeRecognizer, SEGMENTATION_SILENCE_TIMEOUT_MS } from './speechSdkFake';
 
 const TOKEN = {
-  token: 'aad#/subscriptions/s/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/spch#eyJ.token',
+  token: 'eyJhbGciOiJIUzI1NiJ9.eyJyZWdpb24iOiJmcmFuY2VjZW50cmFsIn0.sts',
   region: 'francecentral',
   expiresAt: '2026-09-29T23:00:00Z',
   language: 'en-GB' as const,
@@ -38,7 +38,8 @@ describe('Azure Speech recognition', () => {
 
     const rec = FakeRecognizer.last as FakeRecognizer;
     expect(token).toHaveBeenCalledWith('company-a');
-    expect(rec.config).toEqual({ token: TOKEN.token, region: 'francecentral', speechRecognitionLanguage: 'en-GB' });
+    expect(rec.config).toMatchObject({ token: TOKEN.token, region: 'francecentral', speechRecognitionLanguage: 'en-GB' });
+    expect([...rec.config.properties]).toEqual([[SEGMENTATION_SILENCE_TIMEOUT_MS, '500']]);
     expect(rec.phrases).toEqual(['Insight', 'ADNOC', 'L&S']);
     expect(rec.started).toBe(true);
     expect(h.started).toHaveBeenCalledTimes(1);
@@ -107,7 +108,7 @@ describe('Azure Speech recognition', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-29T22:00:00Z'));
     const { api, startAzureSpeech } = await load();
-    const next = { ...TOKEN, token: 'aad#/subscriptions/s#eyJ.next', expiresAt: '2026-09-29T23:30:00Z' };
+    const next = { ...TOKEN, token: 'eyJhbGciOiJIUzI1NiJ9.eyJuZXh0Ijp0cnVlfQ.sts', expiresAt: '2026-09-29T23:30:00Z' };
     const token = vi.spyOn(api, 'speechToken').mockResolvedValueOnce(TOKEN).mockResolvedValueOnce(next);
     await startAzureSpeech('company-a', [], handlers());
     const rec = FakeRecognizer.last as FakeRecognizer;
