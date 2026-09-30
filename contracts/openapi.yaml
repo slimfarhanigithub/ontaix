@@ -1636,7 +1636,7 @@ paths:
       tags: [Teach]
       summary: Parse a sentence with its drafts streamed as the model answers
       description: |
-        The streamed variant of `POST /teach/parse` (ADR 0008, Streamed Parse; decision row 135). Same request body, same permission, same gates, charges and refusals, which answer before the stream begins, with the same status codes and `Problem` bodies as `POST /teach/parse`. The parse itself is the same: the same model call on the same profile, the same budgets (one parse unit per started 400 characters, one `llm` unit, the same token reservation and the same `llm_call` cost row), the same timeout and the same bounded retries of a `429` or `503` from the provider. Only the provider's answer is read as it arrives.
+        The streamed variant of `POST /teach/parse` (ADR 0008, Streamed Parse; decision row 138). Same request body, same permission, same gates, charges and refusals, which answer before the stream begins, with the same status codes and `Problem` bodies as `POST /teach/parse`. The parse itself is the same: the same model call on the same profile, the same budgets (one parse unit per started 400 characters, one `llm` unit, the same token reservation and the same `llm_call` cost row), the same timeout and the same bounded retries of a `429` or `503` from the provider. Only the provider's answer is read as it arrives.
 
         The response is `200` with `Content-Type: application/x-ndjson` and `Cache-Control: no-store`: one JSON object per line, each ended by a line feed, in this order:
 

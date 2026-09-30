@@ -239,7 +239,7 @@ Amended under decision row 133. The Studio sends one finished spoken sentence pe
 
 ### Streamed Parse
 
-Amended under decision row 135. `POST /teach/parse/stream` is the streamed variant of `POST /teach/parse`: the same request, gates, charges, refusals, model call, budgets, cost record, timeout and bounded retries, answered as newline-delimited JSON (`application/x-ndjson`). Its purpose is speed only: the drafts, captions and outcomes are those of the plain endpoint, because the plain endpoint's code decides them.
+Amended under decision row 138. `POST /teach/parse/stream` is the streamed variant of `POST /teach/parse`: the same request, gates, charges, refusals, model call, budgets, cost record, timeout and bounded retries, answered as newline-delimited JSON (`application/x-ndjson`). Its purpose is speed only: the drafts, captions and outcomes are those of the plain endpoint, because the plain endpoint's code decides them.
 
 ```mermaid
 sequenceDiagram
