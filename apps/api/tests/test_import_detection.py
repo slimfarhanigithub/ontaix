@@ -7,7 +7,9 @@ from pathlib import Path
 import httpx
 import pytest
 
-from app.utilities.import_detection import detect_import
+from app.config import get_settings
+from app.utilities.hierarchy_table_reader import is_csv_hierarchy
+from app.utilities.import_detection import PREFIX_BYTES, detect_import, text_prefix
 from tests.conftest import TenantFixture
 from tests.office_files import PPTX_TYPE, XLSX_TYPE, pptx, xlsx
 from tests.test_imports import docx, pdf
@@ -211,3 +213,63 @@ async def _document(
         data={"mediaType": media_type} if media_type else {},
         headers=tenant.builder.headers,
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        b'"label,parent
+Sales,
+Orders,Sales
+',
+        b"label,parent
+" + b"x" * 200_000 + b"
+",
+        b"x" * 200_000 + b",parent
+",
+    ],
+)
+async def test_malformed_csv_is_a_document_not_an_error(
+    client: httpx.AsyncClient, tenant: TenantFixture, data: bytes
+) -> None:
+    response = await detect(client, tenant, "tree.csv", data)
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"kind": "document", "format": None, "mediaType": "text/csv"}
+
+
+async def test_the_csv_header_sniff_answers_false_on_csv_errors() -> None:
+    assert is_csv_hierarchy(b'"label,parent
+Sales,
+') is False
+    assert is_csv_hierarchy(b'"' + b"a" * 200_000) is False
+    assert is_csv_hierarchy(b"label;parent
+Sales;
+") is True
+
+
+async def test_only_a_bounded_prefix_of_a_text_file_is_read() -> None:
+    triples = b"<http://x/a> <http://x/p> <http://x/b> .
+" * 5_000
+    late_directive = b"The plant runs three lines.
+" * 5_000 + b"@prefix : <http://x/> .
+"
+    split_character = b"a" * (PREFIX_BYTES - 1) + "é".encode() + b"tail"
+
+    assert len(triples) > PREFIX_BYTES
+    assert detect_import("big.txt", None, triples).format == "n_triples"
+    assert detect_import("notes.txt", None, late_directive).kind == "document"
+    assert text_prefix(triples).endswith(b".
+") and len(text_prefix(triples)) <= PREFIX_BYTES
+    assert text_prefix(split_character) == b"a" * (PREFIX_BYTES - 1)
+
+
+async def test_detection_refuses_a_file_larger_than_either_import_reads(
+    client: httpx.AsyncClient, tenant: TenantFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(get_settings(), "ontology_import_max_bytes", 100)
+
+    response = await detect(client, tenant, "big.txt", b"a" * (10 * 1024 * 1024 + 1))
+
+    assert response.status_code == 413, response.text
+    assert response.json()["code"] == "payload_too_large"

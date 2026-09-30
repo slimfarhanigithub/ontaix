@@ -2,8 +2,8 @@
 
 The caller must be allowed to import (a proposing role, `importDocs` on); no import unit is
 spent, as nothing is extracted or stored. An Office archive's header row is read in a child
-process with a time limit and a memory cap, like every other untrusted-file parse; the other
-checks read a signature, an XML root or the text's first lines, in the request.
+process with a time limit and a memory cap, like every other untrusted-file parse; any other
+file is judged in the request by its first 64 KiB only, so the work there is bounded.
 """
 
 from __future__ import annotations

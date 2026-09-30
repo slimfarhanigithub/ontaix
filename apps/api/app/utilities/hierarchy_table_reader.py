@@ -47,12 +47,13 @@ def read_xlsx_hierarchy(data: bytes) -> ParsedOntology:
 
 
 def is_csv_hierarchy(data: bytes) -> bool:
-    """True when the first non-empty row of the CSV text is a hierarchy header."""
+    """True when the first non-empty row of the CSV text is a hierarchy header; False when the
+    text is not UTF-8 or its first rows are not well-formed CSV."""
     try:
         text = decode_text(data)
-    except UnicodeDecodeError:
+        header = next((cells for _, cells in _csv_rows(text) if cells), None)
+    except (UnicodeDecodeError, csv.Error):
         return False
-    header = next((cells for _, cells in _csv_rows(text) if cells), None)
     return header is not None and _is_header(header)
 
 
