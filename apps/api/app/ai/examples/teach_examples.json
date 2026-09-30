@@ -2885,77 +2885,6 @@
    }
   },
   {
-   "id": "doc-steps",
-   "source": {
-    "set": "document",
-    "id": "hospital_eastmere"
-   },
-   "tags": [
-    "document",
-    "deep-chain",
-    "reuse"
-   ],
-   "input": {
-    "mode": "document",
-    "company": "Eastmere General Hospital",
-    "sentence": "Emergency admission consists of triage and the admission decision.",
-    "candidates": [
-     {
-      "handle": "c0",
-      "label": "Eastmere General Hospital",
-      "parent": null
-     },
-     {
-      "handle": "c1",
-      "label": "Patient admission",
-      "parent": "c0"
-     },
-     {
-      "handle": "c2",
-      "label": "Emergency admission",
-      "parent": "c1"
-     }
-    ]
-   },
-   "output": {
-    "intents": [
-     {
-      "kind": "rel",
-      "subject": {
-       "candidate": "c2"
-      },
-      "action": "consists of",
-      "object": {
-       "newLabel": "Triage"
-      },
-      "confidence": 0.9,
-      "span": "Emergency admission consists of triage",
-      "source": {
-       "start": 0,
-       "end": 38
-      }
-     },
-     {
-      "kind": "rel",
-      "subject": {
-       "candidate": "c2"
-      },
-      "action": "consists of",
-      "object": {
-       "newLabel": "Admission decision"
-      },
-      "confidence": 0.9,
-      "span": "the admission decision",
-      "source": {
-       "start": 43,
-       "end": 65
-      }
-     }
-    ],
-    "unresolved": []
-   }
-  },
-  {
    "id": "doc-includes",
    "source": {
     "set": "document",
@@ -3025,65 +2954,6 @@
       "source": {
        "start": 47,
        "end": 68
-      }
-     }
-    ],
-    "unresolved": []
-   }
-  },
-  {
-   "id": "doc-record",
-   "source": {
-    "set": "document",
-    "id": "telecom_tessaline"
-   },
-   "tags": [
-    "document",
-    "reuse"
-   ],
-   "input": {
-    "mode": "document",
-    "company": "Tessaline Telecom",
-    "sentence": "Order tracking raises a jeopardy alert when an order is at risk of missing its promised date.",
-    "candidates": [
-     {
-      "handle": "c0",
-      "label": "Tessaline Telecom",
-      "parent": null
-     },
-     {
-      "handle": "c1",
-      "label": "Fulfilment",
-      "parent": "c0"
-     },
-     {
-      "handle": "c2",
-      "label": "Order handling",
-      "parent": "c1"
-     },
-     {
-      "handle": "c3",
-      "label": "Order tracking",
-      "parent": "c2"
-     }
-    ]
-   },
-   "output": {
-    "intents": [
-     {
-      "kind": "rel",
-      "subject": {
-       "candidate": "c3"
-      },
-      "action": "raises",
-      "object": {
-       "newLabel": "Jeopardy alert"
-      },
-      "confidence": 0.9,
-      "span": "Order tracking raises a jeopardy alert",
-      "source": {
-       "start": 0,
-       "end": 38
       }
      }
     ],
@@ -3376,79 +3246,6 @@
        "start": 75,
        "end": 105
       }
-     }
-    ],
-    "unresolved": []
-   }
-  },
-  {
-   "id": "goodrelations-warranty-promise",
-   "source": {
-    "set": "benchmark",
-    "id": "goodrelations"
-   },
-   "tags": [
-    "document",
-    "benchmark",
-    "reuse",
-    "cross-domain"
-   ],
-   "input": {
-    "mode": "document",
-    "company": "GoodRelations",
-    "sentence": "A warranty promise is characterized by its temporal duration (usually starting with the date of purchase) and its gr:WarrantyScope.",
-    "candidates": [
-     {
-      "handle": "c0",
-      "label": "GoodRelations",
-      "parent": null
-     },
-     {
-      "handle": "c1",
-      "label": "Warranty promise",
-      "parent": "c0"
-     },
-     {
-      "handle": "c2",
-      "label": "Warranty scope",
-      "parent": "c0"
-     }
-    ]
-   },
-   "output": {
-    "intents": [
-     {
-      "kind": "rel",
-      "subject": {
-       "candidate": "c1"
-      },
-      "action": "is characterized by",
-      "object": {
-       "newLabel": "Temporal duration"
-      },
-      "confidence": 0.9,
-      "span": "A warranty promise is characterized by its temporal duration",
-      "source": {
-       "start": 0,
-       "end": 60
-      }
-     },
-     {
-      "kind": "rel",
-      "subject": {
-       "candidate": "c1"
-      },
-      "action": "is characterized by",
-      "object": {
-       "candidate": "c2"
-      },
-      "confidence": 0.9,
-      "span": "its gr:WarrantyScope",
-      "source": {
-       "start": 110,
-       "end": 130
-      },
-      "explanation": "gr:WarrantyScope names the existing Warranty scope"
      }
     ],
     "unresolved": []
@@ -4209,6 +4006,331 @@
       "index": 2,
       "start": 74,
       "end": 107
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-can-be-and-recipient",
+   "source": {
+    "set": "case",
+    "id": "en-speech-owner-live-employees"
+   },
+   "tags": [
+    "speech",
+    "sub-groups",
+    "back-reference",
+    "multi-turn",
+    "fillers"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Kestrel Advisory",
+    "sentence": "the staff can be analysts or can be in support and um the analysts write reports for investors",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Kestrel Advisory",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Staff",
+      "parent": "c0"
+     }
+    ],
+    "sessionTurns": [
+     {
+      "sentence": "Kestrel Advisory has staff",
+      "referenced": [
+       "c0"
+      ],
+      "introduced": [
+       "c1"
+      ]
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "includes",
+      "object": {
+       "newLabel": "Analysts"
+      },
+      "confidence": 0.9,
+      "explanation": "can be: a group of Staff, not a kind",
+      "span": "the staff can be analysts",
+      "source": {
+       "start": 0,
+       "end": 25
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "includes",
+      "object": {
+       "newLabel": "Support"
+      },
+      "confidence": 0.9,
+      "span": "can be in support",
+      "source": {
+       "start": 29,
+       "end": 46
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Analysts"
+      },
+      "action": "writes",
+      "object": {
+       "newLabel": "Reports"
+      },
+      "confidence": 0.9,
+      "span": "the analysts write reports",
+      "source": {
+       "start": 54,
+       "end": 80
+      },
+      "segment": 1
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Reports"
+      },
+      "action": "for",
+      "object": {
+       "newLabel": "Investors"
+      },
+      "confidence": 0.9,
+      "explanation": "the recipient attaches to the reports, not to Analysts",
+      "span": "reports for investors",
+      "source": {
+       "start": 73,
+       "end": 94
+      },
+      "segment": 1
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 0,
+      "end": 46
+     },
+     {
+      "index": 1,
+      "start": 54,
+      "end": 94
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-text-sequence-of-steps",
+   "source": {
+    "set": "case",
+    "id": "en-text-owner-live-sales-steps"
+   },
+   "tags": [
+    "text",
+    "sequence"
+   ],
+   "input": {
+    "mode": "sentence",
+    "company": "Halden Labs",
+    "sentence": "Sample Intake → Lab Test → Report Review, sign-off and release → Invoice",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Halden Labs",
+      "parent": null
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Sample Intake"
+      },
+      "confidence": 0.9,
+      "explanation": "no process named: the steps sit under the company",
+      "span": "Sample Intake",
+      "source": {
+       "start": 0,
+       "end": 13
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Sample Intake"
+      },
+      "action": "precedes",
+      "object": {
+       "newLabel": "Lab Test"
+      },
+      "confidence": 0.9,
+      "span": "Sample Intake → Lab Test",
+      "source": {
+       "start": 0,
+       "end": 24
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Lab Test"
+      },
+      "action": "precedes",
+      "object": {
+       "newLabel": "Report Review"
+      },
+      "confidence": 0.9,
+      "span": "Lab Test → Report Review",
+      "source": {
+       "start": 16,
+       "end": 40
+      }
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Report Review"
+      },
+      "action": "precedes",
+      "object": {
+       "newLabel": "Invoice"
+      },
+      "confidence": 0.9,
+      "span": "Report Review, sign-off and release → Invoice",
+      "source": {
+       "start": 27,
+       "end": 72
+      }
+     }
+    ],
+    "unresolved": []
+   }
+  },
+  {
+   "id": "en-speech-verb-first-continues",
+   "source": {
+    "set": "case",
+    "id": "en-speech-owner-live-amdaris"
+   },
+   "tags": [
+    "speech",
+    "back-reference",
+    "multi-turn",
+    "fragment",
+    "sub-groups"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Kestrel Advisory",
+    "sentence": "write audit reports for their investors",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Kestrel Advisory",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Staff",
+      "parent": "c0"
+     },
+     {
+      "handle": "c2",
+      "label": "Analysts",
+      "parent": "c1",
+      "pending": true
+     },
+     {
+      "handle": "c3",
+      "label": "Support",
+      "parent": "c1",
+      "pending": true
+     }
+    ],
+    "sessionTurns": [
+     {
+      "sentence": "these staff can be analysts or from support",
+      "referenced": [
+       "c1"
+      ],
+      "introduced": [
+       "c2",
+       "c3"
+      ]
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c2"
+      },
+      "action": "writes",
+      "object": {
+       "newLabel": "Audit reports"
+      },
+      "confidence": 0.85,
+      "explanation": "no subject: Analysts, the first group the previous turn named",
+      "span": "write audit reports",
+      "source": {
+       "start": 0,
+       "end": 19
+      },
+      "segment": 0
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Audit reports"
+      },
+      "action": "for",
+      "object": {
+       "newLabel": "Investors"
+      },
+      "confidence": 0.85,
+      "explanation": "the recipient attaches to the reports",
+      "span": "audit reports for their investors",
+      "source": {
+       "start": 6,
+       "end": 39
+      },
+      "segment": 0
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 0,
+      "end": 39
      }
     ]
    }
