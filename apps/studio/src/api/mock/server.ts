@@ -15,6 +15,7 @@ import { mixedRelationEnd } from '../drafts';
 import { liveEvents, type EventBus, type EventType } from '../events';
 import type * as T from '../types';
 import { createDirectory, DirectoryRefusal, pageOf, parseListArgs } from './directory';
+import { detectImport as detectFile } from './detect';
 import { extractDocument, ExtractRefusal } from './extract';
 import { mapOntologyFile } from './ontology';
 import { ATTR, CATALOG, DISCOVER, generic, HOME_COMPANY, RECORDS, SEED, type AttrSpec } from './seed';
@@ -175,7 +176,9 @@ interface MImport {
 export interface MockServer {
   handle(method: string, path: string, body?: unknown): MockResponse;
   /** `POST /import/sentences`: reads and extracts the uploaded file, then stores the import. */
-  importDocument(file: { name: string; type: string; bytes: Uint8Array }): Promise<MockResponse>;
+  importDocument(file: { name: string; type: string; bytes: Uint8Array }, fields?: Record<string, string>): Promise<MockResponse>;
+  /** `POST /import/detect`: whether the uploaded file is a document or an ontology. */
+  detectImport(file: { name: string; type: string; bytes: Uint8Array }): Promise<MockResponse>;
   /** `POST /ontology-imports`: maps the uploaded file into a stored draft tree. */
   importOntology(file: { name: string; type: string; bytes: Uint8Array }, fields: Record<string, string>): Promise<MockResponse>;
 }
@@ -212,6 +215,7 @@ const TENANT_ID = '00000000-0000-4000-8000-00000000000a';
 const IMPORT_LIFETIME_MS = 60 * 60 * 1000;
 /** An ontology import serves its submission for 24 hours. */
 const ONTOLOGY_IMPORT_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const ONTOLOGY_FORMATS: T.OntologyFormat[] = ['rdf_xml', 'turtle', 'owl_xml', 'json_ld', 'n_triples', 'obo', 'csv', 'xlsx'];
 /** A cited sentence may be parsed this many times. */
 const IMPORT_PARSES_PER_SENTENCE = 3;
 const ACTOR: T.Actor = { kind: 'user', id: '00000000-0000-4000-8000-0000000000a1', name: 'Owner' };
@@ -1734,10 +1738,10 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   }
 
   /** Validates, extracts and stores an uploaded document, as `POST /import/sentences` does. */
-  async function importDocument(file: { name: string; type: string; bytes: Uint8Array }): Promise<MockResponse> {
+  async function importDocument(file: { name: string; type: string; bytes: Uint8Array }, fields: Record<string, string> = {}): Promise<MockResponse> {
     try {
       if (!settings.importDocs) throw new Refusal(409, 'channel_disabled', 'document import is disabled in the admin portal');
-      const extracted = await extractDocument(file.name, file.type, file.bytes);
+      const extracted = await extractDocument(file.name, file.type, file.bytes, fields.mediaType || undefined);
       const imp: MImport = {
         id: uuid(),
         fileName: extracted.fileName,
@@ -1759,6 +1763,18 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         skipped: extracted.skipped,
         positions: imp.positions,
       } satisfies T.ImportResult);
+    } catch (e) {
+      if (e instanceof Refusal) return problem(e);
+      if (e instanceof ExtractRefusal) return problem(new Refusal(e.status, e.code, e.detail));
+      throw e;
+    }
+  }
+
+  /** Detects whether an upload is a document or an ontology, as `POST /import/detect` does. */
+  async function detectImport(file: { name: string; type: string; bytes: Uint8Array }): Promise<MockResponse> {
+    try {
+      if (!settings.importDocs) throw new Refusal(409, 'channel_disabled', 'document import is disabled in the admin portal');
+      return json(200, await detectFile(file));
     } catch (e) {
       if (e instanceof Refusal) return problem(e);
       if (e instanceof ExtractRefusal) return problem(new Refusal(e.status, e.code, e.detail));
@@ -2142,6 +2158,8 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean);
+      const format = fields.format ? (fields.format as T.OntologyFormat) : undefined;
+      if (format && !ONTOLOGY_FORMATS.includes(format)) throw new Refusal(422, 'validation_failed', `format is one of ${ONTOLOGY_FORMATS.join(', ')}`);
       const mapped = mapOntologyFile(
         file.name,
         file.bytes,
@@ -2156,6 +2174,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         concepts
           .filter((c) => c.companyId === company.id && !c.dyingAt)
           .map((c) => ({ id: c.id, label: c.label, parentId: c.parentId, domainKey: c.domainKey })),
+        format,
       );
       const expiresAt = nowDate().getTime() + ONTOLOGY_IMPORT_LIFETIME_MS;
       const result: T.OntologyImportResult = {
@@ -2553,6 +2572,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
 
   return {
     importDocument,
+    detectImport,
     importOntology,
     handle(method, path, body) {
       try {

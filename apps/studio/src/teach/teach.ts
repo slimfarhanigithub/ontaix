@@ -6,13 +6,12 @@
  * `importDocument`) on its import path, where no sentence is intercepted.
  */
 import { api } from '../api/client';
-import { ApiError, type ImportRef, type InputOrigin, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
+import { ApiError, type ImportMediaType, type ImportRef, type InputOrigin, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
 import { drawBirth } from '../canvas/division';
 import { bySid } from '../canvas/state';
 import type { Node } from '../canvas/types';
 import { random } from '../runtime/rng';
 import { store } from '../store/store';
-import { importOntology } from './ontology';
 import { beginProcessing } from './processing';
 import { readWholeDocument } from './wholeDocument';
 
@@ -409,26 +408,31 @@ export function skippedText(skipped: number): string {
   return ` ${skipped} short fragment${skipped === 1 ? '' : 's'} skipped.`;
 }
 
-/** How an imported document is read: sentence by sentence, as a whole by the model, or as an ontology. */
-export type ImportMode = 'sentences' | 'document' | 'ontology';
+/** How an imported document is read: sentence by sentence, or as a whole by the model. */
+export type ImportMode = 'sentences' | 'document';
 
 /**
- * Uploads a document to the API, which extracts and stores its sentences. Sentence by sentence,
- * each is then taught like a spoken one; as a whole, the API maps the document into one tree of
+ * Uploads a document to the API, which extracts and stores its sentences; `mediaType`, when
+ * given, is the type the file is read as, in place of its extension. Sentence by sentence, each
+ * is then taught like a spoken one; as a whole, the API maps the document into one tree of
  * proposals, and the sentences are taught one by one when that reading is not available.
  */
-export async function importDocument(file: File | null | undefined, mode: ImportMode = 'sentences'): Promise<void> {
+export async function importDocument(
+  file: File | null | undefined,
+  mode: ImportMode = 'sentences',
+  mediaType?: ImportMediaType,
+): Promise<void> {
   if (!file || store.ui.importing) return;
-  if (mode === 'ontology') return importOntology(file);
   store.ui.importing = true;
   const end = beginProcessing();
   try {
-    const imported = await api.importSentences(file);
+    const imported = await api.importSentences(file, mediaType);
     const co = store.s.activeCompany;
     if (mode === 'document' && co?.sid) {
       if ((await readWholeDocument(imported, co.sid)) !== 'unavailable') return;
-      // The failure caption stays readable before the sentence-by-sentence captions replace it.
-      await wait(FALLBACK_PAUSE_MS);
+      // The failure caption stays readable before the sentence-by-sentence captions replace it;
+      // with animations off the sentences follow at once, as they do without the whole read.
+      if (!store.s.SKIP) await wait(FALLBACK_PAUSE_MS);
     }
     const sents = imported.sentences;
     const before = store.ui.proposals.length;

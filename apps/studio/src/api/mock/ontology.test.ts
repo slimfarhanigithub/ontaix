@@ -1,5 +1,5 @@
 import { createEventBus } from '../events';
-import type { ImportResult, OntologyImportResult, Proposal, Scene } from '../types';
+import type { ImportDetection, ImportResult, OntologyImportResult, Proposal, Scene } from '../types';
 import { createMockServer } from './server';
 
 const enc = (t: string) => new TextEncoder().encode(t);
@@ -145,5 +145,65 @@ describe('mock API: ontology import', () => {
     expect(await code('x.ttl', '@prefix : <http://x/> .')).toBe(415);
     server.handle('PATCH', '/settings', { importDocs: false });
     expect(await code('x.csv', 'label,parent\nA thing,\n')).toBe(409);
+  });
+});
+
+const S_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const workbook = (cells: string[]) =>
+  zip({
+    '[Content_Types].xml': types('xl/workbook.xml', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml'),
+    'xl/workbook.xml': `<workbook xmlns="${S_NS}" xmlns:r="${OFFICE}"><sheets><sheet name="A" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': rels([['rId1', 'worksheets/sheet1.xml']]),
+    'xl/worksheets/sheet1.xml': `<worksheet xmlns="${S_NS}"><sheetData><row r="1">${cells
+      .map((c, i) => `<c r="${String.fromCharCode(65 + i)}1" t="inlineStr"><is><t>${c}</t></is></c>`)
+      .join('')}</row></sheetData></worksheet>`,
+  });
+
+describe('mock API: import detection', () => {
+  const TTL = '@prefix : <http://x/> .\n:A a <http://www.w3.org/2002/07/owl#Class> .\n';
+  const RDF = '<?xml version="1.0"?><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"/>';
+  const detect = async (name: string, data: string | Uint8Array, type?: string) =>
+    body<ImportDetection>(await fresh().server.detectImport(file(name, data, type)));
+
+  it('detects each ontology format and each document type', async () => {
+    expect(await detect('plant.ttl', TTL)).toEqual({ kind: 'ontology', format: 'turtle', mediaType: 'text/plain' });
+    expect(await detect('plant.rdf', RDF)).toEqual({ kind: 'ontology', format: 'rdf_xml', mediaType: 'text/plain' });
+    expect((await detect('plant.owx', '<?xml version="1.0"?><Ontology xmlns="http://www.w3.org/2002/07/owl#"/>')).format).toBe('owl_xml');
+    expect((await detect('plant.jsonld', '{"@context": {}, "@graph": []}')).format).toBe('json_ld');
+    expect((await detect('plant.nt', '<http://x/a> <http://x/p> <http://x/b> .\n')).format).toBe('n_triples');
+    expect((await detect('plant.obo', 'format-version: 1.2\n\n[Term]\nid: A\n')).format).toBe('obo');
+    expect(await detect('notes.md', '# Plant\n\nThe plant runs lines.')).toEqual({ kind: 'document', format: null, mediaType: 'text/markdown' });
+    expect(await detect('page.html', '<!doctype html><p>The plant runs lines.</p>')).toEqual({ kind: 'document', format: null, mediaType: 'text/html' });
+    expect(await detect('report.pdf', '%PDF-1.4 x')).toEqual({ kind: 'document', format: null, mediaType: 'application/pdf' });
+    expect((await detect('deck.pptx', deck())).mediaType).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    expect(await detect('data.json', '{"a": 1}')).toEqual({ kind: 'document', format: null, mediaType: 'application/json' });
+  });
+
+  it('reads a CSV or XLSX as an ontology only with a hierarchy header', async () => {
+    expect(await detect('tree.csv', 'label;parent\nSales;\n')).toEqual({ kind: 'ontology', format: 'csv', mediaType: 'text/csv' });
+    expect(await detect('levels.csv', 'Level 1,Level 2\nSales,Orders\n')).toMatchObject({ kind: 'ontology', format: 'csv' });
+    expect(await detect('table.csv', 'Customer,City\nAurora,Lyon\n')).toEqual({ kind: 'document', format: null, mediaType: 'text/csv' });
+    expect(await detect('tree.xlsx', workbook(['Level 1', 'Level 2']))).toMatchObject({ kind: 'ontology', format: 'xlsx' });
+    expect(await detect('table.xlsx', workbook(['Customer', 'City']))).toMatchObject({ kind: 'document', format: null });
+  });
+
+  it('lets the content win over a wrong extension, and a chosen type read the file', async () => {
+    expect(await detect('notes.txt', TTL)).toEqual({ kind: 'ontology', format: 'turtle', mediaType: 'text/plain' });
+    expect(await detect('plant.ttl', '%PDF-1.4 x')).toEqual({ kind: 'document', format: null, mediaType: 'application/pdf' });
+    expect(await detect('plant.ttl', 'Just prose, no triples.')).toMatchObject({ kind: 'ontology', format: 'turtle' });
+    const { server, co } = fresh();
+    const csv = 'label,parent\nSales,\n';
+    expect((await server.importOntology(file('tree.txt', csv), { companyId: co.id })).status).toBe(415);
+    expect((await server.importOntology(file('tree.txt', csv), { companyId: co.id, format: 'csv' })).status).toBe(200);
+    expect((await server.importOntology(file('tree.txt', csv), { companyId: co.id, format: 'owl' })).status).toBe(422);
+    const asText = body<ImportResult>(await server.importDocument(file('plant.rdf', RDF + ' The plant runs lines.'), { mediaType: 'text/plain' }));
+    expect(asText.originDetail.mediaType).toBe('text/plain');
+  });
+
+  it('refuses binary files and answers channel_disabled while importDocs is off', async () => {
+    const { server } = fresh();
+    expect((await server.detectImport(file('run.exe', new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])))).status).toBe(415);
+    server.handle('PATCH', '/settings', { importDocs: false });
+    expect((await server.detectImport(file('notes.txt', 'The plant runs lines.'))).status).toBe(409);
   });
 });
