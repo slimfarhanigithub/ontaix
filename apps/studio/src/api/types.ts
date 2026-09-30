@@ -607,10 +607,10 @@ export interface TeachResult {
 
 /** `POST /speech/token`: a short-lived Azure AI Speech token for the microphone. */
 export interface SpeechToken {
-  /** `aad#<resource id>#<access token>` for the Speech SDK; held in memory only. */
+  /** The Speech resource's STS token for the Speech SDK, valid about 10 minutes; held in memory only. */
   token: string;
   region: string;
-  /** ISO date-time the access token expires. */
+  /** ISO date-time the Speech token expires. */
   expiresAt: string;
   language: 'en-GB' | 'en-US';
 }

@@ -22,6 +22,15 @@ const FALLBACK_PAUSE_MS = 1500;
 /** The longest `Retry-After` a refused batch is retried after; a longer wait is shown as refused. */
 const BATCH_RETRY_MAX_S = 60;
 
+/** Why a typed or spoken sentence drafted nothing when the model step is on but did not answer;
+ * the sentence stays in the teach bar to be sent again. */
+const MODEL_REFUSALS: Partial<Record<TeachResult['llmOutcome'], string>> = {
+  budget_exhausted: 'The monthly model allowance is used up. Ask an administrator to raise it.',
+  rate_limited: 'The model is busy. Try again in a moment.',
+  timeout: 'The model is unavailable right now. Your sentence is kept, send it again.',
+  provider_error: 'The model is unavailable right now. Your sentence is kept, send it again.',
+};
+
 /** The teach bar session: a new one when the Studio loads and whenever the taught company changes. */
 let session: { companyId: string; id: string } | null = null;
 
@@ -222,8 +231,16 @@ async function propose(result: TeachResult): Promise<boolean> {
     store.caption('Partly understood', result.caption);
     return accepted;
   }
-  store.caption('Not understood', result.caption);
+  store.caption('Not understood', notUnderstoodText(result));
   return false;
+}
+
+/** The caption text of a sentence not understood: why the model did not answer a typed or
+ * spoken sentence, else the API's hint. */
+export function notUnderstoodText(result: TeachResult): string {
+  const live = result.origin === 'text' || result.origin === 'speech';
+  const why = live && result.degraded && !result.drafts.length ? MODEL_REFUSALS[result.llmOutcome] : undefined;
+  return why ?? result.caption;
 }
 
 /** The refusals of a batch that name a fact the model already holds. */

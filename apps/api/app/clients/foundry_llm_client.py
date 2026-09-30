@@ -4,7 +4,8 @@ One Chat Completions call per request to the Foundry resource's OpenAI v1 endpoi
 (`<endpoint>/openai/v1/`) through the official `openai` SDK, addressed to the model deployment.
 Authentication is keyless: an Entra ID bearer token for `https://cognitiveservices.azure.com/.default`
 from `DefaultAzureCredential` (the workload identity in the cluster, the `az login` session
-locally), acquired before every call and cached by the credential until it nears expiry.
+locally), served by the process-wide token cache, which calls the credential only when it holds
+no valid token.
 
 The answer is constrained by `response_format` of type `json_schema` with `strict` true. Strict
 mode needs every property listed as required, so the request's schema is sent in its strict form
@@ -30,6 +31,7 @@ from collections.abc import Awaitable, Callable
 import openai
 from openai.types.chat import ChatCompletion
 
+from app.clients.entra_token_client import shared_token_cache
 from app.clients.llm_client import (
     LlmAnswer,
     LlmProviderError,
@@ -149,19 +151,9 @@ class FoundryLlmClient:
 
 
 def entra_token_provider() -> TokenProvider:
-    """An async source of Entra ID bearer tokens for Azure AI services.
-
-    The synchronous `DefaultAzureCredential` runs in a worker thread, so a slow credential
-    chain never blocks the event loop and the call's timeout still applies to it.
-    """
-    from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-
-    token = get_bearer_token_provider(DefaultAzureCredential(), TOKEN_SCOPE)
-
-    async def provide() -> str:
-        return await asyncio.to_thread(token)
-
-    return provide
+    """An async source of Entra ID bearer tokens for Azure AI services, shared by every client
+    of the process."""
+    return shared_token_cache(TOKEN_SCOPE).token
 
 
 def _guarded(provider: TokenProvider) -> TokenProvider:
