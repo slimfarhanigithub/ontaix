@@ -29,7 +29,7 @@ servers:
     host: localhost:8000
     pathname: /api/v1/ws
     protocol: ws
-    description: Studio live-update channel. Authentication is a one-time ticket minted by `POST /api/v1/ws/ticket` and passed as the `ticket` query parameter; a bearer token is never accepted in the URL. The `since` query parameter resumes from a sequence.
+    description: Studio live-update channel. Authentication is a one-time ticket minted by `POST /api/v1/ws/ticket` and passed as the `ticket` query parameter; a bearer token is never accepted in the URL. The `since` query parameter resumes from a sequence. A ticket is bound to the session that minted it (ADR 0017); the hub re-resolves that session at least every 60 seconds and before each delivery batch, and closes the socket with code 4401 once the session has ended, expired, or lost its account or organization, so a signed-out, reset, disabled or support-ended session stops receiving events.
 
 channels:
   proposalCreated:
@@ -1003,6 +1003,7 @@ components:
         - $ref: '#/components/messageTraits/Audience'
       title: settings.changed
       summary: One or more tenant settings changed.
+      description: '`settings` is the full `Settings` of `contracts/openapi.yaml`, including the read-only `companyMode`. A super admin''s company mode change (ADR 0017) emits this event to the organization with actor kind `platform` and `changed` naming `companyMode`, plus `multiCompany` when single mode turned it off.'
       payload:
         type: object
         required: [settings, changed]
@@ -1233,7 +1234,8 @@ components:
       properties:
         kind:
           type: string
-          enum: [user, agent, system]
+          enum: [user, agent, system, platform]
+          description: '`platform` - a super admin acting on the organization (ADR 0017); `id` is the platform account.'
         id:
           type: string
           format: uuid

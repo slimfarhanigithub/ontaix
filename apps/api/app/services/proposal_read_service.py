@@ -14,7 +14,7 @@ from app.models.api.proposal import BulkDeleteRequest
 from app.models.api.proposal import Proposal as ProposalDto
 from app.models.storage.proposal import Proposal
 from app.repositories import proposal_repository
-from app.services import proposal_service, provenance_service
+from app.services import learning_capture_service, proposal_service, provenance_service
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.proposal_branch_service import OPEN_STATES, BranchIndex, annotate
 from app.services.rate_limit_service import Budget, charge
@@ -105,6 +105,7 @@ async def create_batch(
     view = await load_view(session, caller.tenant_id)
     provenances = await provenance_service.resolve(session, caller, view, drafts)
     created = await proposal_service.create_batch(session, caller, view, drafts, provenances)
+    await learning_capture_service.link_batch(session, caller, batch.parse_id, drafts, created)
     return [
         readable_proposal(caller.grants, view.proposal_dto(p, view.proposal_artefacts(p)))
         for p in created

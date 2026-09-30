@@ -69,6 +69,23 @@ async def get(
     )
 
 
+async def get_birth(
+    session: AsyncSession, tenant_id: uuid.UUID, concept_id: uuid.UUID
+) -> Proposal | None:
+    """The approved concept or spec proposal that created the concept, if any."""
+    return await session.scalar(
+        select(Proposal)
+        .where(
+            Proposal.tenant_id == tenant_id,
+            Proposal.concept_id == concept_id,
+            Proposal.type.in_((ProposalType.CONCEPT, ProposalType.SPEC)),
+            Proposal.state == ProposalState.APPROVED,
+        )
+        .order_by(Proposal.created_at)
+        .limit(1)
+    )
+
+
 async def get_for_update(
     session: AsyncSession, tenant_id: uuid.UUID, proposal_id: uuid.UUID
 ) -> Proposal | None:

@@ -36,7 +36,7 @@ from app.ai.prompts.document_extraction import (
     SECTION_SCHEMA,
     SECTION_SYSTEM_PROMPT,
 )
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import platform_session, tenant_session
 from app.clients.llm_client import (
     LlmAnswer,
     LlmCallError,
@@ -55,7 +55,7 @@ from app.repositories import (
     document_import_sentence_repository,
 )
 from app.repositories.llm_call_repository import CallRecord
-from app.services import import_service, llm_usage_service
+from app.services import import_service, learning_service, llm_usage_service
 from app.services.document_extraction_mapping_service import map_tree
 from app.services.document_extraction_pass_service import (
     Chunk,
@@ -152,7 +152,7 @@ async def run_once(runner: uuid.UUID | None = None) -> bool:
 async def _claim(runner: uuid.UUID) -> tuple[DocumentExtractionJob, int | None] | None:
     """The claimed job and its lease epoch; epoch None when the claim ended the job instead."""
     max_attempts = get_settings().document_extraction_max_attempts
-    async with get_session_factory()() as session:
+    async with platform_session() as session:
         job = await document_extraction_job_repository.claimable(session)
         if job is None:
             return None
@@ -268,6 +268,12 @@ class _Run:
         )
         outline_pass = pass_name == "outline"
         bound = OUTLINE_MAX_OUTPUT_TOKENS if outline_pass else SECTION_MAX_OUTPUT_TOKENS
+        learning = await learning_service.context_for(
+            view,
+            self.job.company_id,
+            " ".join(s.text for s in chunk.sentences),
+            "extraction",
+        )
         request = LlmRequest(
             system=OUTLINE_SYSTEM_PROMPT if outline_pass else SECTION_SYSTEM_PROMPT,
             user=context(
@@ -277,6 +283,7 @@ class _Run:
                 total,
                 company_name,
                 "outline" if outline_pass else "section",
+                learning.as_data() if learning else {},
             ),
             output_schema=OUTLINE_SCHEMA if outline_pass else SECTION_SCHEMA,
             max_output_tokens=bound + self.settings.llm_profile(DEEP).reasoning_allowance_tokens,
@@ -414,7 +421,7 @@ class _Run:
         job = self.job
         if job.import_id is None:
             return None, {}
-        async with get_session_factory()() as session:
+        async with tenant_session(self.job.tenant_id) as session:
             row = await document_import_repository.get(session, job.tenant_id, job.import_id)
             if row is None:
                 return None, {}
@@ -426,7 +433,7 @@ class _Run:
         return (sentences or None), details
 
     async def _view(self) -> OntologyView:
-        async with get_session_factory()() as session:
+        async with tenant_session(self.job.tenant_id) as session:
             return await load_view(session, self.job.tenant_id)
 
     async def _progress(self, values: dict[str, Any]) -> None:
@@ -452,7 +459,7 @@ class _Run:
             "degraded": self.degraded,
         }
         keep = RESULT_KEPT if values["state"] == "succeeded" else None
-        async with get_session_factory()() as session:
+        async with tenant_session(self.job.tenant_id) as session:
             job = await document_extraction_job_repository.fenced_finish(
                 session, self.job.id, self.lease.runner, self.lease.epoch, final, keep
             )
@@ -460,7 +467,7 @@ class _Run:
 
     async def _write(self, values: dict[str, Any], *, event: bool = False) -> None:
         """Write `values` and renew the lease; fenced."""
-        async with get_session_factory()() as session:
+        async with tenant_session(self.job.tenant_id) as session:
             job = await document_extraction_job_repository.fenced_update(
                 session, self.job.id, self.lease.runner, self.lease.epoch, values
             )

@@ -19,6 +19,7 @@ from app.repositories import (
     company_repository,
     concept_repository,
     domain_product_repository,
+    organization_settings_repository,
     tenant_settings_repository,
 )
 from app.seed.starter_vocabulary import STARTER_VOCABULARY
@@ -27,6 +28,7 @@ from app.services.ontology_view_service import OntologyView, load_view
 from app.services.rate_limit_service import charge_proposals
 from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.clock import get_clock
+from app.utilities.company_creation import COMPANY_LIMIT_DETAIL, company_creation_allowed
 from app.utilities.layout import company_centre
 from app.utilities.permissions import can_manage, can_read
 from app.utilities.problems import conflict, forbidden, not_found
@@ -76,9 +78,12 @@ async def create_company(
         raise conflict("company_creation_disabled", "adding companies is off in the settings")
     if not can_manage(caller.grants):
         raise forbidden("Adding a company requires Administrator")
+    view = await load_view(session, caller.tenant_id)
+    mode = await organization_settings_repository.company_mode(session, caller.tenant_id)
+    if not company_creation_allowed(mode, len(view.companies)):
+        raise conflict("company_limit", COMPANY_LIMIT_DETAIL)
     if body.start == "starter_vocabulary":
         await charge_proposals(caller, len(STARTER_VOCABULARY))
-    view = await load_view(session, caller.tenant_id)
     key = company_key(body.name)
     if any(c.key == key for c in view.companies.values()):
         raise conflict("duplicate_label", f"a company with key {key!r} already exists")

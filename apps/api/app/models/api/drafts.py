@@ -219,8 +219,11 @@ ConceptOrSpecDraft = Annotated[ConceptDraft | SpecDraft, Field(discriminator="ty
 
 
 class ProposalBatch(ApiModel):
-    """`origin` and `import_ref` apply to every draft that sets none of its own."""
+    """`origin` and `import_ref` apply to every draft that sets none of its own. `parse_id` is
+    the `TeachResult.parseId` the drafts came from: advisory, it only links the created
+    proposals to the stored parse for usage learning and never changes what is created."""
 
     origin: InputOrigin | None = None
     import_ref: ImportRef | None = None
+    parse_id: uuid.UUID | None = None
     drafts: list[ProposalDraft] = Field(min_length=1, max_length=200)

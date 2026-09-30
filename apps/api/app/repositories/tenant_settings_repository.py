@@ -10,7 +10,7 @@ from app.models.storage.tenant_settings import TenantSettings
 
 
 async def get(session: AsyncSession, tenant_id: uuid.UUID) -> TenantSettings | None:
-    return await session.get(TenantSettings, tenant_id)
+    return await session.get(TenantSettings, tenant_id, populate_existing=True)
 
 
 async def create(session: AsyncSession, tenant_id: uuid.UUID, **values: object) -> TenantSettings:

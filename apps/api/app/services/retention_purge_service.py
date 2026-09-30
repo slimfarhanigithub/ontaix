@@ -3,7 +3,8 @@
 Every interval it deletes, each in its own transaction: rate budget windows that started more
 than 2 hours ago, expired teach session turns, language model cost records older than 400 days,
 concept expansions and whole-document extraction results more than 24 hours past their expiry,
-and failed or cancelled extraction jobs 48 hours after they ended. Every delete is idempotent,
+failed or cancelled extraction jobs 48 hours after they ended, teach parse records past their
+expiry, and lessons and aliases retired more than 30 days ago. Every delete is idempotent,
 so several processes purging at once only repeat work. A failed round is logged and the next
 round runs on schedule.
 """
@@ -16,6 +17,7 @@ import logging
 from app.services import (
     concept_expansion_service,
     document_extraction_service,
+    learning_service,
     llm_usage_service,
     rate_limit_service,
     teach_session_service,
@@ -30,15 +32,18 @@ async def purge_once() -> None:
     calls = await llm_usage_service.purge_old_calls()
     expansions = await concept_expansion_service.purge_expired()
     jobs = await document_extraction_service.purge_expired()
-    if windows or turns or calls or expansions or jobs:
+    parses, retired = await learning_service.purge_expired()
+    if windows or turns or calls or expansions or jobs or parses or retired:
         logger.info(
             "purged %d budget windows, %d teach session turns, %d cost records, %d expansions,"
-            " %d extraction jobs",
+            " %d extraction jobs, %d teach parses, %d retired lessons and aliases",
             windows,
             turns,
             calls,
             expansions,
             jobs,
+            parses,
+            retired,
         )
 
 

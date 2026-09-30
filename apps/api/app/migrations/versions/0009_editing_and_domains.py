@@ -73,6 +73,26 @@ CREATE TABLE IF NOT EXISTS tenant_domain_revision (
 );
 COMMENT ON TABLE tenant_domain_revision IS 'Name, colour and owner of a tenant domain at each revision: revision 0 when the domain is created or copied from its template, one row per approved edit_domain (proposal_id set, a plain uuid so the history survives the proposal). A colour set immediately through Appearance is recorded in the audit log, not here.';
 
+-- Row-level security and the role grants of the two new tables, as revision 0008 set them on
+-- every table with a tenant_id column that existed then.
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['tenant_domain', 'tenant_domain_revision']
+  LOOP
+    EXECUTE format('ALTER TABLE ontaix.%I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON ontaix.%I', t);
+    EXECUTE format('DROP POLICY IF EXISTS platform_access ON ontaix.%I', t);
+    EXECUTE format(
+      'CREATE POLICY tenant_isolation ON ontaix.%I TO ontaix_app '
+      'USING (tenant_id = ontaix.current_tenant_id()) WITH CHECK (tenant_id = ontaix.current_tenant_id())', t);
+    EXECUTE format('CREATE POLICY platform_access ON ontaix.%I TO ontaix_platform USING (true) WITH CHECK (true)', t);
+  END LOOP;
+END;
+$$;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_domain, tenant_domain_revision TO ontaix_app, ontaix_platform;
+
 INSERT INTO tenant_domain (tenant_id, key, name, owner, default_color, template_key, position)
 SELECT tenant.id, t.key, t.name, t.owner, t.color, t.key, t.position
 FROM tenant CROSS JOIN domain_template t

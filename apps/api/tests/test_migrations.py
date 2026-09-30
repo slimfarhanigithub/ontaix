@@ -61,6 +61,20 @@ CATALOG_QUERIES: dict[str, str] = {
         JOIN pg_attribute a ON a.attrelid = c.oid
         WHERE n.nspname = 'ontaix' AND c.relkind = 'r' AND a.attnum > 0
           AND NOT a.attisdropped ORDER BY 1, 2""",
+    "row_security": """
+        SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'ontaix' AND c.relkind = 'r' ORDER BY 1""",
+    "policies": """
+        SELECT tablename, policyname, roles::text, cmd, qual, with_check FROM pg_policies
+        WHERE schemaname = 'ontaix' ORDER BY 1, 2""",
+    "table_grants": """
+        SELECT table_name, grantee, privilege_type FROM information_schema.role_table_grants
+        WHERE table_schema = 'ontaix' AND grantee IN ('ontaix_app', 'ontaix_platform')
+        ORDER BY 1, 2, 3""",
+    "function_grants": """
+        SELECT routine_name, grantee, privilege_type FROM information_schema.role_routine_grants
+        WHERE routine_schema = 'ontaix' ORDER BY 1, 2, 3""",
 }
 
 

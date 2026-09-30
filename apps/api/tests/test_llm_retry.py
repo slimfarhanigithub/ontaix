@@ -273,7 +273,7 @@ async def _teach_once(client, tenant: TenantFixture, monkeypatch, handler) -> li
 
 
 async def _accounting(tenant: TenantFixture) -> tuple[list, int]:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         rows = (
             await s.execute(
                 text(

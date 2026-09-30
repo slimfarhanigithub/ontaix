@@ -29,7 +29,12 @@ from app.repositories import (
     proposal_repository,
     relation_repository,
 )
-from app.services import audit_service, decision_lock_service, outbox_service
+from app.services import (
+    audit_service,
+    decision_lock_service,
+    learning_capture_service,
+    outbox_service,
+)
 from app.services.decision_event_service import emit_proposal_event
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.proposal_apply_service import apply, delete_removed_company
@@ -107,6 +112,7 @@ async def reject(
     view = await load_view(session, caller.tenant_id, proposals)
     _ensure_can_approve(caller, view, proposal, "reject")
     outcome = await reject_one(session, caller, view, proposal, proposals, reason, False)
+    await learning_capture_service.on_rejected(session, caller, view, proposal)
     return _result(caller, view, proposal, outcome, proposals)
 
 
@@ -281,7 +287,11 @@ async def _complete_approval(
         session, proposal, ProposalState.APPROVED, get_clock().now()
     )
     await _clear_pending(session, view, proposal)
+    previous_label = learning_capture_service.label_before(view, proposal)
     outcome = await apply(session, caller, view, proposal, open_proposals, bulk)
+    await learning_capture_service.on_approved(
+        session, caller, view, proposal, previous_label, bulk
+    )
     if proposal.domain_product_id and proposal.domain_product_id in view.domain_products:
         product = view.domain_products[proposal.domain_product_id]
         await domain_product_repository.bump_revision(session, product)

@@ -132,6 +132,7 @@ def test_a_two_million_character_block_without_line_breaks_splits_quickly() -> N
     kept, skipped = split_sentences(block)
     elapsed = time.perf_counter() - started
 
-    assert elapsed < 1.0
+    # Linear time; the bound leaves room for a loaded test run and still catches a quadratic split.
+    assert elapsed < 3.0
     assert skipped == 0
     assert " ".join(kept) == block

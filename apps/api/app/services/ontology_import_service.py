@@ -14,6 +14,7 @@ import logging
 import re
 import uuid
 from datetime import timedelta
+from typing import get_args
 
 from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +28,7 @@ from app.models.api.ontology_import import (
     SkippedItem,
 )
 from app.models.api.proposal import Proposal as ProposalDto
+from app.models.ontology_import.parsed_ontology import OntologyFormat
 from app.models.proposals.provenance import Provenance
 from app.models.storage.base import NodeKind, ProposalOrigin
 from app.models.storage.ontology_import import OntologyImport
@@ -82,8 +84,10 @@ async def import_ontology(
     languages: str | None,
     individuals: str | None,
     domain_key: str | None,
+    chosen_format: str | None = None,
 ) -> OntologyImportResult:
-    """Map and store one upload admitted by `admit_import`; nothing is stored on a refusal."""
+    """Map and store one upload admitted by `admit_import`; nothing is stored on a refusal.
+    `chosen_format` replaces the extension and media type as the declared format."""
     config = get_settings()
     file_name = base_name(raw_file_name)
     problem = file_name_problem(file_name)
@@ -92,6 +96,7 @@ async def import_ontology(
     company = _uuid("companyId", company_id)
     parent_id = _uuid("parentConceptId", parent_concept_id) if parent_concept_id else None
     tags = _languages(languages)
+    chosen = _format(chosen_format)
     individuals = individuals or "skip"
     if individuals not in INDIVIDUALS:
         raise validation_failed("individuals", "individuals is skip or as_concepts")
@@ -100,7 +105,7 @@ async def import_ontology(
     view = await load_view(session, caller.tenant_id)
     target = _target(caller, view, company, parent_id, tags, individuals, domain_key or None)
     try:
-        fmt = detect_format(file_name, content_type, data)
+        fmt = detect_format(file_name, content_type, data, chosen)
         tree: MappedTree = await child_process_service.run(
             read_and_map,
             (data, fmt, target, _existing(view, company), _existing_relations(view, company)),
@@ -298,6 +303,15 @@ def _languages(raw: str | None) -> tuple[str, ...]:
     if len(tags) > MAX_LANGUAGES or not all(_LANGUAGE_TAG.match(t) for t in tags):
         raise validation_failed("languages", "at most 10 BCP 47 tags separated by commas")
     return tags
+
+
+def _format(raw: str | None) -> OntologyFormat | None:
+    """The chosen format, None when none is chosen."""
+    if raw is None or not raw:
+        return None
+    if raw not in get_args(OntologyFormat):
+        raise validation_failed("format", "format is one of " + ", ".join(get_args(OntologyFormat)))
+    return raw  # type: ignore[return-value]
 
 
 def _uuid(field: str, value: str | None) -> uuid.UUID:

@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import platform_session
 from app.config import get_settings
 from app.models.api.document_extraction import (
     DocumentDraftNote,
@@ -38,7 +38,7 @@ from app.repositories import (
     document_import_sentence_repository,
     tenant_settings_repository,
 )
-from app.services import import_service, stored_draft_service
+from app.services import import_service, learning_capture_service, stored_draft_service
 from app.services.extraction_event_service import NODE, emit_changed, job_dto
 from app.services.ontology_view_service import load_view
 from app.services.rate_limit_service import Budget, charge, charge_proposals
@@ -162,13 +162,25 @@ async def propose(
     provenances = [
         Provenance(ProposalOrigin.DOCUMENT, job.notes[i][ORIGIN_DETAIL]) for i in indexes
     ]
-    return await stored_draft_service.propose(session, caller, view, drafts, provenances)
+    created = await stored_draft_service.propose(session, caller, view, drafts, provenances)
+    company = view.companies.get(job.company_id)
+    if company is not None:
+        await learning_capture_service.link_stored(
+            session,
+            caller.tenant_id,
+            company,
+            learning_capture_service.KIND_EXTRACTION,
+            job.id,
+            indexes,
+            [p.id for p in created],
+        )
+    return created
 
 
 async def purge_expired() -> int:
     """Delete results more than 24 hours past their expiry and failed or cancelled jobs 48 hours
     after they ended, in their own transaction."""
-    async with get_session_factory()() as session:
+    async with platform_session() as session:
         deleted = await document_extraction_job_repository.delete_expired(
             session, get_clock().now()
         )

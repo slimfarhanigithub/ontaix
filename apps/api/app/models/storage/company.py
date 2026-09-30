@@ -24,6 +24,7 @@ class Company(Base):
     sub: Mapped[str] = mapped_column(server_default=text("''"))
     position: Mapped[int] = mapped_column(Integer)
     is_home: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    learning: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     dying_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")

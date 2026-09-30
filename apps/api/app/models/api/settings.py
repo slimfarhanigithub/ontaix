@@ -13,6 +13,8 @@ DEFAULT_OCR_MONTHLY_PAGE_CAP = 1000
 
 
 class Settings(ApiModel):
+    # Set by a super admin; read-only here. `single` keeps `multi_company` off.
+    company_mode: Literal["single", "multiple"]
     voice: bool
     import_docs: bool
     live_teaching: bool

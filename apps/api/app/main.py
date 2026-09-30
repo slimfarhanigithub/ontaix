@@ -24,7 +24,12 @@ from app.config import get_settings
 # first flush, and no request path imports it otherwise.
 from app.models.storage import tenant as _tenant_mapping  # noqa: F401
 from app.routers import (
+    admin_audit,
+    admin_organization_users,
+    admin_organizations,
+    admin_support_session,
     audit,
+    auth,
     companies,
     concepts,
     cost,
@@ -41,16 +46,27 @@ from app.routers import (
     speech,
     teach,
 )
-from app.services import document_extraction_runner_service, retention_purge_service
+from app.services import (
+    auth_upkeep_service,
+    document_extraction_runner_service,
+    password_hash_service,
+    retention_purge_service,
+)
 from app.services.import_purge_service import purge_periodically
 from app.utilities.contention import is_contention
-from app.utilities.problems import ProblemError, busy
+from app.utilities.db_errors import constraint_name
+from app.utilities.problems import ProblemError, busy, conflict
 
 logger = logging.getLogger(__name__)
 
 API_PREFIX = "/api/v1"
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 CONTENTION_DETAIL = "the request met concurrent work on the same data; try again"
+# Constraints the company-mode triggers raise, answered as the conflicts they stand for.
+TRIGGER_CONFLICTS = {
+    "company_limit": "This organization has one company only",
+    "locked_setting": "Several companies stay off while the organization has one company only",
+}
 HTTP_STATUS_CODES = {
     400: "bad_request",
     401: "unauthorized",
@@ -63,12 +79,14 @@ HTTP_STATUS_CODES = {
 
 @asynccontextmanager
 async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Runs the expired-import purge, the retention purge and the whole-document extraction
-    runner for the life of the process, warms the language model clients in the background, and
-    cancels them all on shutdown."""
+    """Runs the expired-import purge, the retention purge, the sign-in upkeep and the
+    whole-document extraction runner for the life of the process, warms the language model
+    clients and the dummy password hash in the background, and cancels them all on shutdown."""
     settings = get_settings()
     tasks = [
         asyncio.create_task(warm_llm_clients(), name="llm-warm-up"),
+        asyncio.create_task(password_hash_service.warm(), name="password-hash-warm-up"),
+        asyncio.create_task(auth_upkeep_service.run_periodically(), name="sign-in-upkeep"),
         asyncio.create_task(
             purge_periodically(settings.import_purge_interval_seconds), name="import-purge"
         ),
@@ -100,15 +118,22 @@ def create_app() -> FastAPI:
     logging.basicConfig(level=settings.log_level)
     check_llm_configuration(settings)
     check_ocr_configuration(settings)
-    if settings.is_dev:
+    if settings.accepts_dev_identity_header:
         logger.warning(
-            "environment is dev: the %s header is accepted without any other credential",
+            "ONTAIX_DEV_IDENTITY_HEADER is on in %s: the %s header is accepted without any"
+            " other credential",
+            settings.environment,
             DEV_USER_HEADER,
         )
 
     application = FastAPI(title=settings.app_name, version="1.0.0", lifespan=_lifespan)
     application.include_router(health.router)
     for module in (
+        auth,
+        admin_organizations,
+        admin_organization_users,
+        admin_support_session,
+        admin_audit,
         scene,
         companies,
         domains,
@@ -174,8 +199,11 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
 
 async def _database_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Lock timeouts, deadlocks and serialisation failures answer `503 busy`; the transaction
-    was rolled back, so the client retries the same request. Any other database error stays a
-    server error."""
+    was rolled back, so the client retries the same request. A refusal of the company-mode
+    triggers answers its `409`. Any other database error stays a server error."""
+    name = constraint_name(exc)
+    if name in TRIGGER_CONFLICTS:
+        return _problem_response(conflict(name, TRIGGER_CONFLICTS[name]), request)
     if not is_contention(exc):
         raise exc
     logger.warning(

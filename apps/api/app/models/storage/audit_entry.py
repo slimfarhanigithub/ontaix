@@ -40,6 +40,7 @@ class AuditEntry(Base):
     actor_kind: Mapped[ActorKind] = mapped_column(pg_enum(ActorKind, "actor_kind"))
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     actor_agent_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    actor_account_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     kind: Mapped[str]
     what: Mapped[str]
     ok: Mapped[bool] = mapped_column(Boolean)

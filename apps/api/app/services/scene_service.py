@@ -15,9 +15,11 @@ from app.models.api.settings import (
     Settings,
 )
 from app.models.api.view_state import ViewState
+from app.models.storage.base import CompanyMode
 from app.models.storage.tenant_settings import TenantSettings
 from app.repositories import (
     connector_type_repository,
+    organization_settings_repository,
     outbox_repository,
     proposal_repository,
     view_state_repository,
@@ -68,7 +70,9 @@ async def get_scene(session: AsyncSession, caller: Caller) -> Scene:
             )
             for p in proposals
         ],
-        settings=settings_dto(settings),
+        settings=settings_dto(
+            settings, await organization_settings_repository.company_mode(session, caller.tenant_id)
+        ),
         appearance=appearance_dto(view, settings),
         view_state=ViewState(
             coverage=view_state.coverage if view_state else False,
@@ -80,9 +84,10 @@ async def get_scene(session: AsyncSession, caller: Caller) -> Scene:
     )
 
 
-def settings_dto(settings: TenantSettings | None) -> Settings:
+def settings_dto(settings: TenantSettings | None, company_mode: CompanyMode) -> Settings:
     if settings is None:
         return Settings(
+            company_mode=company_mode.value,
             voice=True,
             import_docs=True,
             live_teaching=True,
@@ -105,6 +110,7 @@ def settings_dto(settings: TenantSettings | None) -> Settings:
             ocr_monthly_page_cap=DEFAULT_OCR_MONTHLY_PAGE_CAP,
         )
     return Settings(
+        company_mode=company_mode.value,
         voice=settings.voice,
         import_docs=settings.import_docs,
         live_teaching=settings.live_teaching,

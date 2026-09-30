@@ -6,7 +6,7 @@
  * use the existing caption; a refusal is the reference's toast.
  */
 import { api } from '../api/client';
-import { ApiError } from '../api/types';
+import { ApiError, type OntologyFormat } from '../api/types';
 import { store } from '../store/store';
 import { beginProcessing } from './processing';
 
@@ -24,8 +24,9 @@ export function browserLanguages(list: readonly string[] = navigator.languages |
   return (tags.length ? tags : ['en']).join(',');
 }
 
-/** Maps a file into the taught company and proposes every draft of the tree. */
-export async function importOntology(file: File | null | undefined): Promise<void> {
+/** Maps a file into the taught company and proposes every draft of the tree; `format`, when
+ * given, is the format the file is read as, in place of its extension. */
+export async function importOntology(file: File | null | undefined, format?: OntologyFormat): Promise<void> {
   const company = store.s.activeCompany;
   if (!file || store.ui.importing || !company?.sid) return;
   store.ui.importing = true;
@@ -37,6 +38,7 @@ export async function importOntology(file: File | null | undefined): Promise<voi
       companyId: company.sid,
       languages: browserLanguages(),
       individuals: 'skip',
+      ...(format ? { format } : {}),
     });
     const indexes = mapped.drafts.map((_, i) => i);
     const created = indexes.length ? await api.proposeOntologyImport(mapped.ontologyImportId, indexes) : [];

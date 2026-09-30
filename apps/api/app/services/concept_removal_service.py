@@ -12,7 +12,7 @@ from app.models.decisions.decision_outcome import DecisionOutcome
 from app.models.storage.concept import Concept
 from app.models.storage.proposal import Proposal
 from app.repositories import concept_repository, relation_repository
-from app.services import outbox_service
+from app.services import learning_capture_service, outbox_service
 from app.services.ontology_view_service import OntologyView
 from app.utilities.clock import get_clock
 
@@ -45,6 +45,7 @@ async def remove_concepts(
     for c in doomed:
         await concept_repository.delete(session, c)
         view.forget_concept(c.id)
+    await learning_capture_service.on_concepts_removed(session, caller, view, doomed)
     await outbox_service.emit(
         session,
         caller.tenant_id,

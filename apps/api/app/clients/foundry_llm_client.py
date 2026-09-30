@@ -1,10 +1,12 @@
 """The Azure AI Foundry implementation of the language model adapter.
 
-One Chat Completions call per request to the Foundry resource's OpenAI v1 endpoint
-(`<endpoint>/openai/v1/`) through the official `openai` SDK, addressed to the model deployment.
+One Chat Completions call per request, whole or streamed, to the Foundry resource's OpenAI v1
+endpoint (`<endpoint>/openai/v1/`) through the official `openai` SDK, addressed to the model
+deployment.
 Authentication is keyless: an Entra ID bearer token for `https://cognitiveservices.azure.com/.default`
 from `DefaultAzureCredential` (the workload identity in the cluster, the `az login` session
-locally), acquired before every call and cached by the credential until it nears expiry.
+locally), served by the process-wide token cache, which calls the credential only when it holds
+no valid token.
 
 The answer is constrained by `response_format` of type `json_schema` with `strict` true. Strict
 mode needs every property listed as required, so the request's schema is sent in its strict form
@@ -14,7 +16,7 @@ TLS, sending and reading the last byte - is bounded by `asyncio.timeout` on top 
 timeout. The SDK's retries are 0; a 429 or 503 is retried by `call_with_retries` within that
 same wall clock, and only the answering attempt reports tokens. Token counts are the response's
 `usage`: `prompt_tokens` as input (cached tokens included) and `completion_tokens` as output
-(reasoning tokens included).
+(reasoning tokens included); a streamed call asks for the usage in its last chunk.
 The SDK, Azure and HTTP loggers are held at WARNING and filtered, so prompts, answers and tokens
 never reach a log.
 """
@@ -26,16 +28,21 @@ import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from typing import Any
 
 import openai
 from openai.types.chat import ChatCompletion
+from openai.types.completion_usage import CompletionUsage
 
+from app.clients.entra_token_client import shared_token_cache
 from app.clients.llm_client import (
     LlmAnswer,
     LlmProviderError,
     LlmRefused,
     LlmRequest,
     LlmTimeout,
+    TextListener,
     cost_eur,
     elapsed_ms,
     estimate_tokens,
@@ -62,6 +69,18 @@ _REDACTING_FILTER = protect_loggers(
 
 class _CredentialFailure(Exception):
     """No Entra ID token could be acquired; carries no detail of the credential chain."""
+
+
+@dataclass
+class _Streamed:
+    """What one streamed attempt received: the answer text, whether a choice arrived, a refusal,
+    the finish reason and the usage of the last chunk."""
+
+    text: str = ""
+    answered: bool = False
+    refused: bool = False
+    finish_reason: str | None = None
+    usage: CompletionUsage | None = None
 
 
 class FoundryLlmClient:
@@ -93,47 +112,12 @@ class FoundryLlmClient:
 
     async def complete(self, request: LlmRequest) -> LlmAnswer:
         started = time.monotonic()
-        schema, optional = to_strict(request.output_schema)
 
         async def attempt(remaining: float) -> ChatCompletion:
             client = self._client.with_options(timeout=openai.Timeout(remaining, connect=remaining))
-            return await client.chat.completions.create(
-                model=self._deployment,
-                messages=[
-                    {"role": "system", "content": request.system},
-                    {"role": "user", "content": request.user},
-                ],
-                max_completion_tokens=request.max_output_tokens,
-                reasoning_effort=self._reasoning_effort,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {"name": SCHEMA_NAME, "strict": True, "schema": schema},
-                },
-                store=False,
-            )
+            return await client.chat.completions.create(**self._arguments(request))
 
-        try:
-            limit = request.timeout_seconds
-            async with asyncio.timeout(limit):
-                completion = await call_with_retries(
-                    attempt, started + limit, openai.APIStatusError
-                )
-        except (TimeoutError, openai.APITimeoutError) as exc:
-            raise LlmTimeout("timeout", latency_ms=elapsed_ms(started)) from exc
-        except _CredentialFailure as exc:
-            logger.warning("language model call failed: no Entra ID token was acquired")
-            raise LlmProviderError("credential", latency_ms=elapsed_ms(started)) from exc
-        except openai.APIStatusError as exc:
-            logger.warning("language model call refused with status %s", exc.status_code)
-            if getattr(exc, "code", None) == CONTENT_FILTER:
-                raise LlmRefused("refusal", latency_ms=elapsed_ms(started)) from exc
-            raise LlmProviderError("status", latency_ms=elapsed_ms(started)) from exc
-        except openai.APIConnectionError as exc:
-            logger.warning("language model call failed to connect")
-            raise LlmProviderError("connection", latency_ms=elapsed_ms(started)) from exc
-        except openai.OpenAIError as exc:
-            logger.warning("language model call failed: %s", type(exc).__name__)
-            raise LlmProviderError("sdk", latency_ms=elapsed_ms(started)) from exc
+        completion = await _call(request, started, attempt)
         latency_ms = elapsed_ms(started)
         usage = completion.usage
         input_tokens = usage.prompt_tokens if usage else 0
@@ -144,24 +128,105 @@ class FoundryLlmClient:
         choice = completion.choices[0]
         if choice.message.refusal or choice.finish_reason == CONTENT_FILTER:
             raise LlmRefused("refusal", input_tokens, output_tokens, cost, latency_ms)
-        text = _without_optional_nulls(choice.message.content or "", optional)
+        text = self.answer_text(choice.message.content or "", request)
         return LlmAnswer(text, input_tokens, output_tokens, cost, latency_ms)
+
+    async def stream(self, request: LlmRequest, on_text: TextListener) -> LlmAnswer:
+        """The call of `complete` with the answer streamed; the last chunk carries the usage."""
+        started = time.monotonic()
+
+        async def attempt(remaining: float) -> _Streamed:
+            client = self._client.with_options(timeout=openai.Timeout(remaining, connect=remaining))
+            chunks = await client.chat.completions.create(
+                **self._arguments(request),
+                stream=True,
+                stream_options={"include_usage": True},
+            )
+            streamed = _Streamed()
+            async for chunk in chunks:
+                if chunk.usage is not None:
+                    streamed.usage = chunk.usage
+                for choice in chunk.choices:
+                    if choice.index != 0:
+                        continue
+                    streamed.answered = True
+                    if choice.delta.refusal:
+                        streamed.refused = True
+                    if choice.finish_reason:
+                        streamed.finish_reason = choice.finish_reason
+                    if choice.delta.content:
+                        streamed.text += choice.delta.content
+                        await on_text(streamed.text)
+            return streamed
+
+        streamed = await _call(request, started, attempt)
+        latency_ms = elapsed_ms(started)
+        usage = streamed.usage
+        input_tokens = usage.prompt_tokens if usage else 0
+        output_tokens = usage.completion_tokens if usage else 0
+        cost = cost_eur(self._price, input_tokens, output_tokens)
+        if not streamed.answered:
+            raise LlmProviderError("empty", input_tokens, output_tokens, cost, latency_ms)
+        if streamed.refused or streamed.finish_reason == CONTENT_FILTER:
+            raise LlmRefused("refusal", input_tokens, output_tokens, cost, latency_ms)
+        text = self.answer_text(streamed.text, request)
+        return LlmAnswer(text, input_tokens, output_tokens, cost, latency_ms)
+
+    def answer_text(self, raw: str, request: LlmRequest) -> str:
+        """The answer in the original schema's shape; text that is not JSON is returned as is,
+        and fails the API's validation."""
+        _, optional = to_strict(request.output_schema)
+        return _without_optional_nulls(raw, optional)
+
+    def _arguments(self, request: LlmRequest) -> dict[str, Any]:
+        schema, _ = to_strict(request.output_schema)
+        return {
+            "model": self._deployment,
+            "messages": [
+                {"role": "system", "content": request.system},
+                {"role": "user", "content": request.user},
+            ],
+            "max_completion_tokens": request.max_output_tokens,
+            "reasoning_effort": self._reasoning_effort,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": SCHEMA_NAME, "strict": True, "schema": schema},
+            },
+            "store": False,
+        }
+
+
+async def _call[T](
+    request: LlmRequest, started: float, attempt: Callable[[float], Awaitable[T]]
+) -> T:
+    """`attempt` within the request's wall clock, with bounded 429 and 503 retries, and every
+    failure raised as the adapter's error."""
+    try:
+        limit = request.timeout_seconds
+        async with asyncio.timeout(limit):
+            return await call_with_retries(attempt, started + limit, openai.APIStatusError)
+    except (TimeoutError, openai.APITimeoutError) as exc:
+        raise LlmTimeout("timeout", latency_ms=elapsed_ms(started)) from exc
+    except _CredentialFailure as exc:
+        logger.warning("language model call failed: no Entra ID token was acquired")
+        raise LlmProviderError("credential", latency_ms=elapsed_ms(started)) from exc
+    except openai.APIStatusError as exc:
+        logger.warning("language model call refused with status %s", exc.status_code)
+        if getattr(exc, "code", None) == CONTENT_FILTER:
+            raise LlmRefused("refusal", latency_ms=elapsed_ms(started)) from exc
+        raise LlmProviderError("status", latency_ms=elapsed_ms(started)) from exc
+    except openai.APIConnectionError as exc:
+        logger.warning("language model call failed to connect")
+        raise LlmProviderError("connection", latency_ms=elapsed_ms(started)) from exc
+    except openai.OpenAIError as exc:
+        logger.warning("language model call failed: %s", type(exc).__name__)
+        raise LlmProviderError("sdk", latency_ms=elapsed_ms(started)) from exc
 
 
 def entra_token_provider() -> TokenProvider:
-    """An async source of Entra ID bearer tokens for Azure AI services.
-
-    The synchronous `DefaultAzureCredential` runs in a worker thread, so a slow credential
-    chain never blocks the event loop and the call's timeout still applies to it.
-    """
-    from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-
-    token = get_bearer_token_provider(DefaultAzureCredential(), TOKEN_SCOPE)
-
-    async def provide() -> str:
-        return await asyncio.to_thread(token)
-
-    return provide
+    """An async source of Entra ID bearer tokens for Azure AI services, shared by every client
+    of the process."""
+    return shared_token_cache(TOKEN_SCOPE).token
 
 
 def _guarded(provider: TokenProvider) -> TokenProvider:
