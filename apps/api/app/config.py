@@ -301,6 +301,11 @@ class Settings(BaseSettings):
         """True only in dev or test with ONTAIX_DEV_IDENTITY_HEADER on."""
         return self.dev_identity_header and self.environment in DEV_IDENTITY_ENVIRONMENTS
 
+    @property
+    def is_dev(self) -> bool:
+        """True only when the environment is exactly `dev`: the Azure CLI may hand out tokens."""
+        return self.environment == "dev"
+
     def platform_database_url_or_default(self) -> str | None:
         """The platform role's connection: its own setting, else `database_url`."""
         return self.platform_database_url or self.database_url
