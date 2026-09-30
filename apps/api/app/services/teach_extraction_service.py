@@ -72,7 +72,7 @@ from app.services.teach_draft_service import Drafter, End, PlannedIntent, phrase
 from app.utilities.action_text import has_refused_character, normalise_action
 from app.utilities.example_selection import most_similar, within_budget
 from app.utilities.permissions import can_read
-from app.utilities.sound_alike import sounds_like_name
+from app.utilities.sound_alike import company_possessive_rest, sounds_like_name
 from app.utilities.stage_clock import StageClock
 from app.utilities.streamed_json import closed_items
 from app.utilities.teach_parser import singular, title
@@ -600,6 +600,8 @@ def _interpret(
             for i, end in enumerate(placed):
                 if end is not None and _misheard(end, drafter):
                     placed[i], reasons[i] = None, "ambiguous_reference"
+                elif end is not None:
+                    placed[i] = _company_possessive(end, drafter) or end
         grounded = placed[0] is not None and placed[1] is not None
         dropped = sum(1 for end in placed[2:] if end is None)
         ends = [end for end in placed if end is not None]
@@ -1231,6 +1233,18 @@ def _misheard(end: End, drafter: Drafter) -> bool:
         return False
     companies = [company.name for company in drafter.view.companies.values()]
     return any(sounds_like_name(end.label, c.label, company_names=companies) for c in drafter.mine)
+
+
+def _company_possessive(end: End, drafter: Drafter) -> End | None:
+    """A new label that starts with the taught company's name misheard ("Inside sales" for
+    Insight) as the company's own rest of the label: the existing concept it names (Sales), or
+    a new label of those words alone. None when `end` is not such a label."""
+    if end.concept is not None:
+        return None
+    rest = company_possessive_rest(end.label, drafter.view.companies[drafter.company_id].name)
+    if rest is None:
+        return None
+    return End(drafter.resolve(rest), title(rest), rest, cited_new=True)
 
 
 def _distinct(reasons: list[UnresolvedReason | None]) -> tuple[UnresolvedReason, ...]:
