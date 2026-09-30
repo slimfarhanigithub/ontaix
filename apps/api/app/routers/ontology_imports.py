@@ -25,7 +25,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-FORM_FIELDS = ("companyId", "parentConceptId", "languages", "individuals", "domainKey")
+FORM_FIELDS = (
+    "companyId",
+    "parentConceptId",
+    "languages",
+    "individuals",
+    "domainKey",
+    "format",
+)
 
 
 @router.post("/ontology-imports", response_model=OntologyImportResult, tags=["Teach"])
@@ -61,6 +68,7 @@ async def import_ontology(
             languages=fields["languages"],  # type: ignore[arg-type]
             individuals=fields["individuals"],  # type: ignore[arg-type]
             domain_key=fields["domainKey"],  # type: ignore[arg-type]
+            chosen_format=fields["format"],  # type: ignore[arg-type]
         )
     finally:
         await form.close()

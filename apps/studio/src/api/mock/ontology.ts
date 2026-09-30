@@ -18,6 +18,16 @@ const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 const OWL = 'http://www.w3.org/2002/07/owl#';
 const SKOS = 'http://www.w3.org/2004/02/skos/core#';
 const FORBIDDEN = new Set(['is a', 'equivalent to']);
+const EXTENSION_OF_FORMAT: Record<T.OntologyFormat, string> = {
+  rdf_xml: 'rdf',
+  turtle: 'ttl',
+  owl_xml: 'owx',
+  json_ld: 'jsonld',
+  n_triples: 'nt',
+  obo: 'obo',
+  csv: 'csv',
+  xlsx: 'xlsx',
+};
 const REFUSED = /[<>\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/;
 
 type Kind = 'spec' | 'includes';
@@ -62,10 +72,17 @@ export interface MappedOntology {
   skipped: T.OntologyImportResult['skipped'];
 }
 
-export function mapOntologyFile(rawName: string, bytes: Uint8Array, target: OntologyTarget, existing: ExistingConcept[]): MappedOntology {
+/** `format` is the format to read the file as, in place of its extension. */
+export function mapOntologyFile(
+  rawName: string,
+  bytes: Uint8Array,
+  target: OntologyTarget,
+  existing: ExistingConcept[],
+  format?: T.OntologyFormat,
+): MappedOntology {
   const fileName = checkedFileName(rawName);
   if (bytes.length > MAX_BYTES) throw new ExtractRefusal(413, 'payload_too_large', 'the file is larger than 20 MiB');
-  const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : '';
+  const ext = format ? EXTENSION_OF_FORMAT[format] : fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : '';
   const text = new TextDecoder('utf-8').decode(bytes);
   const parsed = parse(ext, text);
   return { fileName, format: parsed.format, ...mapParsed(parsed, target, existing) };

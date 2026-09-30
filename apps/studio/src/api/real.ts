@@ -27,8 +27,8 @@ export function connectRealApi(): void {
     created(p);
     return p;
   };
-  api.createProposalBatch = async (drafts) => {
-    const ps = await raw.createProposalBatch(drafts);
+  api.createProposalBatch = async (drafts, parseId) => {
+    const ps = await raw.createProposalBatch(drafts, parseId);
     for (const p of ps) created(p);
     return ps;
   };

@@ -282,6 +282,8 @@ def _app(database_url: str, args: argparse.Namespace):
     get_settings.cache_clear()
     settings = get_settings()
     settings.llm_calls_per_hour = 1_000_000
+    # No lesson is captured from, or added to, an evaluation input: the TEST split stays honest.
+    settings.learning_enabled = False
     if args.timeout_seconds:
         settings.llm_timeout_seconds = args.timeout_seconds
     if args.speech_timeout_seconds:

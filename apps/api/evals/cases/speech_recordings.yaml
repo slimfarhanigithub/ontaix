@@ -4,14 +4,16 @@
 # one finished spoken sentence, sent in order in one session as the Studio microphone sends it.
 # `expected.attributes` lists taught attributes ("billed monthly") by concept and accepted value.
 #
-# - `en-speech-owner-financial-services` is the owner's own recording, word for word.
+# - `en-speech-owner-financial-services` is the owner's own recording, word for word, and
+#   `en-speech-owner-live-employees`, `en-speech-owner-live-amdaris` and
+#   `en-speech-owner-live-inside-sales` the owner's own sentences from live use on gpt-6-sol.
 # - The `narration` cases retell sections of the public benchmarks in evals/benchmarks as natural
 #   speech with fillers, back-references and multi-level drill-down. Their labels are the
 #   benchmark's class names; the gold follows the tree the narration states, with the
 #   benchmark's own property names among the accepted verbs.
 # - The learn/test assignment of every case is in app/ai/examples/split.json: the org, ssn and
-#   valueflows narrations are TEST; the owner's recording, the goodrelations, prov-o and dcat
-#   narrations and the two other recordings are LEARN.
+#   valueflows narrations are TEST; the owner's recording and live sentences, the goodrelations,
+#   prov-o and dcat narrations and the two other recordings are LEARN.
 #
 # All narration text is original, written for Ontaix on 2026-09-30.
 
@@ -49,6 +51,70 @@ cases:
         - {concept: Managed services, value: [monthly]}
         - {concept: Advisory, value: [per day, daily]}
     optional: [Customer]
+
+  - id: en-speech-owner-live-employees
+    kind: speech
+    company: Insight
+    description: The owner's live sentences on gpt-6-sol; "can be" and "can be around" list sub-groups (includes), and the recipient of an offer attaches to what is offered, one relation per fact.
+    tags: [en, speech, recording, back-reference, sub-groups, owner]
+    existing:
+      - {label: Employees, parent: Insight, action: has, domain: people}
+    input:
+      - "these employees can be consultants and can be in sales"
+      - "the consultants offer services for customers"
+      - "these services can be around AI data and apps"
+    expected:
+      concepts:
+        - {label: Consultants, parent: [Employees], action: [includes, can be]}
+        - {label: Sales, parent: [Employees], action: [includes, can be in]}
+        - {label: Services, parent: [Consultants], action: [offers, offer, provides]}
+        - {label: Customers, parent: [Services], action: [for, is for, is offered for, is offered to, offered to, serves]}
+        - {label: AI, parent: [Services], action: [includes, can be, can be around]}
+        - {label: Data, parent: [Services], action: [includes, can be, can be around]}
+        - {label: Apps, parent: [Services], action: [includes, can be, can be around]}
+      relations:
+        - {from: Consultants, to: Services, action: [offers, offer, provides], inverse: [is offered by]}
+        - {from: Services, to: Customers, action: [for, is for, is offered for, is offered to, offered to, serves], inverse: []}
+    optional: [Customer, Service]
+
+  - id: en-speech-owner-live-inside-sales
+    kind: speech
+    company: Insight
+    description: The owner's live sentence as the browser heard it; "Inside sales" is Insight's existing Sales with the company name misheard, so no Inside sales cell is drafted.
+    tags: [en, speech, recording, misheard-name, reuse, owner]
+    existing:
+      - {label: Sales, parent: Insight, action: has, domain: sales}
+    input:
+      - "Inside sales come from software licenses or from services"
+    expected:
+      concepts:
+        - {label: Software licenses, parent: [Sales], action: [comes from, come from, includes, has]}
+        - {label: Services, parent: [Sales], action: [comes from, come from, includes, has]}
+    optional: []
+
+  - id: en-speech-owner-live-amdaris
+    kind: speech
+    company: Amdaris
+    description: The owner's live session for Amdaris; a sentence that starts with its verb takes the plural subject of the previous sentence (Consultants), the recipient is kept, and every item of a "can be around" list is drafted.
+    tags: [en, speech, recording, back-reference, sub-groups, fragment, owner]
+    existing:
+      - {label: Employees, parent: Amdaris, action: has, domain: people}
+    input:
+      - "these employees can be consultants or from support services"
+      - "offer services to their customers"
+      - "these services can be around AI data or apps"
+    expected:
+      concepts:
+        - {label: Consultants, parent: [Employees], action: [includes, can be]}
+        - {label: Support services, parent: [Employees], action: [includes, can be, can be from, comes from]}
+        - {label: Services, parent: [Consultants], action: [offers, offer, provides]}
+        - {label: Customers, parent: [Services], action: [is offered to, offered to, for, is for, serves, is sold to]}
+        - {label: AI, parent: [Services], action: [includes, can be, can be around]}
+        - {label: Data, parent: [Services], action: [includes, can be, can be around]}
+        - {label: Apps, parent: [Services], action: [includes, can be, can be around]}
+      relations:
+        - {from: Consultants, to: Services, action: [offers, offer, provides], inverse: [is offered by]}
+    optional: [Customer, Service, Support]
 
   # ---------------------------------------------------------------- TEST
   - id: en-speech-narration-valueflows-processes

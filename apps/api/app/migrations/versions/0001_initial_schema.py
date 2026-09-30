@@ -38,9 +38,11 @@ def _contract_ddl() -> str:
         raise FileNotFoundError(
             f"schema contract not found at {path}; set {SCHEMA_SQL_ENV} to its location"
         )
+    # Lines end at "\n" only: `str.splitlines` would also cut at U+2028 and other Unicode line
+    # separators, which regex character classes of the contract hold as literal characters.
     statements = [
         line
-        for line in path.read_text(encoding="utf-8").splitlines()
+        for line in path.read_text(encoding="utf-8").split("\n")
         if line.strip() not in {"BEGIN;", "COMMIT;"}
     ]
     return "\n".join(statements)

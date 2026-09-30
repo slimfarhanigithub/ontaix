@@ -403,6 +403,61 @@ cases:
         - {label: Platform team, parent: [Service desk], action: [escalates to]}
         - {label: Monitoring tools, parent: [Platform team], action: [owns, manages, has]}
 
+  - id: en-text-owner-live-sales-steps
+    kind: text
+    company: Insight
+    description: The owner's typed sales process on gpt-6-sol; ten steps joined by arrows are siblings under the company, ordered by precedes, never nested.
+    tags: [en, text, sequence, owner]
+    input:
+      - "Qualify → Engage Insight AI → Create Salesforce Opp → Scope & Resource → Create WO/SoW → Internal Approval → Client Review → Signature/PO → Closed Won → Delivery Handover"
+    expected:
+      concepts:
+        - {label: Qualify, parent: [Insight], action: [has, includes, starts with]}
+        - {label: Engage Insight AI, parent: [Insight], action: [has, includes, starts with]}
+        - {label: Create Salesforce Opp, parent: [Insight], action: [has, includes, starts with]}
+        - {label: "Scope & Resource", parent: [Insight], action: [has, includes, starts with]}
+        - {label: "Create WO/SoW", parent: [Insight], action: [has, includes, starts with]}
+        - {label: Internal Approval, parent: [Insight], action: [has, includes, starts with]}
+        - {label: Client Review, parent: [Insight], action: [has, includes, starts with]}
+        - {label: "Signature/PO", parent: [Insight], action: [has, includes, starts with]}
+        - {label: Closed Won, parent: [Insight], action: [has, includes, starts with]}
+        - {label: Delivery Handover, parent: [Insight], action: [has, includes, starts with]}
+      relations:
+        - {from: Qualify, to: Engage Insight AI, action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: Engage Insight AI, to: Create Salesforce Opp, action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: Create Salesforce Opp, to: "Scope & Resource", action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: "Scope & Resource", to: "Create WO/SoW", action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: "Create WO/SoW", to: Internal Approval, action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: Internal Approval, to: Client Review, action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: Client Review, to: "Signature/PO", action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: "Signature/PO", to: Closed Won, action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: Closed Won, to: Delivery Handover, action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+
+  - id: en-text-owner-live-long-steps
+    kind: text
+    company: Insight
+    description: The owner's typed process with long steps on gpt-6-sol, whose answer was cut at the output bound; short step labels, siblings under the company, ordered by precedes.
+    tags: [en, text, sequence, owner]
+    input:
+      - "Qualify the opportunity → Confirm client problem/use case → Agree the likely Insight AI service/offering → Confirm client sponsor, budget/funding route and desired timing then Engage Insight AI → Bring in the appropriate Insight AI Solutions Consultant / technical support → Define high-level scope, deliverables, skills and expected delivery dates"
+    expected:
+      concepts:
+        - {label: Qualify the opportunity, parent: [Insight], action: [has, includes, starts with], aliases: [Qualify opportunity, Qualify]}
+        - {label: "Confirm client problem/use case", parent: [Insight], action: [has, includes, starts with], aliases: [Confirm client problem, "Confirm client problem / use case"]}
+        - {label: "Agree the likely Insight AI service/offering", parent: [Insight], action: [has, includes, starts with], aliases: [Agree the likely Insight AI service, "Agree Insight AI service/offering", "Agree the likely Insight AI service / offering"]}
+        - {label: Confirm client sponsor, parent: [Insight], action: [has, includes, starts with], aliases: ["Confirm client sponsor, budget/funding route and desired timing", "Confirm client sponsor budget/funding route and desired timing"]}
+        - {label: Engage Insight AI, parent: [Insight], action: [has, includes, starts with]}
+        - {label: Bring in the appropriate Insight AI Solutions Consultant, parent: [Insight], action: [has, includes, starts with], aliases: ["Bring in the appropriate Insight AI Solutions Consultant / technical support", Bring in Insight AI Solutions Consultant]}
+        - {label: Define high-level scope, parent: [Insight], action: [has, includes, starts with], aliases: ["Define high-level scope, deliverables, skills and expected delivery dates", Define high-level scope and deliverables]}
+      relations:
+        - {from: Qualify the opportunity, to: "Confirm client problem/use case", action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: "Confirm client problem/use case", to: "Agree the likely Insight AI service/offering", action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: "Agree the likely Insight AI service/offering", to: Confirm client sponsor, action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: Confirm client sponsor, to: Engage Insight AI, action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: Engage Insight AI, to: Bring in the appropriate Insight AI Solutions Consultant, action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+        - {from: Bring in the appropriate Insight AI Solutions Consultant, to: Define high-level scope, action: [precedes, comes before, is followed by], inverse: [follows, comes after]}
+    optional: [Opportunity, Client sponsor, Insight AI, Insight AI Solutions Consultant, High-level scope]
+
   # ---------------------------------------------------------------- English, speech
   - id: en-speech-adr-owner-spoken
     kind: speech

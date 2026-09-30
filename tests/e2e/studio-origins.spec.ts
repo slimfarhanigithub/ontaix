@@ -65,7 +65,19 @@ async function openProposals(request: APIRequestContext): Promise<ApiProposal[]>
   return ((await res.json()) as { items: ApiProposal[] }).items;
 }
 
+/**
+ * Imports a document read sentence by sentence. A detected document is read whole first; the
+ * test answers the whole-document job with `503`, so the Studio falls back to sentence by
+ * sentence whether or not the stack has a model configured.
+ */
 async function importFile(page: Page, file: string): Promise<void> {
+  await page.route('**/api/v1/import/*/extraction', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/problem+json',
+      body: JSON.stringify({ title: 'Unavailable', status: 503, code: 'unavailable', detail: 'not in this test' }),
+    }),
+  );
   await page.setInputFiles('#importFile', resolve(FIXTURES, file));
   await expect(page.locator('#captionKicker')).toHaveText('Import finished', { timeout: 30_000 });
 }

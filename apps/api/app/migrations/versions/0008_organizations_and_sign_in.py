@@ -17,7 +17,7 @@ contract this revision changes nothing. The DDL is the contract's text, so const
 definitions match a database loaded from it.
 
 Revision ID: 0008
-Revises: 0006
+Revises: 0007
 Create Date: 2026-09-30
 """
 

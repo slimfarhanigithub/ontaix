@@ -175,7 +175,7 @@ async def test_without_a_provider_the_grammar_answers_and_the_sentence_is_unreso
     assert result["draftNotes"] == [{"extractor": "rules", "confidence": 1}] * 2
 
 
-async def test_a_typed_sentence_goes_to_the_model_first_and_the_grammar_stands_when_it_fails(
+async def test_a_typed_sentence_goes_to_the_model_first_and_drafts_nothing_when_it_fails(
     client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
 ) -> None:
     await configure(tenant)
@@ -184,14 +184,15 @@ async def test_a_typed_sentence_goes_to_the_model_first_and_the_grammar_stands_w
     result = await teach(client, tenant, tenant.company_id, "A plant has machines")
 
     assert len(fake_llm.requests) == 1
-    # The grammar reads the sentence whole, so its result stands without being marked degraded.
+    # The model is on and did not answer: even a sentence the grammar reads whole drafts
+    # nothing, so the owner sends it again.
     assert (result["extractor"], result["llmOutcome"], result["degraded"]) == (
         "rules",
         "provider_error",
-        False,
+        True,
     )
-    assert result["outcome"] == "understood" and result["unresolved"] == []
-    assert [d["label"] for d in result["drafts"]] == ["Plant", "Machine"]
+    assert result["outcome"] == "not_understood" and result["drafts"] == []
+    assert result["unresolved"] == [{"text": "A plant has machines", "reason": "model_unavailable"}]
 
 
 async def test_with_the_step_off_a_sentence_the_grammar_reads_whole_never_calls_the_model(
@@ -221,7 +222,7 @@ async def test_a_zero_cap_is_off_and_sends_nothing(
     assert fake_llm.requests == []
 
 
-async def test_an_exhausted_monthly_cap_degrades_to_the_grammar(
+async def test_an_exhausted_monthly_cap_drafts_nothing_and_sends_nothing(
     client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
 ) -> None:
     company_id, _ = await add_company(tenant, "Insight")
@@ -235,6 +236,7 @@ async def test_an_exhausted_monthly_cap_degrades_to_the_grammar(
         True,
     )
     assert result["unresolved"] == [{"text": FIRST, "reason": "model_unavailable"}]
+    assert result["outcome"] == "not_understood" and result["drafts"] == []
     assert fake_llm.requests == []
     assert (
         await rows("SELECT * FROM ontaix.llm_call WHERE tenant_id = :t", t=tenant.tenant_id) == []
@@ -257,6 +259,7 @@ async def test_the_callers_hourly_llm_budget_is_shared_through_the_database(
 
     assert used["llmOutcome"] == "used"
     assert (limited["llmOutcome"], limited["degraded"]) == ("rate_limited", True)
+    assert limited["drafts"] == []
     [window] = await rows(
         "SELECT budget, spent FROM ontaix.rate_budget_window WHERE tenant_id = :t"
         " AND budget = 'llm'",
@@ -283,6 +286,7 @@ async def test_timeouts_and_provider_errors_answer_200_and_release_the_reservati
     for result in (timed_out, failed):
         assert result["extractor"] == "rules"
         assert result["unresolved"] == [{"text": FIRST, "reason": "model_unavailable"}]
+        assert result["outcome"] == "not_understood" and result["drafts"] == []
     calls = await rows(
         "SELECT outcome, input_tokens, output_tokens, latency_ms FROM ontaix.llm_call"
         " WHERE tenant_id = :t ORDER BY occurred_at",
@@ -482,13 +486,14 @@ async def test_a_spec_intent_citing_another_company_is_invalid(
 async def test_a_sentence_the_grammar_reads_partly_takes_the_model_answer(
     client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
 ) -> None:
-    await configure(tenant)
-    fake_llm.answer(LlmProviderError("status", input_tokens=0, output_tokens=0, cost_eur=0))
+    # The grammar seeds the concepts with the step off.
+    await configure(tenant, llm_monthly_token_cap=0)
     seeded = await teach(client, tenant, tenant.company_id, "A plant has machines")
     created = await client.post(
         "/proposals/batch", json={"drafts": seeded["drafts"]}, headers=tenant.builder.headers
     )
     assert created.status_code == 202, created.text
+    await configure(tenant)
 
     def plant_handle() -> str:
         return next(c["handle"] for c in fake_llm.context()["candidates"] if c["label"] == "Plant")

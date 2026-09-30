@@ -25,6 +25,7 @@ from app.clients import db_client
 from app.main import API_PREFIX, app
 from tests.auth_helpers import create_member, group_ids, ready_member, signed_in
 from tests.conftest import AccountFixture, Browser, TenantFixture, make_tenant
+from tests.test_usage_learning import batch, decide, parse
 
 EXCLUDED_PREFIXES = (f"{API_PREFIX}/auth", f"{API_PREFIX}/admin", f"{API_PREFIX}/healthz")
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
@@ -39,11 +40,14 @@ PLATFORM_ROLE_MODULES = {
     "app/services/document_extraction_runner_service.py",
     "app/services/document_extraction_service.py",
     "app/services/import_purge_service.py",
+    "app/services/learning_service.py",
     "app/services/llm_usage_service.py",
     "app/services/rate_limit_service.py",
     "app/services/teach_session_service.py",
 }
 PLATFORM_NAMES = {"platform_session", "get_platform_session_factory", "platform_session_dependency"}
+# The usage-learning tables, every one of them scoped by tenant_id like the others.
+LEARNING_TABLES = ("teach_parse", "proposal_learning_source", "learning_example", "company_alias")
 
 
 @dataclass(frozen=True)
@@ -311,6 +315,46 @@ async def test_the_application_role_cannot_touch_sign_in_or_platform_tables(
     with pytest.raises(ProgrammingError, match="permission denied"):
         async with db_client.tenant_session(tenant.tenant_id) as s:
             await s.execute(text(statement))
+
+
+async def test_the_learning_of_b_is_invisible_to_a(
+    client: httpx.AsyncClient, tenant: TenantFixture, organization_b: OrganizationB
+) -> None:
+    """B's usage learning - its parse records, proposal sources, lessons and aliases - is read
+    by nobody in A: neither through A's organization session nor through A's API."""
+    b = organization_b.tenant
+    taught = await parse(client, b, b.owner, "A plant has customers")
+    for proposal in await batch(client, b.owner, taught):
+        await decide(client, b.owner, proposal["id"])
+    async with db_client.platform_session() as s:
+        await s.execute(
+            text(
+                "INSERT INTO ontaix.company_alias"
+                " (tenant_id, company_id, heard, meant, actor_user_id)"
+                " VALUES (:t, :c, 'Custommer', 'Customer', :u)"
+            ),
+            {"t": b.tenant_id, "c": b.company_id, "u": b.owner.user_id},
+        )
+        await s.commit()
+        for table in LEARNING_TABLES:
+            rows = (
+                await s.execute(
+                    text(f"SELECT count(*) FROM ontaix.{table} WHERE tenant_id = :b"),
+                    {"b": b.tenant_id},
+                )
+            ).scalar_one()
+            assert rows >= 1, table
+    async with db_client.tenant_session(tenant.tenant_id) as s:
+        for table in LEARNING_TABLES:
+            seen = (
+                await s.execute(
+                    text(f"SELECT count(*) FROM ontaix.{table} WHERE tenant_id = :b"),
+                    {"b": b.tenant_id},
+                )
+            ).scalar_one()
+            assert seen == 0, table
+    read = await client.get(f"/companies/{b.company_id}/learning", headers=tenant.admin.headers)
+    assert read.status_code == 404, read.text
 
 
 def test_only_the_listed_modules_use_the_platform_role() -> None:
