@@ -243,6 +243,37 @@ Amended under decision row 136. When the model step is configured and on (a prov
 
 The Entra ID token cache shared by the Foundry clients serves a held token until its real expiry when a refresh fails, retries a failed credential call once after 1 s, and gives the Azure CLI 30 s per run.
 
+### Streamed Parse
+
+Amended under decision row 138. `POST /teach/parse/stream` is the streamed variant of `POST /teach/parse`: the same request, gates, charges, refusals, model call, budgets, cost record, timeout and bounded retries, answered as newline-delimited JSON (`application/x-ndjson`). Its purpose is speed only: the drafts, captions and outcomes are those of the plain endpoint, because the plain endpoint's code decides them.
+
+```mermaid
+sequenceDiagram
+    participant S as Studio
+    participant A as API
+    participant M as Model
+    S->>A: POST /teach/parse/stream
+    A->>A: gates, charges, grammar (refusals answer here, as for /teach/parse)
+    A->>M: the same call, streamed
+    loop each intent the answer closes
+        M-->>A: answer text so far
+        A->>A: the answer so far through the whole-answer checks
+        A-->>S: draft line for each new draft
+        S->>S: the draft's cell divides off its parent
+    end
+    A->>A: the whole answer through the same checks
+    A-->>S: retract line (sent drafts the result does not hold)
+    A-->>S: result line (the body of /teach/parse)
+    S->>A: POST /proposals/batch with the result's drafts
+    A-->>S: proposal.created takes each early cell over
+```
+
+- Reading the answer as it arrives. The provider adapters stream the same request (Chat Completions with `stream` and the usage in the last chunk; the Messages API stream for Claude) and return the same answer, token counts and refusals as the whole call. Each time the text received so far closes another intent (or segment), the closed intents, segments and phrases form an answer of their own, mapped back to the validated shape exactly as the whole answer is, and read by the same function that reads a whole answer: schema, caps, segment repair, quote location, grounding, candidate and company checks, roles, attributes, on a drafter of its own. A part that fails a check sends nothing. A retried attempt starts its text again, and the reading starts again with it.
+- What is sent. The part's step is mapped to a result with the same code as a final answer (the grammar's drafts first when only `partly_understood` triggered the step), and each draft of it not sent yet goes out once as a `draft` line with its note.
+- The final answer decides. When the stream ends, the whole answer is read once more, exactly as without streaming, and the result is built by the plain endpoint's code. Sent drafts the result does not hold are named in one `retract` line; when the whole answer is refused, that is every sent draft, and the Studio takes their cells back. The `result` line carries the plain endpoint's body. A draft whose note the whole answer completes (a stated count that differs from the list) is sent early with its partial note; the result carries the full one.
+- Nothing else moves. A part is never proposed and never written: the client submits the result's drafts as before. Budgets are charged once per parse, the reservation is settled and one cost row written whatever happens, and the session turns are stored at the end; the parse runs to its end when the caller goes away. A failure after the stream began ends with an `error` line (`unavailable`) instead of a `5xx`.
+- The Studio. Typed and spoken sentences use the stream; document imports keep `POST /teach/parse`. A streamed concept or spec draft makes its birth draws when it arrives - the draws `withSeed` makes, in the same order - and its cell divides off its parent at once, pending, as its proposal's event would draw it. The final result reconciles: a final draft equal to a streamed one is proposed with the streamed seed, and its `proposal.created` event takes the early cell over with the proposal's ids instead of drawing another; a retracted draft's cell, and any early cell no proposal took over once the batch settles, fades out. Captions, `Processing` and the spoken-sentence queue are unchanged: the next spoken sentence is sent once the previous one is proposed.
+
 ## Consequences
 
 - The owner's natural sentences produce drafts; the grammar stays the verbatim port and the screenshot suite is unaffected, because the Studio renders the same drafts and captions.

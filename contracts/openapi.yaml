@@ -1631,6 +1631,77 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
+  /teach/parse/stream:
+    post:
+      tags: [Teach]
+      summary: Parse a sentence with its drafts streamed as the model answers
+      description: |
+        The streamed variant of `POST /teach/parse` (ADR 0008, Streamed Parse; decision row 138). Same request body, same permission, same gates, charges and refusals, which answer before the stream begins, with the same status codes and `Problem` bodies as `POST /teach/parse`. The parse itself is the same: the same model call on the same profile, the same budgets (one parse unit per started 400 characters, one `llm` unit, the same token reservation and the same `llm_call` cost row), the same timeout and the same bounded retries of a `429` or `503` from the provider. Only the provider's answer is read as it arrives.
+
+        The response is `200` with `Content-Type: application/x-ndjson` and `Cache-Control: no-store`: one JSON object per line, each ended by a line feed, in this order:
+
+        - `draft` lines, zero or more. Each time the model's answer closes another intent, the answer so far goes through the checks and grounding of a whole answer and is mapped to the drafts the result would hold if the answer ended there; each draft not sent yet is sent once, with the next `index` (from 0) and its `DraftNote`. A part of the answer that fails a check sends nothing; later parts may still send drafts.
+        - one `retract` line, only when some sent draft is not in the final result: `indexes` names each such draft. When the whole answer is refused (`llmOutcome` `invalid_output`), every sent draft is named. A client removes what it showed for them.
+        - one `result` line, always last on success: `result` is exactly the body `POST /teach/parse` answers for the same request and the same model answer. A draft of the result equal to a sent draft that was not retracted is that draft; the result's own order and notes are the ones to submit.
+        - or, in place of the `result` line, one `error` line when the parse fails after the stream began: `problem` is a `Problem` with code `unavailable` (status `503`); nothing was written, and the client teaches the sentence again.
+
+        A sentence that needs no model step, or whose model step does not run (off, out of budget, rate limited), streams its `result` line alone. The parse runs to its end when the client goes away, so its budget, cost record and teach session turns are those of the plain endpoint. `POST /teach/parse` is unchanged.
+      operationId: parseTeachStream
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [companyId]
+              oneOf:
+                - required: [text]
+                - required: [importRef]
+              properties:
+                companyId:
+                  type: string
+                  format: uuid
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+                  description: As `POST /teach/parse`.
+                origin:
+                  $ref: '#/components/schemas/InputOrigin'
+                importRef:
+                  $ref: '#/components/schemas/ImportRef'
+                sessionId:
+                  type: string
+                  format: uuid
+                  description: As `POST /teach/parse`.
+      responses:
+        '410':
+          $ref: '#/components/responses/Gone'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '200':
+          description: The parse as newline-delimited JSON events, each line one `TeachStreamEvent`.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/TeachStreamEvent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
   /speech/token:
     post:
       tags: [Teach]
@@ -4530,6 +4601,70 @@ components:
           items:
             $ref: '#/components/schemas/LineageNode'
 
+    TeachStreamEvent:
+      description: One line of `POST /teach/parse/stream`, told apart by `type`.
+      oneOf:
+        - $ref: '#/components/schemas/TeachDraftEvent'
+        - $ref: '#/components/schemas/TeachRetractEvent'
+        - $ref: '#/components/schemas/TeachResultEvent'
+        - $ref: '#/components/schemas/TeachErrorEvent'
+      discriminator:
+        propertyName: type
+        mapping:
+          draft: '#/components/schemas/TeachDraftEvent'
+          retract: '#/components/schemas/TeachRetractEvent'
+          result: '#/components/schemas/TeachResultEvent'
+          error: '#/components/schemas/TeachErrorEvent'
+    TeachDraftEvent:
+      type: object
+      description: A draft the valid part of the model's answer received so far gives, sent once, as soon as it is known. Advisory until the `result` line; never submitted on its own.
+      required: [type, index, draft, note]
+      properties:
+        type:
+          type: string
+          enum: [draft]
+        index:
+          type: integer
+          minimum: 0
+          description: The stream's count of drafts, from 0, in the order they are sent.
+        draft:
+          $ref: '#/components/schemas/ProposalDraft'
+        note:
+          $ref: '#/components/schemas/DraftNote'
+    TeachRetractEvent:
+      type: object
+      description: The sent drafts the final result does not hold - every one of them when the whole answer is refused. Sent once, just before the `result` line, only when it names at least one draft.
+      required: [type, indexes]
+      properties:
+        type:
+          type: string
+          enum: [retract]
+        indexes:
+          type: array
+          minItems: 1
+          items:
+            type: integer
+            minimum: 0
+    TeachResultEvent:
+      type: object
+      description: The last line of a parse; `result` is the body `POST /teach/parse` answers for the same request and model answer.
+      required: [type, result]
+      properties:
+        type:
+          type: string
+          enum: [result]
+        result:
+          $ref: '#/components/schemas/TeachResult'
+    TeachErrorEvent:
+      type: object
+      description: The last line of a parse that failed after its stream began, in place of the `result` line. `problem.code` is `unavailable`; nothing was written.
+      required: [type, problem]
+      properties:
+        type:
+          type: string
+          enum: [error]
+        problem:
+          $ref: '#/components/schemas/Problem'
     TeachResult:
       type: object
       required: [outcome, domainKey, intents, drafts, caption, origin, originDetail, extractor, degraded, llmOutcome, draftNotes, unresolved]

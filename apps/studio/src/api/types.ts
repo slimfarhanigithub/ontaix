@@ -605,6 +605,30 @@ export interface TeachResult {
   segments: SourceSegment[];
 }
 
+/** A line of `POST /teach/parse/stream`: a draft known early, the drafts the final result takes back, the result, or a failure. */
+export type TeachStreamEvent =
+  | TeachDraftEvent
+  | TeachRetractEvent
+  | { type: 'result'; result: TeachResult }
+  | { type: 'error'; problem: Problem };
+
+/** A draft the valid part of the model's answer gives, sent once; `index` counts the stream's drafts from 0. */
+export interface TeachDraftEvent {
+  type: 'draft';
+  index: number;
+  draft: ProposalDraft;
+  note: DraftNote;
+}
+
+/** Streamed drafts the final result does not hold, all of them when the whole answer is refused. */
+export interface TeachRetractEvent {
+  type: 'retract';
+  indexes: number[];
+}
+
+/** Receives a streamed parse's draft and retract lines as they arrive. */
+export type TeachStreamListener = (event: TeachDraftEvent | TeachRetractEvent) => void;
+
 /** `POST /speech/token`: a short-lived Azure AI Speech token for the microphone. */
 export interface SpeechToken {
   /** The Speech resource's STS token for the Speech SDK, valid about 10 minutes; held in memory only. */

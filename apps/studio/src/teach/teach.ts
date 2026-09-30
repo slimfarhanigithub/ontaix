@@ -2,11 +2,23 @@
  * The three ways content enters the model: text typed in the teach bar, sentences spoken into the
  * teach bar microphone, and a document uploaded to the API. Each sentence goes through
  * `POST /teach/parse` and the drafts it returns are proposed; nothing is written without approval.
+ * Typed and spoken sentences stream the parse: each concept a draft proposes divides off its parent
+ * as soon as the draft is known, and the proposal the final result makes takes the cell over.
  * Captions and pacing follow reference/ontaix-studio-reference.html lines 864-903 (`teach`,
  * `importDocument`) on its import path, where no sentence is intercepted.
  */
 import { api } from '../api/client';
-import { ApiError, type ImportMediaType, type ImportRef, type InputOrigin, type ProposalDraft, type TeachRequest, type TeachResult } from '../api/types';
+import {
+  ApiError,
+  type ImportMediaType,
+  type ImportRef,
+  type InputOrigin,
+  type ProposalDraft,
+  type TeachDraftEvent,
+  type TeachRequest,
+  type TeachResult,
+  type TeachRetractEvent,
+} from '../api/types';
 import { drawBirth } from '../canvas/division';
 import { bySid } from '../canvas/state';
 import type { Node } from '../canvas/types';
@@ -67,6 +79,82 @@ export function withSeed<D extends ProposalDraft>(draft: D): D {
   return draft;
 }
 
+/** A streamed draft as it arrived, and what became of it. */
+interface EarlyDraft {
+  key: string;
+  /** The draft with the seed drawn for it when it arrived. */
+  seeded: ProposalDraft;
+  node: Node | null;
+  retracted: boolean;
+  used: boolean;
+}
+
+/**
+ * The drafts one streamed parse sent before its result. Each draft's birth draws are made when it
+ * arrives, in arrival order, exactly as `withSeed` makes them, and a concept's cell is drawn at once.
+ * The final result reconciles them: a final draft equal to an early one is proposed with the early
+ * seed and its proposal takes the early cell over; a retracted draft, and any early cell no proposal
+ * took over once the batch settles, fades out.
+ */
+export class EarlyDrafts {
+  private drafts: EarlyDraft[] = [];
+  private closed = false;
+
+  /** Takes one draft or retract line of the stream; after `settle`, lines are ignored. */
+  readonly take = (event: TeachDraftEvent | TeachRetractEvent): void => {
+    if (this.closed) return;
+    if (event.type === 'retract') {
+      for (const i of event.indexes) {
+        const early = this.drafts[i];
+        if (!early || early.retracted) continue;
+        early.retracted = true;
+        this.letGo(early);
+      }
+      return;
+    }
+    const draft = event.draft;
+    let seeded: ProposalDraft = draft;
+    let node: Node | null = null;
+    if (draft.type === 'concept' || draft.type === 'spec') {
+      const draws = drawBirth();
+      seeded = { ...draft, seed: draws.link };
+      node = store.drawEarly(draft, draws);
+      // A cell that could not be drawn yet is born from its proposal's event with the same draws.
+      if (!node) store.rememberBirth(draft.companyId, draft.label, draws);
+    } else seeded = withSeed(draft);
+    this.drafts[event.index] = { key: draftKey(draft), seeded, node, retracted: false, used: false };
+  };
+
+  /** The final drafts, seeded: a draft streamed earlier keeps its seed, any other is seeded now. */
+  seeded(drafts: ProposalDraft[]): ProposalDraft[] {
+    return drafts.map((draft) => {
+      const key = draftKey(draft);
+      const early = this.drafts.find((e) => e && !e.used && !e.retracted && e.key === key);
+      if (!early) return withSeed(draft);
+      early.used = true;
+      return early.seeded;
+    });
+  }
+
+  /** Ends the parse: early drafts the final result did not take fade out, and later lines are ignored. */
+  settle(): void {
+    this.closed = true;
+    for (const early of this.drafts) if (early) this.letGo(early);
+  }
+
+  private letGo(early: EarlyDraft): void {
+    if (early.node) store.dropEarly(early.node);
+    else if (!early.used && (early.seeded.type === 'concept' || early.seeded.type === 'spec'))
+      store.forgetBirth(early.seeded.companyId, early.seeded.label);
+  }
+}
+
+/** A draft compared as the API sent it: its fields in name order, the seed left out. */
+function draftKey(draft: ProposalDraft): string {
+  const { seed: _, ...rest } = draft as ProposalDraft & { seed?: number };
+  return JSON.stringify(Object.fromEntries(Object.entries(rest).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))));
+}
+
 /**
  * Teaches the active company one typed or spoken sentence. Resolves true once the sentence is
  * understood, wholly or partly, and false when it is not understood, the parse or its proposals
@@ -78,7 +166,7 @@ export async function teach(text: string, origin: InputOrigin = 'text'): Promise
   if (!text || !co || !co.sid) return false;
   const end = beginProcessing();
   try {
-    return await parseAndPropose({ companyId: co.sid, text, origin, sessionId: teachSessionId(co.sid) });
+    return await streamAndPropose({ companyId: co.sid, text, origin, sessionId: teachSessionId(co.sid) });
   } finally {
     end();
   }
@@ -143,9 +231,11 @@ export function speechStream(): SpeechStream {
 async function teachSpoken(request: TeachRequest): Promise<void> {
   for (let attempt = 0; ; attempt++) {
     let result: TeachResult;
+    const early = new EarlyDrafts();
     try {
-      result = await withTimeout(api.teachParse(request), SPEECH_PARSE_TIMEOUT_MS);
+      result = await withTimeout(api.teachParse(request, early.take), SPEECH_PARSE_TIMEOUT_MS);
     } catch (err) {
+      early.settle();
       if (!(err instanceof ApiError && err.status === 429)) {
         showSpeechRefusal(err);
         return;
@@ -157,7 +247,7 @@ async function teachSpoken(request: TeachRequest): Promise<void> {
       continue;
     }
     speechRateLimited = false;
-    await propose(result);
+    await propose(result, early);
     return;
   }
 }
@@ -205,6 +295,20 @@ async function parseAndPropose(request: TeachRequest): Promise<boolean> {
   return result ? propose(result) : false;
 }
 
+/** Parses one sentence with its drafts streamed, and proposes them; true as for `parseAndPropose`. */
+async function streamAndPropose(request: TeachRequest): Promise<boolean> {
+  const early = new EarlyDrafts();
+  let result: TeachResult;
+  try {
+    result = await api.teachParse(request, early.take);
+  } catch (err) {
+    early.settle();
+    store.refused(err);
+    return false;
+  }
+  return propose(result, early);
+}
+
 /** Parses one sentence; a refusal is shown and yields null. */
 async function parse(request: TeachRequest): Promise<TeachResult | null> {
   try {
@@ -217,11 +321,16 @@ async function parse(request: TeachRequest): Promise<TeachResult | null> {
 
 /**
  * Proposes a parse's drafts and captions its outcome; true when the sentence is understood and
- * its batch, if any, is accepted.
+ * its batch, if any, is accepted. `early` holds the drafts the parse streamed before its result.
  */
-async function propose(result: TeachResult): Promise<boolean> {
+async function propose(result: TeachResult, early: EarlyDrafts = new EarlyDrafts()): Promise<boolean> {
   // All drafts of one parse leave as one all-or-nothing batch.
-  const accepted = result.drafts.length ? await submitBatch(result.drafts.map(withSeed)) : true;
+  let accepted: boolean;
+  try {
+    accepted = result.drafts.length ? await submitBatch(early.seeded(result.drafts)) : true;
+  } finally {
+    early.settle();
+  }
   if (result.outcome === 'understood') {
     const n = result.statements?.length ?? result.drafts.length;
     store.caption(`Understood ${n === 1 ? 'one statement' : n + ' statements'}`, result.caption);

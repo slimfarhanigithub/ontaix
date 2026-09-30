@@ -12,6 +12,11 @@ speech draft nothing: the result is `not_understood`, marked `degraded`, with ev
 listed as unresolved. Document sentences, and every origin while the step is off, keep the
 grammar's result, marked `degraded` when the step was needed. The sentence is then stored as a
 turn of the caller's teach session.
+
+A parse runs in two parts: `prepare` applies the gates and charges, so every refusal is raised
+before any answer begins, and runs the grammar; `PreparedParse.finish` runs the model step and
+stores the turns. The streamed variant passes a listener to `finish`, which receives the drafts
+of each valid part of the model's answer as it arrives; the result is the same either way.
 """
 
 from __future__ import annotations
@@ -19,7 +24,8 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,12 +34,14 @@ from app.auth import Caller
 from app.config import LlmProfile
 from app.models.api.origin import ImportRef
 from app.models.api.teach import (
+    DraftNote,
     SourceSegment,
     SourceSpan,
     TeachRequest,
     TeachResult,
     UnresolvedPhrase,
 )
+from app.repositories.teach_session_turn_repository import SessionKey
 from app.services import import_service, teach_extraction_service, teach_session_service
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.rate_limit_service import Budget, charge
@@ -74,6 +82,11 @@ UNAVAILABLE = frozenset({"rate_limited", "budget_exhausted", "timeout", "provide
 DOCUMENT_CONTEXT_SENTENCES = 2
 
 
+# Receives the drafts, with their notes, that the part of the model's answer received so far
+# gives; see `PreparedParse.finish`.
+DraftListener = Callable[[list[dict[str, Any]], list[DraftNote]], Awaitable[None]]
+
+
 @dataclass(frozen=True)
 class _Source:
     text: str
@@ -85,7 +98,114 @@ class _Source:
     profile: LlmProfile = "live"
 
 
+@dataclass
+class PreparedParse:
+    """A parse whose gates, charges and grammar have run, so every refusal of the request has
+    been raised; `finish` runs the rest - the model step, when one is needed - and stores the
+    sentence as turns of the caller's teach session. It holds no database session."""
+
+    caller: Caller
+    source: _Source
+    key: SessionKey | None
+    sentence: str
+    started: float
+    view_ms: int
+    # The result and what it kept, when they are known without the model step.
+    ready: tuple[TeachResult, Assembled] | None = None
+    drafter: Drafter | None = None
+    dom_key: str | None = None
+    text: str = ""
+    grammar: GrammarPlan | None = None
+    triggers: set = field(default_factory=set)
+    model_first: bool = False
+    step_on: bool = False
+
+    async def finish(self, on_drafts: DraftListener | None = None) -> TeachResult:
+        """The parse result. With `on_drafts` the model's answer is streamed, and each part of
+        it that reads validly is mapped to the drafts the result would hold if the answer ended
+        there, which go to `on_drafts`; the result is the same with or without it."""
+        if self.ready is not None:
+            result, kept = self.ready
+        else:
+            result, kept = await self._with_model_step(on_drafts)
+        turns = _turns(self.source, result, kept)
+        await teach_session_service.store_turns(self.key, result.extractor, turns)
+        logger.debug(
+            "teach parse (%s, %s): view %d ms, total %d ms",
+            result.extractor,
+            result.llm_outcome,
+            self.view_ms,
+            int((time.perf_counter() - self.started) * 1000),
+        )
+        return result
+
+    async def _with_model_step(
+        self, on_drafts: DraftListener | None
+    ) -> tuple[TeachResult, Assembled]:
+        assert self.drafter is not None
+        source, sentence, drafter = self.source, self.sentence, self.drafter
+        dom_key, text, triggers = self.dom_key, self.text, self.triggers
+        speech = source.reading.speech
+        whole = [(0, len(sentence))]
+        turns = await teach_session_service.recent_turns(self.key)
+        on_partial = None
+        if on_drafts is not None:
+            listener = on_drafts
+
+            async def on_partial(step: teach_extraction_service.ModelStep) -> None:
+                result, _ = self._used(step)
+                await listener(result.drafts, result.draft_notes)
+
+        step = await teach_extraction_service.run(
+            self.caller,
+            drafter,
+            sentence,
+            text,
+            turns,
+            source.reading,
+            profile=source.profile,
+            on_partial=on_partial,
+        )
+        if step.outcome == "used":
+            return self._used(step)
+        if speech:
+            grammar, segments = _grammar_by_segment(drafter, sentence)
+        else:
+            grammar, segments = self.grammar or plan_grammar(drafter, text), whole
+        refused = source.reading.mode != "document" and (
+            step.outcome == "invalid_output" or (self.step_on and step.outcome in UNAVAILABLE)
+        )
+        if refused:
+            # The model is on and its answer was refused, or it did not answer: typed and
+            # spoken text draft nothing in its place, so word runs never become labels, and
+            # every segment is listed with the reason. The owner can send the sentence again.
+            grammar = GrammarPlan([], "not_understood", NOT_UNDERSTOOD, grammar.beyond)
+        if not refused and not triggers and not source.reading.model_first:
+            # Typed text the grammar reads whole: its result stands as it would with the
+            # step off, and the outcome says why the model did not answer.
+            kept = assemble(grammar.planned, sentence)
+            caption = grammar.caption
+            return _result("rules", step.outcome, kept, dom_key, caption, source, whole), kept
+        return _degraded(grammar, step, segments, sentence, dom_key, source)
+
+    def _used(self, step: teach_extraction_service.ModelStep) -> tuple[TeachResult, Assembled]:
+        """The result of a model step that answered validly, whole or in part."""
+        replace = self.model_first or replaces_grammar(self.triggers)
+        segments = step.segments or [(0, len(self.sentence))]
+        return _with_model(
+            self.grammar, step, replace, self.sentence, self.dom_key, self.source, segments
+        )
+
+
 async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> TeachResult:
+    prepared = await prepare(session, caller, body)
+    return await prepared.finish()
+
+
+async def prepare(session: AsyncSession, caller: Caller, body: TeachRequest) -> PreparedParse:
+    """Everything of a parse up to the model step: the gates and charges, which raise the
+    request's refusals, and the grammar. The request's own transaction is committed when the
+    model step follows, so it holds no lock during the model call."""
     started = time.perf_counter()
     view = await load_view(session, caller.tenant_id)
     view_ms = int((time.perf_counter() - started) * 1000)
@@ -101,16 +221,15 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
         else None
     )
     sentence = source.text.strip()
-    speech = source.reading.speech
+    prepared = PreparedParse(caller, source, key, sentence, started, view_ms)
     root = view.root_of(company.id)
     if root is None:
         empty = Assembled([], [], [], [], [], [], [])
         result = _result("rules", "not_triggered", empty, None, NOT_UNDERSTOOD, source, [])
-        await teach_session_service.store_turn(key, sentence, "rules", [], [])
-        return result
+        prepared.ready = (result, empty)
+        return prepared
     dom_key, text = domain_prefix(sentence)
     drafter = Drafter(view, company.id, root, dom_key, source.draft_extras)
-    whole = [(0, len(sentence))]
     grammar: GrammarPlan | None = None
     triggers: set = set()
     # Every origin goes to the model first while the step is on; typed text keeps the grammar
@@ -122,49 +241,16 @@ async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> Te
         triggers = fallback_triggers(text, grammar.outcome)
     if grammar is not None and not triggers and not model_first:
         kept = assemble(grammar.planned, sentence)
+        whole = [(0, len(sentence))]
         caption = grammar.caption
         result = _result("rules", "not_triggered", kept, dom_key, caption, source, whole)
-    else:
-        # The request's own transaction ends here, so it holds no lock during the model call.
-        await session.commit()
-        turns = await teach_session_service.recent_turns(key)
-        step = await teach_extraction_service.run(
-            caller, drafter, sentence, text, turns, source.reading, profile=source.profile
-        )
-        if step.outcome != "used":
-            if speech:
-                grammar, segments = _grammar_by_segment(drafter, sentence)
-            else:
-                grammar, segments = grammar or plan_grammar(drafter, text), whole
-            refused = source.reading.mode != "document" and (
-                step.outcome == "invalid_output" or (step_on and step.outcome in UNAVAILABLE)
-            )
-            if refused:
-                # The model is on and its answer was refused, or it did not answer: typed and
-                # spoken text draft nothing in its place, so word runs never become labels, and
-                # every segment is listed with the reason. The owner can send the sentence again.
-                grammar = GrammarPlan([], "not_understood", NOT_UNDERSTOOD, grammar.beyond)
-            if not refused and not triggers and not source.reading.model_first:
-                # Typed text the grammar reads whole: its result stands as it would with the
-                # step off, and the outcome says why the model did not answer.
-                kept = assemble(grammar.planned, sentence)
-                caption = grammar.caption
-                result = _result("rules", step.outcome, kept, dom_key, caption, source, whole)
-            else:
-                result, kept = _degraded(grammar, step, segments, sentence, dom_key, source)
-        else:
-            replace = model_first or replaces_grammar(triggers)
-            segments = step.segments or whole
-            result, kept = _with_model(grammar, step, replace, sentence, dom_key, source, segments)
-    await teach_session_service.store_turns(key, result.extractor, _turns(source, result, kept))
-    logger.debug(
-        "teach parse (%s, %s): view %d ms, total %d ms",
-        result.extractor,
-        result.llm_outcome,
-        view_ms,
-        int((time.perf_counter() - started) * 1000),
-    )
-    return result
+        prepared.ready = (result, kept)
+        return prepared
+    await session.commit()
+    prepared.drafter, prepared.dom_key, prepared.text = drafter, dom_key, text
+    prepared.grammar, prepared.triggers, prepared.model_first = grammar, triggers, model_first
+    prepared.step_on = step_on
+    return prepared
 
 
 async def _source(

@@ -6,8 +6,8 @@ name. Authentication is keyless: an Entra ID bearer token for `https://ai.azure.
 from the process-wide token cache, which calls `DefaultAzureCredential` only when it holds no
 valid token. Each client keeps one HTTP connection pool whose idle connections live for
 `KEEPALIVE_SECONDS`, so a call made a minute after the last one skips DNS, TCP and TLS; `warm`
-acquires the token and opens a connection without a model call. The call itself, its
-structured output, prompt caching, timeout, zero SDK retries with bounded 429 and 503
+acquires the token and opens a connection without a model call. The call itself, whole or
+streamed, its structured output, prompt caching, timeout, zero SDK retries with bounded 429 and 503
 retries, and token accounting (thinking tokens
 counted as output) are those of the first-party Anthropic client.
 
@@ -28,9 +28,9 @@ from typing import Any
 import anthropic
 import httpx2
 
-from app.clients.anthropic_llm_client import complete_messages
+from app.clients.anthropic_llm_client import answer_text, complete_messages, stream_messages
 from app.clients.entra_token_client import shared_token_cache
-from app.clients.llm_client import LlmAnswer, LlmRequest, estimate_tokens
+from app.clients.llm_client import LlmAnswer, LlmRequest, TextListener, estimate_tokens
 from app.clients.llm_log_redaction import protect_loggers
 from app.config import ModelPrice, ReasoningEffort
 
@@ -93,6 +93,14 @@ class AnthropicFoundryLlmClient:
         return await complete_messages(
             self._client, self.model, self._price, request, self._options
         )
+
+    async def stream(self, request: LlmRequest, on_text: TextListener) -> LlmAnswer:
+        return await stream_messages(
+            self._client, self.model, self._price, request, self._options, on_text
+        )
+
+    def answer_text(self, raw: str, request: LlmRequest) -> str:
+        return answer_text(raw, request)
 
     async def warm(self) -> None:
         """Acquires the Entra ID token and opens a TLS connection to the Foundry host with an
