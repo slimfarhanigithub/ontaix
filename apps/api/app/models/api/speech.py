@@ -16,7 +16,8 @@ class SpeechTokenRequest(ApiModel):
 
 
 class SpeechToken(ApiModel):
-    """`aad#<resource id>#<access token>` for the Speech SDK; a secret while it lives."""
+    """The Speech resource's STS token for `SpeechConfig.fromAuthorizationToken(token, region)`,
+    valid about 10 minutes; a secret while it lives."""
 
     token: str = Field(min_length=1, max_length=8192, repr=False)
     region: SpeechRegion
