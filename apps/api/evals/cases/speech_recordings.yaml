@@ -9,14 +9,14 @@
 #   speech with fillers, back-references and multi-level drill-down. Their labels are the
 #   benchmark's class names; the gold follows the tree the narration states, with the
 #   benchmark's own property names among the accepted verbs.
-# - The learn/test assignment of every case is in app/ai/examples/split.json: the owner's
-#   recording and the org, ssn and valueflows narrations are TEST; the goodrelations, prov-o and
-#   dcat narrations and the two other recordings are LEARN.
+# - The learn/test assignment of every case is in app/ai/examples/split.json: the org, ssn and
+#   valueflows narrations are TEST; the owner's recording, the goodrelations, prov-o and dcat
+#   narrations and the two other recordings are LEARN.
 #
 # All narration text is original, written for Ontaix on 2026-09-30.
 
 cases:
-  # ---------------------------------------------------------------- TEST
+  # ---------------------------------------------------------------- LEARN: the owner's recording
   - id: en-speech-owner-financial-services
     kind: speech
     company: Insight
@@ -50,6 +50,7 @@ cases:
         - {concept: Advisory, value: [per day, daily]}
     optional: [Customer]
 
+  # ---------------------------------------------------------------- TEST
   - id: en-speech-narration-valueflows-processes
     kind: speech
     company: ValueFlows

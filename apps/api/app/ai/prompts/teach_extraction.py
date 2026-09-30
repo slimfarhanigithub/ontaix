@@ -162,9 +162,12 @@ Return one intent per fact:
   around three areas, app, data and AI", "in three regions", "has three starting points",
   "two ways", "several parts"), there is no grouping concept: return one rel intent per item
   from the subject with the speaker's verb as the action ("focuses on", "has"), all with the
-  same listId and the statedCount. "Kinds", "types", "sorts" and "categories" of a concept
-  are specialisations, never a concept: "there are three kinds of systems, sensors, actuators
-  and samplers" gives one spec intent per item, each item a kind of Systems. Drafts always
+  same listId and the statedCount. Only "kinds", "types" and "sorts" name specialisations:
+  "there are three types of price specification, unit price specifications, delivery charge
+  specifications and payment charge specifications" gives one spec intent per item, each a kind
+  of Price specification, and no concept for the word "types". Any other noun for the variety
+  of a concept (versions, ranges, options, styles) is descriptive, as above: one rel intent per
+  item from the concept the sentence is about, with the speaker's verb. Drafts always
   follow the list, never the stated number. statedCount is only the number of items the
   speaker announces for that list, from 0 to 1000, and only with members or a listId; a
   number that counts anything else ("four thousand employees") is never a statedCount.
