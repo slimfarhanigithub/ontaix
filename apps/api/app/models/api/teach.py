@@ -98,8 +98,10 @@ class UnresolvedPhrase(ApiModel):
 
 class TeachResult(ApiModel):
     """`drafts` are in the contract's draft shape, ready for `POST /proposals/batch`;
-    `draft_notes` has one entry per draft, in the same order."""
+    `draft_notes` has one entry per draft, in the same order. `parse_id` is set when the parse
+    was recorded for usage learning; the client sends it back with the batch."""
 
+    parse_id: uuid.UUID | None = None
     outcome: Literal["understood", "partly_understood", "not_understood"]
     domain_key: str | None
     intents: list[Intent] = Field(max_length=150)

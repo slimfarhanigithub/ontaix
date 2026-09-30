@@ -327,7 +327,7 @@ async function propose(result: TeachResult, early: EarlyDrafts = new EarlyDrafts
   // All drafts of one parse leave as one all-or-nothing batch.
   let accepted: boolean;
   try {
-    accepted = result.drafts.length ? await submitBatch(early.seeded(result.drafts)) : true;
+    accepted = result.drafts.length ? await submitBatch(early.seeded(result.drafts), result.parseId ?? null) : true;
   } finally {
     early.settle();
   }
@@ -359,10 +359,11 @@ const DUPLICATE_CODES = new Set(['duplicate_label', 'duplicate_relation']);
  * after its `Retry-After` when that is short, never split. A batch refused because a draft
  * restates a fact already in the model is sent once more without the drafts the canvas shows
  * as already there, so the new facts of the parse are still proposed; a toast names what was
- * left out. Resolves false when the batch ends refused. */
-async function submitBatch(drafts: ProposalDraft[]): Promise<boolean> {
+ * left out. Resolves false when the batch ends refused. `parseId` names the parse the drafts
+ * came from, so the API can link the proposals to it for usage learning. */
+async function submitBatch(drafts: ProposalDraft[], parseId: string | null): Promise<boolean> {
   try {
-    await api.createProposalBatch(drafts);
+    await api.createProposalBatch(drafts, parseId);
     return true;
   } catch (err) {
     if (err instanceof ApiError && err.status === 409 && DUPLICATE_CODES.has(err.problem.code)) {
@@ -372,7 +373,7 @@ async function submitBatch(drafts: ProposalDraft[]): Promise<boolean> {
         return false;
       }
       try {
-        await api.createProposalBatch(plan.fresh);
+        await api.createProposalBatch(plan.fresh, parseId);
       } catch (e) {
         store.refused(e);
         return false;

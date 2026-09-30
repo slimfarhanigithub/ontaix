@@ -200,8 +200,11 @@ export const api = {
   getScene: () => call<Scene>('GET', '/scene'),
   listProposals: () => call<Page & { items: Proposal[] }>('GET', '/proposals'),
   createProposal: (draft: ProposalDraft) => call<Proposal>('POST', '/proposals', contractDraft(draft)),
-  createProposalBatch: (drafts: ProposalDraft[]) =>
-    call<Proposal[]>('POST', '/proposals/batch', { drafts: drafts.map(contractDraft) }),
+  createProposalBatch: (drafts: ProposalDraft[], parseId?: string | null) =>
+    call<Proposal[]>('POST', '/proposals/batch', {
+      drafts: drafts.map(contractDraft),
+      ...(parseId ? { parseId } : {}),
+    }),
   approve: (id: string) => call<DecisionResult>('POST', `/proposals/${id}/approve`),
   secondApprove: (id: string) => call<DecisionResult>('POST', `/proposals/${id}/second-approve`),
   reject: (id: string, reason?: string) =>
