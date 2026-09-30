@@ -104,6 +104,23 @@ Only when `ONTAIX_LLM_PROVIDER` is `anthropic` (with `ONTAIX_LLM_MODEL` set to a
 
 The key is never in settings, API responses, events, audit entries, logs, tests, fixtures, commits or documentation, and no agent asks the owner for it in a conversation. This provider sends prompts to Anthropic outside Azure, with no EU residency guarantee (ADR 0008, Data Residency).
 
+## Sign-In and Organizations
+Users sign in with an email and a password held by Ontaix (ADR 0017, decision row 140). There is no sign-up: the only default account is the super admin, created once by the owner from a terminal attached to the API image, so the password travels only over his own TTY and never enters chat, code, logs, commits or Key Vault:
+
+```bash
+kubectl exec -it <api pod> -- python -m app.admin create-super-admin slim.farhani@outlook.com   # prompts twice, no echo
+kubectl exec -it <api pod> -- python -m app.admin set-password slim.farhani@outlook.com        # his own recovery
+```
+
+The API opens two connection pools on `ONTAIX_DATABASE_URL`, and each connection switches with `SET ROLE` as it opens: organization requests to the NOLOGIN role `ontaix_app`, which row-level security confines to the organization of the session, and sign-in, the platform portal and cross-organization jobs to `ontaix_platform`. Migration `0007` creates both roles and grants them to no login; the login the API connects with must be a member of the role it switches to (the schema owner that ran the migration is, as their creator; any other login is granted membership by the deployment). A separate platform login goes in `ONTAIX_PLATFORM_DATABASE_URL`. The bootstrap commands run with the schema owner's login (the `database-url` secret), because only that login may grant the platform role.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `ONTAIX_ALLOWED_ORIGINS` | none | JSON list of the Studio's origins, checked on sign-in and on every cookie-authenticated write |
+| `ONTAIX_TRUSTED_PROXY_HOPS` | 0 | 1 behind the ingress: the client IP of the sign-in throttle comes from that hop of `X-Forwarded-For` |
+| `ONTAIX_DEV_IDENTITY_HEADER` | false | Accept `X-Ontaix-User`; only in `dev` or `test`, the API refuses to start with it on elsewhere. Never set in the cluster |
+| `ONTAIX_PLATFORM_DATABASE_URL` | `ONTAIX_DATABASE_URL` | A distinct login for the platform pool, when the deployment wants one |
+
 ## Security posture
 - No client secret anywhere: CI uses OIDC federation; pods use workload identity; images are pulled
   with the kubelet identity; the database is VNet-only.

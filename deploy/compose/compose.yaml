@@ -26,6 +26,9 @@ services:
       context: ../../apps/api
     environment:
       ONTAIX_ENVIRONMENT: ${ONTAIX_ENVIRONMENT:-dev}
+      # Local stack only: accept X-Ontaix-User (the API refuses this outside dev and test).
+      ONTAIX_DEV_IDENTITY_HEADER: ${ONTAIX_DEV_IDENTITY_HEADER:-true}
+      ONTAIX_ALLOWED_ORIGINS: '${ONTAIX_ALLOWED_ORIGINS:-["http://localhost:5173"]}'
       ONTAIX_LOG_LEVEL: ${ONTAIX_LOG_LEVEL:-INFO}
       ONTAIX_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     ports:

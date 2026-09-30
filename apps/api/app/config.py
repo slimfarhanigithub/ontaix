@@ -8,12 +8,20 @@ from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DEV_ENVIRONMENT = "dev"
-
 Environment = Literal["dev", "test", "staging", "production"]
+# The only environments where the development identity header may be switched on.
+DEV_IDENTITY_ENVIRONMENTS: tuple[Environment, ...] = ("dev", "test")
 
 MAX_LLM_TIMEOUT_SECONDS = 15.0
 MAX_LLM_SPEECH_TIMEOUT_SECONDS = 45.0
@@ -82,7 +90,21 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("ONTAIX_ENVIRONMENT", "ONTAIX_ENV"),
     )
     log_level: str = "INFO"
+    # Organization requests and per-organization jobs connect here as the database role
+    # `ontaix_app`, which row-level security confines to one organization per transaction.
     database_url: str | None = None
+    # Sign-in, the platform portal and cross-organization jobs connect here as the database role
+    # `ontaix_platform`; unset, the same login as `database_url` switches to that role.
+    platform_database_url: str | None = None
+    # `X-Ontaix-User: <email>` names a seeded `dev` user without a session. Accepted only when
+    # this is true and `environment` is dev or test; true anywhere else stops start-up.
+    dev_identity_header: bool = False
+    # Origins allowed to send cookie-authenticated writes and sign-in (`Origin` header), as a
+    # JSON list, for example ["https://studio.example"]. Empty refuses every such request.
+    allowed_origins: list[str] = Field(default_factory=list)
+    # Reverse proxies in front of the API whose `X-Forwarded-For` entry is trusted: 0 uses the
+    # socket peer, 1 the entry the ingress appended, and so on.
+    trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
     test_seed: int | None = None
     seed: SeedMode = "fixture"
     import_purge_interval_seconds: float = Field(default=15 * 60, gt=0)
@@ -228,6 +250,7 @@ class Settings(BaseSettings):
         "llm_deep_reasoning_allowance_tokens",
         "ocr_endpoint",
         "ocr_model",
+        "platform_database_url",
         mode="before",
     )
     @classmethod
@@ -265,10 +288,27 @@ class Settings(BaseSettings):
         """Extractions one process runs at once: configured, else half the CPUs, at least 2."""
         return self.extraction_concurrency or max(2, (os.cpu_count() or 1) // 2)
 
+    @model_validator(mode="after")
+    def _dev_identity_only_in_dev_or_test(self) -> Settings:
+        if self.dev_identity_header and self.environment not in DEV_IDENTITY_ENVIRONMENTS:
+            raise ValueError(
+                "ONTAIX_DEV_IDENTITY_HEADER may be true only when ONTAIX_ENVIRONMENT is dev or test"
+            )
+        return self
+
+    @property
+    def accepts_dev_identity_header(self) -> bool:
+        """True only in dev or test with ONTAIX_DEV_IDENTITY_HEADER on."""
+        return self.dev_identity_header and self.environment in DEV_IDENTITY_ENVIRONMENTS
+
     @property
     def is_dev(self) -> bool:
-        """True only when the environment is exactly `dev`: the dev identity header is accepted."""
-        return self.environment == DEV_ENVIRONMENT
+        """True only when the environment is exactly `dev`: the Azure CLI may hand out tokens."""
+        return self.environment == "dev"
+
+    def platform_database_url_or_default(self) -> str | None:
+        """The platform role's connection: its own setting, else `database_url`."""
+        return self.platform_database_url or self.database_url
 
 
 @lru_cache

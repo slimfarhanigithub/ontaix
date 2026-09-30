@@ -93,7 +93,7 @@ async def decide(
 
 
 async def rows(sql: str, **params: object) -> list[dict]:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.platform_session() as s:
         result = await s.execute(text(sql), params)
         return [dict(r._mapping) for r in result]
 
@@ -117,7 +117,7 @@ async def aliases_of(tenant: TenantFixture) -> list[dict]:
 
 
 async def learning_audit(tenant: TenantFixture) -> list[AuditEntry]:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.platform_session() as s:
         found = await s.scalars(
             select(AuditEntry)
             .where(AuditEntry.tenant_id == tenant.tenant_id, AuditEntry.kind == "learning")
@@ -129,7 +129,7 @@ async def learning_audit(tenant: TenantFixture) -> list[AuditEntry]:
 async def other_tenant() -> OtherTenant:
     """A second tenant with one company and one Administrator."""
     slug = f"o-{uuid.uuid4().hex[:10]}"
-    async with db_client.get_session_factory()() as s:
+    async with db_client.platform_session() as s:
         t = await tenant_repository.create(s, slug, f"Tenant {slug}")
         await tenant_settings_repository.create(s, t.id)
         await view_state_repository.create(s, t.id)
@@ -403,7 +403,7 @@ async def test_lessons_never_cross_a_company_or_a_tenant(
     elsewhere = uuid.UUID(other_company.json()["company"]["id"])
     other = await other_tenant()
 
-    async with db_client.get_session_factory()() as s:
+    async with db_client.platform_session() as s:
         home_view = await load_view(s, tenant.tenant_id)
         other_view = await load_view(s, other.tenant_id)
         assert (
@@ -539,7 +539,7 @@ async def test_the_purge_removes_expired_parses_and_old_retired_rows(
 ) -> None:
     customer, _ = await taught_and_approved(client, tenant)
     result = await parse(client, tenant, tenant.owner, "A plant has machines")
-    async with db_client.get_session_factory()() as s:
+    async with db_client.platform_session() as s:
         await s.execute(
             text(
                 "UPDATE ontaix.teach_parse SET created_at = now() - interval '8 days',"

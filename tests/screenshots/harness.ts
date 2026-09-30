@@ -60,6 +60,13 @@ const PLACEHOLDER_CSS = '#say::placeholder{color:transparent!important}';
  * the tools row exactly where the reference has it.
  */
 const TEACH_BAR_CSS = '.caption,form.bar{visibility:hidden!important}';
+/**
+ * The account controls of the admin head (`#adminAccount`: the signed-in email, Change password,
+ * Sign out, End support), hidden in both pages just before the screenshot the same way. The
+ * reference has no session and no such element; the Studio renders it only with a live session,
+ * which the mock never has, and its own baselines (auth.spec.ts) cover it.
+ */
+const ACCOUNT_CSS = '#adminAccount{visibility:hidden!important}';
 /** The localStorage key of the Studio's open teach bar; cleared so every run starts collapsed. */
 export const TEACH_BAR_EXPANDED_KEY = 'ontaix.teachBar.expanded';
 
@@ -109,19 +116,27 @@ export async function revealCaption(page: Page): Promise<void> {
 
 /**
  * Brings both pages to the compared form just before the screenshot: the hint without its story fragments
- * (asserted equal as text), the teach bar and caption hidden in both pages, and the teach
+ * (asserted equal as text), the teach bar, caption and account controls hidden in both pages, and the teach
  * placeholder made transparent in both pages when the reference has one company and live
  * teaching on, where it still shows story text.
  */
 export async function beforeScreenshot(ref: Page, studio: Page): Promise<void> {
   for (const page of [ref, studio])
-    await page.evaluate((css) => {
-      if (document.getElementById('ontaix-teach-bar')) return;
-      const style = document.createElement('style');
-      style.id = 'ontaix-teach-bar';
-      style.textContent = css;
-      document.head.appendChild(style);
-    }, TEACH_BAR_CSS);
+    await page.evaluate(
+      (sheets) => {
+        for (const [id, css] of sheets) {
+          if (document.getElementById(id)) continue;
+          const style = document.createElement('style');
+          style.id = id;
+          style.textContent = css;
+          document.head.appendChild(style);
+        }
+      },
+      [
+        ['ontaix-teach-bar', TEACH_BAR_CSS],
+        ['ontaix-account', ACCOUNT_CSS],
+      ],
+    );
   await ref.evaluate(stripHintStory);
   await studio.evaluate(stripHintStory);
   const hints = await Promise.all([ref, studio].map((p) => p.evaluate(() => document.querySelector('.hint')?.textContent ?? '')));

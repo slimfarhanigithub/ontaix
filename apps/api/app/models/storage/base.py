@@ -98,6 +98,38 @@ class ActorKind(enum.StrEnum):
     USER = "user"
     AGENT = "agent"
     SYSTEM = "system"
+    PLATFORM = "platform"
+
+
+class CompanyMode(enum.StrEnum):
+    SINGLE = "single"
+    MULTIPLE = "multiple"
+
+
+class PlatformRoleName(enum.StrEnum):
+    SUPER_ADMIN = "super_admin"
+
+
+class PasswordSetReason(enum.StrEnum):
+    BOOTSTRAP = "bootstrap"
+    INITIAL = "initial"
+    RESET = "reset"
+    CHANGE = "change"
+
+
+class SessionEndReason(enum.StrEnum):
+    SIGN_OUT = "sign_out"
+    PASSWORD_CHANGED = "password_changed"
+    PASSWORD_RESET = "password_reset"
+    ACCOUNT_DISABLED = "account_disabled"
+    ORGANIZATION_DISABLED = "organization_disabled"
+    SESSION_LIMIT = "session_limit"
+    SUPPORT_CHANGED = "support_changed"
+
+
+class ThrottleKeyKind(enum.StrEnum):
+    EMAIL = "email"
+    IP = "ip"
 
 
 class SourceAuth(enum.StrEnum):

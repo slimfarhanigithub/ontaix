@@ -31,11 +31,13 @@ async def create(
     company_ids: list[uuid.UUID],
     domain_key: str | None,
     origin: ProposalOrigin | None = None,
+    actor_account_id: uuid.UUID | None = None,
 ) -> AuditEntry:
     entry = AuditEntry(
         tenant_id=tenant_id,
         actor_kind=actor_kind,
         actor_user_id=actor_user_id,
+        actor_account_id=actor_account_id,
         kind=kind,
         what=what,
         ok=ok,

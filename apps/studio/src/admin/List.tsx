@@ -25,6 +25,8 @@ export interface ListProps<R extends Row> {
   renderRow: (r: R) => ReactNode;
   footer?: (list: R[]) => string;
   height?: string;
+  /** A click on a row outside its action buttons. */
+  onRowClick?: (r: R) => void;
 }
 
 const thStyle = (c: Column): CSSProperties => ({
@@ -33,7 +35,7 @@ const thStyle = (c: Column): CSSProperties => ({
   ...(c.w ? { width: c.w } : {}),
 });
 
-export function List<R extends Row>({ columns, rows, rowKey, searchKeys, filterKey, pageSize = 50, renderRow, footer, height }: ListProps<R>) {
+export function List<R extends Row>({ columns, rows, rowKey, searchKeys, filterKey, pageSize = 50, renderRow, footer, height, onRowClick }: ListProps<R>) {
   const [query, setQuery] = useState<ListQuery>(EMPTY_QUERY);
 
   const view = viewList(rows, { searchKeys, filterKey, pageSize }, query);
@@ -75,7 +77,15 @@ export function List<R extends Row>({ columns, rows, rowKey, searchKeys, filterK
           </thead>
           <tbody>
             {view.items.length ? (
-              view.items.map((r) => <tr key={rowKey(r)}>{renderRow(r)}</tr>)
+              view.items.map((r) => (
+                <tr
+                  key={rowKey(r)}
+                  style={onRowClick ? { cursor: 'pointer' } : undefined}
+                  onClick={onRowClick ? (e) => !(e.target as Element).closest('.act') && onRowClick(r) : undefined}
+                >
+                  {renderRow(r)}
+                </tr>
+              ))
             ) : (
               <tr>
                 <td colSpan={columns.length} style={{ color: 'var(--ink-3)' }}>

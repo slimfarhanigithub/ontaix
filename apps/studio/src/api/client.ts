@@ -5,8 +5,14 @@
  *
  * Drafts leave in the contract's shape (./drafts). A `503 busy` means nothing was written, so the
  * request is sent once more after its `Retry-After` (at most 3 s) before the error reaches the caller.
+ *
+ * The session is a cookie the browser keeps (./session holds its CSRF token). A `401` from any
+ * call other than sign-in and the session read means the session ended, and a
+ * `403 password_change_required` that the password must be changed first; both are raised as
+ * auth signals for the shell before the error reaches the caller.
  */
 import { contractDraft } from './drafts';
+import { authSignals, currentCsrfToken, forgetSession, rememberSession } from './session';
 import {
   ApiError,
   type AppearancePatch,
@@ -20,6 +26,16 @@ import {
   type DiscoveryRequest,
   type Group,
   type GroupInput,
+  type Organization,
+  type OrganizationCreate,
+  type OrganizationUpdate,
+  type OrganizationUser,
+  type OrganizationUserCreate,
+  type OrganizationUserUpdate,
+  type PasswordChange,
+  type PlatformAuditEntry,
+  type Session,
+  type SignInRequest,
   type RefreshAllResult,
   type RoleAssignment,
   type RoleGroup,
@@ -62,19 +78,26 @@ import {
 export const API_BASE: string = (import.meta.env.VITE_ONTAIX_API_URL as string | undefined) || '/api/v1';
 
 /**
- * Dev builds only: the user the API's dev environment resolves from `X-Ontaix-User`. `?user=<email>`
- * overrides `VITE_ONTAIX_DEV_USER`, whose default is the seed's full-access demo user. A
- * production build compiles this away and sends no identity header.
+ * Dev builds only: the user the API's dev environment resolves from `X-Ontaix-User`, sent only
+ * when `?user=<email>` is in the URL or `VITE_ONTAIX_DEV_USER` is set. Without either, a dev
+ * build sends no identity header and signs in like a production build, which compiles this away.
  */
 const IDENTITY: Record<string, string> = import.meta.env.DEV ? devIdentity() : {};
 
 function devIdentity(): Record<string, string> {
-  const user =
-    new URLSearchParams(location.search).get('user') ||
-    (import.meta.env.VITE_ONTAIX_DEV_USER as string | undefined) ||
-    'demo@northwind.com';
-  return { 'X-Ontaix-User': user };
+  const user = new URLSearchParams(location.search).get('user') || (import.meta.env.VITE_ONTAIX_DEV_USER as string | undefined) || '';
+  return user ? { 'X-Ontaix-User': user } : {};
 }
+
+/** True while this build sends the development identity header. */
+export function hasDevIdentity(): boolean {
+  return 'X-Ontaix-User' in IDENTITY;
+}
+
+/** Sign-in and the session read answer `401` about the credentials, not about a session that ended. */
+const SESSION_FREE_PATHS = new Set(['/auth/sign-in', '/auth/session']);
+
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 const BUSY_RETRY_CAP_MS = 3000;
 const BUSY_RETRY_DEFAULT_MS = 1000;
@@ -94,7 +117,13 @@ async function answered(method: string, path: string, body?: unknown): Promise<R
     res = await send(method, path, body);
     problem = res.ok ? null : await problemOf(res);
   }
-  if (problem) throw new ApiError(res.status, problem, retryAfterSeconds(res.headers.get('Retry-After')));
+  if (problem) {
+    if (!SESSION_FREE_PATHS.has(path)) {
+      if (res.status === 401) authSignals.emit('ended');
+      else if (res.status === 403 && problem.code === 'password_change_required') authSignals.emit('passwordChangeRequired');
+    }
+    throw new ApiError(res.status, problem, retryAfterSeconds(res.headers.get('Retry-After')));
+  }
   return res;
 }
 
@@ -146,13 +175,21 @@ async function teachParseStream(body: TeachRequest, listen: TeachStreamListener)
   return result;
 }
 
-/** A form body goes as multipart with the boundary the browser picks; anything else as JSON. */
+/**
+ * A form body goes as multipart with the boundary the browser picks; anything else as JSON. The
+ * session cookie travels with every call, and every unsafe method carries the session's CSRF token.
+ */
 function send(method: string, path: string, body: unknown): Promise<Response> {
-  if (body instanceof FormData) return fetch(API_BASE + path, { method, headers: { ...IDENTITY }, body });
+  const headers: Record<string, string> = { ...IDENTITY };
+  const csrf = currentCsrfToken();
+  if (csrf && UNSAFE_METHODS.has(method)) headers['X-CSRF-Token'] = csrf;
+  if (body instanceof FormData) return fetch(API_BASE + path, { method, headers, body, credentials: 'same-origin' });
+  if (body !== undefined) headers['content-type'] = 'application/json';
   return fetch(API_BASE + path, {
     method,
-    headers: body === undefined ? { ...IDENTITY } : { ...IDENTITY, 'content-type': 'application/json' },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
+    credentials: 'same-origin',
   });
 }
 
@@ -287,6 +324,36 @@ export const api = {
     call<CrossCompanyDisabled>('POST', '/settings/cross-company/disable', { confirmation }),
   resetAppearance: () => call<Appearance>('POST', '/appearance/reset'),
   listAudit: (p?: ListParams) => call<Paged<AuditEntry>>('GET', `/audit${listQuery(p)}`),
+
+  signIn: (body: SignInRequest) => call<Session>('POST', '/auth/sign-in', body).then(rememberSession),
+  signOut: () => call<void>('POST', '/auth/sign-out').finally(forgetSession),
+  getSession: () => call<Session>('GET', '/auth/session').then(rememberSession),
+  changePassword: (body: PasswordChange) => call<Session>('PUT', '/auth/password', body).then(rememberSession),
+
+  listOrganizations: (p?: ListParams) => call<Paged<Organization>>('GET', `/admin/organizations${listQuery(p)}`),
+  createOrganization: (body: OrganizationCreate) => call<Organization>('POST', '/admin/organizations', body),
+  getOrganization: (id: string) => call<Organization>('GET', `/admin/organizations/${id}`),
+  updateOrganization: (id: string, patch: OrganizationUpdate) => call<Organization>('PATCH', `/admin/organizations/${id}`, patch),
+  disableOrganization: (id: string) => call<Organization>('POST', `/admin/organizations/${id}/disable`),
+  enableOrganization: (id: string) => call<Organization>('POST', `/admin/organizations/${id}/enable`),
+  listOrganizationGroups: (id: string) => call<Group[]>('GET', `/admin/organizations/${id}/groups`),
+  listOrganizationUsers: (id: string, p?: ListParams) =>
+    call<Paged<OrganizationUser>>('GET', `/admin/organizations/${id}/users${listQuery(p)}`),
+  createOrganizationUser: (id: string, body: OrganizationUserCreate) =>
+    call<OrganizationUser>('POST', `/admin/organizations/${id}/users`, body),
+  getOrganizationUser: (id: string, userId: string) => call<OrganizationUser>('GET', `/admin/organizations/${id}/users/${userId}`),
+  updateOrganizationUser: (id: string, userId: string, patch: OrganizationUserUpdate) =>
+    call<OrganizationUser>('PATCH', `/admin/organizations/${id}/users/${userId}`, patch),
+  disableOrganizationUser: (id: string, userId: string) =>
+    call<OrganizationUser>('POST', `/admin/organizations/${id}/users/${userId}/disable`),
+  enableOrganizationUser: (id: string, userId: string) =>
+    call<OrganizationUser>('POST', `/admin/organizations/${id}/users/${userId}/enable`),
+  resetOrganizationUserPassword: (id: string, userId: string, newPassword: string) =>
+    call<void>('PUT', `/admin/organizations/${id}/users/${userId}/password`, { newPassword }),
+  startSupportSession: (id: string, reason: string) =>
+    call<Session>('POST', `/admin/organizations/${id}/support-session`, { reason }).then(rememberSession),
+  endSupportSession: () => call<Session>('DELETE', '/admin/support-session').then(rememberSession),
+  listPlatformAudit: (p?: ListParams) => call<Paged<PlatformAuditEntry>>('GET', `/admin/audit${listQuery(p)}`),
 };
 
 export type Api = typeof api;
