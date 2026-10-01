@@ -111,19 +111,22 @@ describe('concept deletion', () => {
     expect(canDeleteFromDrawer(rootOf(c))).toBe(false);
     expect(canDeleteFromDrawer(pending)).toBe(false);
 
+    const openMore = (container: HTMLElement) => act(() => container.querySelector<HTMLButtonElement>('#drMore')?.click());
     store.ui.drawerNode = services;
     const shown = render(<Drawer />);
-    expect(shown.container.querySelector('#drDelete')?.textContent).toBe('Delete');
+    openMore(shown.container);
+    expect(document.getElementById('drDelete')?.textContent).toBe('Delete');
     shown.unmount();
 
     store.ui.drawerNode = c.root;
     const root = render(<Drawer />);
-    expect(root.container.querySelector('#drDelete')).toBeNull();
+    openMore(root.container);
+    expect(document.getElementById('drDelete')).toBeNull();
     root.unmount();
 
     store.ui.drawerNode = pending;
     const wait = render(<Drawer />);
-    expect(wait.container.querySelector('#drDelete')).toBeNull();
+    expect(wait.container.querySelector('#drMore')).toBeNull();
     wait.unmount();
   });
 
@@ -132,7 +135,8 @@ describe('concept deletion', () => {
     store.ui.drawerNode = services;
     const dialog = render(<Dialog />);
     const drawer = render(<Drawer />);
-    act(() => drawer.container.querySelector<HTMLButtonElement>('#drDelete')?.click());
+    act(() => drawer.container.querySelector<HTMLButtonElement>('#drMore')?.click());
+    act(() => document.getElementById('drDelete')?.click());
     expect(dialog.container.querySelector('.dlg .dh b')?.textContent).toBe('Delete Services?');
     expect(dialog.container.querySelector('.dlg .df .btn.danger')?.textContent).toBe('Propose deletion');
   });

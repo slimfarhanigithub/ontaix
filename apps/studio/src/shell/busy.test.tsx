@@ -194,7 +194,8 @@ describe('drawer', () => {
     store.ui.drawerNode = sales;
     const drawer = render(<Drawer />);
     const dialogs = render(<Dialog />);
-    act(() => fireEvent.click(drawer.container.querySelector('#drDelete') as HTMLButtonElement));
+    act(() => fireEvent.click(drawer.container.querySelector('#drMore') as HTMLButtonElement));
+    act(() => fireEvent.click(document.getElementById('drDelete') as HTMLButtonElement));
     const yes = dialogs.container.querySelector('.dlg .df .btn.danger') as HTMLButtonElement;
     expect(yes.textContent).toBe('Propose deletion');
     fireEvent.click(yes);
@@ -218,14 +219,19 @@ describe('drawer', () => {
     const dialogs = render(<Dialog />);
     act(() => openExpandDialog(sales));
     const suggest = dialogs.container.querySelector('.dlg .df .btn.primary') as HTMLButtonElement;
+    act(() => fireEvent.click(drawer.container.querySelector('#drMore') as HTMLButtonElement));
     fireEvent.click(suggest);
     await advance(BUSY_DELAY_MS - 1);
     expect(dialogs.container.querySelector('#exWait')).toBeNull();
-    expect(spinOf(drawer.container.querySelector('#drExpand'))).toBeNull();
+    expect(spinOf(drawer.container.querySelector('#drMore'))).toBeNull();
+    expect(spinOf(document.getElementById('drExpand'))).toBeNull();
     await advance(1);
-    const expand = drawer.container.querySelector('#drExpand') as HTMLButtonElement;
+    const more = drawer.container.querySelector('#drMore') as HTMLButtonElement;
+    expect(more.firstElementChild?.className).toBe('spin');
+    expect(more.disabled).toBe(false);
+    const expand = document.getElementById('drExpand') as HTMLButtonElement;
     expect(expand.firstElementChild?.className).toBe('spin');
-    expect(expand.textContent).toBe('Expand');
+    expect(expand.textContent).toBe('Expand…');
     expect(expand.disabled).toBe(true);
     expect(suggest.firstElementChild?.className).toBe('spin');
     const wait = dialogs.container.querySelector('#exWait');
@@ -244,8 +250,9 @@ describe('drawer', () => {
       skipped: [],
     });
     await settle();
-    expect(spinOf(drawer.container.querySelector('#drExpand'))).toBeNull();
-    expect((drawer.container.querySelector('#drExpand') as HTMLButtonElement).disabled).toBe(false);
+    expect(spinOf(drawer.container.querySelector('#drMore'))).toBeNull();
+    expect(spinOf(document.getElementById('drExpand'))).toBeNull();
+    expect((document.getElementById('drExpand') as HTMLButtonElement).disabled).toBe(false);
 
     const propose = dialogs.container.querySelector('.dlg .df .btn.primary') as HTMLButtonElement;
     expect(propose.textContent).toBe('Propose 1');

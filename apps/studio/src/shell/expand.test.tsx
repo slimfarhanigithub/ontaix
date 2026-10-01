@@ -64,12 +64,14 @@ describe('Expand', () => {
 
     store.ui.drawerNode = sales;
     const drawer = render(<Drawer />);
-    const buttons = [...drawer.container.querySelectorAll('.actions button')].map((b) => b.id);
-    expect(buttons.slice(-2)).toEqual(['drExpand', 'drDelete']);
+    act(() => drawer.container.querySelector<HTMLButtonElement>('#drMore')?.click());
+    const items = [...document.querySelectorAll('#drMoreMenu [role="menuitem"]')].map((b) => b.id);
+    expect(items).toEqual(['drExpand', 'drRename', 'drMove', 'drDelete']);
     drawer.unmount();
     store.ui.drawerNode = pending;
     const waiting = render(<Drawer />);
-    expect(waiting.container.querySelector('#drExpand')).toBeNull();
+    expect(waiting.container.querySelector('#drMore')).toBeNull();
+    waiting.unmount();
   });
 
   it('asks, lists the suggestions as text, cascades the selection and proposes the checked ones', async () => {

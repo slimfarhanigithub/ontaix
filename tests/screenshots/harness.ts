@@ -45,8 +45,8 @@ export const VIEWPORTS: Viewport[] = [
 const STORY_ONLY_CSS = '#sceneNum,#sceneName,#next,#finalise{display:none!important}';
 /**
  * Owner additions absent from the reference, hidden in both pages with `display: none`: the
- * drawer's Expand and Delete buttons, the changes panel's `Approve branch` button, and every
- * element marked `data-ox-new` (the drawer's Rename and Move to domain, the panel's
+ * drawer's Expand and Delete menu items, the changes panel's `Approve branch` button, and every
+ * element marked `data-ox-new` (the drawer's More actions button, the panel's
  * Edit, the selection bar, the admin tables' checkbox columns, Move, New domain, Edit and Delete
  * buttons, header and cells together, the Company creation setting row and the admin portal's
  * Export button). The reference has no such elements, so the rule changes nothing there; in the

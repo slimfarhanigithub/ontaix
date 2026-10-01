@@ -152,19 +152,23 @@ describe('drawer rename and move', () => {
     store.ui.toasts = [];
   });
 
-  it('offers Rename and Move to domain for approved concepts only, after Lineage', () => {
+  it('offers Rename and Move to domain in the More actions menu for approved concepts only', () => {
     const { c, plant } = model();
     store.ui.drawerNode = plant;
     const shown = render(<Drawer />);
     const ids = Array.from(shown.container.querySelectorAll('.drawer .actions button')).map((b) => b.id);
-    expect(ids).toEqual(['drGrow', 'drLineage', 'drRename', 'drMove', 'drExpand', 'drDelete']);
-    expect(shown.container.querySelector('#drRename')?.getAttribute('data-ox-new')).toBe('');
-    expect(shown.container.querySelector('#drMove')?.textContent).toBe('Move to domain');
+    expect(ids).toEqual(['drGrow', 'drLineage', 'drMore']);
+    expect(shown.container.querySelector('#drMore')?.getAttribute('data-ox-new')).toBe('');
+    act(() => shown.container.querySelector<HTMLButtonElement>('#drMore')?.click());
+    expect(document.getElementById('drRename')?.getAttribute('role')).toBe('menuitem');
+    expect(document.getElementById('drMove')?.textContent).toBe('Move to domain…');
     shown.unmount();
     store.ui.drawerNode = c.root;
     const root = render(<Drawer />);
-    expect(root.container.querySelector('#drRename')).toBeNull();
-    expect(root.container.querySelector('#drMove')).toBeNull();
+    act(() => root.container.querySelector<HTMLButtonElement>('#drMore')?.click());
+    expect(document.getElementById('drRename')).toBeNull();
+    expect(document.getElementById('drMove')).toBeNull();
+    root.unmount();
   });
 
   it('Rename opens the rename proposal dialog; Move offers the other domains and proposes the move', async () => {
@@ -172,10 +176,13 @@ describe('drawer rename and move', () => {
     store.ui.drawerNode = plant;
     const dialog = render(<Dialog />);
     const drawer = render(<Drawer />);
-    act(() => drawer.container.querySelector<HTMLButtonElement>('#drRename')?.click());
+    const more = () => act(() => drawer.container.querySelector<HTMLButtonElement>('#drMore')?.click());
+    more();
+    act(() => document.getElementById('drRename')?.click());
     expect(dialog.container.querySelector('.dlg .dh b')?.textContent).toBe('Rename Plant');
     act(() => store.closeDialog());
-    act(() => drawer.container.querySelector<HTMLButtonElement>('#drMove')?.click());
+    more();
+    act(() => document.getElementById('drMove')?.click());
     const dlg = dialog.container.querySelector('.dlg');
     expect(dlg?.querySelector('.dh b')?.textContent).toBe('Move Plant');
     expect(dlg?.querySelector('.dh span')?.textContent).toBe('from Production to another domain product');
