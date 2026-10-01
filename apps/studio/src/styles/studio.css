@@ -140,3 +140,23 @@ body.panel-off #panelShow{ display:inline-flex !important; }
 
 /* The selection bar: a second tool row, 10px above the tool row. */
 .tools.sel{ bottom:calc(var(--teach-h,42px) + 90px + env(safe-area-inset-bottom,0px)); }
+
+/* The drawer's More actions: a square button after Lineage, as tall as the row, in the row's
+   button style; its menu is drawn in the body (the drawer scrolls and would clip it), under the
+   button with their right edges aligned, on the drawer's own surface, radius and shadow. */
+.drawer .actions button.more{ flex:none; width:34px; padding:8px 0; display:inline-flex; align-items:center; justify-content:center; font-size:16px; line-height:1; }
+.drawer .actions button.more .spin{ margin-right:0; }
+.drawer .actions button.more:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.drawer .actions button.more[aria-expanded="true"]{ background:rgba(255,255,255,.12); }
+:root[data-theme="light"] .drawer .actions button.more[aria-expanded="true"]{ background:rgba(20,26,46,.1); }
+.dr-menu{ position:fixed; z-index:5; min-width:176px; padding:6px; border-radius:12px; background:var(--panel); border:1px solid var(--line); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); box-shadow:0 20px 50px rgba(0,0,0,.45); animation:fade .15s ease both; }
+.dr-menu [role="menuitem"]{ display:flex; align-items:center; width:100%; box-sizing:border-box; margin:0; padding:7px 10px; border:0; border-radius:8px; background:transparent; font:inherit; font-size:12.5px; font-weight:500; color:var(--ink); text-align:left; cursor:pointer; }
+.dr-menu [role="menuitem"]:hover, .dr-menu [role="menuitem"]:focus{ background:rgba(255,255,255,.08); outline:0; }
+.dr-menu [role="menuitem"]:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
+.dr-menu [role="menuitem"]:disabled{ opacity:.5; cursor:default; background:transparent; }
+.dr-menu [role="menuitem"].danger{ color:var(--conflict); }
+.dr-menu [role="menuitem"].danger:hover, .dr-menu [role="menuitem"].danger:focus{ background:rgba(217,90,104,.14); }
+.dr-menu .sep{ height:1px; margin:4px 2px; background:var(--line); }
+:root[data-theme="light"] .dr-menu [role="menuitem"]:hover, :root[data-theme="light"] .dr-menu [role="menuitem"]:focus{ background:rgba(20,26,46,.06); }
+:root[data-theme="light"] .dr-menu [role="menuitem"].danger:hover, :root[data-theme="light"] .dr-menu [role="menuitem"].danger:focus{ background:rgba(217,90,104,.12); }
+@media (prefers-reduced-motion: reduce){ .dr-menu{ animation:none; } }

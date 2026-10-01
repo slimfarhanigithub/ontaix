@@ -2,21 +2,17 @@
  * What the model knows about a cell, and its lineage. Markup from
  * reference/ontaix-studio-reference.html line 214; content from `openDrawer` (lines 637-646)
  * and `showLineage` (lines 653-662). Labels, subs, names and freshness are rendered as text.
- * Delete, offered for approved concepts, is an owner addition absent from the reference; it opens
- * the same proposal dialog as the admin portal's Entities page. Expand, offered for approved
- * concepts and the company root just before Delete, is another owner addition; it opens the
- * expansion dialog. Rename and Move to domain, offered for approved concepts after Lineage, are
- * owner additions: each opens a dialog whose outcome is a proposal.
+ * The owner's additions to the action row (Expand, Rename, Move to domain and Delete, each a
+ * dialog whose outcome is a proposal) sit behind the More actions button after Lineage, so the
+ * reference's two buttons keep their width.
  */
 import { useEffect } from 'react';
 
-import { deleteNodeDialog, moveDialog, renameDialog } from '../admin/actions';
-import { canDeleteFromDrawer } from '../admin/conceptDeletion';
 import { ancestorsOf, childrenOf, descendantsOf } from '../canvas/lineage';
 import type { Node } from '../canvas/types';
 import { useDelayed } from './busy';
 import { useStore } from './dom';
-import { canExpandFromDrawer, openExpandDialog } from './ExpandDialog';
+import { DrawerMoreMenu } from './DrawerMoreMenu';
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const safeColour = (c: string, fallback: string) => (HEX.test(c) ? c : fallback);
@@ -174,27 +170,8 @@ export function Drawer() {
         >
           Lineage
         </button>
-        {canDeleteFromDrawer(n) ? (
-          <button id="drRename" data-ox-new="" onClick={() => renameDialog(n)}>
-            Rename
-          </button>
-        ) : null}
-        {canDeleteFromDrawer(n) ? (
-          <button id="drMove" data-ox-new="" onClick={() => moveDialog(n)}>
-            Move to domain
-          </button>
-        ) : null}
-        {canExpandFromDrawer(n) ? (
-          <button id="drExpand" disabled={expanding} aria-busy={expanding ? 'true' : undefined} onClick={() => openExpandDialog(n)}>
-            {expanding ? <span className="spin"></span> : null}
-            Expand
-          </button>
-        ) : null}
-        {canDeleteFromDrawer(n) ? (
-          <button id="drDelete" onClick={() => deleteNodeDialog(n)}>
-            Delete
-          </button>
-        ) : null}
+        {/* Keyed by the cell, so another selection starts with the menu closed. */}
+        <DrawerMoreMenu key={n.id} node={n} expanding={expanding} />
       </div>
       <div id="drLine" style={{ display: lineageOn ? undefined : 'none' }}>
         {lineageOn ? <Lineage n={n} /> : null}
