@@ -126,7 +126,8 @@ describe('concept deletion', () => {
 
     store.ui.drawerNode = pending;
     const wait = render(<Drawer />);
-    expect(wait.container.querySelector('#drMore')).toBeNull();
+    openMore(wait.container);
+    expect(document.getElementById('drDelete')).toBeNull();
     wait.unmount();
   });
 

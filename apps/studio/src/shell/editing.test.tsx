@@ -157,7 +157,7 @@ describe('drawer rename and move', () => {
     store.ui.drawerNode = plant;
     const shown = render(<Drawer />);
     const ids = Array.from(shown.container.querySelectorAll('.drawer .actions button')).map((b) => b.id);
-    expect(ids).toEqual(['drGrow', 'drLineage', 'drMore']);
+    expect(ids).toEqual(['drMore']);
     expect(shown.container.querySelector('#drMore')?.getAttribute('data-ox-new')).toBe('');
     act(() => shown.container.querySelector<HTMLButtonElement>('#drMore')?.click());
     expect(document.getElementById('drRename')?.getAttribute('role')).toBe('menuitem');
