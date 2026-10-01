@@ -116,7 +116,19 @@ kubectl exec -it <api pod> -- python -m app.admin create-super-admin slim.farhan
 kubectl exec -it <api pod> -- python -m app.admin set-password slim.farhani@outlook.com        # his own recovery
 ```
 
-The API opens two connection pools on `ONTAIX_DATABASE_URL`, and each connection switches with `SET ROLE` as it opens: organization requests to the NOLOGIN role `ontaix_app`, which row-level security confines to the organization of the session, and sign-in, the platform portal and cross-organization jobs to `ontaix_platform`. Migration `0007` creates both roles and grants them to no login; the login the API connects with must be a member of the role it switches to (the schema owner that ran the migration is, as their creator; any other login is granted membership by the deployment). A separate platform login goes in `ONTAIX_PLATFORM_DATABASE_URL`. The bootstrap commands run with the schema owner's login (the `database-url` secret), because only that login may grant the platform role.
+The API opens two connection pools on `ONTAIX_DATABASE_URL`, and each connection switches with `SET ROLE` as it opens: organization requests to the NOLOGIN role `ontaix_app`, which row-level security confines to the organization of the session, and sign-in, the platform portal and cross-organization jobs to `ontaix_platform`. Migration `0008` creates both roles and grants them to no login; the login the API connects with must be able to `SET ROLE` to the role it switches to. A separate platform login goes in `ONTAIX_PLATFORM_DATABASE_URL`. The bootstrap commands run with the schema owner's login (the `database-url` secret), because only that login may grant the platform role.
+
+### Database Role Grant (Once per Database)
+
+On Azure the API connects with the server's administrator login `ontaix_admin` (the `database-url` secret; the password lives in Key Vault only). That login is not a superuser: on PostgreSQL 16 a login that creates a role gets ADMIN OPTION on it but not the SET option, so after the migration `SET ROLE ontaix_app` is refused with `permission denied to set role` and the API cannot serve a request. The embedded and compose databases do not show this, because their login is a superuser. Decision row 152.
+
+The grant is applied by the bootstrap CLI, with the schema owner's login (the roles' creator, which holds ADMIN OPTION on both) and the login names from the environment. Login names are not secrets; the command takes no password and prints no URL:
+
+```bash
+kubectl exec -it <api pod> -- env ONTAIX_APP_DATABASE_LOGIN=ontaix_admin python -m app.admin grant-database-roles
+```
+
+It runs `GRANT ontaix_app TO <app login> WITH INHERIT FALSE, SET TRUE` and `GRANT ontaix_platform TO <platform login> WITH INHERIT FALSE, SET TRUE` in one transaction, then confirms each login can `SET ROLE` to its role. `INHERIT FALSE` means the login holds none of the role's privileges outside `SET ROLE`. It grants nothing else and revokes nothing; a second run is a no-op (PostgreSQL answers a repeated grant with a notice). Run it once after the first migration that reaches `0008`, and again only when the login changes or a new login is added. When the platform pool has its own login, name it in `ONTAIX_PLATFORM_DATABASE_LOGIN`: each login then holds only its own role. A connection that lacks ADMIN OPTION on the roles (any login other than their creator or a superuser) is refused by the server and the command exits 1.
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -124,6 +136,8 @@ The API opens two connection pools on `ONTAIX_DATABASE_URL`, and each connection
 | `ONTAIX_TRUSTED_PROXY_HOPS` | 0 | 1 behind the ingress: the client IP of the sign-in throttle comes from that hop of `X-Forwarded-For` |
 | `ONTAIX_DEV_IDENTITY_HEADER` | false | Accept `X-Ontaix-User`; only in `dev` or `test`, the API refuses to start with it on elsewhere. Never set in the cluster |
 | `ONTAIX_PLATFORM_DATABASE_URL` | `ONTAIX_DATABASE_URL` | A distinct login for the platform pool, when the deployment wants one |
+| `ONTAIX_APP_DATABASE_LOGIN` | none | Login name inside `ONTAIX_DATABASE_URL`, granted `ontaix_app` by `grant-database-roles`; `ontaix_admin` on Azure. Not a secret |
+| `ONTAIX_PLATFORM_DATABASE_LOGIN` | `ONTAIX_APP_DATABASE_LOGIN` | Login name inside `ONTAIX_PLATFORM_DATABASE_URL`, granted `ontaix_platform` |
 
 ## Security posture
 - No client secret anywhere: CI uses OIDC federation; pods use workload identity; images are pulled
