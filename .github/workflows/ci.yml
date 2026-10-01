@@ -4,8 +4,9 @@ name: ci
 #   Python packages (api, gateway, connectors): uv sync, ruff, pytest - when the package or contracts change
 #   Studio: pnpm install, vitest, vite build - when the Studio, tests or contracts change
 #   E2E: the Studio against the real API - on pull requests that touch the API, the Studio or tests/e2e
-#   Screens: screenshot regression against the reference, in 10 shards - only on demand, through
-#     the `screens` pull request label or a manual run with `screens` set
+#   Screens: screenshot regression against the reference, in 10 shards - on demand, through the
+#     `screens` pull request label or a manual run with `screens` set, and on every push to main
+#     that touches the Studio, the screenshot suite or the reference
 # Infrastructure has its own workflow (infra.yml).
 
 on:
@@ -35,6 +36,7 @@ jobs:
       packages: ${{ steps.diff.outputs.packages }}
       studio: ${{ steps.diff.outputs.studio }}
       e2e: ${{ steps.diff.outputs.e2e }}
+      screens: ${{ steps.diff.outputs.screens }}
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false, fetch-depth: 0 }
@@ -59,6 +61,7 @@ jobs:
           echo "packages=[${packages%,}]" >> "$GITHUB_OUTPUT"
           hit "^apps/studio/|^tests/|^pnpm-lock\.yaml|^package\.json|$shared" && echo studio=true >> "$GITHUB_OUTPUT" || echo studio=false >> "$GITHUB_OUTPUT"
           hit "^apps/api/|^apps/studio/|^tests/e2e/|^scripts/|$shared" && echo e2e=true >> "$GITHUB_OUTPUT" || echo e2e=false >> "$GITHUB_OUTPUT"
+          hit "^apps/studio/|^tests/screenshots/|^reference/|^pnpm-lock\.yaml|^package\.json|$shared" && echo screens=true >> "$GITHUB_OUTPUT" || echo screens=false >> "$GITHUB_OUTPUT"
 
   python:
     name: ${{ matrix.package }}
@@ -125,9 +128,14 @@ jobs:
 
   screens:
     name: apps/studio screenshots (${{ matrix.shard }}/10)
+    needs: changes
+    # On a pull request the label asks for the suite; on main every merge that touches it runs it,
+    # so a merged branch cannot leave main with a scene nobody checked. One run per ref at a time
+    # (the concurrency group above), so a burst of merges only costs the newest.
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.screens) ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'screens'))
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'screens')) ||
+      (github.event_name == 'push' && needs.changes.outputs.screens == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
