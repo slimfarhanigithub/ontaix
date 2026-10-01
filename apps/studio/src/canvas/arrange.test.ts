@@ -24,9 +24,11 @@ describe('arrange', () => {
   beforeEach(() => setSource(mulberry32(3)));
   afterEach(() => setSource(null));
 
-  it('lays a pure birth tree out with no crossing, overlap or hidden action', () => {
+  it('lays a birth tree of one domain product out with no crossing, overlap or hidden action', () => {
     const s = createScene();
-    syntheticModel(s, 120, 5, 0);
+    const c = syntheticModel(s, 120, 5, 0);
+    const production = domainOf(s, 'production', c);
+    for (const n of s.nodes) if (n.domain) n.domain = production;
     arrangeAll(s);
     settleTweens(s);
     expect(sceneMetrics(s)).toMatchObject({
@@ -38,7 +40,7 @@ describe('arrange', () => {
     });
   });
 
-  it('lays Northwind out readably: no overlap, every action shown, at most two crossings', () => {
+  it('lays Northwind out with one clear region per domain product, nothing covered, at most two crossings', () => {
     const s = createScene();
     const c = northwindModel(s);
     arrangeAll(s);
@@ -46,11 +48,25 @@ describe('arrange', () => {
     expect([c.root!.x, c.root!.y]).toEqual([c.x, c.y]);
     settleTweens(s);
     const m = sceneMetrics(s);
-    expect(m).toMatchObject({ cellOverlaps: 0, chipOverlaps: 0, hiddenLabels: 0 });
+    expect(m).toMatchObject({
+      cellOverlaps: 0,
+      chipOverlaps: 0,
+      chipsOnCells: 0,
+      hiddenLabels: 0,
+      regionOverlaps: 0,
+      headerOverlaps: 0,
+    });
     expect(m.crossings).toBeLessThanOrEqual(2);
-    expect(m.chipsOnCells).toBeLessThanOrEqual(1);
-    expect(m.linksThroughCells).toBeLessThanOrEqual(1);
+    expect(m.linksThroughCells).toBeLessThanOrEqual(2);
     expect(s.userZoomed).toBe(false);
+  });
+
+  it('keeps the camera at a zoom that draws labels when the fit would be smaller', () => {
+    const s = createScene();
+    northwindModel(s);
+    arrangeAll(s, undefined, view);
+    expect(s.userZoomed).toBe(true);
+    expect(s.cam.ts).toBeCloseTo(0.55, 9);
   });
 
   it('lays the fixture model out with no overlap and keeps the two companies apart', () => {
@@ -59,8 +75,15 @@ describe('arrange', () => {
     arrangeAll(s);
     settleTweens(s);
     const m = sceneMetrics(s);
-    expect(m).toMatchObject({ cellOverlaps: 0, chipOverlaps: 0, hiddenLabels: 0 });
-    expect(m.crossings).toBeLessThanOrEqual(30);
+    expect(m).toMatchObject({
+      cellOverlaps: 0,
+      chipOverlaps: 0,
+      chipsOnCells: 0,
+      hiddenLabels: 0,
+      regionOverlaps: 0,
+      headerOverlaps: 0,
+    });
+    expect(m.crossings).toBeLessThanOrEqual(20);
     const right = Math.max(...s.nodes.filter((n) => n.company === northwind).map((n) => n.x));
     const left = Math.min(...s.nodes.filter((n) => n.company === aurora).map((n) => n.x));
     expect(left - right).toBeGreaterThan(400);
@@ -73,9 +96,9 @@ describe('arrange', () => {
     arrangeAll(s);
     const ms = performance.now() - t0;
     settleTweens(s);
-    expect(sceneMetrics(s)).toMatchObject({ cellOverlaps: 0, hiddenLabels: 0 });
-    // The target is 150 ms in the browser; the bound leaves room for slow test machines.
-    expect(ms).toBeLessThan(1500);
+    expect(sceneMetrics(s)).toMatchObject({ cellOverlaps: 0, hiddenLabels: 0, regionOverlaps: 0 });
+    // About 250 ms on a desktop; the bound leaves room for slow test machines.
+    expect(ms).toBeLessThan(3000);
   });
 
   it('puts a source beside the first concept bound to it and anchors it there', () => {

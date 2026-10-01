@@ -60,4 +60,14 @@ describe('layout metrics', () => {
     const far = measureLayout([cell(0, 0, 'a'), cell(0, 100, 'a'), cell(600, 0, 'b')], []);
     expect(far.regionOverlaps).toBe(0);
   });
+
+  it('counts a header over a label or inside another domain region', () => {
+    const cells = [cell(0, 0, 'a'), cell(0, 400, 'b')];
+    const clear = measureLayout(cells, [], [{ group: 'b', box: { x0: -60, y0: 260, x1: 60, y1: 290 } }]);
+    expect(clear.headerOverlaps).toBe(0);
+    const inRegion = measureLayout(cells, [], [{ group: 'b', box: { x0: 70, y0: -20, x1: 150, y1: 10 } }]);
+    expect(inRegion.headerOverlaps).toBe(1);
+    const onLabel = measureLayout(cells, [], [{ group: 'a', box: { x0: -60, y0: 40, x1: 60, y1: 55 } }]);
+    expect(onLabel.headerOverlaps).toBe(1);
+  });
 });

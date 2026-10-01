@@ -4,7 +4,8 @@
  * cells, labels or chips overlap and tree links never cross; the order of children keeps the
  * other links from crossing.
  *
- * With nothing highlighted, each company's birth tree grows from its root to both sides. With a
+ * With nothing highlighted, each company's tree grows from its root to both sides, every domain
+ * product in one region of its own, clear of the others and of their headers. With a
  * highlighted set (lineage, cell, domain), only that set moves, staged in a clear area to the
  * right of everything else, and the camera fits it. `fitTo`, `tw` and `stageOrigin` are ported
  * from reference/ontaix-studio-reference.html lines 506-511.
@@ -13,6 +14,7 @@ import { now } from '../runtime/clock';
 import { clamp } from './colour';
 import { DOMAIN_R } from './constants';
 import { focusOnDomain } from './focus';
+import { layoutByDomain } from './domainTree';
 import { cellFootprint, chipWidth, estimateWidth, measureWith, type Measure } from './footprint';
 import { layoutForest, type LayoutBlock, type LayoutItem, type LayoutLink } from './layered';
 import { ancestorsOf, descendantsOf } from './lineage';
@@ -22,8 +24,6 @@ import { panelW, type View } from './view';
 
 /** Room between the right edge of everything else and the left edge of a staged set. */
 const STAGE_CLEAR = 560;
-/** Room kept free between two companies' arranged trees. */
-const COMPANY_CLEAR = 420;
 
 export function fitTo(s: SceneState, v: View, set: Iterable<Node>, padX = 260, padY = 220): void {
   let x0 = 1e9,
@@ -205,54 +205,63 @@ export function arrangeCell(s: SceneState, v: View, n: Node, measure: Measure = 
   );
 }
 
+/** Zoom under which the renderer stops drawing action chips; cell labels go at 0.45. */
+const READABLE = 0.55;
+
 /**
- * Whole-model layout: each company's birth tree from its root, split between the root's two
- * sides, a source beside the first concept bound to it. Cells left without a living parent hang
- * from their company's root.
+ * Whole-model layout: each company's tree with every domain product in one region of its own
+ * (`domainTree.ts`). The camera fits the model; when that fit would be too small for labels and
+ * chips to be drawn, it stays at the smallest zoom that draws them, centred on the active
+ * company, and the rest is a pan away.
  */
-export function arrangeAll(s: SceneState, measure: Measure = estimateWidth): void {
+export function arrangeAll(s: SceneState, measure: Measure = estimateWidth, v?: View): void {
   const t = now();
   for (const c of s.companies) if (c.root) c.root.tween = null;
   const companies = s.companies.filter((c) => c.root).sort((a, b) => a.x - b.x);
-  const set = new Set<Node>();
-  const parent = new Map<number, number>();
-  const blocks: LayoutBlock[] = [];
-  for (const c of companies) {
-    const root = c.root as Node;
-    set.add(root);
-    blocks.push({ root: root.id, at: [root.x, root.y], sides: 'both' });
-  }
-  const roots = new Map(companies.map((c) => [c, c.root as Node]));
-  for (const n of s.nodes) if (!n.dying && !n.fixed && n.company && roots.has(n.company)) set.add(n);
-  for (const n of set) {
-    if (n.fixed || !n.company) continue;
-    const root = roots.get(n.company) as Node;
-    let p: Node | undefined = n.parent;
-    if (n.kind === 'source') {
-      const l = s.links.find((x) => x.kind === 'bind' && x.a === n && !x.dying && set.has(x.b));
-      p = l ? l.b : undefined;
-    }
-    parent.set(n.id, p && set.has(p) && p.company === n.company ? p.id : root.id);
-  }
-  if (!blocks.length) return;
-  const { pos } = layoutForest({
-    items: [...set].map((n) => itemOf(n, measure)),
-    parent,
-    blocks,
-    links: linksAmong(s, set, measure),
-    groupRank: groupRank(s),
-    budget: set.size > 200 ? 40 : set.size > 100 ? 80 : 400,
-    apart: COMPANY_CLEAR,
-  });
-  for (const n of set) {
-    if (n.fixed) continue;
-    const [x, y] = pos.get(n.id) as [number, number];
+  if (!companies.length) return;
+  const pos = layoutByDomain(s, companies, measure);
+  for (const [n, [x, y]] of pos) {
     n.tween = { fx: n.x, fy: n.y, tx: x, ty: y, start: t };
     if (n.kind === 'source') n.anchor = [x, y];
   }
   s.cam.tx = s.cam.ty = 0;
   s.userZoomed = false;
   s.lastInteract = now();
+  if (!v) return;
+  let x0 = 1e9,
+    y0 = 1e9,
+    x1 = -1e9,
+    y1 = -1e9;
+  for (const n of s.nodes) {
+    if (n.dying || !shown(n)) continue;
+    const x = n.tween ? n.tween.tx : n.x,
+      y = n.tween ? n.tween.ty : n.y;
+    x0 = Math.min(x0, x);
+    y0 = Math.min(y0, y);
+    x1 = Math.max(x1, x);
+    y1 = Math.max(y1, y);
+  }
+  // The same fit the physics step makes while the user has not zoomed.
+  const fit = Math.min((v.W - panelW(v) - 60) / (x1 - x0 + 2 * (175 + 80)), (v.H - 250) / (y1 - y0 + 2 * (175 + 70)));
+  if (fit >= READABLE) return;
+  const home = s.activeCompany && s.activeCompany.root ? s.activeCompany : companies[0];
+  let hx0 = 1e9,
+    hx1 = -1e9,
+    hy0 = 1e9,
+    hy1 = -1e9;
+  for (const n of s.nodes) {
+    if (n.dying || !shown(n) || n.company !== home) continue;
+    const x = n.tween ? n.tween.tx : n.x,
+      y = n.tween ? n.tween.ty : n.y;
+    hx0 = Math.min(hx0, x);
+    hx1 = Math.max(hx1, x);
+    hy0 = Math.min(hy0, y);
+    hy1 = Math.max(hy1, y);
+  }
+  s.userZoomed = true;
+  s.cam.ts = READABLE;
+  s.cam.tx = (hx0 + hx1) / 2;
+  s.cam.ty = (hy0 + hy1) / 2;
 }
 
 /** Arrange acts on the highlighted set: lineage, then cell, then domain, else everything. */
@@ -261,5 +270,5 @@ export function arrange(s: SceneState, v: View): void {
   if (s.lineageNode) return arrangeLineage(s, v, s.lineageNode, measure);
   if (s.cellFocus) return arrangeCell(s, v, s.cellFocus, measure);
   if (s.domainFocus) return arrangeDomain(s, v, s.domainFocus, measure);
-  arrangeAll(s, measure);
+  arrangeAll(s, measure, v);
 }

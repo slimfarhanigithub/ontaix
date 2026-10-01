@@ -10,7 +10,12 @@
  * so tree links never cross. A domain product's cells stay together under a parent, with extra
  * room where one domain meets another. The order of children is then chosen to keep the other
  * links (relations, equivalences) from crossing: barycentre sweeps, then a bounded local search
- * on the crossings that remain. Pure: no scene, no canvas, no clock.
+ * on the crossings that remain.
+ *
+ * With `groupGapX`, groups are kept as regions: a parent sits between its children of its own
+ * group, a group's top clears other groups one column to each side, a child that starts another
+ * group may skip columns (`skip`) and its link then passes under the cells of the columns it
+ * skips. Pure: no scene, no canvas, no clock.
  */
 import { chipCorners, convexOverlap, linkShape } from './layoutMetrics';
 
@@ -62,6 +67,18 @@ export interface LayoutInput {
   budget?: number;
   /** Least horizontal room between the labels of two neighbouring blocks. */
   apart?: number;
+  /** Order and place only: no local search, no room made for chips. */
+  draft?: boolean;
+  /** Extra vertical room where two groups meet in a column; `GROUP_GAP` when left out. */
+  groupGap?: number;
+  /** Empty columns left before an item, counted from its parent's column. */
+  skip?: Map<number, number>;
+  /**
+   * Keeps groups apart as regions: room between two columns where a link passes from one group
+   * to another, a parent between its children of its own group, and a group's top clear of other
+   * groups one column to each side.
+   */
+  groupGapX?: number;
 }
 
 export interface LayoutResult {
@@ -80,6 +97,12 @@ export const GAP_X = 36;
 const CHIP_CLEAR = 12;
 /** Shortest visible link length at which the renderer draws a chip, plus a margin. */
 const CHIP_MIN_GAP = 76;
+/** Most a column distance may grow while making room for chips. */
+const MAX_WIDEN = 2.2;
+/** Room kept between a link that skips columns and the cells above it. */
+const LINK_CLEAR = 34;
+/** Share of a skipping link's length from which it must pass under the cells it skips. */
+const MIN_ALONG = 0.4;
 /** Rounds of chip-driven column widening. */
 const WIDEN_ROUNDS = 24;
 /** Barycentre sweeps before the local search. */
@@ -130,6 +153,10 @@ class Layout {
   private rank: (g: string | null) => number;
   /** The link from a node to its tree parent. */
   private up = new Map<TN, Edge>();
+  /** Column distances before any widening, by block side. */
+  private base: Map<string, number[]> = new Map();
+  /** Whether a subtree holds another group than its top's; subtrees never change membership. */
+  private holds = new Map<TN, boolean>();
   /** Extra room above a subtree, given where two chips met. */
   private extra = new Map<TN, number>();
   /** Widest chip of the other links between two cells, by `pairKey`. */
@@ -207,7 +234,7 @@ class Layout {
       n.kids = n.kids.filter((k) => k.block === -1);
       for (const k of n.kids) {
         k.block = block;
-        k.depth = n.depth + 1;
+        k.depth = n.depth + 1 + (this.input.skip?.get(k.id) ?? 0);
         stack.push(k);
       }
     }
@@ -281,9 +308,11 @@ class Layout {
     }
     this.restore(best);
     this.place();
-    bestScore = this.search(bestScore);
-    this.place();
-    this.widen();
+    if (!this.input.draft) {
+      bestScore = this.search(bestScore);
+      this.place();
+      this.widen();
+    }
     const pos = new Map<number, [number, number]>();
     for (const n of this.nodes.values()) pos.set(n.id, [n.x, n.y]);
     return { pos, score: bestScore };
@@ -331,15 +360,90 @@ class Layout {
     return { top: [-n.item.up], bot: [n.item.down], topG: [g], botG: [g] };
   }
 
-  /** Packs the subtrees of `kids` one under another, as close as their columns allow. */
+  /**
+   * Where a block starting `ck` must sit below `acc` so the two regions, and the header over the
+   * lower one, keep apart: the block's top against everything above it in its own columns and
+   * one column to each side.
+   */
+  private blockClear(acc: Contour, ck: Contour): number {
+    let s = 0;
+    while (s < ck.top.length && Number.isNaN(ck.top[s])) s++;
+    if (s >= ck.top.length) return -Infinity;
+    const g = ck.topG[s];
+    let e = s;
+    while (e + 1 < ck.top.length && !Number.isNaN(ck.top[e + 1]) && ck.topG[e + 1] === g) e++;
+    let top = Infinity;
+    for (let d = s; d <= e; d++) top = Math.min(top, ck.top[d]);
+    const sep = GAP_Y + (this.input.groupGap ?? GROUP_GAP);
+    let off = -Infinity;
+    for (let d = Math.max(0, s - 1); d <= Math.min(acc.bot.length - 1, e + 1); d++)
+      if (!Number.isNaN(acc.bot[d]) && acc.botG[d] !== g) off = Math.max(off, acc.bot[d] + sep - top);
+    // Deeper blocks: each column's top also clears the other groups one column to each side.
+    for (let d = e + 1; d < ck.top.length; d++) {
+      if (Number.isNaN(ck.top[d])) continue;
+      for (const n of [d - 1, d + 1])
+        if (n >= 0 && n < acc.bot.length && !Number.isNaN(acc.bot[n]) && acc.botG[n] !== ck.topG[d])
+          off = Math.max(off, acc.bot[n] + sep - ck.top[d]);
+    }
+    return off;
+  }
+
+  /** True when a subtree holds a cell of another group than its top. */
+  private holdsOther(k: TN): boolean {
+    let v = this.holds.get(k);
+    if (v === undefined) {
+      const g = k.item?.group ?? null;
+      v = false;
+      for (const x of this.all(k))
+        if ((x.item?.group ?? null) !== g) {
+          v = true;
+          break;
+        }
+      this.holds.set(k, v);
+    }
+    return v;
+  }
+
+  /** A contour moved `by` columns to the right, empty in the columns it skips. */
+  private shifted(c: Contour, by: number): Contour {
+    if (by <= 0) return c;
+    const pad = <T>(v: T): T[] => Array.from({ length: by }, () => v);
+    return {
+      top: [...pad(NaN), ...c.top],
+      bot: [...pad(NaN), ...c.bot],
+      topG: [...pad<string | null>(null), ...c.topG],
+      botG: [...pad<string | null>(null), ...c.botG],
+    };
+  }
+
+  /**
+   * Packs the subtrees of `kids` one under another, as close as their columns allow. With
+   * groups kept as regions, a parent's children of its own group come first and the parent sits
+   * between them; a child that starts another group further right (skipping columns) comes
+   * after, low enough that its link passes under everything in the columns it skips, and the
+   * link's path is kept free for the cells packed next to this subtree.
+   */
   private pack(n: TN, kids: TN[]): Contour {
     const own = this.own(n);
     if (!kids.length) return own;
+    const regions = this.input.groupGapX !== undefined && !!n.item;
+    const mine = (k: TN) => regions && k.item?.group === n.item?.group;
+    // Own children that hold another group go to the outside, the first on top and the rest at
+    // the bottom, with the children of other groups last, so another group sits beside this one
+    // rather than between two parts of it.
+    const holders = regions ? kids.filter((k) => mine(k) && this.holdsOther(k)) : [];
+    const order = regions
+      ? [...holders.slice(0, 1), ...kids.filter((k) => mine(k) && !holders.includes(k)), ...holders.slice(1), ...kids.filter((k) => !mine(k))]
+      : kids;
+    const ownCount = regions ? order.filter(mine).length : 0;
     let acc: Contour | null = null;
     const offs: number[] = [];
-    for (let i = 0; i < kids.length; i++) {
-      const k = kids[i];
-      const ck = this.pack(k, k.kids);
+    let mid = 0;
+    for (let i = 0; i < order.length; i++) {
+      const k = order[i];
+      const skip = k.depth - n.depth - 1;
+      const ck = this.shifted(this.pack(k, k.kids), skip);
+      if (i === ownCount && ownCount > 0) mid = (offs[0] + offs[ownCount - 1]) / 2;
       if (!acc) {
         offs.push(0);
         acc = ck;
@@ -349,11 +453,21 @@ class Layout {
       const m = Math.min(acc.bot.length, ck.top.length);
       for (let d = 0; d < m; d++) {
         if (Number.isNaN(acc.bot[d]) || Number.isNaN(ck.top[d])) continue;
-        const sep = GAP_Y + (acc.botG[d] !== ck.topG[d] ? GROUP_GAP : 0);
+        const sep = GAP_Y + (acc.botG[d] !== ck.topG[d] ? (this.input.groupGap ?? GROUP_GAP) : 0);
         off = Math.max(off, acc.bot[d] + sep - ck.top[d]);
       }
       if (off === -Infinity) off = 0;
-      const prev = kids[i - 1];
+      if (regions) off = Math.max(off, this.blockClear(acc, ck));
+      // The link to a child further right passes under the cells of the columns it skips.
+      if (regions && skip > 0 && ownCount > 0 && i >= ownCount)
+        for (let j = 1; j <= skip; j++) {
+          const b = acc.bot[j - 1];
+          const f = this.along(k, n, j);
+          // Close to the parent the link can only pass under by going very far down; there the
+          // link is allowed over the cells instead, which keeps the model from growing tall.
+          if (b !== undefined && !Number.isNaN(b) && f >= MIN_ALONG) off = Math.max(off, mid + (b + LINK_CLEAR - mid) / f);
+        }
+      const prev = order[i - 1];
       const chip = this.near.get(pairKey(prev, k));
       // A labelled link between two neighbours runs straight down from one to the other; its chip
       // sits half-way, so the half-way point must clear the upper one's labels by half a chip.
@@ -361,27 +475,81 @@ class Layout {
         off = Math.max(off, offs[i - 1] + 2 * Math.max(prev.item.down, k.item.up) + chip + 2 * CHIP_CLEAR);
       off += this.extra.get(k) ?? 0;
       offs.push(off);
-      const merged: Contour = { top: [], bot: [], topG: [], botG: [] };
-      const len = Math.max(acc.top.length, ck.top.length);
-      for (let d = 0; d < len; d++) {
-        const ha = d < acc.top.length && !Number.isNaN(acc.top[d]),
-          hb = d < ck.top.length && !Number.isNaN(ck.top[d]);
-        merged.top.push(ha ? acc.top[d] : hb ? ck.top[d] + off : NaN);
-        merged.topG.push(ha ? acc.topG[d] : hb ? ck.topG[d] : null);
-        merged.bot.push(hb ? ck.bot[d] + off : ha ? acc.bot[d] : NaN);
-        merged.botG.push(hb ? ck.botG[d] : ha ? acc.botG[d] : null);
-      }
-      acc = merged;
+      acc = this.merge(acc, ck, off);
     }
-    const mid = (offs[0] + offs[offs.length - 1]) / 2;
-    kids.forEach((k, i) => (k.rel = offs[i] - mid));
-    const a = acc as Contour;
+    // A parent sits between its first and last child of its own group when it has one, so a
+    // group hung from it elsewhere does not pull it away from its own cells.
+    if (!(regions && ownCount > 0)) mid = (offs[0] + offs[offs.length - 1]) / 2;
+    else if (ownCount === order.length) mid = (offs[0] + offs[ownCount - 1]) / 2;
+    order.forEach((k, i) => (k.rel = offs[i] - mid));
+    let a = acc as Contour;
+    // Keep the path of every link that skips columns free in those columns.
+    if (regions)
+      order.forEach((k, i) => {
+        const skip = k.depth - n.depth - 1;
+        for (let j = 1; j <= skip; j++) {
+          const y = mid + (offs[i] - mid) * this.along(k, n, j);
+          const path: Contour = { top: [], bot: [], topG: [], botG: [] };
+          for (let d = 0; d < j - 1; d++) {
+            path.top.push(NaN);
+            path.bot.push(NaN);
+            path.topG.push(null);
+            path.botG.push(null);
+          }
+          path.top.push(-LINK_CLEAR);
+          path.bot.push(LINK_CLEAR);
+          path.topG.push(k.item?.group ?? null);
+          path.botG.push(k.item?.group ?? null);
+          a = this.merge(a, path, y, true);
+        }
+      });
     return {
       top: [own.top[0], ...a.top.map((v) => v - mid)],
       bot: [own.bot[0], ...a.bot.map((v) => v - mid)],
       topG: [own.topG[0], ...a.topG],
       botG: [own.botG[0], ...a.botG],
     };
+  }
+
+  /**
+   * How far along the link from `n` to its child `k` (0 at `n`, 1 at `k`) the column `j` after
+   * `n` lies, from the last column distances known; evenly spaced columns before any are known.
+   */
+  private along(k: TN, n: TN, j: number): number {
+    const span = k.depth - n.depth;
+    const gaps = this.gaps.get(this.key(k));
+    if (!gaps || gaps.length <= k.depth) return j / span;
+    let to = 0,
+      all = 0;
+    for (let d = n.depth + 1; d <= k.depth; d++) {
+      all += gaps[d];
+      if (d <= n.depth + j) to += gaps[d];
+    }
+    return all > 0 ? to / all : j / span;
+  }
+
+  /** `acc` with `ck` placed `off` below; `both` widens each column to whichever reaches further. */
+  private merge(acc: Contour, ck: Contour, off: number, both = false): Contour {
+    const merged: Contour = { top: [], bot: [], topG: [], botG: [] };
+    const len = Math.max(acc.top.length, ck.top.length);
+    for (let d = 0; d < len; d++) {
+      const ha = d < acc.top.length && !Number.isNaN(acc.top[d]),
+        hb = d < ck.top.length && !Number.isNaN(ck.top[d]);
+      if (both && ha && hb) {
+        const upA = acc.top[d] <= ck.top[d] + off,
+          downB = ck.bot[d] + off >= acc.bot[d];
+        merged.top.push(upA ? acc.top[d] : ck.top[d] + off);
+        merged.topG.push(upA ? acc.topG[d] : ck.topG[d]);
+        merged.bot.push(downB ? ck.bot[d] + off : acc.bot[d]);
+        merged.botG.push(downB ? ck.botG[d] : acc.botG[d]);
+        continue;
+      }
+      merged.top.push(ha ? acc.top[d] : hb ? ck.top[d] + off : NaN);
+      merged.topG.push(ha ? acc.topG[d] : hb ? ck.topG[d] : null);
+      merged.bot.push(hb ? ck.bot[d] + off : ha ? acc.bot[d] : NaN);
+      merged.botG.push(hb ? ck.botG[d] : ha ? acc.botG[d] : null);
+    }
+    return merged;
   }
 
   private key(n: TN): string {
@@ -409,6 +577,15 @@ class Layout {
           let g = 0;
           const hw = (ns: TN[]) => ns.reduce((a, n) => Math.max(a, n.item ? n.item.halfW : 0), 0);
           if (prev.length) g = hw(prev) + hw(cur) + GAP_X;
+          const across = this.input.groupGapX;
+          if (across !== undefined && d > 1) {
+            const curItems = cur.filter((n) => n.item);
+            // An empty column between two groups' columns, or a link from one group to another.
+            if (!curItems.length && prev.length) g = Math.max(g, hw(prev) + across);
+            else if (curItems.length && !prev.length) g = Math.max(g, hw(curItems) + across);
+            else if (cur.some((n) => n.parent?.item && n.parent.item.group !== n.item?.group))
+              g = Math.max(g, hw(prev) + hw(cur) + across);
+          }
           for (const n of cur) {
             if (!n.parent || !n.parent.item || !n.item) continue;
             const e = this.up.get(n);
@@ -418,6 +595,7 @@ class Layout {
           gaps.push(g);
         }
         this.gaps.set(key, gaps);
+        this.base.set(key, gaps.slice());
       }
       while (gaps.length < layers.length) gaps.push(gaps[gaps.length - 1] || 200);
       const [blockS, sideS] = key.split(':');
@@ -733,7 +911,8 @@ class Layout {
         const [key, d] = c.split('#');
         const gaps = this.gaps.get(key),
           depth = Number(d);
-        if (gaps && depth > 0 && depth < gaps.length) gaps[depth] = gaps[depth] * 1.12 + 8;
+        const base = this.base.get(key);
+        if (gaps && depth > 0 && depth < gaps.length) gaps[depth] = Math.min(gaps[depth] * 1.12 + 8, (base?.[depth] ?? gaps[depth]) * MAX_WIDEN);
       }
       this.place();
     }
@@ -797,7 +976,10 @@ class Layout {
           ) {
             if (a.n) {
               bad.add(a.n);
-              if (c.parent && c !== a.n && c !== a.n.parent) bad.add(c);
+              if (c.parent && c !== a.n && c !== a.n.parent) {
+                bad.add(c);
+                tall.add(c.y > a.n.y ? c : a.n);
+              }
             } else if (!a.ends.includes(c)) tall.add(c);
           }
         }
@@ -809,6 +991,11 @@ class Layout {
         if (!convexOverlap(a.poly, b.poly) || a.n === b.n) continue;
         if (a.n && b.n) tall.add(a.n.y > b.n.y ? a.n : b.n);
         else if (a.n || b.n) tall.add((a.n ?? b.n) as TN);
+        else {
+          // Two other links: the lowest of their cells that is not shared moves down.
+          const own = [...a.ends, ...b.ends].filter((x) => !(a.ends.includes(x) && b.ends.includes(x)) && x.parent);
+          if (own.length) tall.add(own.reduce((p, q) => (q.y > p.y ? q : p)));
+        }
       }
     }
     return { wide: bad, tall };

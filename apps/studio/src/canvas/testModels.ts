@@ -146,6 +146,11 @@ export function fixtureModel(s: SceneState, seed = 7): { northwind: Company; aur
   grow(s, aurora, AURORA, rnd);
   for (const [a, b] of EQUIVALENCES)
     addLink(s, find(s, a, aurora) as Node, find(s, b, northwind) as Node, 'same', 230, 'equivalent to', rnd());
+  // A company root sits on its company, as the physics step keeps it once companies are laid out.
+  for (const c of [northwind, aurora]) {
+    (c.root as Node).x = c.x;
+    (c.root as Node).y = c.y;
+  }
   return { northwind, aurora };
 }
 
@@ -159,16 +164,22 @@ const ACTIONS = ['has', 'owns', 'feeds', 'records', 'is planned by', 'ships', 'c
 /**
  * A seeded synthetic model of `size` concepts in one company: a birth tree in which a child stays
  * in its parent's domain three times in four, and one extra relation per `per` concepts (none
- * when `per` is 0).
+ * when `per` is 0). With `whole`, a child that leaves its parent's domain starts a domain no
+ * other cell holds yet (or stays when every domain is taken), so each domain is one subtree.
  */
-export function syntheticModel(s: SceneState, size: number, seed = 11, per = 8): Company {
+export function syntheticModel(s: SceneState, size: number, seed = 11, per = 8, whole = false): Company {
   const rnd = mulberry32(seed);
   const company = addCompany(s, 'Synthetic Holdings', '');
   const keys = company.domains.map((d) => d.key);
   const made: Node[] = [];
   for (let i = 0; i < size; i++) {
     const parent = made.length && rnd() > 0.06 ? made[Math.floor(Math.pow(rnd(), 0.7) * made.length)] : (company.root as Node);
-    const key = parent.domain && rnd() < 0.75 ? parent.domain.key : keys[Math.floor(rnd() * keys.length)];
+    let key = parent.domain && rnd() < 0.75 ? parent.domain.key : keys[Math.floor(rnd() * keys.length)];
+    if (whole && key !== parent.domain?.key) {
+      const free = keys.filter((k) => !made.some((n) => n.domain?.key === k));
+      const firstTop = made.find((n) => n.parent === company.root);
+      key = free.length ? free[0] : (parent.domain?.key ?? firstTop?.domain?.key ?? keys[0]);
+    }
     const d = domainOf(s, key, company);
     const [gx, gy] = domainCentre(d!);
     const n = addNode(s, {

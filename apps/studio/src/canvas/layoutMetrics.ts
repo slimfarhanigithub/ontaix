@@ -4,7 +4,7 @@
  * sits at the middle of the drawn curve, turned along it and kept upright; a cell's labels sit
  * under it. Pure: no scene, no canvas.
  */
-import { distSeg, hull, inHull, type Pt } from './hulls';
+import { distSeg, hull, type Pt } from './hulls';
 
 export interface Box {
   x0: number;
@@ -49,6 +49,14 @@ export interface LayoutMetrics {
   hiddenLabels: number;
   /** Pairs of domain products whose tinted regions overlap. */
   regionOverlaps: number;
+  /** Domain headers that cover a cell, its labels, another header or another domain's region. */
+  headerOverlaps: number;
+}
+
+/** The two-line header the renderer writes above a domain product's region. */
+export interface MetricHeader {
+  group: string;
+  box: Box;
 }
 
 /** Shortest visible length of a link (between the two cells) at which its chip is drawn. */
@@ -252,10 +260,24 @@ const parts = (c: MetricCell): Box[] => [
   labelBox(c),
 ];
 
+/** True when a point lies inside a convex polygon (either winding). */
+function inConvex(h: Pt[], x: number, y: number): boolean {
+  let sign = 0;
+  for (let i = 0; i < h.length; i++) {
+    const [ax, ay] = h[i],
+      [bx, by] = h[(i + 1) % h.length];
+    const c = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+    if (c === 0) continue;
+    if (sign === 0) sign = Math.sign(c);
+    else if (Math.sign(c) !== sign) return false;
+  }
+  return true;
+}
+
 /** Distance between two convex point sets grown into regions; 0 when they overlap. */
-function regionDistance(p: Pt[], q: Pt[]): number {
-  if (p.length >= 3 && q.some(([x, y]) => inHull(p, x, y))) return 0;
-  if (q.length >= 3 && p.some(([x, y]) => inHull(q, x, y))) return 0;
+export function regionDistance(p: Pt[], q: Pt[]): number {
+  if (p.length >= 3 && q.some(([x, y]) => inConvex(p, x, y))) return 0;
+  if (q.length >= 3 && p.some(([x, y]) => inConvex(q, x, y))) return 0;
   const edges = (h: Pt[]): [Pt, Pt][] =>
     h.length === 1 ? [[h[0], h[0]]] : h.length === 2 ? [[h[0], h[1]]] : h.map((a, i) => [a, h[(i + 1) % h.length]]);
   let best = Infinity;
@@ -274,7 +296,7 @@ function regionDistance(p: Pt[], q: Pt[]): number {
 }
 
 /** Every readability measure of a layout. */
-export function measureLayout(cells: MetricCell[], links: MetricLink[]): LayoutMetrics {
+export function measureLayout(cells: MetricCell[], links: MetricLink[], headers: MetricHeader[] = []): LayoutMetrics {
   const shapes = links.map((l) => linkShape(cells[l.a], cells[l.b], l.seed));
   const crossings = crossingPairs(cells, links, shapes).length;
 
@@ -336,10 +358,20 @@ export function measureLayout(cells: MetricCell[], links: MetricLink[]): LayoutM
     if (g) g.push([c.x, c.y]);
     else groups.set(c.group, [[c.x, c.y]]);
   }
-  const hulls = [...groups.values()].map((pts) => hull(pts));
+  const hullOf = new Map([...groups].map(([g, pts]) => [g, hull(pts)]));
+  const hulls = [...hullOf.values()];
   let regionOverlaps = 0;
   for (let i = 0; i < hulls.length; i++)
     for (let j = i + 1; j < hulls.length; j++) if (regionDistance(hulls[i], hulls[j]) < 2 * REGION_PAD) regionOverlaps++;
 
-  return { crossings, cellOverlaps, chipOverlaps, chipsOnCells, linksThroughCells, hiddenLabels, regionOverlaps };
+  let headerOverlaps = 0;
+  headers.forEach((h, i) => {
+    const hit =
+      cells.some((c) => parts(c).some((p) => boxesOverlap(p, h.box))) ||
+      headers.some((o, j) => j !== i && boxesOverlap(o.box, h.box)) ||
+      [...hullOf].some(([g, hp]) => g !== h.group && regionDistance(hp, boxCorners(h.box)) < REGION_PAD);
+    if (hit) headerOverlaps++;
+  });
+
+  return { crossings, cellOverlaps, chipOverlaps, chipsOnCells, linksThroughCells, hiddenLabels, regionOverlaps, headerOverlaps };
 }
