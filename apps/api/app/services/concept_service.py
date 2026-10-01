@@ -1,4 +1,5 @@
-"""Concepts: the Entities list, single reads, lineage, attributes, rename and delete proposals."""
+"""Concepts: the Entities list, single reads, lineage, attributes, and the rename, delete and
+move proposals."""
 
 from __future__ import annotations
 
@@ -126,6 +127,22 @@ async def propose_delete(
     view = await load_view(session, caller.tenant_id)
     _readable_concept(caller, view, concept_id)
     draft = ChangeDraft(change_kind="delete_concept", payload=ChangePayload(concept_id=concept_id))
+    proposal = await proposal_service.create(session, caller, view, draft)
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )
+
+
+async def propose_move(
+    session: AsyncSession, caller: Caller, concept_id: uuid.UUID, domain_key: str
+) -> ProposalDto:
+    await charge_proposals(caller)
+    view = await load_view(session, caller.tenant_id)
+    _readable_concept(caller, view, concept_id)
+    draft = ChangeDraft(
+        change_kind="move_concept_domain",
+        payload=ChangePayload(concept_id=concept_id, domain_key=domain_key),
+    )
     proposal = await proposal_service.create(session, caller, view, draft)
     return readable_proposal(
         caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))

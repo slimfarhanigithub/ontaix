@@ -22,7 +22,6 @@ of each valid part of the model's answer as it arrives; the result is the same e
 from __future__ import annotations
 
 import logging
-import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -76,6 +75,7 @@ from app.utilities.channels import (
 )
 from app.utilities.permissions import can_propose_anywhere, can_read
 from app.utilities.problems import forbidden, not_found
+from app.utilities.stage_clock import StageClock
 from app.utilities.teach_parser import domain_prefix
 from app.utilities.teach_triggers import fallback_triggers, replaces_grammar
 from app.utilities.transcript import MAX_SEGMENTS, split_transcript
@@ -114,8 +114,8 @@ class PreparedParse:
     source: _Source
     key: SessionKey | None
     sentence: str
-    started: float
-    view_ms: int
+    # The parse's stage clock, started when the request was read.
+    clock: StageClock
     # The result and what it kept, when they are known without the model step.
     ready: tuple[TeachResult, Assembled] | None = None
     drafter: Drafter | None = None
@@ -136,18 +136,18 @@ class PreparedParse:
             result, kept = self.ready
         else:
             result, kept = await self._with_model_step(on_drafts)
+        self.clock.mark("drafts")
         turns = _turns(self.source, result, kept)
         await teach_session_service.store_turns(self.key, result.extractor, turns)
+        self.clock.mark("turns")
         assert self.company is not None
         result.parse_id = await learning_capture_service.record_parse(
             self.caller, self.company, self.session_id, self.source.origin, self.sentence, result
         )
+        self.clock.mark("learning")
+        self.clock.total()
         logger.debug(
-            "teach parse (%s, %s): view %d ms, total %d ms",
-            result.extractor,
-            result.llm_outcome,
-            self.view_ms,
-            int((time.perf_counter() - self.started) * 1000),
+            "teach parse (%s, %s): %s", result.extractor, result.llm_outcome, self.clock.publish()
         )
         return result
 
@@ -178,6 +178,7 @@ class PreparedParse:
             profile=source.profile,
             on_partial=on_partial,
         )
+        self.clock.mark("model")
         if step.outcome == "used":
             return self._used(step)
         if speech:
@@ -218,22 +219,23 @@ async def prepare(session: AsyncSession, caller: Caller, body: TeachRequest) -> 
     """Everything of a parse up to the model step: the gates and charges, which raise the
     request's refusals, and the grammar. The request's own transaction is committed when the
     model step follows, so it holds no lock during the model call."""
-    started = time.perf_counter()
+    clock = StageClock("parse")
     view = await load_view(session, caller.tenant_id)
-    view_ms = int((time.perf_counter() - started) * 1000)
+    clock.mark("view")
     company = view.companies.get(body.company_id)
     if company is None or not can_read(caller.grants, company.id):
         raise not_found("company")
     if not can_propose_anywhere(caller.grants, caller.everyone_teaches):
         raise forbidden("Your roles do not allow proposing")
     source = await _source(session, caller, view, body)
+    clock.mark("source")
     key = (
         teach_session_service.session_key(caller, company.id, body.session_id)
         if body.session_id
         else None
     )
     sentence = source.text.strip()
-    prepared = PreparedParse(caller, source, key, sentence, started, view_ms)
+    prepared = PreparedParse(caller, source, key, sentence, clock)
     prepared.company, prepared.session_id = company, body.session_id
     root = view.root_of(company.id)
     if root is None:
@@ -252,6 +254,7 @@ async def prepare(session: AsyncSession, caller: Caller, body: TeachRequest) -> 
     if not source.reading.model_first:
         grammar = plan_grammar(drafter, text)
         triggers = fallback_triggers(text, grammar.outcome)
+        clock.mark("grammar")
     if grammar is not None and not triggers and not model_first:
         kept = assemble(grammar.planned, sentence)
         whole = [(0, len(sentence))]

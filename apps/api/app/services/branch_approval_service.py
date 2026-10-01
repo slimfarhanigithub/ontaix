@@ -20,7 +20,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import tenant_session
 from app.config import get_settings
 from app.models.api.proposal import BranchResult
 from app.models.storage.base import ProposalState
@@ -51,7 +51,7 @@ async def approve_branch(caller: Caller, proposal_id: uuid.UUID) -> BranchResult
     last: _Batch | None = None
     for _ in range(settings.branch_approve_max_rounds):
         try:
-            async with get_session_factory()() as session:
+            async with tenant_session(caller.tenant_id) as session:
                 batch = await _run_batch(
                     session, caller, proposal_id, settings.branch_approve_batch, batches == 0
                 )

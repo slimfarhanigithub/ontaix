@@ -53,7 +53,7 @@ async def test_change_on_a_concept_removed_meanwhile_answers_409(
     client: httpx.AsyncClient, tenant: TenantFixture, change_kind: str
 ) -> None:
     concept = await approved(client, tenant, f"Gone {change_kind}")
-    factory = db_client.get_session_factory()
+    factory = db_client.get_platform_session_factory()
     async with factory() as stale:
         view = await load_view(stale, tenant.tenant_id)
         delete = await client.delete(f"/concepts/{concept['id']}", headers=tenant.builder.headers)
@@ -97,7 +97,7 @@ async def test_change_on_a_relation_removed_meanwhile_answers_409(
             f"/proposals/{relation.json()['id']}/approve", headers=tenant.governor.headers
         )
     ).status_code == 200
-    factory = db_client.get_session_factory()
+    factory = db_client.get_platform_session_factory()
     async with factory() as stale:
         view = await load_view(stale, tenant.tenant_id)
         removal = await client.delete(f"/relations/{relation_id}", headers=tenant.builder.headers)

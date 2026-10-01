@@ -9,8 +9,10 @@ alembic.ini              Alembic configuration; the URL comes from ONTAIX_DATABA
 app/
   main.py                FastAPI entry point: routers under /api/v1, Problem+JSON handlers
   config.py              single pydantic-settings Settings class, env prefix ONTAIX_
-  auth.py                caller resolution (dev header X-Ontaix-User) and role grants
-  clients/db_client.py   async SQLAlchemy engine and session factory over psycopg 3
+  auth.py                caller resolution (session cookie, dev header), CSRF, organization binding
+  admin.py               `python -m app.admin`: create the super admin, set a password (getpass)
+  clients/db_client.py   async SQLAlchemy engines over psycopg 3, one per database role
+  data/                  the hashed list of common breached passwords the password policy checks
   migrations/            Alembic env, runner and versions; 0001 executes contracts/schema.sql
   models/api/            Pydantic DTOs, camelCase on the wire, one file per shape
   models/storage/        SQLAlchemy mappings, one file per table
@@ -39,7 +41,16 @@ uv run pytest
 uv run ruff check
 ```
 
-`ONTAIX_DATABASE_URL` must point at a PostgreSQL 16 database. In the `dev` environment a request identifies its user with the header `X-Ontaix-User: <email>` (the seeded users live in `app/seed/directory.py`). On Windows the async driver needs a selector event loop: run uvicorn with `--loop asyncio` after setting `asyncio.WindowsSelectorEventLoopPolicy`, as the seed command does.
+`ONTAIX_DATABASE_URL` must point at a PostgreSQL 16 database. Its login must be a member of the NOLOGIN roles `ontaix_app` (organization requests, confined by row-level security to one organization per transaction) and `ontaix_platform` (sign-in, the platform portal, cross-organization jobs), or give the platform login in `ONTAIX_PLATFORM_DATABASE_URL`; the migration creates both roles. A superuser login (the embedded test server, the compose stack) can `SET ROLE` to them as it is. Any other login is granted its role once, with the schema owner's login in `ONTAIX_DATABASE_URL` and the login names in `ONTAIX_APP_DATABASE_LOGIN` and `ONTAIX_PLATFORM_DATABASE_LOGIN` (default the same): `uv run python -m app.admin grant-database-roles`, safe to repeat.
+
+Users sign in with an email and a password at `POST /api/v1/auth/sign-in`, which sets the `__Host-ontaix_session` cookie. There is no sign-up: the only default account is the super admin, created once by the owner in a terminal with the schema owner's login in `ONTAIX_DATABASE_URL` (only that login may grant the platform role):
+
+```bash
+uv run python -m app.admin create-super-admin <email>   # prompts twice, no echo
+uv run python -m app.admin set-password <email>         # the super admin's own recovery
+```
+
+The super admin then creates organizations and their accounts from the platform portal. Only with `ONTAIX_ENVIRONMENT` `dev` or `test` and `ONTAIX_DEV_IDENTITY_HEADER=true` does the header `X-Ontaix-User: <email>` identify a seeded user instead (the seeded users live in `app/seed/directory.py` and have no password); `pnpm dev:stack` and the tests turn it on. On Windows the async driver needs a selector event loop: run uvicorn with `--loop asyncio` after setting `asyncio.WindowsSelectorEventLoopPolicy`, as the seed command does.
 
 ## Tests
 

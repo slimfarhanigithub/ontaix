@@ -169,6 +169,10 @@ Decision row 130. A sentence can state a fact about a concept rather than a new 
 - An exhausted budget never fails the request: the response is `200` with the grammar's result, `degraded` true and the reason in `llmOutcome`. The existing `429 rate_limited` stays for the parse budget, which is charged before the grammar runs, as today.
 - No event is published for cost records. They change no state another client draws; Cost management reads `GET /cost` when it opens.
 
+### Stage Timings
+
+Decision row 154. Every parse measures its stages on a wall clock and publishes them (`app/utilities/stage_clock.py`): for the request, `view` (loading the ontology), `source` (gates and charges), `grammar`, `model` (the whole model step), `drafts` (building the drafts) and `turns` (storing the session turns); for the model step, `budget` and `reserve` (the hourly budget and the monthly reservation), `candidates`, `examples` and `context` (building the prompt), `provider` (the whole model call, with `provider_first_token` when the answer was streamed), `interpret` (validation, grounding and mapping) and `settle` (the cost record), with the call's input and output token counts. They go to the debug log, never to a response, and the evaluation harness records them per parse and reports each stage's median, 90th percentile and slowest per configuration (the Timing Breakdown tables), so a change in latency is placed in the stage that caused it before it is tuned.
+
 ### Failure Modes
 
 | Situation | `llmOutcome` | Response |

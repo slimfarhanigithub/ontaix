@@ -17,6 +17,11 @@ class DomainProduct(Base):
         ForeignKeyConstraint(
             ["tenant_id", "company_id"], ["company.tenant_id", "company.id"], ondelete="CASCADE"
         ),
+        ForeignKeyConstraint(
+            ["tenant_id", "template_key"],
+            ["tenant_domain.tenant_id", "tenant_domain.key"],
+            ondelete="RESTRICT",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -24,7 +29,8 @@ class DomainProduct(Base):
     )
     tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenant.id", ondelete="CASCADE"))
     company_id: Mapped[uuid.UUID] = mapped_column(Uuid)
-    template_key: Mapped[str] = mapped_column(ForeignKey("domain_template.key"))
+    # The tenant domain key: a template key or a custom domain's key.
+    template_key: Mapped[str]
     revision: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     hidden: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
