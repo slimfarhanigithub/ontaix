@@ -11,6 +11,15 @@ object properties with a named domain and range, from some and all restrictions 
 relationships, their verb taken from the property. Everything left out is reported with its
 source and reason. Drafts come parents first, then relations; above `max_nodes` drafts the
 whole import is refused.
+
+A file in the Ontaix vocabulary, as an Ontaix OWL export is, maps back into the model it came
+from: the company root is not drafted, its children hang under the import's parent; a class
+hangs under its `ox:bornFrom` parent - a specialisation when it is also `rdfs:subClassOf` it,
+else born with its `ox:birthAction`, reversed with `ox:birthReverse` - and its further parents
+become relations; `ox:domain` sets its domain when the company has it (else the parent's, with
+`unknown_domain`); a restriction that repeats a birth relation is not drafted twice; object
+property domains and ranges add nothing, since the restrictions carry every relation; and each
+taught attribute becomes an attribute draft after the relations.
 """
 
 from __future__ import annotations
@@ -37,6 +46,10 @@ MAX_LABEL_CHARS = 120
 MAX_VERB_CHARS = 60
 MAX_SOURCE_CHARS = 400
 MAX_SKIPPED = 100_000
+MAX_RULE_CHARS = 200
+MAX_ATTRIBUTE_NAME_CHARS = 80
+MAX_ATTRIBUTE_VALUE_CHARS = 200
+TAUGHT_TYPES = ("text", "number", "date")
 DEFAULT_DOMAIN = "production"
 INCLUDES = "includes"
 HAS_INSTANCE = "has instance"
@@ -183,6 +196,10 @@ class _Mapper:
         # A dropped duplicate's source to the source of the item that kept the label.
         self.alias: dict[str, str] = {}
         self.relation_keys: set[tuple[str, str, str]] = set()
+        # The company roots of an Ontaix export: never drafted, they stand for the import parent.
+        self.roots: set[str] = set()
+        # `(subject, object, action)` of each birth read from an Ontaix export.
+        self.birth_keys: set[tuple[str, str, str]] = set()
 
     def run(self) -> MappedTree:
         for entry in self.parsed.skipped:
@@ -203,6 +220,8 @@ class _Mapper:
                 self._emit_concept(pending)
                 done.add(pending)
         self._relations()
+        if self.parsed.ontaix:
+            self._attributes()
         if len(self.tree.drafts) > self.target.max_nodes:
             raise DocumentTooLargeError(
                 f"the file maps to more than {self.target.max_nodes} proposals"
@@ -217,6 +236,9 @@ class _Mapper:
         )
         kept_by_label: dict[str, str] = {}
         for item in items:
+            if self.parsed.ontaix and item.root and not item.individual:
+                self.roots.add(item.source)
+                continue
             if item.individual and self.target.individuals != "as_concepts":
                 self._skip(item.source, "individual_skipped")
                 continue
@@ -242,11 +264,30 @@ class _Mapper:
                     if all(p != resolved for p, _ in named):
                         named.append((resolved, kind))
             named.sort(key=lambda p: (self.nodes[p[0]].label.lower(), p[0]))
+            if node.item.born_from is not None:
+                self._born_from(node, named)
+                continue
             if named:
                 node.parent, node.parent_kind = named[0]
                 node.extra_parents = named[1:]
             elif node.item.individual:
                 node.parent_kind = "instance"
+
+    def _born_from(self, node: _Node, named: list[tuple[str, str]]) -> None:
+        """Hang an item of an Ontaix export under its birth parent; its other parents become
+        relations. A birth parent outside the file, or the company root, puts it at the top."""
+        item = node.item
+        born = item.born_from or ""
+        resolved = self.alias.get(born, born)
+        spec = (born, "spec") in item.parents
+        node.extra_parents = [(p, k) for p, k in named if p != resolved]
+        if resolved in self.nodes and resolved != item.source:
+            node.parent = resolved
+            node.parent_kind = "spec" if spec else INCLUDES
+        if not spec:
+            action = normalise_action(item.action or INCLUDES)[:MAX_VERB_CHARS].strip()
+            ends = (item.source, born) if item.birth_reverse else (born, item.source)
+            self.birth_keys.add((*ends, action))
 
     def _break_cycles(self) -> None:
         done: set[str] = set()
@@ -316,8 +357,12 @@ class _Mapper:
                 requires.append(parent.draft_index)
         if node.parent_kind == "spec" and parent is not None:
             draft = {"type": "spec", **draft}
+            if node.item.rule and node.item.rule.strip():
+                draft["rule"] = node.item.rule.strip()[:MAX_RULE_CHARS]
         else:
             draft = {"type": "concept", **draft, "action": self._birth_action(node)}
+            if node.item.birth_reverse:
+                draft["reverse"] = True
         node.draft_index = len(self.tree.drafts)
         self.tree.drafts.append(draft)
         self.tree.notes.append(
@@ -344,6 +389,8 @@ class _Mapper:
         keys = self.target.domain_keys
         if node.item.domain and node.item.domain in keys:
             return node.item.domain
+        if node.item.domain and self.parsed.ontaix:
+            self._skip(node.item.source, "unknown_domain", node.label)
         if self.target.domain_key:
             return self.target.domain_key
         if parent_domain and parent_domain in keys:
@@ -359,7 +406,7 @@ class _Mapper:
                     action = HAS_INSTANCE if kind == "instance" else INCLUDES
                     self._relation(parent, node.item.source, action, node.item.source)
         for prop in sorted(self.parsed.properties.values(), key=lambda p: p.source):
-            if not prop.domains or not prop.ranges:
+            if self.parsed.ontaix or not prop.domains or not prop.ranges:
                 continue
             verb = self._verb(prop.source)
             if verb is None:
@@ -369,8 +416,11 @@ class _Mapper:
                     self._relation(domain, rng, verb, prop.source)
         for statement in self.parsed.statements:
             verb = self._verb(statement.property)
-            if verb is not None:
-                self._relation(statement.subject, statement.object, verb, statement.subject)
+            if verb is None:
+                continue
+            if (statement.subject, statement.object, verb) in self.birth_keys:
+                continue
+            self._relation(statement.subject, statement.object, verb, statement.subject)
 
     def _verb(self, prop_source: str) -> str | None:
         prop = self.parsed.properties.get(prop_source)
@@ -387,8 +437,8 @@ class _Mapper:
         return verb
 
     def _relation(self, a_source: str, b_source: str, action: str, source: str) -> None:
-        a = self.nodes.get(self.alias.get(a_source, a_source))
-        b = self.nodes.get(self.alias.get(b_source, b_source))
+        a = self._end(a_source)
+        b = self._end(b_source)
         if a is None or b is None:
             self._skip(source, "unknown_parent")
             return
@@ -409,7 +459,9 @@ class _Mapper:
         draft: dict[str, Any] = {"type": "relation", "companyId": str(self.target.company_id)}
         requires: list[int] = []
         for end, node in (("a", a), ("b", b)):
-            if node.existing is not None:
+            if node.item.root:
+                draft[f"{end}Id"] = str(self.target.parent_id)
+            elif node.existing is not None:
                 draft[f"{end}Id"] = str(node.existing.id)
             else:
                 draft[f"{end}Label"] = node.label
@@ -425,6 +477,52 @@ class _Mapper:
                 "requires": sorted(set(requires)),
             }
         )
+
+    def _end(self, source: str) -> _Node | None:
+        """The node a relation end names; the company root of an Ontaix export stands for the
+        import's parent."""
+        if source in self.roots:
+            return _Node(OntologyItem(source=source, root=True), "", None)
+        return self.nodes.get(self.alias.get(source, source))
+
+    def _attributes(self) -> None:
+        """One taught attribute draft per value, after its concept's draft."""
+        for node in self.nodes.values():
+            seen: set[str] = set()
+            for attribute in node.item.attributes:
+                name = unicodedata.normalize("NFKC", attribute.name).strip()
+                value = attribute.value.strip()
+                valid = (
+                    0 < len(name) <= MAX_ATTRIBUTE_NAME_CHARS
+                    and 0 < len(value) <= MAX_ATTRIBUTE_VALUE_CHARS
+                    and attribute.type in TAUGHT_TYPES
+                    and not has_refused_character(name)
+                )
+                if not valid:
+                    self._skip(node.item.source, "unsupported_axiom", node.label)
+                    continue
+                if name.lower() in seen:
+                    continue
+                seen.add(name.lower())
+                draft: dict[str, Any] = {"type": "attr"}
+                requires: list[int] = []
+                if node.existing is not None:
+                    draft["conceptId"] = str(node.existing.id)
+                else:
+                    draft["conceptLabel"] = node.label
+                    draft["companyId"] = str(self.target.company_id)
+                    if node.draft_index is not None:
+                        requires.append(node.draft_index)
+                draft.update({"name": name, "attributeType": attribute.type, "value": value})
+                self.tree.drafts.append(draft)
+                self.tree.notes.append(
+                    {
+                        "source": safe_source(node.item.source),
+                        "labelLanguage": None,
+                        "depth": None,
+                        "requires": requires,
+                    }
+                )
 
     def _skip(self, source: str, reason: SkipReason, label: str | None = None) -> None:
         if len(self.tree.skipped) >= MAX_SKIPPED:

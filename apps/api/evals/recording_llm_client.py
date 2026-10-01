@@ -11,13 +11,16 @@ still refused with status 429 after those retries (the deployment's quota, not t
 recorded and tried again after a longer pause, up to RATE_LIMIT_RETRIES times, so a small quota
 does not turn into comprehension failures; the recorded calls keep the refusals countable.
 Calls pass through a `CallGate`: each 429 that reaches this client halves the number of calls
-the gate lets run at once, down to one, so a run slows to what the quota accepts.
+the gate lets run at once, down to one, so a run slows to what the quota accepts. The time a
+call waits at the gate is the harness's, not the pipeline's: it is published as the `harness`
+clock's `gate` stage, so the pipeline's `provider` stage can be read net of it.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextvars import ContextVar
 from dataclasses import dataclass
 
@@ -28,6 +31,7 @@ from app.clients.llm_client import (
     LlmProviderError,
     LlmRequest,
 )
+from app.utilities.stage_clock import StageClock
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +47,11 @@ class RecordedCall:
     cost_eur: float
     latency_ms: int
     error: str | None = None
+    # When the call began, as `time.monotonic()` milliseconds, so calls made at once show as
+    # overlapping in a case's timeline.
+    started_ms: int = 0
+    # The provider's time to its first answer fragment; None when the answer was read whole.
+    first_token_ms: int | None = None
 
 
 @dataclass
@@ -114,6 +123,7 @@ class RecordingLlmClient:
             raise LlmProviderError(BUDGET_REASON)
         attempt = 0
         while True:
+            began = int(time.monotonic() * 1000)
             try:
                 answer = await self._forward(request)
                 break
@@ -128,6 +138,7 @@ class RecordingLlmClient:
                             exc.cost_eur,
                             exc.latency_ms,
                             f"{type(exc).__name__}: {'rate limited' if limited else exc}",
+                            started_ms=began,
                         )
                     )
                 if limited and self._gate is not None:
@@ -140,7 +151,12 @@ class RecordingLlmClient:
         if calls is not None:
             calls.append(
                 RecordedCall(
-                    answer.input_tokens, answer.output_tokens, answer.cost_eur, answer.latency_ms
+                    answer.input_tokens,
+                    answer.output_tokens,
+                    answer.cost_eur,
+                    answer.latency_ms,
+                    started_ms=began,
+                    first_token_ms=answer.first_token_ms,
                 )
             )
         return answer
@@ -148,7 +164,10 @@ class RecordingLlmClient:
     async def _forward(self, request: LlmRequest) -> LlmAnswer:
         if self._gate is None:
             return await self.inner.complete(request)
+        clock = StageClock("harness")
         async with self._gate:
+            clock.mark("gate")
+            clock.publish()
             return await self.inner.complete(request)
 
 

@@ -39,7 +39,7 @@ async def test_birth_actions_and_new_relations_are_normalised_and_duplicates_com
             headers=tenant.builder.headers,
         )
     ).json()
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         label = (
             await s.execute(
                 text("SELECT label FROM ontaix.relation WHERE b_id = :b"),

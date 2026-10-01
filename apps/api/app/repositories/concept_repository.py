@@ -113,7 +113,23 @@ async def rename(session: AsyncSession, concept: Concept, label: str) -> None:
     await session.flush()
 
 
+async def move_to_domain(
+    session: AsyncSession, concept: Concept, domain_product_id: uuid.UUID, x: float, y: float
+) -> None:
+    """Put the cell in another domain product of its company and settle it near that domain."""
+    concept.domain_product_id = domain_product_id
+    concept.x = x
+    concept.y = y
+    await session.flush()
+
+
 async def mark_dying(session: AsyncSession, concept: Concept, at: datetime) -> None:
     """Stamp the moment the cell starts dying; the row is deleted later in the same transaction."""
     concept.dying_at = at
+    await session.flush()
+
+
+async def set_birth_action(session: AsyncSession, concept: Concept, action: str) -> None:
+    """The action of the cell's birth relation, kept on the cell for its lineage."""
+    concept.birth_action = action
     await session.flush()

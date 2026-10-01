@@ -4,11 +4,14 @@ Each case gets its own tenant in the scratch database: a builder who teaches and
 approves, the case's company as the home company, and the case's pre-existing concepts proposed
 and approved. The builder then calls `POST /teach/parse` exactly as the Studio does, one session
 for the whole case, and submits each result's drafts before the next unit, so later sentences
-resolve against what earlier ones introduced.
+resolve against what earlier ones introduced. A whole-document reading starts the extraction
+job as the Studio's import dialog does, runs the API's own job runner in process until the job
+ends, reads its result and proposes every draft of it.
 """
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -28,7 +31,7 @@ from app.repositories import (
     user_group_repository,
     view_state_repository,
 )
-from app.services import company_service
+from app.services import company_service, document_extraction_runner_service
 from app.services.ontology_view_service import load_view
 from evals.scoring import normalise_label
 from evals.teach_case import TeachCase
@@ -36,6 +39,8 @@ from evals.teach_case import TeachCase
 DEV_ISSUER = "dev"
 # The tenant's monthly token cap never stops a bake-off; the per-call bounds still apply.
 MONTHLY_TOKEN_CAP = 1_000_000_000
+JOB_STATES_IN_PROGRESS = ("queued", "running")
+JOB_POLL_SECONDS = 0.2
 
 
 @dataclass
@@ -51,6 +56,8 @@ class UnitResult:
     outcome: str | None = None
     unresolved: list[dict[str, Any]] = field(default_factory=list)
     drafts: list[dict[str, Any]] = field(default_factory=list)
+    # A whole-document reading's note per draft: pass, confidence, depth, grounding sentence.
+    notes: list[dict[str, Any]] = field(default_factory=list)
     statements: list[str] = field(default_factory=list)
     submitted: int = 0
     submit_error: str | None = None
@@ -74,7 +81,7 @@ class Workspace:
 
     async def open(self) -> None:
         slug = f"eval-{uuid.uuid4().hex[:12]}"
-        async with db_client.get_session_factory()() as s:
+        async with db_client.platform_session() as s:
             tenant = await tenant_repository.create(s, slug, f"Bake-off {slug}")
             await tenant_settings_repository.create(s, tenant.id)
             await view_state_repository.create(s, tenant.id)
@@ -155,6 +162,74 @@ class Workspace:
                 unit.submit_error = f"{submitted.status_code} {submitted.text[:300]}"
         return unit
 
+    async def extract_whole(self, import_id: str) -> tuple[UnitResult, dict[str, Any]]:
+        """One whole-document extraction of a stored import, run to its end in process, with
+        its drafts proposed: the unit and the job's own figures (chunks, outline nodes, tokens).
+        The job runs alone: the runner claims the oldest waiting job of any tenant, so two
+        readings at once would record each other's calls."""
+        started = time.monotonic()
+        shown = f"whole document (import {import_id})"
+        response = await self._client.post(
+            f"/import/{import_id}/extraction",
+            json={"companyId": str(self.company_id)},
+            headers=self._builder,
+        )
+        if response.status_code != 202:
+            wall_ms = int((time.monotonic() - started) * 1000)
+            return UnitResult(shown, response.status_code, wall_ms, error=response.text[:300]), {}
+        job = response.json()
+        while job["state"] in JOB_STATES_IN_PROGRESS:
+            ran = await document_extraction_runner_service.run_once()
+            job = await self._job(job["id"])
+            if not ran and job["state"] in JOB_STATES_IN_PROGRESS:
+                await asyncio.sleep(JOB_POLL_SECONDS)
+        wall_ms = int((time.monotonic() - started) * 1000)
+        figures = {
+            "chunks": job["chunks"],
+            "outlineNodes": job["outlineNodes"],
+            "tokensUsed": job["tokensUsed"],
+            "degraded": job["degraded"],
+            "failureReason": job["failureReason"],
+        }
+        unit = UnitResult(
+            text=shown,
+            status=200,
+            wall_ms=wall_ms,
+            extractor="llm",
+            llm_outcome="used" if job["state"] == "succeeded" else job["failureReason"],
+            degraded=bool(job["degraded"]),
+        )
+        if job["state"] != "succeeded":
+            unit.outcome = "not_understood"
+            unit.error = f"{job['state']}: {job['failureReason']}"
+            return unit, figures
+        result = await self._client.get(f"/extractions/{job['id']}/result", headers=self._builder)
+        if result.status_code != 200:
+            unit.error = f"result {result.status_code} {result.text[:300]}"
+            return unit, figures
+        body = result.json()
+        unit.drafts = body.get("drafts") or []
+        unit.notes = body.get("notes") or []
+        unit.unresolved = body.get("unresolved") or []
+        unit.outcome = "understood" if unit.drafts else "not_understood"
+        if unit.drafts:
+            submitted = await self._client.post(
+                f"/extractions/{job['id']}/proposals",
+                json={"indexes": list(range(len(unit.drafts)))},
+                headers=self._builder,
+            )
+            if submitted.status_code == 202:
+                unit.submitted = len(submitted.json())
+            else:
+                unit.submit_error = f"{submitted.status_code} {submitted.text[:300]}"
+        return unit, figures
+
+    async def _job(self, job_id: str) -> dict[str, Any]:
+        response = await self._client.get(f"/extractions/{job_id}", headers=self._builder)
+        if response.status_code != 200:
+            raise SeedError(f"extraction job unreadable: {response.status_code} {response.text}")
+        return response.json()
+
     async def upload(self, file_name: str, data: bytes) -> tuple[str, int]:
         """Stores a document as an import; returns its id and its sentence count."""
         response = await self._client.post(
@@ -167,7 +242,7 @@ class Workspace:
 
     async def labels(self) -> dict[str, str]:
         """Every concept id of the tenant (approved and pending) with its label."""
-        async with db_client.get_session_factory()() as s:
+        async with db_client.platform_session() as s:
             view = await load_view(s, self.tenant_id)
             return {str(c.id): c.label for c in view.concepts.values()}
 

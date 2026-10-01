@@ -5,7 +5,10 @@ and no entities, so the RDF/XML parser never meets one; a JSON-LD `@context` giv
 through `@import` is refused before parsing, so no context is ever fetched; `owl:imports` is
 only reported. Nothing is inferred: named classes are those typed `owl:Class`, `rdfs:Class` or
 `skos:Concept`, those with an asserted `rdfs:subClassOf` or `skos:broader`, and parents that
-are described in the file. At most 1,000,000 triples.
+are described in the file. At most 1,000,000 triples. A file that uses the Ontaix vocabulary
+(`ox:`), as an Ontaix export does, has its `ox:` annotations read onto its classes; its own
+vocabulary terms and its company and domain individuals are not items, and its object
+properties' domains and ranges are left to the restrictions, which carry every relation.
 """
 
 from __future__ import annotations
@@ -35,6 +38,8 @@ from app.models.ontology_import.parsed_ontology import (
 )
 from app.utilities.document_errors import DocumentTooLargeError, DocumentUnreadableError
 from app.utilities.document_text import decode_text
+from app.utilities.ontaix_annotations import Annotations, AnnotationValue, apply_ontaix
+from app.utilities.ontaix_vocabulary import is_ontaix_term
 
 MAX_TRIPLES = 1_000_000
 # JSON-LD nests a few levels in practice; the bound keeps every parser's recursion shallow.
@@ -106,6 +111,9 @@ class _Reader:
     def __init__(self, graph: Graph, fmt: OntologyFormat) -> None:
         self.graph = graph
         self.parsed = ParsedOntology(format=fmt)
+        self.parsed.ontaix = any(
+            isinstance(p, URIRef) and is_ontaix_term(str(p)) for p in set(graph.predicates())
+        )
 
     def read(self) -> ParsedOntology:
         g = self.graph
@@ -127,6 +135,8 @@ class _Reader:
                         items[narrower].parents.append(parent)
         self._properties(classes)
         self._individuals(classes, items)
+        if self.parsed.ontaix:
+            apply_ontaix({str(k): v for k, v in items.items()}, self._annotations(items))
         self.parsed.items.extend(items.values())
         self.parsed.items.sort(key=lambda i: i.source)
         return self.parsed
@@ -142,7 +152,13 @@ class _Reader:
             found.update(
                 o for o in g.objects(None, predicate) if isinstance(o, URIRef) and o in described
             )
-        return {c for c in found if c not in TOP_CLASSES and not self._is_property(c)}
+        return {
+            c
+            for c in found
+            if c not in TOP_CLASSES
+            and not self._is_property(c)
+            and not (self.parsed.ontaix and is_ontaix_term(str(c)))
+        }
 
     def _is_property(self, node: URIRef) -> bool:
         types = set(self.graph.objects(node, RDF.type))
@@ -209,6 +225,8 @@ class _Reader:
             entry = self._property(prop)
             if any(True for _ in g.objects(prop, OWL.propertyChainAxiom)):
                 self._skip(str(prop), "unsupported_axiom")
+            if self.parsed.ontaix:
+                continue
             for domain in sorted(g.objects(prop, RDFS.domain), key=str):
                 if isinstance(domain, URIRef) and domain in classes:
                     entry.domains.append(str(domain))
@@ -241,6 +259,10 @@ class _Reader:
         for node in sorted(candidates - classes, key=str):
             if self._is_property(node) or node in items:
                 continue
+            if self.parsed.ontaix and any(
+                isinstance(t, URIRef) and is_ontaix_term(str(t)) for t in g.objects(node, RDF.type)
+            ):
+                continue
             item = self._item(node, individual=True)
             for cls in sorted(g.objects(node, RDF.type), key=str):
                 if isinstance(cls, URIRef) and cls in classes:
@@ -248,6 +270,30 @@ class _Reader:
             if any(True for _ in g.objects(node, OWL.sameAs)):
                 self._skip(str(node), "equivalence_not_imported")
             items[node] = item
+
+    def _annotations(self, items: dict[URIRef, OntologyItem]) -> Annotations:
+        """Every literal or IRI value of the items and of the annotation properties."""
+        g = self.graph
+        subjects = set(items) | {
+            s for s in g.subjects(RDF.type, OWL.AnnotationProperty) if isinstance(s, URIRef)
+        }
+        found: Annotations = {}
+        for subject in subjects:
+            entry: dict[str, list[AnnotationValue]] = {}
+            for prop, value in g.predicate_objects(subject):
+                if isinstance(value, Literal):
+                    language = value.language.lower() if value.language else None
+                    datatype = str(value.datatype) if value.datatype else None
+                    annotation = AnnotationValue(str(value), False, datatype, language)
+                elif isinstance(value, URIRef):
+                    annotation = AnnotationValue(str(value), True)
+                else:
+                    continue
+                entry.setdefault(str(prop), []).append(annotation)
+            for values in entry.values():
+                values.sort(key=lambda v: (v.language or "", v.value))
+            found[str(subject)] = entry
+        return found
 
     def _skip(self, source: str, reason: Any) -> None:
         entry = SkippedSource(source, reason)

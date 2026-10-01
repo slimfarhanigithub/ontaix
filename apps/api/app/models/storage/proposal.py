@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, ForeignKeyConstraint, Uuid, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, ForeignKeyConstraint, Integer, Uuid, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -75,6 +75,7 @@ class Proposal(Base):
     proposer_user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     proposer_agent_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     bulk: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    revision: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     origin: Mapped[ProposalOrigin] = mapped_column(
         pg_enum(ProposalOrigin, "proposal_origin"), server_default=text("'text'")
     )

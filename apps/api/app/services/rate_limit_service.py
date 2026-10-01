@@ -1,5 +1,5 @@
 """Per-actor hourly budgets for imports, teach parses, proposal creation, model calls, concept
-expansions, whole-document extraction jobs, OCR pages and speech tokens.
+expansions, whole-document extraction jobs, OCR pages, speech tokens and exports.
 
 Each actor of each tenant holds one budget per kind and clock hour (UTC), counted in the
 `rate_budget_window` table that every API replica and worker shares. A charge takes every unit
@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 
 from app.auth import Caller
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import platform_session, tenant_session
 from app.config import get_settings
 from app.repositories import rate_budget_window_repository
 from app.utilities.clock import get_clock
@@ -39,6 +39,7 @@ class Budget(StrEnum):
     EXPAND = "expand"
     EXTRACTION = "extraction"
     SPEECH = "speech"
+    EXPORT = "export"
 
 
 UNITS_PER_WINDOW: dict[Budget, int] = {
@@ -70,7 +71,7 @@ async def try_charge(
     budget: Budget, tenant_id: uuid.UUID, actor_kind: str, actor_id: uuid.UUID, units: int = 1
 ) -> bool:
     """Spend `units` in the current hour; False, spending nothing, when the budget cannot."""
-    async with get_session_factory()() as session:
+    async with tenant_session(tenant_id) as session:
         spent = await rate_budget_window_repository.charge(
             session,
             tenant_id=tenant_id,
@@ -102,12 +103,14 @@ def limit_of(budget: Budget) -> int:
         return settings.ocr_pages_per_hour
     if budget is Budget.SPEECH:
         return settings.speech_tokens_per_hour
+    if budget is Budget.EXPORT:
+        return settings.export_per_hour
     return UNITS_PER_WINDOW[budget]
 
 
 async def purge_old_windows() -> int:
     """Delete windows that started more than 2 hours ago, in its own transaction."""
-    async with get_session_factory()() as session:
+    async with platform_session() as session:
         deleted = await rate_budget_window_repository.delete_started_before(
             session, get_clock().now() - RETAINED_WINDOWS
         )

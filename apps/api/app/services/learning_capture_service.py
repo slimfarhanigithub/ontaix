@@ -24,7 +24,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import tenant_session
 from app.config import get_settings
 from app.models.api.teach import TeachResult
 from app.models.storage.base import ActorKind, ChangeKind, ProposalOrigin, ProposalType
@@ -108,7 +108,7 @@ async def record_parse(
     if _bytes(output) > MAX_PARSE_BYTES:
         return None
     try:
-        async with get_session_factory()() as session:
+        async with tenant_session(caller.tenant_id) as session:
             row = await teach_parse_repository.create(
                 session,
                 tenant_id=caller.tenant_id,

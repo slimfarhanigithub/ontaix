@@ -3,12 +3,14 @@
  * from reference/ontaix-studio-reference.html line 192; open, close and theme behaviour from
  * lines 948-952. The navigation and the pages come from the admin module. While it is open, Tab
  * stays inside the window unless a dialog above it holds the focus, and closing it gives focus
- * back to the element that had it before.
+ * back to the element that had it before. With a live session the head also holds `#adminAccount`
+ * (the account controls) before its ×.
  */
 import { useEffect, useRef } from 'react';
 
 import { invalidateDirectory } from '../admin/adminData';
 import { AdminMain, AdminNav } from '../admin/AdminPortal';
+import { AccountControls } from '../auth/AccountControls';
 import { trapTab, useFocusReturn } from './Dialog';
 import { refStyle, useStore } from './dom';
 
@@ -62,6 +64,7 @@ export function AdminOverlay() {
             </svg>
             <span id="themeLbl">{theme === 'light' ? 'Dark mode' : 'Light mode'}</span>
           </button>
+          <AccountControls />
           <button className="x" id="adminClose" aria-label="Close" ref={refStyle('margin-left:8px')} onClick={() => st.closeAdmin()}>
             ×
           </button>

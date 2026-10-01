@@ -15,14 +15,14 @@ turn of the caller's teach session.
 
 A parse runs in two parts: `prepare` applies the gates and charges, so every refusal is raised
 before any answer begins, and runs the grammar; `PreparedParse.finish` runs the model step and
-stores the turns. The streamed variant passes a listener to `finish`, which receives the drafts
-of each valid part of the model's answer as it arrives; the result is the same either way.
+stores the turns. The streamed variant passes a listener to `finish`, which receives the
+grammar's drafts at once when the grammar read a typed sentence whole, then the drafts of each
+valid part of the model's answer as it arrives; the result is the same either way.
 """
 
 from __future__ import annotations
 
 import logging
-import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -76,6 +76,7 @@ from app.utilities.channels import (
 )
 from app.utilities.permissions import can_propose_anywhere, can_read
 from app.utilities.problems import forbidden, not_found
+from app.utilities.stage_clock import StageClock
 from app.utilities.teach_parser import domain_prefix
 from app.utilities.teach_triggers import fallback_triggers, replaces_grammar
 from app.utilities.transcript import MAX_SEGMENTS, split_transcript
@@ -86,6 +87,39 @@ PARSE_UNIT_CHARS = 400
 # Ends of a model step that is on but did not answer.
 UNAVAILABLE = frozenset({"rate_limited", "budget_exhausted", "timeout", "provider_error"})
 DOCUMENT_CONTEXT_SENTENCES = 2
+# Bounds on the grammar's drafts shown while the model answers.
+MAX_INSTANT_DRAFTS = 6
+MAX_INSTANT_LABEL_WORDS = 4
+_NOT_IN_A_CONCEPT_NAME = frozenset(
+    {
+        "that",
+        "which",
+        "who",
+        "whose",
+        "is",
+        "are",
+        "was",
+        "were",
+        "has",
+        "have",
+        "and",
+        "or",
+        "but",
+        "also",
+        "too",
+        "including",
+        "with",
+        "into",
+        "against",
+        "each",
+        "them",
+        "they",
+        "it",
+        "these",
+        "those",
+        "this",
+    }
+)
 
 
 # Receives the drafts, with their notes, that the part of the model's answer received so far
@@ -114,8 +148,8 @@ class PreparedParse:
     source: _Source
     key: SessionKey | None
     sentence: str
-    started: float
-    view_ms: int
+    # The parse's stage clock, started when the request was read.
+    clock: StageClock
     # The result and what it kept, when they are known without the model step.
     ready: tuple[TeachResult, Assembled] | None = None
     drafter: Drafter | None = None
@@ -136,18 +170,18 @@ class PreparedParse:
             result, kept = self.ready
         else:
             result, kept = await self._with_model_step(on_drafts)
+        self.clock.mark("drafts")
         turns = _turns(self.source, result, kept)
         await teach_session_service.store_turns(self.key, result.extractor, turns)
+        self.clock.mark("turns")
         assert self.company is not None
         result.parse_id = await learning_capture_service.record_parse(
             self.caller, self.company, self.session_id, self.source.origin, self.sentence, result
         )
+        self.clock.mark("learning")
+        self.clock.total()
         logger.debug(
-            "teach parse (%s, %s): view %d ms, total %d ms",
-            result.extractor,
-            result.llm_outcome,
-            self.view_ms,
-            int((time.perf_counter() - self.started) * 1000),
+            "teach parse (%s, %s): %s", result.extractor, result.llm_outcome, self.clock.publish()
         )
         return result
 
@@ -163,6 +197,12 @@ class PreparedParse:
         on_partial = None
         if on_drafts is not None:
             listener = on_drafts
+            instant = _instant(self.grammar, triggers, sentence)
+            if instant is not None:
+                # The grammar read the sentence whole, nothing marks its reading as suspect and
+                # its drafts look like concepts: they show at once while the model answers, and
+                # the model's result replaces them. They are never proposed in the model's place.
+                await listener(instant.drafts, instant.notes)
 
             async def on_partial(step: teach_extraction_service.ModelStep) -> None:
                 result, _ = self._used(step)
@@ -178,6 +218,7 @@ class PreparedParse:
             profile=source.profile,
             on_partial=on_partial,
         )
+        self.clock.mark("model")
         if step.outcome == "used":
             return self._used(step)
         if speech:
@@ -209,6 +250,29 @@ class PreparedParse:
         )
 
 
+def _instant(grammar: GrammarPlan | None, triggers: set, sentence: str) -> Assembled | None:
+    """The grammar's drafts to show while the model answers, or None: only a typed sentence the
+    grammar understood whole with no fallback trigger, giving at most MAX_INSTANT_DRAFTS drafts
+    whose labels read as concept names (at most MAX_INSTANT_LABEL_WORDS words, none of them a
+    word that betrays a clause or a verb list read as a name, such as `that`, `also` or
+    `including`). A preview the model does not confirm fades; a wrong one costs a fading cell,
+    so the gate errs on showing nothing."""
+    if grammar is None or grammar.outcome != "understood" or triggers:
+        return None
+    assembled = assemble(grammar.planned, sentence)
+    if not assembled.drafts or len(assembled.drafts) > MAX_INSTANT_DRAFTS:
+        return None
+    for draft in assembled.drafts:
+        labels = [draft.get(key) for key in ("label", "aLabel", "bLabel", "parentLabel")]
+        for label in (str(value) for value in labels if value):
+            words = label.split()
+            if len(words) > MAX_INSTANT_LABEL_WORDS or any(
+                w.lower() in _NOT_IN_A_CONCEPT_NAME for w in words
+            ):
+                return None
+    return assembled
+
+
 async def parse(session: AsyncSession, caller: Caller, body: TeachRequest) -> TeachResult:
     prepared = await prepare(session, caller, body)
     return await prepared.finish()
@@ -218,22 +282,23 @@ async def prepare(session: AsyncSession, caller: Caller, body: TeachRequest) -> 
     """Everything of a parse up to the model step: the gates and charges, which raise the
     request's refusals, and the grammar. The request's own transaction is committed when the
     model step follows, so it holds no lock during the model call."""
-    started = time.perf_counter()
+    clock = StageClock("parse")
     view = await load_view(session, caller.tenant_id)
-    view_ms = int((time.perf_counter() - started) * 1000)
+    clock.mark("view")
     company = view.companies.get(body.company_id)
     if company is None or not can_read(caller.grants, company.id):
         raise not_found("company")
     if not can_propose_anywhere(caller.grants, caller.everyone_teaches):
         raise forbidden("Your roles do not allow proposing")
     source = await _source(session, caller, view, body)
+    clock.mark("source")
     key = (
         teach_session_service.session_key(caller, company.id, body.session_id)
         if body.session_id
         else None
     )
     sentence = source.text.strip()
-    prepared = PreparedParse(caller, source, key, sentence, started, view_ms)
+    prepared = PreparedParse(caller, source, key, sentence, clock)
     prepared.company, prepared.session_id = company, body.session_id
     root = view.root_of(company.id)
     if root is None:
@@ -252,6 +317,7 @@ async def prepare(session: AsyncSession, caller: Caller, body: TeachRequest) -> 
     if not source.reading.model_first:
         grammar = plan_grammar(drafter, text)
         triggers = fallback_triggers(text, grammar.outcome)
+        clock.mark("grammar")
     if grammar is not None and not triggers and not model_first:
         kept = assemble(grammar.planned, sentence)
         whole = [(0, len(sentence))]

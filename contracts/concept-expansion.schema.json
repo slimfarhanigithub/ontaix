@@ -64,18 +64,9 @@
           "description": "The birth relation's action, read parent to child, a lower-case present-tense verb phrase such as has, includes, uses or produces; a canonical predicate of the reference lexicon when one has the same meaning. After normalisation, is a and equivalent to are refused."
         },
         "domainKey": {
-          "enum": [
-            "production",
-            "supply",
-            "sales",
-            "logistics",
-            "quality",
-            "maintenance",
-            "finance",
-            "people",
-            "engineering"
-          ],
-          "description": "Only when e0 is the company root and the parent is e0: the domain template of the new concept. Otherwise absent, and ignored when present; a suggestion takes its parent's domain, and a child of the root without one takes production."
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,39}$",
+          "description": "Only when e0 is the company root and the parent is e0: the domain template of the new concept. Otherwise absent, and ignored when present; a suggestion takes its parent's domain, and a child of the root without one takes production. A domain key the API sent in the request's domain list (the tenant's domains, ADR 0015); any other key makes the answer invalid."
         },
         "confidence": {
           "type": "number",

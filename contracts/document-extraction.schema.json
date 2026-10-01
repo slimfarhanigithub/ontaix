@@ -131,18 +131,9 @@
           "description": "Advisory: what the node is in the business. Shown to the reviewer in the draft note; it does not limit where the node may sit."
         },
         "domainKey": {
-          "enum": [
-            "production",
-            "supply",
-            "sales",
-            "logistics",
-            "quality",
-            "maintenance",
-            "finance",
-            "people",
-            "engineering"
-          ],
-          "description": "The domain template of the node; absent to inherit from its parent (production under the root)."
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,39}$",
+          "description": "The domain template of the node; absent to inherit from its parent (production under the root). A domain key the API sent in the request's domain list (the tenant's domains, ADR 0015); any other key makes the answer invalid."
         },
         "confidence": {
           "type": "number",
@@ -222,41 +213,13 @@
         "sentenceIndex",
         "span"
       ],
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "rel"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "action"
-            ],
-            "not": {
-              "required": [
-                "rule"
-              ]
-            }
-          },
-          "else": {
-            "not": {
-              "required": [
-                "action"
-              ]
-            }
-          }
-        }
-      ],
       "properties": {
         "kind": {
           "enum": [
             "rel",
             "spec"
           ],
-          "description": "As in teach extraction: rel is subject action object; spec is subject is a kind of object, both ends in the import's company."
+          "description": "As in teach extraction: rel is subject action object, with an action and no rule; spec is subject is a kind of object, with an optional rule and no action; both ends in the import's company. The API reads an intent whose fields disagree with its kind by its fields instead of refusing the chunk: an action meaning is a makes a spec without an action, any other action makes a rel with that action and no rule, and a rel without an action or an action equivalent to is listed as not_understood."
         },
         "subject": {
           "$ref": "#/$defs/intentRef"
@@ -277,17 +240,9 @@
           "pattern": "^[^<>\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]*$"
         },
         "domainKey": {
-          "enum": [
-            "production",
-            "supply",
-            "sales",
-            "logistics",
-            "quality",
-            "maintenance",
-            "finance",
-            "people",
-            "engineering"
-          ]
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,39}$",
+          "description": "A domain key the API sent in the request's domain list (the tenant's domains, ADR 0015); any other key makes the answer invalid."
         },
         "confidence": {
           "type": "number",

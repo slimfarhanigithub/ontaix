@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from app.models.api.actor import Actor
 from app.models.api.attribute import Attribute
@@ -14,6 +14,7 @@ from app.models.api.audit import AuditEntry
 from app.models.api.base import ApiModel
 from app.models.api.binding import Binding
 from app.models.api.concept import Concept
+from app.models.api.deletion_impact import ensure_unique_ids
 from app.models.api.domain_product import DomainProduct
 from app.models.api.origin import Origin, OriginDetail
 from app.models.api.relation import Relation
@@ -64,6 +65,7 @@ class Proposal(ApiModel):
     origin_detail: OriginDetail | None
     approvals: list[Approval] = Field(default_factory=list)
     bulk: bool = False
+    revision: int = Field(default=0, ge=0)
     # Open proposals in the branch of an open concept or spec proposal, itself excluded; set by
     # the reads that list proposals, absent elsewhere.
     open_below: int | None = Field(default=None, ge=0, exclude_if=lambda v: v is None)
@@ -82,6 +84,36 @@ class DecisionResult(ApiModel):
 
 class RejectRequest(ApiModel):
     reason: str | None = Field(default=None, max_length=500)
+
+
+class ProposalEdit(ApiModel):
+    """An in-place edit of a pending draft: the revision the editor saw, and a new label
+    (concept and spec) and/or action (concept birth action and relation)."""
+
+    revision: int = Field(ge=0)
+    label: str | None = Field(default=None, min_length=1, max_length=120)
+    action: str | None = Field(default=None, min_length=1, max_length=60)
+
+    @model_validator(mode="after")
+    def _one_change(self) -> ProposalEdit:
+        if self.label is None and self.action is None:
+            raise ValueError("label or action is required")
+        return self
+
+
+class BulkDeleteRequest(ApiModel):
+    """Concepts and domain products of one company to delete through one proposal."""
+
+    company_id: uuid.UUID
+    concept_ids: list[uuid.UUID] | None = Field(default=None, max_length=200)
+    domain_product_ids: list[uuid.UUID] | None = Field(default=None, max_length=20)
+
+    @model_validator(mode="after")
+    def _some_items(self) -> BulkDeleteRequest:
+        ensure_unique_ids(self.concept_ids, self.domain_product_ids)
+        if not self.concept_ids and not self.domain_product_ids:
+            raise ValueError("conceptIds or domainProductIds is required")
+        return self
 
 
 class BranchResult(ApiModel):

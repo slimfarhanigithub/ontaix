@@ -133,6 +133,31 @@ async def mark_decided(
     await session.flush()
 
 
+async def edit_draft(
+    session: AsyncSession, proposal: Proposal, *, title: str, html: str, revision: int
+) -> None:
+    """Rewrite a pending draft's texts at its next revision."""
+    proposal.title = title
+    proposal.html = html
+    proposal.revision = revision
+    await session.flush()
+
+
+async def rewrite_dependencies(
+    session: AsyncSession,
+    proposal: Proposal,
+    *,
+    deps: list[Any],
+    wait_for: str | None,
+    parent_label: str | None,
+) -> None:
+    """Replace the labels a proposal waits for, after one of them was edited."""
+    proposal.deps = deps
+    proposal.wait_for = wait_for
+    proposal.parent_label = parent_label
+    await session.flush()
+
+
 async def detach_company(
     session: AsyncSession, tenant_id: uuid.UUID, company_id: uuid.UUID
 ) -> None:

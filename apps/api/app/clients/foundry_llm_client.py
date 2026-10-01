@@ -81,6 +81,8 @@ class _Streamed:
     refused: bool = False
     finish_reason: str | None = None
     usage: CompletionUsage | None = None
+    # Milliseconds from the start of the call to the first answer fragment.
+    first_token_ms: int | None = None
 
 
 class FoundryLlmClient:
@@ -155,6 +157,8 @@ class FoundryLlmClient:
                     if choice.finish_reason:
                         streamed.finish_reason = choice.finish_reason
                     if choice.delta.content:
+                        if streamed.first_token_ms is None:
+                            streamed.first_token_ms = elapsed_ms(started)
                         streamed.text += choice.delta.content
                         await on_text(streamed.text)
             return streamed
@@ -170,7 +174,9 @@ class FoundryLlmClient:
         if streamed.refused or streamed.finish_reason == CONTENT_FILTER:
             raise LlmRefused("refusal", input_tokens, output_tokens, cost, latency_ms)
         text = self.answer_text(streamed.text, request)
-        return LlmAnswer(text, input_tokens, output_tokens, cost, latency_ms)
+        return LlmAnswer(
+            text, input_tokens, output_tokens, cost, latency_ms, streamed.first_token_ms
+        )
 
     def answer_text(self, raw: str, request: LlmRequest) -> str:
         """The answer in the original schema's shape; text that is not JSON is returned as is,

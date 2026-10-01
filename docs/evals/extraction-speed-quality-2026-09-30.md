@@ -1,6 +1,6 @@
 # Extraction Speed And Quality 2026-09-30
 
-Six steps to make text-to-ontology processing faster and better, never one for the other (owner decision, Slim, 2026-09-30). Each step is a small pull request gated by the evaluation harness on the LEARN split, with the TEST split used once per step for its final number. Every number below comes from a JSON record under `docs/evals/results/2026-09-30/` (see Results Files); run-to-run noise on the speech sets is about 2 concepts, and 4 to 8 invented labels on the LEARN document.
+Six steps to make text-to-ontology processing faster and better, never one for the other (owner decision, Slim, 2026-09-30). Each step is a small pull request gated by the evaluation harness on the LEARN split, with the TEST split used once per step for its final number. Every number below comes from a JSON record under `docs/evals/results/2026-09-30/` (see Results Files); run-to-run noise on the speech sets is about 2 concepts, and 4 to 8 invented labels on the LEARN document. Decision rows 154 (step 1), 155 (step 2), 156 (step 3), 157 (step 5) and 158 (step 6) record the steps; step 4 was reverted and has no row.
 
 ## Summary
 

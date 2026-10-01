@@ -248,7 +248,7 @@ async def test_a_source_is_located_from_the_quoted_words_not_the_models_offsets(
     assert result["draftNotes"][1]["sourceSpan"] == {"start": 24, "end": 67}
 
 
-async def test_a_quote_that_cuts_a_word_is_still_refused(
+async def test_a_quote_that_cuts_a_word_is_widened_to_the_word(
     client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
 ) -> None:
     company_id, _ = await add_company(tenant, "Insight")
@@ -267,10 +267,9 @@ async def test_a_quote_that_cuts_a_word_is_still_refused(
 
     result = await speak(client, tenant, company_id, sentence)
 
-    assert result["drafts"] == []
-    assert result["unresolved"] == [
-        {"text": "Services has 3 offerings, apps, data and A", "reason": "ungrounded_label"}
-    ]
+    assert result["unresolved"] == []
+    assert [d["label"] for d in result["drafts"]] == ["Services", "Offerings", "AI"]
+    assert result["draftNotes"][0]["sourceSpan"] == {"start": 0, "end": len(sentence)}
 
 
 async def test_offsets_counted_in_utf16_units_are_replaced_by_the_quote(

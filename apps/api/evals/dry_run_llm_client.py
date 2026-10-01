@@ -1,7 +1,9 @@
 """A language model client for a dry run of the bake-off: no network, always a valid answer.
 
 It reads the call's data like a model would, takes the first sentence of the text as one
-segment, and answers that the company root `has` the last long word of that sentence. The
+segment, and answers that the company root `has` the last long word of that sentence. For a
+whole-document job it answers the outline pass with one node per chunk, the last long word of
+the chunk's first sentence born from the root, and the section pass with no intent. The
 answer passes the pipeline's validation and grounding, so a dry run exercises the whole path
 (seeding, parse, drafts, submit, scoring, cost) without measuring anything about a model. As a
 reviewer it returns no correction.
@@ -35,6 +37,8 @@ class DryRunLlmClient:
         data = json.loads(request.user)
         if "corrections" in request.output_schema.get("properties", {}):
             text = json.dumps({"corrections": []})
+        elif "pass" in data:
+            text = _document_answer(data)
         else:
             text = _answer(data["sentence"], data["mode"] == "speech")
         tokens_in, tokens_out = estimate_tokens(request), max(1, len(text) // 4)
@@ -65,6 +69,28 @@ def _answer(sentence: str, speech: bool) -> str:
         intent["segment"] = 0
         answer["segments"] = [{"index": 0, "start": start, "end": end}]
     return json.dumps(answer)
+
+
+def _document_answer(data: dict) -> str:
+    if data["pass"] == "section":
+        return json.dumps({"pass": "section", "intents": [], "unresolved": []})
+    sentences = data.get("sentences") or []
+    for sentence in sentences:
+        words = _LONG_WORD.findall(sentence["text"])
+        if words:
+            word = words[-1]
+            node = {
+                "key": f"k{data['chunk']['number']}",
+                "parent": {"handle": "c0"},
+                "label": word[0].upper() + word[1:],
+                "action": "has",
+                "role": "entity",
+                "confidence": 0.9,
+                "sentenceIndex": sentence["index"],
+                "span": word,
+            }
+            return json.dumps({"pass": "outline", "nodes": [node]})
+    return json.dumps({"pass": "outline", "nodes": []})
 
 
 def _first_sentence(text: str) -> tuple[int, int]:

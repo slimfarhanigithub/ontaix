@@ -1,4 +1,4 @@
-"""Who did something: a user, an agent or the system."""
+"""Who did something: a user, an agent, the system, or a super admin (`platform`)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,6 @@ from app.models.api.base import ApiModel
 
 
 class Actor(ApiModel):
-    kind: Literal["user", "agent", "system"]
+    kind: Literal["user", "agent", "system", "platform"]
     id: uuid.UUID | None = None
     name: str | None = None

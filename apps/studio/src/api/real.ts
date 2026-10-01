@@ -32,8 +32,38 @@ export function connectRealApi(): void {
     for (const p of ps) created(p);
     return ps;
   };
-  api.approve = async (id) => decided(await raw.approve(id));
-  api.secondApprove = async (id) => decided(await raw.secondApprove(id));
+  api.approve = async (id, expectedRevision) => decided(await raw.approve(id, expectedRevision));
+  api.secondApprove = async (id, expectedRevision) => decided(await raw.secondApprove(id, expectedRevision));
+  api.editProposal = async (id, body) => {
+    const p = await raw.editProposal(id, body);
+    emit('proposal.changed', p.proposer, { proposal: p, artefacts: p.artefacts || {}, cascaded: [] });
+    return p;
+  };
+  api.proposeCreateDomain = async (body) => {
+    const p = await raw.proposeCreateDomain(body);
+    created(p);
+    return p;
+  };
+  api.proposeEditDomain = async (key, patch) => {
+    const p = await raw.proposeEditDomain(key, patch);
+    created(p);
+    return p;
+  };
+  api.proposeDeleteDomain = async (id) => {
+    const p = await raw.proposeDeleteDomain(id);
+    created(p);
+    return p;
+  };
+  api.proposeMoveConcept = async (conceptId, domainKey) => {
+    const p = await raw.proposeMoveConcept(conceptId, domainKey);
+    created(p);
+    return p;
+  };
+  api.proposeBulkDelete = async (body) => {
+    const p = await raw.proposeBulkDelete(body);
+    created(p);
+    return p;
+  };
   api.reject = async (id, reason) => {
     const res = await raw.reject(id, reason);
     emit('proposal.rejected', res.proposal.proposer, { ...res, audit: undefined });

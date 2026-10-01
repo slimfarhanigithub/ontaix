@@ -32,7 +32,7 @@ CAP = 2_000_000
 
 
 async def add_company(tenant: TenantFixture, name: str) -> tuple[uuid.UUID, uuid.UUID]:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         view = await load_view(s, tenant.tenant_id)
         company = await company_service.add_company(s, view, name, "", is_home=False)
         root = view.root_of(company.id)
@@ -43,7 +43,7 @@ async def add_company(tenant: TenantFixture, name: str) -> tuple[uuid.UUID, uuid
 
 async def configure(tenant: TenantFixture, **values: object) -> None:
     values.setdefault("llm_monthly_token_cap", CAP)
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         await s.execute(
             text(
                 "UPDATE ontaix.tenant_settings SET "
@@ -76,7 +76,7 @@ async def teach(
 
 
 async def rows(sql: str, **params: object) -> list[dict]:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         result = await s.execute(text(sql), params)
         return [dict(r._mapping) for r in result]
 
@@ -568,7 +568,7 @@ async def test_concurrent_sentences_of_one_session_never_collide(
     assert mine == list(range(2, 10))
     assert [t["turn_index"] for t in turns if t["session_id"] == other_session] == [0]
 
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         owner_key = SessionKey(
             tenant.tenant_id, "user", tenant.owner.user_id, tenant.company_id, session_id
         )

@@ -229,7 +229,7 @@ async def test_row_lock_timeout_answers_503_busy(
         await propose_concept(client, tenant, tenant.builder, "RowLocked", tenant.root_id)
     ).json()
     monkeypatch.setattr(proposal_repository, "DECISION_LOCK_TIMEOUT_MS", SHORT_LOCK_TIMEOUT_MS)
-    holder = db_client.get_session_factory()()
+    holder = db_client.get_platform_session_factory()()
     try:
         await holder.execute(
             select(Proposal).where(Proposal.id == uuid.UUID(waiting["id"])).with_for_update()
