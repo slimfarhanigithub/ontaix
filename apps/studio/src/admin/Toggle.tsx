@@ -39,12 +39,12 @@ export function Tg({ on, locked, onClick, ...rest }: TgProps) {
 
 export type SettingKey = keyof Omit<Settings, 'refresh'>;
 
-/** A tenant setting with its toggle; locked settings are always on. */
-export function SetRow({ k, title, desc, locked }: { k: SettingKey; title: string; desc: string; locked?: boolean }) {
+/** A tenant setting with its toggle; locked settings are always on. A row marked `ox` is an owner addition hidden from the screenshot suite. */
+export function SetRow({ k, title, desc, locked, ox }: { k: SettingKey; title: string; desc: string; locked?: boolean; ox?: boolean }) {
   const st = useStore();
   const on = locked ? true : !!st.ui.settings?.[k];
   return (
-    <div className="set">
+    <div className="set" data-ox-new={ox ? '' : undefined}>
       <b>{title}</b>
       <Tg on={on} locked={locked} data-set={k} onClick={() => changeSetting(k)} />
       <p>{desc}</p>

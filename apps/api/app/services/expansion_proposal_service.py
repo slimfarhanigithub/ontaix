@@ -20,7 +20,7 @@ from app.models.api.proposal import Proposal as ProposalDto
 from app.models.proposals.provenance import Provenance
 from app.models.storage.base import ProposalOrigin
 from app.repositories import concept_expansion_repository
-from app.services import stored_draft_service, teach_session_service
+from app.services import learning_capture_service, stored_draft_service, teach_session_service
 from app.services.concept_expansion_service import expansion_scope
 from app.services.ontology_view_service import load_view
 from app.services.rate_limit_service import charge_proposals
@@ -59,6 +59,15 @@ async def propose(
     drafts = [row.drafts[i] for i in indexes]
     provenances = [Provenance(ProposalOrigin.SUGGESTION, None, _why(row.notes[i])) for i in indexes]
     created = await stored_draft_service.propose(session, caller, view, drafts, provenances)
+    await learning_capture_service.link_stored(
+        session,
+        caller.tenant_id,
+        view.companies[concept.company_id],
+        learning_capture_service.KIND_EXPAND,
+        row.id,
+        indexes,
+        [p.id for p in created],
+    )
     await session.commit()
     if row.session_id is not None:
         key = teach_session_service.session_key(caller, concept.company_id, row.session_id)

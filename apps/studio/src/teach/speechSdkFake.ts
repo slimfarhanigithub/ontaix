@@ -6,10 +6,14 @@
 export const RECOGNIZED_SPEECH = 3;
 export const CANCELLED_WITH_ERROR = 1;
 
+export const SEGMENTATION_SILENCE_TIMEOUT_MS = 31;
+
 interface FakeConfig {
   token: string;
   region: string;
   speechRecognitionLanguage: string;
+  properties: Map<number, string>;
+  setProperty(name: number, value: string): void;
 }
 
 type Handler = ((sender: unknown, e: never) => void) | null;
@@ -67,17 +71,23 @@ export function resetFakeRecognizer(): void {
 export function fakeSpeechSdk() {
   return {
     SpeechConfig: {
-      fromAuthorizationToken: (token: string, region: string): FakeConfig => ({
-        token,
-        region,
-        speechRecognitionLanguage: '',
-      }),
+      fromAuthorizationToken: (token: string, region: string): FakeConfig => {
+        const properties = new Map<number, string>();
+        return {
+          token,
+          region,
+          speechRecognitionLanguage: '',
+          properties,
+          setProperty: (name: number, value: string) => properties.set(name, value),
+        };
+      },
     },
     AudioConfig: { fromDefaultMicrophoneInput: () => ({}) },
     SpeechRecognizer: FakeRecognizer,
     PhraseListGrammar: {
       fromRecognizer: (r: FakeRecognizer) => ({ addPhrase: (p: string) => r.phrases.push(p) }),
     },
+    PropertyId: { Speech_SegmentationSilenceTimeoutMs: SEGMENTATION_SILENCE_TIMEOUT_MS },
     ResultReason: { RecognizedSpeech: RECOGNIZED_SPEECH },
     CancellationReason: { Error: CANCELLED_WITH_ERROR },
   };

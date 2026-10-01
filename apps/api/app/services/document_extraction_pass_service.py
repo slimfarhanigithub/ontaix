@@ -243,8 +243,10 @@ def context(
     chunks: int,
     company_name: str,
     pass_name: Literal["outline", "section"],
+    learning: dict[str, Any] | None = None,
 ) -> str:
-    """The user message: the chunk and the handles as JSON data, no id of any kind."""
+    """The user message: the chunk and the handles as JSON data, no id of any kind; the
+    company's learning (`learning`, as data fields) comes last."""
     handle_of = {c.id: f"c{i}" for i, c in enumerate(handles.candidates)}
     view = outline.view
 
@@ -278,9 +280,10 @@ def context(
         ],
         "domainTemplates": [
             {"key": key, "name": t.name}
-            for key, t in sorted(view.templates.items(), key=lambda kv: kv[1].position)
+            for key, t in sorted(view.domains.items(), key=lambda kv: kv[1].position)
         ],
     }
+    data.update(learning or {})
     return json.dumps(data, ensure_ascii=False)
 
 
@@ -294,6 +297,8 @@ def read_outline_answer(raw: str, outline: Outline, handles: Handles, chunk: Chu
     for node in answer.nodes:
         if node.key in keys:
             raise InvalidAnswer("a key repeats")
+        if node.domain_key is not None and node.domain_key not in outline.view.domains:
+            raise InvalidAnswer("a node names a domain key the tenant does not hold")
         if isinstance(node.parent, KeyRef) and node.parent.key not in keys:
             raise InvalidAnswer("a parent key is not defined earlier in the answer")
         if isinstance(node.parent, HandleRef):
@@ -348,6 +353,8 @@ def read_section_answer(raw: str, outline: Outline, handles: Handles, chunk: Chu
     except ValidationError as exc:
         raise InvalidAnswer(f"{exc.error_count()} schema errors") from None
     for intent in answer.intents:
+        if intent.domain_key is not None and intent.domain_key not in outline.view.domains:
+            raise InvalidAnswer("an intent names a domain key the tenant does not hold")
         for ref in (intent.subject, intent.object):
             if isinstance(ref, KeyRef):
                 raise InvalidAnswer("a section answer defines no keys")

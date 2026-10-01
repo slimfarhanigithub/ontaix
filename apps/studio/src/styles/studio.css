@@ -69,3 +69,6 @@ form.bar .hist p{ margin:2px 0 0; font-size:13px; line-height:1.5; color:var(--i
 
 /* A dialog keeps focus on its own frame while a focused button waits, so Escape still closes it. */
 .dlg:focus{ outline:0; }
+
+/* The selection bar: a second tool row, 10px above the tool row. */
+.tools.sel{ bottom:calc(var(--teach-h,42px) + 90px + env(safe-area-inset-bottom,0px)); }

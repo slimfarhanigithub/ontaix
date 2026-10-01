@@ -143,7 +143,7 @@ def _scope(
     company = readable.get(product.company_id) if product is not None else None
     if product is None or company is None:
         raise not_found("domain product")
-    name = f"{view.templates[product.template_key].name} of {company.name}"
+    name = f"{view.domains[product.template_key].name} of {company.name}"
     stem = f"{_stem(company.key)}-{product.template_key}"
     return _Scope("domain", name, stem, [company], product.id)
 
@@ -194,7 +194,7 @@ def _snapshot(
         if key is not None:
             domain_keys[concept.company_id].add(key)
     used = set().union(*domain_keys.values()) if domain_keys else set()
-    order = sorted(view.templates.values(), key=lambda t: t.position)
+    order = sorted(view.domains.values(), key=lambda t: t.position)
     return ExportSnapshot(
         scope=chosen.kind,
         scope_name=chosen.name,

@@ -8,7 +8,7 @@
  */
 import { now } from '../runtime/clock';
 import { random } from '../runtime/rng';
-import { C, CELL, DEFAULT_BRASS, DOMAIN_R, DOMAIN_TEMPLATES } from './constants';
+import { C, CELL, CUSTOM_RING_STEP, DEFAULT_BRASS, DOMAIN_R, DOMAIN_TEMPLATES, TEMPLATE_COUNT } from './constants';
 import type { Cam, Company, Domain, Link, LinkKind, Node, SplitInfo } from './types';
 
 /** Side effects the canvas raises toward the shell. Defaults are no-ops so pure tests need none. */
@@ -47,6 +47,8 @@ export interface SceneState {
   /** A run of proposals is playing; idle drift waits while it is set. */
   running: boolean;
   splitting: Map<Node, SplitInfo>;
+  /** Cells picked with Shift+click or Ctrl+click for a bulk deletion; shown as the sticky focus set. */
+  selected: Set<Node>;
   effects: SceneEffects;
 }
 
@@ -84,6 +86,7 @@ export function createScene(effects: Partial<SceneEffects> = {}): SceneState {
     lastInteract: now(),
     running: false,
     splitting: new Map(),
+    selected: new Set(),
     effects: { ...noEffects, ...effects },
   };
 }
@@ -192,11 +195,24 @@ export const domainOf = (s: SceneState, key: string | null | undefined, company?
 
 export const shown = (n: Node): boolean => !(n.domain && n.domain.hidden);
 
+/**
+ * The nine templates sit on the reference's ring, at the reference's angles whatever else the
+ * tenant holds. A custom domain (position 9 and up) sits between two templates on the same ring
+ * for the first nine, then on outer rings, nine per ring, so no template moves.
+ */
 export const domainCentre = (d: Domain): [number, number] => {
-  const c = d.company,
-    i = c.domains.indexOf(d),
-    a = -Math.PI / 2 + (i * 2 * Math.PI) / c.domains.length;
-  return [c.x + Math.cos(a) * DOMAIN_R, c.y + Math.sin(a) * DOMAIN_R];
+  const c = d.company;
+  if (d.position < TEMPLATE_COUNT) {
+    const i = d.position,
+      a = -Math.PI / 2 + (i * 2 * Math.PI) / TEMPLATE_COUNT;
+    return [c.x + Math.cos(a) * DOMAIN_R, c.y + Math.sin(a) * DOMAIN_R];
+  }
+  const j = d.position - TEMPLATE_COUNT,
+    ring = Math.floor(j / TEMPLATE_COUNT),
+    slot = j % TEMPLATE_COUNT,
+    a = -Math.PI / 2 + ((slot + 0.5) * 2 * Math.PI) / TEMPLATE_COUNT,
+    r = DOMAIN_R + ring * CUSTOM_RING_STEP;
+  return [c.x + Math.cos(a) * r, c.y + Math.sin(a) * r];
 };
 
 export function layoutCompanies(s: SceneState): void {
@@ -223,7 +239,7 @@ export function addCompany(s: SceneState, name: string, sub: string): Company {
     domains: [],
     root: null,
   };
-  c.domains = DOMAIN_TEMPLATES.map((t) => ({ ...t, sid: null, company: c, version: 1.0, hidden: false }));
+  c.domains = DOMAIN_TEMPLATES.map((t, position) => ({ ...t, sid: null, company: c, version: 1.0, hidden: false, position }));
   s.companies.push(c);
   s.DOMAINS = s.companies.flatMap((x) => x.domains);
   layoutCompanies(s);
@@ -241,6 +257,36 @@ export function addCompany(s: SceneState, name: string, sub: string): Company {
   s.activeCompany = c;
   s.effects.companiesChanged();
   return c;
+}
+
+/** What a tenant domain is: the fields every company's product for it copies. */
+export interface TenantDomainDef {
+  key: string;
+  name: string;
+  owner: string;
+  color: string;
+  position: number;
+}
+
+/**
+ * Gives a company its domain for a tenant domain, or updates the one it has: name, owner, colour
+ * and position follow the tenant, everything else (server id, version, hidden) stays. Domains keep
+ * ring order, which is also the order of the domains card and the new-concept box.
+ */
+export function ensureDomain(s: SceneState, c: Company, def: TenantDomainDef): Domain {
+  let d = c.domains.find((x) => x.key === def.key);
+  if (!d) {
+    d = { sid: null, key: def.key, name: def.name, owner: def.owner, color: def.color, company: c, version: 1.0, hidden: false, position: def.position };
+    c.domains.push(d);
+  } else {
+    d.name = def.name;
+    d.owner = def.owner;
+    d.color = def.color;
+    d.position = def.position;
+  }
+  c.domains.sort((a, b) => a.position - b.position);
+  s.DOMAINS = s.companies.flatMap((x) => x.domains);
+  return d;
 }
 
 export function addSource(s: SceneState, company: Company, label: string, kind: string): Node {

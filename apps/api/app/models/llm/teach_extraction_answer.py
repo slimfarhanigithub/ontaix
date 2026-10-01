@@ -10,19 +10,12 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
+from app.models.api.drafts import DOMAIN_KEY_PATTERN
 from app.utilities.action_text import has_refused_character
 
-DomainKey = Literal[
-    "production",
-    "supply",
-    "sales",
-    "logistics",
-    "quality",
-    "maintenance",
-    "finance",
-    "people",
-    "engineering",
-]
+# A tenant domain key by shape; the service accepts only a key it sent in the request's domain
+# list, so a key the tenant does not hold makes the answer invalid.
+DomainKey = Annotated[str, Field(pattern=DOMAIN_KEY_PATTERN)]
 
 _UPPER_ASCII = re.compile("[A-Z]")
 

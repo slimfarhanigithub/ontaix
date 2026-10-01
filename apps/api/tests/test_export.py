@@ -411,7 +411,7 @@ async def test_a_company_owner_exports_only_what_it_reads(
 async def test_another_tenants_company_and_domain_are_not_found(
     client: httpx.AsyncClient, tenant: TenantFixture
 ) -> None:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.platform_session() as s:
         foreign = await tenant_repository.create(s, f"x-{uuid.uuid4().hex[:8]}", "Foreign")
         await tenant_settings_repository.create(s, foreign.id)
         await view_state_repository.create(s, foreign.id)

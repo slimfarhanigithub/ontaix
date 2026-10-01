@@ -21,6 +21,9 @@ import { createView, resize, toWorld, worldTransform, type View } from './view';
 export interface RendererHooks {
   openDrawer(n: Node): void;
   closeDrawer(): void;
+  /** Shift+click or Ctrl+click on a cell: adds it to the selection or takes it out. */
+  toggleSelected(n: Node): void;
+  clearSelection(): void;
   openLinkBox(a: Node, b: Node, sx: number, sy: number, link?: Link | null): void;
   closeNewBox(): void;
   closeLinkBox(): void;
@@ -46,6 +49,8 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
   let moved = 0;
   let dragStart: { x: number; y: number } | null = null;
   let clickedRoot: Node | null = null;
+  /** The cell under a Shift+click or Ctrl+click; it neither drags nor opens the drawer. */
+  let modClick: Node | null = null;
 
   function frameBody(): void {
     const t = now(),
@@ -137,6 +142,10 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
     moved = 0;
     const n = hit(s, v, e.clientX, e.clientY);
     if (n) hooks.setActive(n.company);
+    if (n && !n.fixed && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+      modClick = n;
+      return;
+    }
     clickedRoot = n && n.fixed ? n : null;
     if (n && !n.fixed) {
       s.dragging = n;
@@ -152,6 +161,13 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
 
   const onPointerUp = (e: PointerEvent) => {
     canvas.classList.remove('drag');
+    if (modClick) {
+      if (moved <= 3) hooks.toggleSelected(modClick);
+      modClick = null;
+      s.hover = null;
+      s.focusSet = s.stickyFocus;
+      return;
+    }
     if (!s.dragging && !clickedRoot && moved <= 3) {
       const l = hitChip(s, v, e.clientX, e.clientY);
       if (l) hooks.openLinkBox(l.a, l.b, e.clientX, e.clientY, l);
@@ -167,6 +183,7 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
         } else {
           s.cellFocus = null;
           focusOnDomain(s, null);
+          hooks.clearSelection();
           hooks.closeNewBox();
           hooks.closeLinkBox();
           hooks.closeDrawer();
@@ -174,10 +191,12 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
       }
     }
     if (s.dragging && moved <= 3 && !s.dropTarget) {
+      hooks.clearSelection();
       if (!s.lineageNode) focusOnCell(s, s.dragging);
       hooks.openDrawer(s.dragging);
     }
     if (clickedRoot && moved <= 3) {
+      hooks.clearSelection();
       if (!s.lineageNode) focusOnCell(s, clickedRoot);
       hooks.openDrawer(clickedRoot);
       clickedRoot = null;

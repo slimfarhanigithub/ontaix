@@ -10,10 +10,11 @@ info:
 
     - Every change to the ontology (concept, specialisation, relation, equivalence, source, binding, attribute, and any rename, deletion, edit or unbind) is a proposal. Ontology mutation endpoints return `202 Accepted` with the proposal; nothing writes an approved ontology row directly.
     - Settings, appearance, identity (groups, members, roles), source enable/disable/reconfigure and agent access are immediate and audited.
-    - Authentication is a bearer OIDC ID token or access token. Authorisation is Ontaix-native: roles reach a user only through group membership in this API's own tables.
+    - Authentication is a password session (ADR 0017): `POST /auth/sign-in` sets the `__Host-ontaix_session` cookie, and there is no sign-up. Agents authenticate with their bearer token (`agentToken`); OIDC bearer tokens for users (`bearerAuth`) are specified and not enabled in this deployment. How a caller authenticates never decides what it may do: authorisation is Ontaix-native, and roles reach a user only through group membership in this API's own tables.
+    - Organizations: every tenant is an organization, its own instance; a member's session names exactly one, and every read and write is confined to it by the repositories and by PostgreSQL row-level security. Only a super admin (a platform role outside every organization) creates organizations and accounts, under `/admin`, and enters an organization only through an audited read-only support session.
     - Errors are `application/problem+json` with a stable `code`.
     - Lists that can grow large (concepts, relations, bindings, users, groups, agents, audit) share one pagination, search, filter and sort convention: `page`, `pageSize`, `q`, `filter[<field>]=<value>`, `sort`, `order`, and return `{ items, page, pageSize, total }`.
-    - The tenant is resolved from the token; no path carries a tenant id.
+    - The tenant is resolved from the session or token; no path outside `/admin` carries a tenant id.
 
     Live updates: `POST /api/v1/ws/ticket` mints a one-time ticket; `GET /api/v1/ws?ticket=` upgrades to a WebSocket that carries the events described in `contracts/events.yaml`, in the envelope `{ id, type, occurredAt, tenantId, companyIds, sequence, actor, bulk, payload }`. A bearer token is never accepted in a query string. Reconnect with `?since=<sequence>` to receive missed events; a `snapshot.required` message means the client must reload `GET /api/v1/scene`. Each event is delivered only to callers holding the permission its channel declares as `x-ontaix-visibility` in a scope that contains every company in the event's `companyIds` (any scope when the list is empty).
 
@@ -25,7 +26,9 @@ info:
 
     Language model: Ontaix calls a language model in three places only, the extraction step of `POST /teach/parse` (ADR 0008), concept expansion, `POST /concepts/{conceptId}/expand` (ADR 0009), and whole-document extraction jobs, `POST /import/{importId}/extraction` (ADR 0010). OCR of scanned PDF pages during `POST /import/sentences` calls a document model through the same provider (ADR 0011). Ontology import (`POST /ontology-imports`, ADR 0012) calls no model. The model produces drafts, never writes, and its absence, failure or budget exhaustion never turns a request into an error. Teach extraction is grounded in the caller's own words; concept expansion is deliberately creative and ungrounded, so its suggestions are bounded by their own caps and carry the server-set origin `suggestion`.
 
-    CORS: the API answers an explicit origin allow-list from configuration, never a wildcard. Authentication is bearer tokens only, no cookies, so there is no CSRF surface.
+    CORS and CSRF: the Studio and the API are served from one origin (the ingress routes `/api` to the API), so the session cookie is first-party and host-only; the API answers an explicit origin allow-list from configuration, never a wildcard. Every POST, PUT, PATCH and DELETE authenticated by the cookie must carry `X-CSRF-Token` equal to the session's `csrfToken` (compared in constant time) and an `Origin` header in the allow-list; otherwise `403 csrf_failed`. `POST /auth/sign-in` checks `Origin` only. Bearer-token calls carry no cookie and need neither.
+
+    Development identity: only when `ONTAIX_ENVIRONMENT` is `dev` or `test` and `ONTAIX_DEV_IDENTITY_HEADER` is true does the header `X-Ontaix-User: <email>` name a seeded directory user of issuer `dev`, without a session and without CSRF checks; a live session cookie takes precedence. Outside those environments the process refuses to start with the flag on.
   license:
     name: Proprietary
     identifier: LicenseRef-Ontaix-Proprietary
@@ -41,9 +44,14 @@ servers:
       host:
         default: api.ontaix.dev
 security:
+  - sessionCookie: []
   - bearerAuth: []
   - agentToken: []
 tags:
+  - name: Authentication
+    description: Sign-in with email and password, sign-out, the current session and password change. No sign-up; a forgotten password is reset by a super admin.
+  - name: Platform
+    description: Super admin only - organizations, their accounts and passwords, read-only support sessions, and the platform audit log.
   - name: Scene
     description: One-call snapshot for the canvas, coverage, shared view state and stored positions.
   - name: Companies
@@ -275,7 +283,7 @@ paths:
     post:
       tags: [Companies]
       summary: Add a company
-      description: 'Immediate and audited (kind `company`). Refused with `409 company_creation_disabled` while the `companyCreation` setting is off. Creates the domain products of the tenant''s domains and the root cell. With `start` set to `starter_vocabulary` the thirteen starter concepts are created as proposals, awaiting approval.'
+      description: 'Immediate and audited (kind `company`). Creates the domain products of the tenant''s domains and the root cell. With `start` set to `starter_vocabulary` the thirteen starter concepts are created as proposals, awaiting approval. Refused with `409 company_creation_disabled` while the `companyCreation` setting is off, and with `409 company_limit` when the organization''s `companyMode` is `single` and it already has a company.'
       operationId: createCompany
       x-ontaix-permission: company.create
       requestBody:
@@ -621,6 +629,145 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Problem'
+  /companies/{companyId}/learning:
+    parameters:
+      - $ref: '#/components/parameters/CompanyId'
+    get:
+      tags: [Companies]
+      summary: List what Ontaix has learnt from usage in a company
+      description: |
+        Usage learning (ADR 0014). Returns the company's learning switch, its active lessons (approve, reject and correct examples), its active speech aliases and the habits summary derived from its approved relations, as the model receives them. Administrator at tenant scope only (`settings.write`); `404` for a company of another tenant. There is no Studio screen for learning: the Studio shows nothing new, and this API is for administrators and support tools. Paginated over lessons; filterable - `signal`, `task`; sortable - `createdAt`. Aliases are returned whole (at most 1,000). Lesson and alias text is company content written by people or models - rendered as text by any client.
+      operationId: listCompanyLearning
+      x-ontaix-permission: settings.write
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: The company's learning.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyLearning'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Companies]
+      summary: Turn usage learning on or off for a company
+      description: Immediate and audited (kind `learning`, `Learning enabled|disabled for <company>`). Administrator at tenant scope only. While off, no lesson is captured and none is sent to a model for the company; existing lessons are kept (use reset to remove them). Default on.
+      operationId: setCompanyLearning
+      x-ontaix-permission: settings.write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: The new switch.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [companyId, enabled]
+                properties:
+                  companyId:
+                    $ref: '#/components/schemas/Id'
+                  enabled:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /companies/{companyId}/learning/{lessonId}:
+    parameters:
+      - $ref: '#/components/parameters/CompanyId'
+      - name: lessonId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [Companies]
+      summary: Delete one lesson or alias
+      description: Deletes one lesson (`learning_example`) or one speech alias (`company_alias`) of the company, active or retired, at once and for good; it is never sent to a model again. Administrator at tenant scope only; audited (kind `learning`, `Lesson deleted`, no lesson text in the entry). `404` when the id is not a lesson or alias of this company.
+      operationId: deleteCompanyLesson
+      x-ontaix-permission: settings.write
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /companies/{companyId}/learning/reset:
+    parameters:
+      - $ref: '#/components/parameters/CompanyId'
+    post:
+      tags: [Companies]
+      summary: Forget everything learnt in a company
+      description: Deletes every lesson and alias of the company, active and retired, and the pending teach parse records that could still produce lessons. The switch keeps its value. Requires `confirm` set to `reset` in the body (`422 confirmation_required` or `confirmation_mismatch` otherwise). Administrator at tenant scope only; audited (kind `learning`, `Learning reset for <company> - <n> lessons, <m> aliases`).
+      operationId: resetCompanyLearning
+      x-ontaix-permission: settings.write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirm]
+              properties:
+                confirm:
+                  type: string
+                  const: reset
+      responses:
+        '200':
+          description: What was removed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lessons, aliases]
+                properties:
+                  lessons:
+                    type: integer
+                    minimum: 0
+                  aliases:
+                    type: integer
+                    minimum: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   /domain-products:
     get:
@@ -1593,6 +1740,10 @@ paths:
                   $ref: '#/components/schemas/InputOrigin'
                 importRef:
                   $ref: '#/components/schemas/ImportRef'
+                parseId:
+                  type: string
+                  format: uuid
+                  description: The `TeachResult.parseId` these drafts came from (ADR 0014). Optional and advisory - it only links the created proposals to the stored parse for usage learning, matching each draft to the parse's drafts (an unmatched draft is linked as edited). A parse of another user, company or tenant, or an expired one, is ignored silently, never an error; it never changes what is created.
                 drafts:
                   type: array
                   minItems: 1
@@ -1987,14 +2138,85 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
 
+  /teach/parse/stream:
+    post:
+      tags: [Teach]
+      summary: Parse a sentence with its drafts streamed as the model answers
+      description: |
+        The streamed variant of `POST /teach/parse` (ADR 0008, Streamed Parse; decision row 138). Same request body, same permission, same gates, charges and refusals, which answer before the stream begins, with the same status codes and `Problem` bodies as `POST /teach/parse`. The parse itself is the same: the same model call on the same profile, the same budgets (one parse unit per started 400 characters, one `llm` unit, the same token reservation and the same `llm_call` cost row), the same timeout and the same bounded retries of a `429` or `503` from the provider. Only the provider's answer is read as it arrives.
+
+        The response is `200` with `Content-Type: application/x-ndjson` and `Cache-Control: no-store`: one JSON object per line, each ended by a line feed, in this order:
+
+        - `draft` lines, zero or more. Each time the model's answer closes another intent, the answer so far goes through the checks and grounding of a whole answer and is mapped to the drafts the result would hold if the answer ended there; each draft not sent yet is sent once, with the next `index` (from 0) and its `DraftNote`. A part of the answer that fails a check sends nothing; later parts may still send drafts.
+        - one `retract` line, only when some sent draft is not in the final result: `indexes` names each such draft. When the whole answer is refused (`llmOutcome` `invalid_output`), every sent draft is named. A client removes what it showed for them.
+        - one `result` line, always last on success: `result` is exactly the body `POST /teach/parse` answers for the same request and the same model answer. A draft of the result equal to a sent draft that was not retracted is that draft; the result's own order and notes are the ones to submit.
+        - or, in place of the `result` line, one `error` line when the parse fails after the stream began: `problem` is a `Problem` with code `unavailable` (status `503`); nothing was written, and the client teaches the sentence again.
+
+        A sentence that needs no model step, or whose model step does not run (off, out of budget, rate limited), streams its `result` line alone. The parse runs to its end when the client goes away, so its budget, cost record and teach session turns are those of the plain endpoint. `POST /teach/parse` is unchanged.
+      operationId: parseTeachStream
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [companyId]
+              oneOf:
+                - required: [text]
+                - required: [importRef]
+              properties:
+                companyId:
+                  type: string
+                  format: uuid
+                text:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+                  description: As `POST /teach/parse`.
+                origin:
+                  $ref: '#/components/schemas/InputOrigin'
+                importRef:
+                  $ref: '#/components/schemas/ImportRef'
+                sessionId:
+                  type: string
+                  format: uuid
+                  description: As `POST /teach/parse`.
+      responses:
+        '410':
+          $ref: '#/components/responses/Gone'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '200':
+          description: The parse as newline-delimited JSON events, each line one `TeachStreamEvent`.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/TeachStreamEvent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
   /speech/token:
     post:
       tags: [Teach]
       summary: Mint a short-lived Azure AI Speech token for the microphone
       description: |
-        Speech recognition (ADR 0013). Returns a Microsoft Entra access token for the tenant's Azure AI Speech resource in France Central, already in the form the Speech SDK expects, `aad#<resourceId>#<accessToken>`, with the resource's `region` and the token's `expiresAt`. The Studio passes it to `SpeechConfig.fromAuthorizationToken(token, region)` and recognises English only (`en-GB` by default). The API obtains the token keyless from a dedicated managed identity (`ONTAIX_SPEECH_CLIENT_ID`) that holds only the role Cognitive Services Speech User on that one Speech resource. The token's audience is `https://cognitiveservices.azure.com`, valid wherever its identity holds a role, and that identity holds this one role only, so the token can do nothing but speech on this resource until it expires. The API never hands out its own workload identity's token or a developer's `az login` token: without the dedicated identity the answer is `503`, in every environment. No key ever exists or reaches the browser. The token carries no Ontaix identity and grants nothing in Ontaix.
+        Speech recognition (ADR 0013). Returns a Speech token issued by the tenant's Azure AI Speech resource in France Central, with the resource's `region` and the token's `expiresAt`. The Studio passes it to `SpeechConfig.fromAuthorizationToken(token, region)` and recognises English only (`en-GB` by default). The API obtains it server-side and keyless: it takes a Microsoft Entra access token for `https://cognitiveservices.azure.com/.default` and exchanges it at the resource's own `sts/v1.0/issueToken` endpoint on its custom subdomain. The Entra token comes from the dedicated managed identity `ONTAIX_SPEECH_CLIENT_ID`, which holds roles on that one Speech resource only; without it, and only in `dev` and only without `AZURE_FEDERATED_TOKEN_FILE`, from the developer's `az login`. The Entra token never leaves the API; the browser receives only the Speech token, valid about 10 minutes on this one Speech resource and for nothing else. No key ever exists or reaches the browser. The token carries no Ontaix identity and grants nothing in Ontaix.
 
-        Permission - the same as teaching: `proposal.create` in the scope of `companyId` (Owner, Builder, Agent in scope, or Member while `everyoneTeaches` is on); `403` otherwise. `404` when the caller may not read the company. `409 channel_disabled` while the `voice` setting is off. Charges one unit of the caller's hourly `speech` budget (default 60 per user or agent; `429 rate_limited` with `Retry-After`). Each successful call writes the audit entry `speech` `Speech recognition token issued` for that company. `503 unavailable` when no Speech resource or no dedicated identity is configured, or the token cannot be obtained; the Studio then falls back to the browser's own recogniser. The response is never cached (`Cache-Control: no-store`) and the token is never logged.
+        Permission - the same as teaching: `proposal.create` in the scope of `companyId` (Owner, Builder, Agent in scope, or Member while `everyoneTeaches` is on); `403` otherwise. `404` when the caller may not read the company. `409 channel_disabled` while the `voice` setting is off. Charges one unit of the caller's hourly `speech` budget (default 60 per user or agent; `429 rate_limited` with `Retry-After`). Each successful call writes the audit entry `speech` `Speech recognition token issued` for that company. `503 unavailable` when no Speech resource or no credential is configured, or the Entra token or the exchange fails; the Studio then falls back to the browser's own recogniser. The response is never cached (`Cache-Control: no-store`) and the token is never logged.
       operationId: mintSpeechToken
       x-ontaix-permission: proposal.create
       requestBody:
@@ -2091,7 +2313,7 @@ paths:
       description: |
         The only place documents are read - the Studio never extracts text itself and loads nothing from a CDN. Accepts at most 10 MiB of `text/plain`, `text/markdown`, `text/csv`, `application/json`, DOCX (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`), PDF (`application/pdf`, text or scanned), PPTX (`application/vnd.openxmlformats-officedocument.presentationml.presentation`), XLSX (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`) or HTML (`text/html`); anything else is `415 unsupported_media_type` (ADR 0011).
 
-        Sniffing - the server decides the type from the bytes, and the declared type must agree with it. `%PDF-` is PDF. A ZIP archive is OOXML only when `[Content_Types].xml` declares exactly one main part of DOCX, PPTX or XLSX; a macro-enabled main part (`docm`, `pptm`, `xlsm`, any `macroEnabled` content type) or a `vbaProject.bin` part is refused, as are legacy binary Office files and encrypted OOXML (both OLE compound files). HTML is text starting, after a byte order mark and whitespace, with `<!doctype html`, `<html`, `<head` or `<body`. Text types are UTF-8 (a UTF-16 byte order mark is converted).
+        Sniffing - the server decides the type from the bytes, and the declared type must agree with it. The declared type is the form field `mediaType` when given (one of the types above, else `422 validation_failed`), else the file extension, else the part's media type; `mediaType` lets a file be read as a document whatever its name says, for example a PDF named `.txt` or an ontology read as plain text (ADR 0011). `%PDF-` is PDF. A ZIP archive is OOXML only when `[Content_Types].xml` declares exactly one main part of DOCX, PPTX or XLSX; a macro-enabled main part (`docm`, `pptm`, `xlsm`, any `macroEnabled` content type) or a `vbaProject.bin` part is refused, as are legacy binary Office files and encrypted OOXML (both OLE compound files). HTML is text starting, after a byte order mark and whitespace, with `<!doctype html`, `<html`, `<head` or `<body`. Text types are UTF-8 (a UTF-16 byte order mark is converted).
 
         Per type - every XML part is read with no DTD and no entity expansion; OOXML archives hold at most 1,000 members; decompression is bounded in bytes - each member at most 50 MiB and the archive at most 200 MiB uncompressed, counted while streaming whatever the declared sizes say, and a compression ratio above 100 for any member is refused - and also stops at the extracted-text limit. PDF at most 2,000 pages. PPTX at most 500 slides; slide text and speaker notes, in slide order; images are not read. XLSX at most 50 sheets and 200,000 non-empty cells; each non-empty row becomes one sentence of its cell values joined by `, `, in sheet and row order; formulas are never evaluated (cached values only) and external links never followed. HTML at most 5 MiB and nesting depth 512; parsed without running anything; `script`, `style`, `template`, `noscript`, `iframe`, `object`, `embed`, `svg` and `math` contents are dropped; no external resource is ever fetched (no image, stylesheet, frame, font, base URL or link); block elements end sentences.
 
@@ -2111,6 +2333,10 @@ paths:
                 file:
                   type: string
                   contentMediaType: application/octet-stream
+                mediaType:
+                  type: string
+                  enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/html]
+                  description: The document type to read the file as, in place of its extension and part media type. The bytes must still agree with it.
       responses:
         '503':
           $ref: '#/components/responses/Problem'
@@ -2178,6 +2404,65 @@ paths:
         '413':
           $ref: '#/components/responses/Problem'
         '415':
+          $ref: '#/components/responses/Problem'
+
+  /import/detect:
+    post:
+      tags: [Teach]
+      summary: Detect whether a file is a document or an ontology
+      description: |
+        Import routing (ADR 0011, ADR 0012). Reads one upload and answers whether it is a document for `POST /import/sentences` or an ontology for `POST /ontology-imports`, with the ontology format and the document media type the bytes read as. Nothing is extracted, mapped or stored, and no model is called.
+
+        Detection - the bytes decide when they are unambiguous: PDF, DOCX, PPTX and HTML (sniffed as in `POST /import/sentences`) are documents; text whose root element is `rdf:RDF` (RDF/XML) or `owl:Ontology` (OWL/XML), JSON naming an `@context` or `@graph` key (JSON-LD), an OBO `format-version:` header with `[Term]` stanzas, a Turtle `@prefix`, `@base`, `PREFIX` or `BASE` directive, or lines that are all full N-Triples are ontologies. A CSV (by extension, or by `text/csv` when the extension names no document type) or an XLSX workbook is an ontology when its first non-empty row, of the first sheet for XLSX, is a hierarchy header (`label` and `parent` columns, or at least one `Level <n>` column, matched without regard to case or surrounding space), and a document otherwise. Other text follows its extension, else its part media type: an ontology extension (`.owl`, `.rdf`, `.xml`, `.owx`, `.ttl`, `.nt`, `.jsonld`, `.obo`) or media type names the format, anything else is a document. So the content wins over a wrong extension: Turtle named `.txt` is an ontology, a PDF named `.ttl` a document. JSON without `@context` or `@graph` is a document. `mediaType` is always set: the document type the bytes read as (a text type from the extension or part media type, plain text for other text), so a file detected as an ontology can still be read as a document.
+
+        Rules - permission `proposal.create` in some scope (`403` otherwise); `409 channel_disabled` while `importDocs` is off; no import unit is spent. At most the larger of the two import limits (10 MiB and `ONTAIX_ONTOLOGY_IMPORT_MAX_BYTES`), else `413`. XML is read with no DTD and no entity expansion, and only up to its root element; an Office archive follows the OOXML sniffing and decompression bounds of `POST /import/sentences`, and its header row is read in a child process with the ontology parse time limit and memory cap (`503 busy` when every reading slot is taken). Legacy or encrypted Office files, unknown or macro-enabled archives and binary data are `415 unsupported_media_type`; a refused file name is `422 validation_failed`.
+      operationId: detectImport
+      x-ontaix-permission: proposal.create
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  contentMediaType: application/octet-stream
+      responses:
+        '200':
+          description: What the file is.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [kind, format, mediaType]
+                properties:
+                  kind:
+                    type: string
+                    enum: [document, ontology]
+                  format:
+                    type: [string, 'null']
+                    enum: [rdf_xml, turtle, owl_xml, json_ld, n_triples, obo, csv, xlsx, null]
+                    description: The ontology format when `kind` is `ontology`, else null.
+                  mediaType:
+                    type: string
+                    enum: [text/plain, text/markdown, text/csv, application/json, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/html]
+                    description: The document media type the bytes read as, sent as `mediaType` to `POST /import/sentences` when the file is read as a document.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/Problem'
+        '415':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '503':
           $ref: '#/components/responses/Problem'
 
   /import/{importId}/extraction:
@@ -2369,7 +2654,7 @@ paths:
 
         Limits - at most `ONTAIX_ONTOLOGY_IMPORT_MAX_BYTES` (default 20 MiB) and 1,000,000 triples or 200,000 CSV or XLSX rows; at most `ONTAIX_ONTOLOGY_IMPORT_MAX_NODES` drafts (default 5,000, at most 20,000; beyond it `413`). Parsing runs in a child process with `ONTAIX_ONTOLOGY_IMPORT_PARSE_TIMEOUT_SECONDS` (default 60) and a memory cap; past it `413`. `owl:imports` is never fetched (each one is reported as `remote_import_not_fetched`); a JSON-LD remote `@context` is never fetched (`422`); XML is read with no DTD and no entity expansion; no reasoner runs - only asserted axioms are read. Every limit refuses the whole import; nothing is stored.
 
-        Rules - permission `proposal.create` in the scope of `companyId` (and of `parentConceptId` when given, which must be an approved live concept of that company, else `404` or `409 concept_pending`); `409 channel_disabled` while `importDocs` is off; one unit of the import budget (`429`). The detected format must agree with the declared media type or extension (`415` otherwise).
+        Rules - permission `proposal.create` in the scope of `companyId` (and of `parentConceptId` when given, which must be an approved live concept of that company, else `404` or `409 concept_pending`); `409 channel_disabled` while `importDocs` is off; one unit of the import budget (`429`). The detected format must agree with the declared one (`415` otherwise): the form field `format` when given, else the extension, else the part media type. `format` lets a file be read in a chosen format whatever its name says; `turtle` also accepts N-Triples content, and an unknown value is `422 validation_failed`.
       operationId: importOntology
       x-ontaix-permission: proposal.create
       requestBody:
@@ -2400,6 +2685,10 @@ paths:
                   default: skip
                 domainKey:
                   $ref: '#/components/schemas/DomainKey'
+                format:
+                  type: string
+                  enum: [rdf_xml, turtle, owl_xml, json_ld, n_triples, obo, csv, xlsx]
+                  description: The format to read the file as, in place of its extension and part media type. The bytes must still agree with it.
       responses:
         '200':
           description: The mapped tree.
@@ -2508,6 +2797,7 @@ paths:
     get:
       tags: [Identity]
       summary: The signed-in user, effective roles and permissions
+      description: A member session returns its directory user. A super admin's session answers `403` outside a support session; inside one it returns the platform account as `user` (its account id, no groups, no roles) with exactly `model.read`, `directory.read` and `audit.read` in `permissions` (ADR 0017).
       operationId: getMe
       x-ontaix-permission: authenticated
       responses:
@@ -3244,13 +3534,619 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /auth/sign-in:
+    post:
+      tags: [Authentication]
+      summary: Sign in with email and password
+      description: |
+        The only way to start a session; there is no sign-up and no self-service password recovery (ADR 0017). Checks run in this order: the client IP's and the email's throttle (`429`), then the argon2id verification. An unknown email is verified against a fixed dummy hash, so every refusal takes the same time. A wrong password, an unknown email, a disabled account and a disabled organization all answer the same `401 invalid_credentials`; five failures within 15 minutes lock that email, and that IP, for 15 minutes (`429 sign_in_locked`), whether or not an account has the email.
+
+        On success the response sets the session cookie `__Host-ontaix_session` (`Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`, no `Max-Age`) holding a new 256-bit token, ends any session the request presented, and returns the session with its CSRF token. When `mustChangePassword` is true the session may only call `GET /auth/session`, `PUT /auth/password` and `POST /auth/sign-out` until the password is changed; every other call answers `403 password_change_required`. The request must carry an `Origin` header naming an allowed origin (login CSRF). Every attempt is audited.
+      operationId: signIn
+      x-ontaix-permission: none
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignInRequest'
+      responses:
+        '200':
+          description: Signed in. `Set-Cookie` carries the session token; the body never does.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: '`__Host-ontaix_session=<token>; Path=/; Secure; HttpOnly; SameSite=Lax`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/InvalidCredentials'
+        '403':
+          $ref: '#/components/responses/CsrfFailed'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/SignInThrottled'
+
+  /auth/sign-out:
+    post:
+      tags: [Authentication]
+      summary: Sign out
+      description: Ends the presented session, clears the cookie (`Max-Age=0`) and audits `sign_out`. Answers `204` even when the session had already ended, so the Studio can always return to the sign-in page. Needs `X-CSRF-Token` when the session is live.
+      operationId: signOut
+      x-ontaix-permission: authenticated
+      security:
+        - sessionCookie: []
+      responses:
+        '204':
+          description: Signed out; `Set-Cookie` clears the session cookie.
+        '403':
+          $ref: '#/components/responses/CsrfFailed'
+
+  /auth/session:
+    get:
+      tags: [Authentication]
+      summary: The current session
+      description: The Studio's first call. `401` means no live session, and the Studio shows the sign-in page. Reading the session slides its 30-minute idle expiry like any other authenticated call.
+      operationId: getSession
+      x-ontaix-permission: authenticated
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The live session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/password:
+    put:
+      tags: [Authentication]
+      summary: Change my password
+      description: |
+        The signed-in account changes its own password: `currentPassword` must verify (a failure counts toward the email's throttle and answers `422 current_password_incorrect`), and `newPassword` must pass the policy (`422 password_rejected`, `detail` says which rule): 12 to 128 characters after Unicode NFC normalisation, any characters, not in the bundled list of common and breached passwords, not containing the email's local part, and different from the current password. On success the credential's `mustChange` clears, every other session of the account ends (`password_changed`), and the presented session is replaced by a new token (`Set-Cookie`) whose session the body returns. Audited as `password_changed` or `password_change_failed`.
+      operationId: changePassword
+      x-ontaix-permission: authenticated
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChange'
+      responses:
+        '200':
+          description: Changed. The body is the new session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfFailed'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/SignInThrottled'
+
+  /admin/organizations:
+    get:
+      tags: [Platform]
+      summary: List organizations (super admin)
+      operationId: listOrganizations
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Q'
+        - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: A page of organizations. Filterable - `status` (`active`, `disabled`), `companyMode`. Sortable - `name`, `createdAt`, `users`.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Platform]
+      summary: Create an organization (super admin)
+      description: Creates the tenant, its `organization_settings` (company mode), its default tenant settings and view state, and five starter groups, each holding one role at tenant scope - `Administrators` (Administrator), `Governors` (Governor), `Builders` (Builder), `Members` (Member), `Auditors` (Auditor) - so accounts can be given roles at creation. It creates no company and no user; the organization's first company becomes its home company. The slug is derived from the name (lower-case, hyphens) and never changes. Audited `organization_created` in the platform log.
+      operationId: createOrganization
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationCreate'
+      responses:
+        '201':
+          description: The organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /admin/organizations/{organizationId}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Platform]
+      summary: Get one organization (super admin)
+      operationId: getOrganization
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Platform]
+      summary: Rename an organization or change its company mode (super admin)
+      description: '`name` renames (`409 duplicate_organization` when another organization has it, case-insensitive). `companyMode` `single` is refused with `409 company_limit` while the organization has two or more companies; setting it turns the organization''s `multiCompany` setting off, which hides Add company, and emits `settings.changed` to the organization with `companyMode` and `multiCompany` in `changed`. `multiple` lets the organization''s Administrator turn `multiCompany` on again. Audited in the platform log and in the organization''s audit log (kind `platform`).'
+      operationId: updateOrganization
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationUpdate'
+      responses:
+        '200':
+          description: The organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /admin/organizations/{organizationId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    post:
+      tags: [Platform]
+      summary: Disable an organization (super admin)
+      description: Nobody signs into it any more and every session of its accounts ends at once (`organization_disabled`), including support sessions in it; its data, users and audit log are kept. Idempotent. Audited in both logs.
+      operationId: disableOrganization
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/organizations/{organizationId}/enable:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    post:
+      tags: [Platform]
+      summary: Enable a disabled organization (super admin)
+      description: Its enabled accounts can sign in again. Idempotent. Audited in both logs.
+      operationId: enableOrganization
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/organizations/{organizationId}/groups:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Platform]
+      summary: List an organization's groups, to assign accounts (super admin)
+      description: Every group of the organization with its roles, for the group picker of the user dialogs. Groups themselves are managed by the organization's Administrator on the Groups page.
+      operationId: listOrganizationGroups
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The groups, by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Group'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/organizations/{organizationId}/users:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Platform]
+      summary: List an organization's accounts (super admin)
+      operationId: listOrganizationUsers
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Q'
+        - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: A page of the organization's users. Filterable - `status` (`active`, `disabled`, `locked`, `mustChangePassword`), `inGroup`. Sortable - `name`, `email`, `lastSignInAt`.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/OrganizationUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Platform]
+      summary: Create an account in an organization (super admin)
+      description: 'Creates the account, its directory user (issuer `local`) and its password credential in one transaction, and adds the user to `groupIds` (groups of this organization only, `422` otherwise). The initial password passes the same policy as a change (`422 password_rejected`) and must be changed at first sign-in. The password is never returned, logged or audited. The email is unique across the deployment (`409 duplicate_email`), because the sign-in page has no organization field. Refused with `409 organization_disabled` on a disabled organization. Audited `account_created` in both logs, and as kind `groups` for each membership.'
+      operationId: createOrganizationUser
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationUserCreate'
+      responses:
+        '201':
+          description: The account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /admin/organizations/{organizationId}/users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Platform]
+      summary: Get one account of an organization (super admin)
+      operationId: getOrganizationUser
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Platform]
+      summary: Rename an account or change its groups (super admin)
+      description: '`groupIds` replaces the user''s memberships (groups of this organization only). Membership changes are immediate and audited as kind `groups` in the organization''s log, like the Groups page. The email never changes; create a new account instead.'
+      operationId: updateOrganizationUser
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationUserUpdate'
+      responses:
+        '200':
+          description: The account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /admin/organizations/{organizationId}/users/{userId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Platform]
+      summary: Disable an account (super admin)
+      description: The account can no longer sign in and every session of it ends (`account_disabled`). Its directory user, memberships and history stay. Idempotent. Audited in both logs.
+      operationId: disableOrganizationUser
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/organizations/{organizationId}/users/{userId}/enable:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Platform]
+      summary: Enable a disabled account (super admin)
+      description: Idempotent. Audited in both logs.
+      operationId: enableOrganizationUser
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/organizations/{organizationId}/users/{userId}/password:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/UserId'
+    put:
+      tags: [Platform]
+      summary: Reset an account's password (super admin)
+      description: The only password recovery. Sets `newPassword` (same policy, `422 password_rejected`) with a forced change at the next sign-in, ends every session of the account (`password_reset`) and clears the throttle of its email. The super admin passes the password to the user outside Ontaix; it is never returned, logged or audited. Audited `password_reset` in both logs.
+      operationId: resetOrganizationUserPassword
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordReset'
+      responses:
+        '204':
+          description: Reset.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /admin/organizations/{organizationId}/support-session:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    post:
+      tags: [Platform]
+      summary: Open a read-only support session in an organization (super admin)
+      description: 'The super admin''s only way into an organization''s data. Replaces the presented session with a new token (`Set-Cookie`) bound to this organization for 60 minutes, never past the session''s absolute expiry; opening another organization''s support session ends this one. Inside it the super admin holds exactly `model.read`, `directory.read` and `audit.read` at tenant scope; every write, proposal, decision and model call answers `403 forbidden`. `reason` is required and audited: `support_session_started` in the platform log and kind `platform` in the organization''s log, where its Administrators and Auditors see it. Refused with `409 organization_disabled` on a disabled organization.'
+      operationId: startSupportSession
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportSessionStart'
+      responses:
+        '200':
+          description: The new session, with `support` set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /admin/support-session:
+    delete:
+      tags: [Platform]
+      summary: End the current support session (super admin)
+      description: Replaces the presented session with a new token without `support` (`Set-Cookie`) and audits `support_session_ended` in both logs. A support session that reaches `support.until` ends by itself and is audited the same way, with the system as actor.
+      operationId: endSupportSession
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The new session, without `support`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/audit:
+    get:
+      tags: [Platform]
+      summary: Platform audit log, newest first (super admin)
+      operationId: listPlatformAudit
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Q'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: A page of entries. Filterable - `action`, `ok`, `organizationId`, `from`, `to`.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PlatformAuditEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
 components:
   securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-ontaix_session
+      description: 'The browser session set by `POST /auth/sign-in`: an opaque 256-bit token, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, host-only. The server stores only its SHA-256. It ends after 30 minutes without an authenticated call or 12 hours after sign-in, at sign-out, and when the password changes or is reset or the account or organization is disabled. Unsafe methods also need `X-CSRF-Token`. Authentication only; roles come from Ontaix groups, or from the platform role for a super admin.'
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: OIDC ID token or access token from any provider the tenant trusts (`tenant_identity_provider` maps issuer and audience to the tenant). Authentication only; roles come from Ontaix groups.
+      description: OIDC ID token or access token from any provider the tenant trusts (`tenant_identity_provider` maps issuer and audience to the tenant). Authentication only; roles come from Ontaix groups. Specified for a later deployment and not enabled in this one (ADR 0017); until then a bearer token that is not an agent's answers `401`.
     agentToken:
       type: http
       scheme: bearer
@@ -3376,6 +4272,12 @@ components:
       schema:
         type: string
         format: uuid
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
     UserId:
       name: userId
       in: path
@@ -3453,6 +4355,30 @@ components:
           schema:
             type: integer
           description: Seconds to wait.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+    InvalidCredentials:
+      description: 'The email and password do not sign anyone in (code `invalid_credentials`, `detail` `Email or password is incorrect.`), whether the email is unknown, the password wrong, or the account or its organization disabled.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    SignInThrottled:
+      description: 'Too many failed sign-ins for this email or from this IP within 15 minutes (code `sign_in_locked`, `detail` `Too many attempts. Try again in <n> minutes.`); `Retry-After` gives the seconds left.'
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until the lock ends.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    CsrfFailed:
+      description: The `Origin` header is missing or not allowed, or `X-CSRF-Token` does not match the session (code `csrf_failed`).
       content:
         application/problem+json:
           schema:
@@ -3538,6 +4464,16 @@ components:
             - proposal_not_editable
             - company_creation_disabled
             - domain_limit
+            - invalid_credentials
+            - sign_in_locked
+            - csrf_failed
+            - password_change_required
+            - password_rejected
+            - current_password_incorrect
+            - duplicate_email
+            - duplicate_organization
+            - organization_disabled
+            - company_limit
         errors:
           type: array
           items:
@@ -3585,7 +4521,8 @@ components:
 
     ActorKind:
       type: string
-      enum: [user, agent, system]
+      enum: [user, agent, system, platform]
+      description: '`platform` - a super admin acting on the organization or inside a support session; `id` is the platform account.'
 
     Actor:
       type: object
@@ -4855,10 +5792,78 @@ components:
           items:
             $ref: '#/components/schemas/LineageNode'
 
+    TeachStreamEvent:
+      description: One line of `POST /teach/parse/stream`, told apart by `type`.
+      oneOf:
+        - $ref: '#/components/schemas/TeachDraftEvent'
+        - $ref: '#/components/schemas/TeachRetractEvent'
+        - $ref: '#/components/schemas/TeachResultEvent'
+        - $ref: '#/components/schemas/TeachErrorEvent'
+      discriminator:
+        propertyName: type
+        mapping:
+          draft: '#/components/schemas/TeachDraftEvent'
+          retract: '#/components/schemas/TeachRetractEvent'
+          result: '#/components/schemas/TeachResultEvent'
+          error: '#/components/schemas/TeachErrorEvent'
+    TeachDraftEvent:
+      type: object
+      description: A draft the valid part of the model's answer received so far gives, sent once, as soon as it is known. Advisory until the `result` line; never submitted on its own.
+      required: [type, index, draft, note]
+      properties:
+        type:
+          type: string
+          enum: [draft]
+        index:
+          type: integer
+          minimum: 0
+          description: The stream's count of drafts, from 0, in the order they are sent.
+        draft:
+          $ref: '#/components/schemas/ProposalDraft'
+        note:
+          $ref: '#/components/schemas/DraftNote'
+    TeachRetractEvent:
+      type: object
+      description: The sent drafts the final result does not hold - every one of them when the whole answer is refused. Sent once, just before the `result` line, only when it names at least one draft.
+      required: [type, indexes]
+      properties:
+        type:
+          type: string
+          enum: [retract]
+        indexes:
+          type: array
+          minItems: 1
+          items:
+            type: integer
+            minimum: 0
+    TeachResultEvent:
+      type: object
+      description: The last line of a parse; `result` is the body `POST /teach/parse` answers for the same request and model answer.
+      required: [type, result]
+      properties:
+        type:
+          type: string
+          enum: [result]
+        result:
+          $ref: '#/components/schemas/TeachResult'
+    TeachErrorEvent:
+      type: object
+      description: The last line of a parse that failed after its stream began, in place of the `result` line. `problem.code` is `unavailable`; nothing was written.
+      required: [type, problem]
+      properties:
+        type:
+          type: string
+          enum: [error]
+        problem:
+          $ref: '#/components/schemas/Problem'
     TeachResult:
       type: object
       required: [outcome, domainKey, intents, drafts, caption, origin, originDetail, extractor, degraded, llmOutcome, draftNotes, unresolved]
       properties:
+        parseId:
+          type: [string, 'null']
+          format: uuid
+          description: Set when the parse was recorded for usage learning (ADR 0014) - a user caller, learning on for the company, at least one draft; the client sends it back as `parseId` with `POST /proposals/batch`. Null otherwise.
         extractor:
           type: string
           enum: [rules, llm, rules+llm]
@@ -5422,8 +6427,8 @@ components:
           type: string
           minLength: 1
           maxLength: 8192
-          pattern: '^aad#/subscriptions/[^#]+#[A-Za-z0-9._-]+$'
-          description: '`aad#<Speech resource id>#<Microsoft Entra access token>`, ready for `SpeechConfig.fromAuthorizationToken` and for `recognizer.authorizationToken` on refresh. A secret while it lives - held in memory only, never stored, logged or put in a URL.'
+          pattern: '^[A-Za-z0-9._-]+$'
+          description: 'The Speech STS token the Speech resource issued (`sts/v1.0/issueToken`), valid about 10 minutes, ready for `SpeechConfig.fromAuthorizationToken(token, region)` and for `recognizer.authorizationToken` on refresh. Never the Entra token, which stays on the server. A secret while it lives - held in memory only, never stored, logged or put in a URL.'
         region:
           type: string
           const: francecentral
@@ -5431,7 +6436,7 @@ components:
         expiresAt:
           type: string
           format: date-time
-          description: When the access token expires. The Studio requests a new token at least 5 minutes before, and at every microphone start, and sets it on the running recogniser.
+          description: When the Speech token expires, about 10 minutes after it is issued. The Studio requests a new token at least 5 minutes before, and at every microphone start, and sets it on the running recogniser.
         language:
           type: string
           enum: [en-GB, en-US]
@@ -5543,6 +6548,450 @@ components:
           description: Up to six labels of what goes, named concepts first, then descendants. Rendered as text.
           items:
             type: string
+    SignInRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          minLength: 3
+          maxLength: 254
+          description: Trimmed and lower-cased before lookup.
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          writeOnly: true
+          description: Never logged, audited or echoed. Longer than 128 characters is verified like any other value and fails, so length never reveals anything.
+
+    Session:
+      type: object
+      description: The live session of the browser. A member session names its organization and directory user; a platform session names no organization unless a support session is open.
+      required: [kind, account, csrfToken, mustChangePassword, idleExpiresAt, absoluteExpiresAt]
+      properties:
+        kind:
+          type: string
+          enum: [member, platform]
+        account:
+          type: object
+          required: [id, email, name]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            email:
+              type: string
+              format: email
+            name:
+              type: string
+        organization:
+          oneOf:
+            - $ref: '#/components/schemas/OrganizationRef'
+            - type: 'null'
+          description: The member's organization; null for a platform session.
+        userId:
+          type: [string, 'null']
+          format: uuid
+          description: The member's directory user (`GET /me` returns its roles); null for a platform session.
+        platformRoles:
+          type: array
+          items:
+            type: string
+            enum: [super_admin]
+          description: Present on a platform session.
+        support:
+          oneOf:
+            - type: object
+              required: [organization, until, reason]
+              properties:
+                organization:
+                  $ref: '#/components/schemas/OrganizationRef'
+                until:
+                  type: string
+                  format: date-time
+                reason:
+                  type: string
+            - type: 'null'
+          description: The open read-only support session of a super admin, else null.
+        csrfToken:
+          type: string
+          minLength: 43
+          maxLength: 43
+          description: Sent back in the `X-CSRF-Token` header of every POST, PUT, PATCH and DELETE while this session lives.
+        mustChangePassword:
+          type: boolean
+          description: True after a super admin set or reset the password; only the password change, this read and sign-out are allowed until it is false.
+        idleExpiresAt:
+          type: string
+          format: date-time
+          description: 30 minutes after the last authenticated call, never after `absoluteExpiresAt`.
+        absoluteExpiresAt:
+          type: string
+          format: date-time
+          description: 12 hours after sign-in; the session then ends whatever the activity.
+
+    PasswordChange:
+      type: object
+      required: [currentPassword, newPassword]
+      additionalProperties: false
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          writeOnly: true
+        newPassword:
+          $ref: '#/components/schemas/NewPassword'
+
+    PasswordReset:
+      type: object
+      required: [newPassword]
+      additionalProperties: false
+      properties:
+        newPassword:
+          $ref: '#/components/schemas/NewPassword'
+
+    NewPassword:
+      type: string
+      minLength: 12
+      maxLength: 128
+      writeOnly: true
+      description: 12 to 128 characters after Unicode NFC normalisation, any characters including spaces, no composition rule. Refused with `422 password_rejected` when it is in the bundled list of common and breached passwords (checked offline, no external call), contains the email's local part, or equals the current password. Never logged, audited or returned.
+
+    CompanyMode:
+      type: string
+      enum: [single, multiple]
+      description: '`single` - the organization has at most one company: Add company is hidden and `POST /companies` answers `409 company_limit` once it has one, and its `multiCompany` setting stays off (`409 locked_setting`). `multiple` - several companies, subject to the organization''s own `multiCompany` setting.'
+
+    OrganizationRef:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        slug:
+          type: string
+
+    Organization:
+      type: object
+      required: [id, name, slug, companyMode, status, companies, users, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+        slug:
+          type: string
+          pattern: '^[a-z0-9]([a-z0-9-]{0,46}[a-z0-9])?$'
+        companyMode:
+          $ref: '#/components/schemas/CompanyMode'
+        status:
+          type: string
+          enum: [active, disabled]
+        companies:
+          type: integer
+          minimum: 0
+        users:
+          type: integer
+          minimum: 0
+          description: Accounts of the organization, disabled included.
+        createdAt:
+          type: string
+          format: date-time
+        disabledAt:
+          type: [string, 'null']
+          format: date-time
+
+    OrganizationCreate:
+      type: object
+      required: [name, companyMode]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Unique across the deployment, case-insensitive (`409 duplicate_organization`).
+        companyMode:
+          $ref: '#/components/schemas/CompanyMode'
+
+    OrganizationUpdate:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        companyMode:
+          $ref: '#/components/schemas/CompanyMode'
+
+    OrganizationUser:
+      type: object
+      required: [id, accountId, email, name, status, mustChangePassword, locked, groups, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        accountId:
+          $ref: '#/components/schemas/Id'
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        department:
+          type: [string, 'null']
+        status:
+          type: string
+          enum: [active, disabled]
+        mustChangePassword:
+          type: boolean
+        locked:
+          type: boolean
+          description: The email is inside a 15-minute sign-in lock.
+        groups:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id:
+                $ref: '#/components/schemas/Id'
+              name:
+                type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastSignInAt:
+          type: [string, 'null']
+          format: date-time
+
+    OrganizationUserCreate:
+      type: object
+      required: [email, name, password, groupIds]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Stored lower-case; unique across the deployment.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        department:
+          type: [string, 'null']
+          maxLength: 120
+        password:
+          $ref: '#/components/schemas/NewPassword'
+        groupIds:
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/Id'
+          description: Groups of this organization; may be empty, and a user with no group can read nothing.
+
+    OrganizationUserUpdate:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        department:
+          type: [string, 'null']
+          maxLength: 120
+        groupIds:
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/Id'
+
+    SupportSessionStart:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 300
+          description: Why the super admin opens the organization; shown in both audit logs.
+
+    PlatformAuditEntry:
+      type: object
+      required: [id, at, action, ok, what]
+      properties:
+        id:
+          type: integer
+        at:
+          type: string
+          format: date-time
+        actor:
+          oneOf:
+            - type: object
+              required: [accountId, email]
+              properties:
+                accountId:
+                  $ref: '#/components/schemas/Id'
+                email:
+                  type: string
+            - type: 'null'
+          description: The account that acted; null for a failed sign-in with an unknown email and for the system (an expired support session).
+        action:
+          type: string
+          enum: [sign_in, sign_in_failed, sign_in_locked, sign_out, session_expired, password_changed, password_change_failed, password_reset, account_created, account_updated, account_disabled, account_enabled, organization_created, organization_renamed, organization_company_mode, organization_disabled, organization_enabled, support_session_started, support_session_ended, super_admin_created, super_admin_password_set]
+        ok:
+          type: boolean
+        organization:
+          oneOf:
+            - $ref: '#/components/schemas/OrganizationRef'
+            - type: 'null'
+        targetAccountId:
+          type: [string, 'null']
+          format: uuid
+        what:
+          type: string
+          description: One English sentence; never a password, token, hash, or an email that matches no account.
+        clientIp:
+          type: [string, 'null']
+
+    CompanyLearning:
+      type: object
+      additionalProperties: false
+      required: [companyId, enabled, page, pageSize, total, lessons, aliases, habits]
+      properties:
+        companyId:
+          $ref: '#/components/schemas/Id'
+        enabled:
+          type: boolean
+          description: The company's learning switch.
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+          description: Lessons matching the filter, active and retired.
+        lessons:
+          type: array
+          items:
+            $ref: '#/components/schemas/Lesson'
+        aliases:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/CompanyAlias'
+        habits:
+          $ref: '#/components/schemas/LearningHabits'
+
+    Lesson:
+      type: object
+      additionalProperties: false
+      required: [id, signal, task, origin, sourceText, bulk, createdAt, retiredAt, retiredReason, proposalIds]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        signal:
+          type: string
+          enum: [approve, reject, correct]
+        task:
+          type: string
+          enum: [teach, expand, extraction]
+        origin:
+          type: string
+          enum: [text, speech, document, suggestion]
+        sourceText:
+          type: string
+          maxLength: 4000
+          description: The sentence, speech text, document sentence or expansion request the lesson comes from.
+        modelOutput:
+          type: [object, 'null']
+          description: What the model produced (reject and correct).
+        finalStructure:
+          type: [object, 'null']
+          description: What people approved (approve and correct).
+        correctsId:
+          type: [string, 'null']
+          format: uuid
+          description: For a correct lesson, the reject lesson it answers, when that was captured.
+        bulk:
+          type: boolean
+        proposalIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/Id'
+        createdAt:
+          type: string
+          format: date-time
+        retiredAt:
+          type: [string, 'null']
+          format: date-time
+        retiredReason:
+          type: [string, 'null']
+          enum: [contradicted, superseded, cap, null]
+
+    CompanyAlias:
+      type: object
+      additionalProperties: false
+      required: [id, heard, meant, conceptId, hits, createdAt, retiredAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        heard:
+          type: string
+          maxLength: 120
+        meant:
+          type: string
+          maxLength: 120
+        conceptId:
+          type: [string, 'null']
+          format: uuid
+        hits:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        retiredAt:
+          type: [string, 'null']
+          format: date-time
+
+    LearningHabits:
+      type: object
+      additionalProperties: false
+      description: Derived on read from the company's approved relations and concepts, never stored.
+      required: [verbs, naming]
+      properties:
+        verbs:
+          type: array
+          maxItems: 20
+          description: The most used actions of approved relations, most used first.
+          items:
+            type: object
+            additionalProperties: false
+            required: [action, count]
+            properties:
+              action:
+                type: string
+              count:
+                type: integer
+                minimum: 1
+        naming:
+          type: array
+          maxItems: 5
+          description: Short plain statements of naming patterns, for example `labels are plural nouns` or `acronyms kept upper-case`.
+          items:
+            type: string
+            maxLength: 120
 
     CurrentUser:
       type: object
@@ -5855,8 +7304,13 @@ components:
 
     Settings:
       type: object
-      required: [voice, importDocs, liveTeaching, everyoneTeaches, approvalRequired, twoApprovers, autoAttrs, notifyOwners, multiCompany, crossCompany, animations, coverageDefault, legend, readOnlyConnectors, refresh, agentAccess, costCap, llmMonthlyTokenCap, ocrMonthlyPageCap, companyCreation]
+      required: [companyMode, voice, importDocs, liveTeaching, everyoneTeaches, approvalRequired, twoApprovers, autoAttrs, notifyOwners, multiCompany, crossCompany, animations, coverageDefault, legend, readOnlyConnectors, refresh, agentAccess, costCap, llmMonthlyTokenCap, ocrMonthlyPageCap, companyCreation]
       properties:
+        companyMode:
+          allOf:
+            - $ref: '#/components/schemas/CompanyMode'
+          readOnly: true
+          description: Set by a super admin (`PATCH /admin/organizations/{organizationId}`); read-only here.
         voice:
           type: boolean
         importDocs:
@@ -5877,6 +7331,7 @@ components:
           type: boolean
         multiCompany:
           type: boolean
+          description: Several companies in one view; off hides Add company. Always false, and locked, while `companyMode` is `single`.
         companyCreation:
           type: boolean
           description: When false, `POST /companies` is refused with `409 company_creation_disabled` for every caller, and the Studio hides Add company (ADR 0015). Administrator only (`settings.write`), audited. Default true. Unlike `multiCompany`, which only shows or hides the Company button, this is enforced by the API.
@@ -5931,6 +7386,7 @@ components:
           type: boolean
         multiCompany:
           type: boolean
+          description: '`true` is refused with `409 locked_setting` while the organization''s `companyMode` is `single`.'
         companyCreation:
           type: boolean
           description: When false, `POST /companies` is refused with `409 company_creation_disabled` for every caller, and the Studio hides Add company (ADR 0015). Administrator only (`settings.write`), audited. Default true. Unlike `multiCompany`, which only shows or hides the Company button, this is enforced by the API.
@@ -6075,7 +7531,7 @@ components:
           $ref: '#/components/schemas/Actor'
         kind:
           type: string
-          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`, `speech` (a speech recognition token was issued, ADR 0013), `edit` (a pending proposal edited in place, ADR 0015), `export` (an export, ADR 0016).
+          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`, `speech` (a speech recognition token was issued, ADR 0013), `learning` (usage learning switched, a lesson deleted or a company's learning reset, ADR 0014), `auth` (a member signed in, failed to, signed out, or changed their password; ADR 0017), `platform` (a super admin created or changed an account, reset a password, renamed, disabled or re-enabled the organization, changed its company mode, or opened or ended a support session in it; actor kind `platform`), `edit` (a pending proposal edited in place, ADR 0015), `export` (an export, ADR 0016), `edit` (a pending proposal edited in place, ADR 0015), `export` (an export, ADR 0016).
         what:
           type: string
         ok:

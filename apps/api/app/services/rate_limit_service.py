@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 
 from app.auth import Caller
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import platform_session, tenant_session
 from app.config import get_settings
 from app.repositories import rate_budget_window_repository
 from app.utilities.clock import get_clock
@@ -71,7 +71,7 @@ async def try_charge(
     budget: Budget, tenant_id: uuid.UUID, actor_kind: str, actor_id: uuid.UUID, units: int = 1
 ) -> bool:
     """Spend `units` in the current hour; False, spending nothing, when the budget cannot."""
-    async with get_session_factory()() as session:
+    async with tenant_session(tenant_id) as session:
         spent = await rate_budget_window_repository.charge(
             session,
             tenant_id=tenant_id,
@@ -110,7 +110,7 @@ def limit_of(budget: Budget) -> int:
 
 async def purge_old_windows() -> int:
     """Delete windows that started more than 2 hours ago, in its own transaction."""
-    async with get_session_factory()() as session:
+    async with platform_session() as session:
         deleted = await rate_budget_window_repository.delete_started_before(
             session, get_clock().now() - RETAINED_WINDOWS
         )

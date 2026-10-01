@@ -45,22 +45,14 @@ const STORY_ONLY_CSS = '#sceneNum,#sceneName,#next,#finalise{display:none!import
 /**
  * Owner additions absent from the reference, hidden in both pages with `display: none`: the
  * drawer's Expand and Delete buttons, the changes panel's `Approve branch` button, and every
- * element marked `data-ox-new` (the admin portal's Export button). The reference has no such
- * elements, so the rule changes nothing there; in the Studio the drawer's other actions, each
- * proposal's row and the admin pages lay out as the reference's.
+ * element marked `data-ox-new` (the drawer's Rename and Move to domain, the panel's
+ * Edit, the selection bar, the admin tables' checkbox columns, Move, New domain, Edit and Delete
+ * buttons, header and cells together, the Company creation setting row and the admin portal's
+ * Export button). The reference has no such elements, so the rule changes nothing there; in the
+ * Studio the drawer's other actions, each proposal's row and each table lay out as the
+ * reference's.
  */
-const OWNER_ADDITIONS_CSS =
-  '#drExpand,#drDelete,.prop .act .branch,[data-ox-new]{display:none!important}';
-/**
- * The import mode pill, an owner addition shown in every scene: the Studio's `#imMode` at its
- * default, added to the reference after `#importFile` before its first layout, so both tool rows
- * hold it from the start and every other pixel still compares against the reference.
- */
-export const IMPORT_MODE_PILL =
-  '<button type="button" id="imMode" title="How the next imported document is read" aria-pressed="false"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"></path></svg>Sentences</button>';
-const ADD_IMPORT_MODE_PILL = `document.addEventListener('DOMContentLoaded', () => {
-  if (!document.getElementById('imMode')) document.getElementById('importFile')?.insertAdjacentHTML('afterend', ${JSON.stringify(IMPORT_MODE_PILL)});
-}, { once: true });`;
+const OWNER_ADDITIONS_CSS = '#drExpand,#drDelete,#imAs,.prop .act .branch,[data-ox-new]{display:none!important}';
 /** The caption, hidden while the reference still shows the story's opening caption. */
 const OPENING_CAPTION_CSS = '.caption{visibility:hidden!important}';
 /** The teach placeholder, made transparent in one-company scenes with live teaching on, where the reference shows story text. */
@@ -72,6 +64,13 @@ const PLACEHOLDER_CSS = '#say::placeholder{color:transparent!important}';
  * the tools row exactly where the reference has it.
  */
 const TEACH_BAR_CSS = '.caption,form.bar{visibility:hidden!important}';
+/**
+ * The account controls of the admin head (`#adminAccount`: the signed-in email, Change password,
+ * Sign out, End support), hidden in both pages just before the screenshot the same way. The
+ * reference has no session and no such element; the Studio renders it only with a live session,
+ * which the mock never has, and its own baselines (auth.spec.ts) cover it.
+ */
+const ACCOUNT_CSS = '#adminAccount{visibility:hidden!important}';
 /** The localStorage key of the Studio's open teach bar; cleared so every run starts collapsed. */
 export const TEACH_BAR_EXPANDED_KEY = 'ontaix.teachBar.expanded';
 
@@ -120,32 +119,28 @@ export async function revealCaption(page: Page): Promise<void> {
 }
 
 /**
- * Brings both pages to the compared form just before the screenshot: the reference's import mode
- * pill checked equal to the Studio's and shown or hidden with its Import button, the hint without its story fragments
- * (asserted equal as text), the teach bar and caption hidden in both pages, and the teach
+ * Brings both pages to the compared form just before the screenshot: the hint without its story fragments
+ * (asserted equal as text), the teach bar, caption and account controls hidden in both pages, and the teach
  * placeholder made transparent in both pages when the reference has one company and live
  * teaching on, where it still shows story text.
  */
 export async function beforeScreenshot(ref: Page, studio: Page): Promise<void> {
   for (const page of [ref, studio])
-    await page.evaluate((css) => {
-      if (document.getElementById('ontaix-teach-bar')) return;
-      const style = document.createElement('style');
-      style.id = 'ontaix-teach-bar';
-      style.textContent = css;
-      document.head.appendChild(style);
-    }, TEACH_BAR_CSS);
-  const pill = await studio.evaluate(() => {
-    const copy = document.getElementById('imMode')?.cloneNode(true) as HTMLElement | undefined;
-    copy?.removeAttribute('style');
-    return copy?.outerHTML ?? '';
-  });
-  expect(pill, 'the reference holds the same import mode pill as the Studio').toBe(IMPORT_MODE_PILL);
-  await ref.evaluate(() => {
-    const added = document.getElementById('imMode');
-    const importBtn = document.getElementById('importBtn');
-    if (added && importBtn) added.style.display = importBtn.style.display;
-  });
+    await page.evaluate(
+      (sheets) => {
+        for (const [id, css] of sheets) {
+          if (document.getElementById(id)) continue;
+          const style = document.createElement('style');
+          style.id = id;
+          style.textContent = css;
+          document.head.appendChild(style);
+        }
+      },
+      [
+        ['ontaix-teach-bar', TEACH_BAR_CSS],
+        ['ontaix-account', ACCOUNT_CSS],
+      ],
+    );
   await ref.evaluate(stripHintStory);
   await studio.evaluate(stripHintStory);
   const hints = await Promise.all([ref, studio].map((p) => p.evaluate(() => document.querySelector('.hint')?.textContent ?? '')));
@@ -214,7 +209,6 @@ export async function alignClock(page: Page): Promise<void> {
 
 export async function openReference(page: Page): Promise<void> {
   await prepare(page, { seedMathRandom: true });
-  await page.addInitScript(ADD_IMPORT_MODE_PILL);
   await page.goto(REFERENCE_URL);
   await page.waitForSelector('canvas#brain');
   await alignClock(page);
@@ -303,12 +297,41 @@ export async function teachText(page: Page, sentence: string): Promise<void> {
   await revealCaption(page);
 }
 
+/**
+ * Answers the Studio's whole-document job with `503`, as the e2e suite does, so an imported
+ * document is read sentence by sentence as the reference reads it. The Studio's mock API answers
+ * `fetch` in the page, so the refusal wraps `window.fetch` there rather than a Playwright route.
+ */
+async function refuseWholeDocument(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as Window & { __ontaixRefuseWholeDocument?: boolean };
+    if (w.__ontaixRefuseWholeDocument) return;
+    w.__ontaixRefuseWholeDocument = true;
+    const previous = window.fetch.bind(window);
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (!/\/api\/v1\/import\/[^/]+\/extraction$/.test(new URL(url, location.origin).pathname)) return previous(input, init);
+      const problem = { title: 'Unavailable', status: 503, code: 'unavailable', detail: 'not in this scene' };
+      return Promise.resolve(
+        new Response(JSON.stringify(problem), { status: 503, headers: { 'content-type': 'application/problem+json' } }),
+      );
+    };
+  });
+}
+
 /** Imports a text document through the file input, the same user action on both pages, and lets every sentence run. */
 export async function importText(page: Page, name: string, text: string, ms = 2000): Promise<void> {
+  if (await isStudio(page)) await refuseWholeDocument(page);
   const before = await page.locator('#propList .prop').count();
   await page.setInputFiles('#importFile', { name, mimeType: 'text/plain', buffer: Buffer.from(text, 'utf-8') });
-  // The file is read in real time on both pages; the first sentence is taught at once after that.
-  await page.waitForFunction((n) => document.querySelectorAll('#propList .prop').length > n, before);
+  // The file is read in real time on both pages; the first sentence is taught at once after that,
+  // the Studio's refused whole-document read included, so the clock stays put until then.
+  const proposals = () => page.locator('#propList .prop').count();
+  const started = Date.now();
+  while ((await proposals()) <= before) {
+    if (Date.now() - started > 30_000) throw new Error('the import proposed nothing within 30 s');
+    await page.waitForTimeout(20);
+  }
   await revealCaption(page);
   // Sentences are taught one clock tick apart; the clock advances until the import has finished.
   const finished = () => page.evaluate(() => /^Import (finished|failed)/.test(document.getElementById('captionKicker')?.textContent || ''));

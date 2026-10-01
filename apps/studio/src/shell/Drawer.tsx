@@ -5,11 +5,12 @@
  * Delete, offered for approved concepts, is an owner addition absent from the reference; it opens
  * the same proposal dialog as the admin portal's Entities page. Expand, offered for approved
  * concepts and the company root just before Delete, is another owner addition; it opens the
- * expansion dialog.
+ * expansion dialog. Rename and Move to domain, offered for approved concepts after Lineage, are
+ * owner additions: each opens a dialog whose outcome is a proposal.
  */
 import { useEffect } from 'react';
 
-import { deleteNodeDialog } from '../admin/actions';
+import { deleteNodeDialog, moveDialog, renameDialog } from '../admin/actions';
 import { canDeleteFromDrawer } from '../admin/conceptDeletion';
 import { ancestorsOf, childrenOf, descendantsOf } from '../canvas/lineage';
 import type { Node } from '../canvas/types';
@@ -173,6 +174,16 @@ export function Drawer() {
         >
           Lineage
         </button>
+        {canDeleteFromDrawer(n) ? (
+          <button id="drRename" data-ox-new="" onClick={() => renameDialog(n)}>
+            Rename
+          </button>
+        ) : null}
+        {canDeleteFromDrawer(n) ? (
+          <button id="drMove" data-ox-new="" onClick={() => moveDialog(n)}>
+            Move to domain
+          </button>
+        ) : null}
         {canExpandFromDrawer(n) ? (
           <button id="drExpand" disabled={expanding} aria-busy={expanding ? 'true' : undefined} onClick={() => openExpandDialog(n)}>
             {expanding ? <span className="spin"></span> : null}

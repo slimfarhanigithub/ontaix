@@ -12,7 +12,7 @@ import logging
 import uuid
 
 from app.auth import Caller
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import platform_session, tenant_session
 from app.repositories import teach_session_turn_repository
 from app.repositories.teach_session_turn_repository import SessionKey, StoredTurn
 
@@ -38,7 +38,7 @@ async def recent_turns(key: SessionKey | None) -> list[StoredTurn]:
     if key is None:
         return []
     try:
-        async with get_session_factory()() as session:
+        async with tenant_session(key.tenant_id) as session:
             return await teach_session_turn_repository.recent(session, key)
     except Exception:
         logger.warning("reading a teach session failed; parsing without its history")
@@ -69,7 +69,7 @@ async def store_turns(
     if key is None or not kept:
         return
     try:
-        async with get_session_factory()() as session:
+        async with tenant_session(key.tenant_id) as session:
             for text, concept_ids, new_labels in kept:
                 await teach_session_turn_repository.store(
                     session,
@@ -86,7 +86,7 @@ async def store_turns(
 
 async def purge_expired() -> int:
     """Delete expired turns across tenants, in its own transaction."""
-    async with get_session_factory()() as session:
+    async with platform_session() as session:
         deleted = await teach_session_turn_repository.delete_expired(session)
         await session.commit()
     return deleted

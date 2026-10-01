@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request, status
 
 from app.auth import CallerDependency, SessionDependency
 from app.models.api.attribute import Attribute
-from app.models.api.concept import Concept, ConceptRename
+from app.models.api.concept import Concept, ConceptMove, ConceptRename
 from app.models.api.drafts import ConceptOrSpecDraft
 from app.models.api.expansion import ExpansionRequest, ExpansionResult
 from app.models.api.lineage import Lineage
@@ -67,6 +67,18 @@ async def propose_delete_concept(
     concept_id: uuid.UUID, session: SessionDependency, caller: CallerDependency
 ) -> Proposal:
     return await concept_service.propose_delete(session, caller, concept_id)
+
+
+@router.post(
+    "/concepts/{concept_id}/move", response_model=Proposal, status_code=status.HTTP_202_ACCEPTED
+)
+async def propose_move_concept(
+    concept_id: uuid.UUID,
+    body: ConceptMove,
+    session: SessionDependency,
+    caller: CallerDependency,
+) -> Proposal:
+    return await concept_service.propose_move(session, caller, concept_id, body.domain_key)
 
 
 @router.get("/concepts/{concept_id}/lineage", response_model=Lineage)

@@ -75,3 +75,13 @@ async def mark_dying(session: AsyncSession, company: Company, at: datetime) -> N
     """Stamp the moment the company starts dying; it is deleted later in the same transaction."""
     company.dying_at = at
     await session.flush()
+
+
+async def count_by_tenant(session: AsyncSession) -> dict[uuid.UUID, int]:
+    """Live companies per organization, for the platform portal (platform role)."""
+    rows = await session.execute(
+        select(Company.tenant_id, func.count())
+        .where(Company.dying_at.is_(None))
+        .group_by(Company.tenant_id)
+    )
+    return {tenant_id: count for tenant_id, count in rows.all()}

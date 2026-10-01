@@ -93,7 +93,7 @@ SECTIONS = json.dumps(
 @pytest_asyncio.fixture(autouse=True, loop_scope="session")
 async def no_waiting_jobs(migrated_database: str) -> None:
     """The runner claims the oldest waiting job of any tenant, so each test starts with none."""
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         await s.execute(
             text(
                 "UPDATE ontaix.document_extraction_job SET state = 'cancelled', phase = NULL,"
@@ -105,7 +105,7 @@ async def no_waiting_jobs(migrated_database: str) -> None:
 
 
 async def rows(sql: str, **params: object) -> list[dict]:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         result = await s.execute(text(sql), params)
         return [dict(r._mapping) for r in result]
 
@@ -293,12 +293,12 @@ async def test_a_lost_lease_writes_nothing_and_a_crashing_job_stops(
     import_id = await imported(client, tenant)
     job = (await start(client, tenant, import_id)).json()
     runner = uuid.uuid4()
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         claimed = await document_extraction_job_repository.claimable(s)
         assert claimed is not None and str(claimed.id) == job["id"]
         epoch = await document_extraction_job_repository.take_lease(s, claimed, runner)
         await s.commit()
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         stale = await document_extraction_job_repository.fenced_update(
             s, claimed.id, runner, epoch - 1, {"tokens_used": 99}
         )
@@ -333,7 +333,7 @@ async def test_a_cancel_requested_while_running_ends_the_job(
     job = (await start(client, tenant, import_id)).json()
     fake = FakeLlmClient()
     set_llm_client(fake)
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         await s.execute(
             text(
                 "UPDATE ontaix.document_extraction_job SET state = 'running', phase = 'outline',"

@@ -21,6 +21,7 @@ const settings = {
   autoAttrs: false,
   notifyOwners: true,
   multiCompany: true,
+  companyCreation: true,
   crossCompany: true,
   animations: true,
   coverageDefault: false,

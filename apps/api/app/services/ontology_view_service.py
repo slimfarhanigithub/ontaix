@@ -24,16 +24,23 @@ from app.models.api.domain_product import DomainProductCounts
 from app.models.api.proposal import Approval, Artefacts
 from app.models.api.proposal import Proposal as ProposalDto
 from app.models.api.relation import Relation as RelationDto
+from app.models.api.tenant_domain import TenantDomain as TenantDomainDto
 from app.models.storage.app_user import AppUser
 from app.models.storage.attribute import Attribute
-from app.models.storage.base import NodeKind, ProposalOrigin, ProposalType, RelationKind
+from app.models.storage.base import (
+    ChangeKind,
+    NodeKind,
+    ProposalOrigin,
+    ProposalType,
+    RelationKind,
+)
 from app.models.storage.company import Company
 from app.models.storage.concept import Concept
 from app.models.storage.domain_product import DomainProduct
-from app.models.storage.domain_template import DomainTemplate
 from app.models.storage.proposal import Proposal
 from app.models.storage.proposal_approval import ProposalApproval
 from app.models.storage.relation import Relation
+from app.models.storage.tenant_domain import TenantDomain
 from app.models.storage.tenant_settings import TenantSettings
 from app.repositories import (
     app_user_repository,
@@ -41,12 +48,13 @@ from app.repositories import (
     company_repository,
     concept_repository,
     domain_product_repository,
-    domain_template_repository,
     proposal_approval_repository,
     relation_repository,
+    tenant_domain_repository,
     tenant_settings_repository,
 )
 from app.utilities.layout import ROOT_COLOR
+from app.utilities.permissions import Scope
 from app.utilities.proposal_relations import own_relation_ids
 from app.utilities.versions import version_label
 
@@ -74,7 +82,7 @@ MAX_LINEAGE_HOPS = 50
 class OntologyView:
     tenant_id: uuid.UUID
     settings: TenantSettings | None
-    templates: dict[str, DomainTemplate]
+    domains: dict[str, TenantDomain]
     companies: dict[uuid.UUID, Company]
     domain_products: dict[uuid.UUID, DomainProduct]
     concepts: dict[uuid.UUID, Concept]
@@ -208,7 +216,7 @@ class OntologyView:
 
     def effective_color(self, template_key: str) -> str:
         overrides = self.settings.colors if self.settings is not None else {}
-        return str(overrides.get(template_key) or self.templates[template_key].color)
+        return str(overrides.get(template_key) or self.domains[template_key].default_color)
 
     def concept_color(self, concept: Concept) -> str:
         product = self.domain_products.get(concept.domain_product_id or uuid.UUID(int=0))
@@ -220,7 +228,7 @@ class OntologyView:
             if concept.domain_product_id
             else None
         )
-        return self.templates[product.template_key].name if product else None
+        return self.domains[product.template_key].name if product else None
 
     def domain_key(self, concept: Concept) -> str | None:
         product = (
@@ -231,7 +239,47 @@ class OntologyView:
         return product.template_key if product else None
 
     def proposal_domain_key(self, proposal: Proposal) -> str | None:
-        """The template key of the proposal's domain product, or None when it has none."""
+        """The template key of the proposal's domain product, for audit entries and their
+        events: None when the proposal has no domain product and when its domain is a custom
+        one, since those columns name a template only."""
+        key = self._product_key(proposal)
+        if key is None:
+            return None
+        domain = self.domains.get(key)
+        return key if domain is not None and domain.template_key is not None else None
+
+    def proposal_scopes(self, proposal: Proposal) -> list[Scope]:
+        """Every scope an approver needs rights in: the proposal's domain product, else its
+        company, else the tenant (a cross-company relation or a new domain). An edit of a domain
+        is decided in that domain's scope, which covers it in every company; a move of a concept
+        needs the source domain's scope and the target domain's scope."""
+        payload = proposal.payload or {}
+        payload_key = str(payload["domainKey"]) if payload.get("domainKey") else None
+        if proposal.change_kind is ChangeKind.EDIT_DOMAIN:
+            return [Scope(None, payload_key)]
+        if proposal.change_kind is ChangeKind.DELETE_BULK:
+            return self._bulk_scopes(proposal)
+        scopes = [Scope(proposal.company_id, self._product_key(proposal))]
+        if proposal.change_kind is ChangeKind.MOVE_CONCEPT_DOMAIN and payload_key:
+            scopes.append(Scope(proposal.company_id, payload_key))
+        return scopes
+
+    def _bulk_scopes(self, proposal: Proposal) -> list[Scope]:
+        """A bulk deletion is decided in the domain scope of each named concept and each named
+        domain product; in the company alone when none of them exists any more."""
+        payload = proposal.payload or {}
+        scopes: list[Scope] = []
+        for concept_id in payload.get("conceptIds") or []:
+            concept = self.concepts.get(uuid.UUID(str(concept_id)))
+            if concept is not None:
+                scopes.append(Scope(concept.company_id, self.domain_key(concept)))
+        for product_id in payload.get("domainProductIds") or []:
+            product = self.domain_products.get(uuid.UUID(str(product_id)))
+            if product is not None:
+                scopes.append(Scope(product.company_id, product.template_key))
+        return list(dict.fromkeys(scopes)) or [Scope(proposal.company_id, None)]
+
+    def _product_key(self, proposal: Proposal) -> str | None:
         product = (
             self.domain_products.get(proposal.domain_product_id)
             if proposal.domain_product_id
@@ -239,8 +287,20 @@ class OntologyView:
         )
         return product.template_key if product else None
 
+    def domain_dto(self, domain: TenantDomain) -> TenantDomainDto:
+        return TenantDomainDto(
+            key=domain.key,
+            name=domain.name,
+            owner=domain.owner,
+            color=self.effective_color(domain.key),
+            default_color=domain.default_color,
+            template=domain.template_key is not None,
+            position=domain.position,
+            revision=domain.revision,
+        )
+
     def domain_product_dto(self, product: DomainProduct) -> DomainProductDto:
-        template = self.templates[product.template_key]
+        template = self.domains[product.template_key]
         members = [c for c in self.live_concepts() if c.domain_product_id == product.id]
         return DomainProductDto(
             id=product.id,
@@ -261,7 +321,7 @@ class OntologyView:
 
     def company_domain_products(self, company_id: uuid.UUID) -> list[DomainProduct]:
         products = [p for p in self.domain_products.values() if p.company_id == company_id]
-        return sorted(products, key=lambda p: self.templates[p.template_key].position)
+        return sorted(products, key=lambda p: self.domains[p.template_key].position)
 
     def company_dto(self, company: Company) -> CompanyDto:
         root = self.root_of(company.id)
@@ -384,7 +444,7 @@ class OntologyView:
         )
         heading = HEADINGS[proposal.type]
         if product is not None and proposal.type is not ProposalType.RELATION:
-            heading += f" · {self.templates[product.template_key].name}"
+            heading += f" · {self.domains[product.template_key].name}"
         if proposal.origin is ProposalOrigin.SUGGESTION:
             heading += SUGGESTED_HEADING
         proposer_user = (
@@ -430,6 +490,7 @@ class OntologyView:
                 for a in self.approvals.get(proposal.id, [])
             ],
             bulk=proposal.bulk,
+            revision=proposal.revision,
             created_at=proposal.created_at,
             decided_at=proposal.decided_at,
             artefacts=artefacts,
@@ -487,14 +548,14 @@ async def load_view(
     session: AsyncSession, tenant_id: uuid.UUID, proposals: list[Proposal] | None = None
 ) -> OntologyView:
     """Load every ontology row of the tenant, plus the approvals of the given proposals."""
-    templates = await domain_template_repository.list_in_ring_order(session)
+    domains = await tenant_domain_repository.list_in_ring_order(session, tenant_id)
     attributes: dict[uuid.UUID, list[Attribute]] = defaultdict(list)
     for attribute in await attribute_repository.list_for_tenant(session, tenant_id):
         attributes[attribute.concept_id].append(attribute)
     view = OntologyView(
         tenant_id=tenant_id,
         settings=await tenant_settings_repository.get(session, tenant_id),
-        templates={t.key: t for t in templates},
+        domains={d.key: d for d in domains},
         companies={c.id: c for c in await company_repository.list_for_tenant(session, tenant_id)},
         domain_products={
             p.id: p for p in await domain_product_repository.list_for_tenant(session, tenant_id)

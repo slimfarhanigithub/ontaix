@@ -126,9 +126,11 @@ async def test_only_candidates_sent_in_this_call_are_reused_without_grounding(
     fake_llm: FakeLlmClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    await configure(tenant)
+    # The grammar seeds the concepts with the step off.
+    await configure(tenant, llm_monthly_token_cap=0)
     seeded = await teach(client, tenant, tenant.company_id, "A plant has machines")
     [plant, _] = await submit(client, tenant, seeded["drafts"])
+    await configure(tenant)
     monkeypatch.setattr(teach_extraction_service, "MAX_CANDIDATES", 1)
     root_only = "these words name nothing"
     names_plant = "these lines feed the plant"

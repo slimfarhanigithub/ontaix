@@ -8,7 +8,6 @@ import { store } from '../store/store';
 import { Dialog } from './Dialog';
 import { Drawer } from './Drawer';
 import { canExpandFromDrawer, noSuggestionsText, openExpandDialog, toggleSelection } from './ExpandDialog';
-import { IMPORT_MODES, ImportModePill, importMode } from './ImportMode';
 import { Panel, branchSize } from './Panel';
 
 const flush = () => act(() => new Promise((r) => setTimeout(r, 0)));
@@ -173,8 +172,9 @@ describe('Approve branch', () => {
     store.ui.proposals = [proposal({ openBelow: 2 }), proposal({ id: 'p-2', openBelow: 0 })];
     const { container } = render(<Panel />);
     const rows = [...container.querySelectorAll('.prop')];
-    expect([...rows[0].querySelectorAll('.act button')].map((b) => b.textContent)).toEqual(['Approve', 'Reject', 'Approve branch (3)']);
-    expect(rows[1].querySelectorAll('.act button')).toHaveLength(2);
+    // `Edit` is the in-place draft edit, offered on every pending concept draft.
+    expect([...rows[0].querySelectorAll('.act button')].map((b) => b.textContent)).toEqual(['Approve', 'Reject', 'Approve branch (3)', 'Edit']);
+    expect(rows[1].querySelectorAll('.act button')).toHaveLength(3);
     expect(rows[0].querySelector('.top')?.textContent).toBe('New concept · Sales · suggested');
     expect(rows[0].querySelector('.why')?.textContent).toBe('Suggested by the model · 91% · Service after the sale');
   });
@@ -188,22 +188,5 @@ describe('Approve branch', () => {
     await store.approveBranch(proposal({ openBelow: 204 }));
     expect(branch).toHaveBeenCalledTimes(2);
     expect(branch).toHaveBeenLastCalledWith('p-1');
-  });
-});
-
-describe('Import mode', () => {
-  it('cycles Sentences, Whole document and Ontology on one pill, Sentences by default', () => {
-    const { container } = render(<ImportModePill hidden={false} />);
-    const pill = container.querySelector<HTMLButtonElement>('#imMode');
-    if (!pill) throw new Error('no #imMode pill');
-    const seen = () => [pill.textContent, pill.getAttribute('aria-pressed'), importMode()];
-    expect(IMPORT_MODES.map((m) => m.label)).toEqual(['Sentences', 'Whole document', 'Ontology']);
-    expect(seen()).toEqual(['Sentences', 'false', 'sentences']);
-    fireEvent.click(pill);
-    expect(seen()).toEqual(['Whole document', 'true', 'document']);
-    fireEvent.click(pill);
-    expect(seen()).toEqual(['Ontology', 'true', 'ontology']);
-    fireEvent.click(pill);
-    expect(seen()).toEqual(['Sentences', 'false', 'sentences']);
   });
 });

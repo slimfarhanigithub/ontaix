@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.prompts.concept_expansion import OUTPUT_SCHEMA, OUTPUT_TOKENS_PER_DRAFT, SYSTEM_PROMPT
 from app.auth import Caller
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import platform_session, tenant_session
 from app.clients.llm_client import (
     LlmCallError,
     LlmRefused,
@@ -51,7 +51,7 @@ from app.models.storage.base import NodeKind
 from app.models.storage.concept import Concept
 from app.repositories import concept_expansion_repository
 from app.repositories.llm_call_repository import CallRecord
-from app.services import llm_usage_service
+from app.services import learning_service, llm_usage_service
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.rate_limit_service import Budget, charge, try_charge
 from app.utilities.action_text import has_refused_character, normalise_action
@@ -106,7 +106,7 @@ async def expand(
     assert interpretation is not None
     expansion_id = expires_at = None
     if interpretation.drafts:
-        async with get_session_factory()() as write:
+        async with tenant_session(caller.tenant_id) as write:
             row = await concept_expansion_repository.create(
                 write,
                 tenant_id=caller.tenant_id,
@@ -135,7 +135,7 @@ async def expand(
 
 async def purge_expired() -> int:
     """Delete expansions more than 24 hours past their expiry, in their own transaction."""
-    async with get_session_factory()() as session:
+    async with platform_session() as session:
         deleted = await concept_expansion_repository.delete_expired_before(
             session, get_clock().now() - PURGE_AFTER_EXPIRY
         )
@@ -189,9 +189,18 @@ async def _call(
     answer_bound = min(
         OUTPUT_TOKENS_PER_DRAFT * config.expand_max_nodes, config.expand_max_output_tokens
     )
+    learning = await learning_service.context_for(
+        view, concept.company_id, f"Expand {concept.label} {body.focus or ''}".strip(), "expand"
+    )
     request = LlmRequest(
         system=SYSTEM_PROMPT,
-        user=_context(view, concept, body, config.expand_context_labels),
+        user=_context(
+            view,
+            concept,
+            body,
+            config.expand_context_labels,
+            learning.as_data() if learning else {},
+        ),
         output_schema=OUTPUT_SCHEMA,
         max_output_tokens=answer_bound + config.llm_profile(DEEP).reasoning_allowance_tokens,
         timeout_seconds=config.expand_timeout_seconds,
@@ -249,8 +258,15 @@ async def _call(
             logger.exception("settling a language model call failed; its reservation stays")
 
 
-def _context(view: OntologyView, concept: Concept, body: ExpansionRequest, budget: int) -> str:
-    """The user message: the call's data as JSON, labels only, nearest to e0 first."""
+def _context(
+    view: OntologyView,
+    concept: Concept,
+    body: ExpansionRequest,
+    budget: int,
+    learning: dict[str, Any] | None = None,
+) -> str:
+    """The user message: the call's data as JSON, labels only, nearest to e0 first; the
+    company's learning (`learning`, as data fields) comes last."""
     company = view.companies[concept.company_id]
     is_root = concept.kind is NodeKind.ROOT
     remaining = budget
@@ -303,12 +319,13 @@ def _context(view: OntologyView, concept: Concept, body: ExpansionRequest, budge
         "domainLabels": domain_labels,
         "domainTemplates": [
             {"key": key, "name": t.name}
-            for key, t in sorted(view.templates.items(), key=lambda kv: kv[1].position)
+            for key, t in sorted(view.domains.items(), key=lambda kv: kv[1].position)
         ],
         "focus": body.focus,
         "depth": body.depth,
         "maxChildren": body.max_children,
     }
+    data.update(learning or {})
     return json.dumps(data, ensure_ascii=False)
 
 
@@ -342,6 +359,8 @@ def _interpret(
             raise _InvalidAnswer("a key repeats")
         if s.parent != ROOT_HANDLE and s.parent not in keys:
             raise _InvalidAnswer("a parent is neither e0 nor an earlier key")
+        if s.domain_key is not None and s.domain_key not in view.domains:
+            raise _InvalidAnswer("a suggestion names a domain key the tenant does not hold")
         keys.add(s.key)
         _check_text(s.label, s.action, s.rationale)
     for link in answer.links:

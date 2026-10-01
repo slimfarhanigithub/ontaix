@@ -131,6 +131,8 @@ Roles (row 120). `X is a <role> of Y`, where the role is a relationship noun (`c
 
 Labels keep the speaker's casing under the existing label rule: the first character is capitalised and the rest is kept, so `Apps`, `Data` and `AI` stay as spoken. A new label that repeats one introduced by an earlier intent of the same answer names the same new concept and is drafted by `parentLabel`.
 
+Sequences (row 139). A sequence of steps (`Qualify → Engage → Create Opp`, `A then B`, `first A, after that B`) names steps that sit side by side under one parent: the process the text names, else the concept the sentence is about, else the company. The model returns one `rel` intent from that parent to the first step (`has`, or the speaker's verb) and one `rel` intent per consecutive pair with the action `precedes`. The draft mapping of a `rel` intent whose action orders two steps (`precedes`, `follows`, `is followed by`, `comes before`, `comes after`) differs from the plain mapping when one step is new: the new step is born beside the known one, under the same parent with the same birth action, and the order is a `RelationDraft` between the two by id or label, so a chain of ten steps stays one level deep. Two new steps are both born from the company root with `has`. When the known step has no placement to share (the root, a concept born by `is a`, or a reversed birth) the plain mapping applies.
+
 Stated counts: when the stated number disagrees with the length of the list (`3 offerings` followed by four names), the drafts follow the list, never the number, and the server adds to the `DraftNote.explanation` of every draft from that list the note `stated <n>, listed <m>`, appended to the model's explanation within the 300-character limit. A grouping intent counts as one intent and `1 + members` drafts toward the caps.
 
 For the owner's two sentences, with `Insight` as `c0`:
@@ -144,6 +146,7 @@ The model cannot be fine-tuned, so it learns by example in the prompt (decision 
 
 - Fixed examples: the system prompt is the instructions followed by five worked examples (a deep chain, a grouping noun, a descriptive list, a role with a relative clause, reuse of existing concepts). Each is an input and the exact answer the API accepts, with labels in the input's own words. The system prompt is byte-identical on every call, so a provider's prompt cache can hold it.
 - Retrieved examples: `apps/api/app/ai/examples/teach_examples.json` holds a library of 20 to 40 entries (input, expected answer, tags, source). Per call the API ranks them by Okapi BM25 over words (NFKC, case folded) against the text, a word for the reading mode added on both sides, and sends the best three whose estimated tokens together stay within 2,000, as the `examples` field that opens the user message, before the caller's text. The call's token reservation counts them. There is no embedding deployment; the ranking is standard library only and deterministic.
+- Company lessons (ADR 0014): after the static examples, the API adds the company's own lessons learnt from people's decisions, ranked by the same BM25 utility with company lessons first, plus its negatives, speech aliases and a short habits summary, all after the byte-stable cached prefix and within a bounded token budget that the reservation counts.
 - Learn/test split (`apps/api/app/ai/examples/split.json`): examples come only from LEARN, which is the GoodRelations benchmark and a stratified half of the non-private bake-off cases and documents (strata by kind, language and main stress). TEST is the W3C Organization benchmark, the other half, and every private input; it never supplies an example, so measured quality stays honest. A test fails when an example names a TEST source or quotes W3C Organization material, and, where the bake-off material is present, when an example shares a six-word phrase with TEST text.
 
 ### Attribute Intents
@@ -236,6 +239,43 @@ Egress is on by default (decision row 87). `llmMonthlyTokenCap` defaults to 2,00
 ### Segment Repair And Refused Answers
 
 Amended under decision row 133. The Studio sends one finished spoken sentence per `speech` request, and a model splits such a sentence into segments that overlap or go backwards. Those segments are repaired, not refused: each intent's source is located from its quote over the whole text; a text of at most 400 code points is one segment covering it, and each intent belongs to it; a longer text keeps the model's segments, snapped to words, sorted and merged with each other and with the sources where they overlap, and a merged segment over 400 code points is split at the last word end that fits and cuts no source. The model's segment indexes are then ignored. The answer is refused only when a source cannot be placed in a segment of at most 400 code points. When the model is configured and answers, and the answer is refused (`invalid_output`), a `text` or `speech` request drafts nothing: the grammar never drafts in its place, because on a sentence the model was needed for it reads runs of words as labels. The response is `not_understood` with each segment listed as `model_invalid_output`. When the step does not answer (`not_configured`, `rate_limited`, `budget_exhausted`, `timeout`, `provider_error`), and for `document` sentences, the grammar result stands as above.
+
+### Unanswered Model Step
+
+Amended under decision row 136. When the model step is configured and on (a provider configured and a monthly cap above 0) and does not answer - `rate_limited`, `budget_exhausted`, `timeout` or `provider_error`, a failed Entra ID credential included - a `text` or `speech` request drafts nothing, as for a refused answer: the response is `not_understood`, `degraded` true, with each segment listed as `model_unavailable`, and the owner sends the sentence again; the Studio names the reason (the monthly allowance used up, the model busy, or the model unavailable). Once the tenant's monthly token cap is used up, typed and spoken teaching drafts nothing until the cap resets or is raised. On such a sentence the grammar reads runs of words as labels, and a failure of this kind is usually gone a moment later. `document` sentences keep the grammar result. While the step is off (`not_configured`, or a monthly cap of 0) every origin keeps the grammar result as above.
+
+The Entra ID token cache shared by the Foundry clients serves a held token until its real expiry when a refresh fails, retries a failed credential call once after 1 s, and gives the Azure CLI 30 s per run.
+
+### Streamed Parse
+
+Amended under decision row 138. `POST /teach/parse/stream` is the streamed variant of `POST /teach/parse`: the same request, gates, charges, refusals, model call, budgets, cost record, timeout and bounded retries, answered as newline-delimited JSON (`application/x-ndjson`). Its purpose is speed only: the drafts, captions and outcomes are those of the plain endpoint, because the plain endpoint's code decides them.
+
+```mermaid
+sequenceDiagram
+    participant S as Studio
+    participant A as API
+    participant M as Model
+    S->>A: POST /teach/parse/stream
+    A->>A: gates, charges, grammar (refusals answer here, as for /teach/parse)
+    A->>M: the same call, streamed
+    loop each intent the answer closes
+        M-->>A: answer text so far
+        A->>A: the answer so far through the whole-answer checks
+        A-->>S: draft line for each new draft
+        S->>S: the draft's cell divides off its parent
+    end
+    A->>A: the whole answer through the same checks
+    A-->>S: retract line (sent drafts the result does not hold)
+    A-->>S: result line (the body of /teach/parse)
+    S->>A: POST /proposals/batch with the result's drafts
+    A-->>S: proposal.created takes each early cell over
+```
+
+- Reading the answer as it arrives. The provider adapters stream the same request (Chat Completions with `stream` and the usage in the last chunk; the Messages API stream for Claude) and return the same answer, token counts and refusals as the whole call. Each time the text received so far closes another intent (or segment), the closed intents, segments and phrases form an answer of their own, mapped back to the validated shape exactly as the whole answer is, and read by the same function that reads a whole answer: schema, caps, segment repair, quote location, grounding, candidate and company checks, roles, attributes, on a drafter of its own. A part that fails a check sends nothing. A retried attempt starts its text again, and the reading starts again with it.
+- What is sent. The part's step is mapped to a result with the same code as a final answer (the grammar's drafts first when only `partly_understood` triggered the step), and each draft of it not sent yet goes out once as a `draft` line with its note.
+- The final answer decides. When the stream ends, the whole answer is read once more, exactly as without streaming, and the result is built by the plain endpoint's code. Sent drafts the result does not hold are named in one `retract` line; when the whole answer is refused, that is every sent draft, and the Studio takes their cells back. The `result` line carries the plain endpoint's body. A draft whose note the whole answer completes (a stated count that differs from the list) is sent early with its partial note; the result carries the full one.
+- Nothing else moves. A part is never proposed and never written: the client submits the result's drafts as before. Budgets are charged once per parse, the reservation is settled and one cost row written whatever happens, and the session turns are stored at the end; the parse runs to its end when the caller goes away. A failure after the stream began ends with an `error` line (`unavailable`) instead of a `5xx`.
+- The Studio. Typed and spoken sentences use the stream; document imports keep `POST /teach/parse`. A streamed concept or spec draft makes its birth draws when it arrives - the draws `withSeed` makes, in the same order - and its cell divides off its parent at once, pending, as its proposal's event would draw it. The final result reconciles: a final draft equal to a streamed one is proposed with the streamed seed, and its `proposal.created` event takes the early cell over with the proposal's ids instead of drawing another; a retracted draft's cell, and any early cell no proposal took over once the batch settles, fades out. Captions, `Processing` and the spoken-sentence queue are unchanged: the next spoken sentence is sent once the previous one is proposed.
 
 ## Consequences
 

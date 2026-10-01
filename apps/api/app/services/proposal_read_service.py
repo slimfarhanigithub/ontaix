@@ -8,12 +8,13 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
-from app.models.api.drafts import ProposalBatch
+from app.models.api.drafts import ChangeDraft, ChangePayload, ProposalBatch
 from app.models.api.page import PageOf
+from app.models.api.proposal import BulkDeleteRequest
 from app.models.api.proposal import Proposal as ProposalDto
 from app.models.storage.proposal import Proposal
 from app.repositories import proposal_repository
-from app.services import proposal_service, provenance_service
+from app.services import learning_capture_service, proposal_service, provenance_service
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.proposal_branch_service import OPEN_STATES, BranchIndex, annotate
 from app.services.rate_limit_service import Budget, charge
@@ -104,10 +105,31 @@ async def create_batch(
     view = await load_view(session, caller.tenant_id)
     provenances = await provenance_service.resolve(session, caller, view, drafts)
     created = await proposal_service.create_batch(session, caller, view, drafts, provenances)
+    await learning_capture_service.link_batch(session, caller, batch.parse_id, drafts, created)
     return [
         readable_proposal(caller.grants, view.proposal_dto(p, view.proposal_artefacts(p)))
         for p in created
     ]
+
+
+async def propose_bulk_delete(
+    session: AsyncSession, caller: Caller, body: BulkDeleteRequest
+) -> ProposalDto:
+    """One `delete_bulk` change proposal for concepts and domain products of one company."""
+    await charge(Budget.PROPOSAL, caller.tenant_id, caller.actor_kind.value, caller.user_id)
+    view = await load_view(session, caller.tenant_id)
+    draft = ChangeDraft(
+        change_kind="delete_bulk",
+        payload=ChangePayload(
+            company_id=body.company_id,
+            concept_ids=body.concept_ids or [],
+            domain_product_ids=body.domain_product_ids or [],
+        ),
+    )
+    proposal = await proposal_service.create(session, caller, view, draft)
+    return readable_proposal(
+        caller.grants, view.proposal_dto(proposal, view.proposal_artefacts(proposal))
+    )
 
 
 def _ensure_readable(caller: Caller, view: OntologyView, proposal: Proposal) -> None:
