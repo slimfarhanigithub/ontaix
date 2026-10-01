@@ -72,6 +72,7 @@ from app.services.rate_limit_service import Budget, try_charge
 from app.services.teach_draft_service import Drafter, End, PlannedIntent, phrase_in
 from app.utilities.action_text import has_refused_character, normalise_action
 from app.utilities.example_selection import most_similar, within_budget
+from app.utilities.label_forms import label_key, singular_word
 from app.utilities.learning_structure import fold
 from app.utilities.permissions import can_read
 from app.utilities.sound_alike import company_possessive_rest, sounds_like_name
@@ -135,6 +136,13 @@ _HYPHEN = "-"
 _LABEL_JOINERS = frozenset("&./-'’+")
 # A full stop followed by whitespace, or any other sentence-ending mark, ends a sentence.
 _SENTENCE_END = re.compile(r"\.\s|[!?;:]")
+# Articles and pronouns that French elides before a vowel: `l'accueil` is one word by the word
+# rules, and the label is the noun after the apostrophe.
+_ELISIONS = frozenset({"l", "d", "qu", "n", "s", "j", "m", "t", "c", "jusqu", "lorsqu", "puisqu"})
+_APOSTROPHE_CHARS = frozenset("'\u2019")
+# Read as one shape when a quote is matched loosely against the text.
+_APOSTROPHES = frozenset("'\u2019\u2018\u02bc\u00b4`")
+_QUOTATION_MARKS = frozenset('"\u201c\u201d\u00ab\u00bb\u201e')
 # A word that tells the example ranking the reading mode, so a transcript favours transcripts.
 _MODE_WORD = {"sentence": "mode_sentence", "speech": "mode_speech", "document": "mode_document"}
 
@@ -947,26 +955,36 @@ def _locate(
 
     A model counts characters unreliably (it drops a space, or counts UTF-16 units or bytes), so
     when the intent quotes its words in `span` the range is an occurrence of that quote in
-    `text`, exact or after whitespace collapse and case folding. An occurrence whose widening of
-    the intent's segment would reach into another segment is never chosen. Of the rest, in
-    order: a whole-word occurrence inside the intent's own segment; any other whole-word
-    occurrence; an occurrence cutting a word. Ties go to an exact match, then to the occurrence
-    nearest the model's own start. The range is always a slice of the caller's input, so
-    grounding still judges it word by word. Without a quote, or when no occurrence qualifies,
-    the model's offsets stand."""
+    `text`: exact; after whitespace collapse and case folding; or, loosest, also ignoring
+    accents (a quote in one Unicode normalisation form against text in the other) and the shape
+    of apostrophes and quotation marks. An occurrence whose widening of the intent's segment
+    would reach into another segment is never chosen. Of the rest, in order: a whole-word
+    occurrence inside the intent's own segment; any other whole-word occurrence; an occurrence
+    cutting a word. Ties go to the strictest match, then to the occurrence nearest the model's
+    own start. Without a quote, or when no occurrence qualifies, the model's offsets stand.
+    A range that starts or ends inside a word is widened to that word's edges, since the
+    model's offsets drift by a few code points along accented text, so grounding, which judges
+    whole words only, still finds the words the model meant."""
     claimed = _clamp(intent.source.start, intent.source.end, text)
-    quote = (intent.span or "").strip()
-    if not quote:
-        return claimed
-    found: dict[tuple[int, int], int] = dict.fromkeys(_occurrences_exact(text, quote), 0)
-    for r in _occurrences_folded(text, quote):
-        found.setdefault(r, 1)
     home = segments[own] if own < len(segments) else None
     others = [seg for j, seg in enumerate(segments) if j != own]
 
     def reaches_another(r: tuple[int, int]) -> bool:
         lo, hi = (min(home[0], r[0]), max(home[1], r[1])) if home else r
         return any(lo < b and hi > a for a, b in others)
+
+    def on_word_edges(r: tuple[int, int]) -> tuple[int, int]:
+        widened = _widen(words, r)
+        return r if reaches_another(widened) else widened
+
+    quote = (intent.span or "").strip()
+    if not quote:
+        return on_word_edges(claimed)
+    found: dict[tuple[int, int], int] = dict.fromkeys(_occurrences_exact(text, quote), 0)
+    for r in _occurrences_folded(text, quote):
+        found.setdefault(r, 1)
+    for r in _occurrences_folded(text, quote, loose=True):
+        found.setdefault(r, 2)
 
     def rank(r: tuple[int, int]) -> tuple[int, int, int, int]:
         whole = not any(a < r[0] < b or a < r[1] < b for a, b in words)
@@ -975,7 +993,18 @@ def _locate(
         return (tier, found[r], abs(r[0] - claimed[0]), r[0])
 
     choices = [r for r in found if not reaches_another(r)]
-    return min(choices, key=rank) if choices else claimed
+    return on_word_edges(min(choices, key=rank) if choices else claimed)
+
+
+def _widen(words: list[tuple[int, int]], r: tuple[int, int]) -> tuple[int, int]:
+    """`r` with a boundary inside a word moved out to that word's edge."""
+    start, end = r
+    for a, b in words:
+        if a < start < b:
+            start = a
+        if a < end < b:
+            end = b
+    return start, end
 
 
 def _occurrences_exact(text: str, quote: str) -> list[tuple[int, int]]:
@@ -987,9 +1016,12 @@ def _occurrences_exact(text: str, quote: str) -> list[tuple[int, int]]:
     return out
 
 
-def _occurrences_folded(text: str, quote: str) -> list[tuple[int, int]]:
+def _occurrences_folded(text: str, quote: str, loose: bool = False) -> list[tuple[int, int]]:
     """Occurrences of `quote` in `text` with whitespace runs collapsed and case folded on both
-    sides, as ranges of the original `text`."""
+    sides, as ranges of the original `text`; `loose` also drops accents and other combining
+    marks and reads every apostrophe and quotation mark as one shape, so a quote and a text in
+    different Unicode normalisation forms, or with typographic against typewriter marks, still
+    meet. A range never ends before a combining mark of its last word."""
     folded: list[str] = []
     origin: list[int] = []
     for i, c in enumerate(text):
@@ -999,17 +1031,35 @@ def _occurrences_folded(text: str, quote: str) -> list[tuple[int, int]]:
             folded.append(" ")
             origin.append(i)
             continue
-        for f in c.casefold():
+        for f in _fold_char(c, loose):
             folded.append(f)
             origin.append(i)
     haystack = "".join(folded)
-    needle = " ".join(quote.split()).casefold()
+    needle = "".join(" " if c.isspace() else _fold_char(c, loose) for c in " ".join(quote.split()))
     out: list[tuple[int, int]] = []
     at = haystack.find(needle) if needle else -1
     while at >= 0:
-        out.append((origin[at], origin[at + len(needle) - 1] + 1))
+        end = origin[at + len(needle) - 1] + 1
+        while end < len(text) and unicodedata.category(text[end]) in ("Mn", "Mc", "Me"):
+            end += 1
+        out.append((origin[at], end))
         at = haystack.find(needle, at + 1)
     return out
+
+
+def _fold_char(c: str, loose: bool) -> str:
+    """`c` case folded; with `loose`, also without accents and with every apostrophe or
+    quotation mark as the typewriter one (an accent on its own folds to nothing)."""
+    folded = c.casefold()
+    if not loose:
+        return folded
+    if c in _APOSTROPHES:
+        return "'"
+    if c in _QUOTATION_MARKS:
+        return '"'
+    return "".join(
+        d for d in unicodedata.normalize("NFKD", folded) if unicodedata.category(d) != "Mn"
+    )
 
 
 def ground_in_sentence(label: str, sentence: str) -> tuple[str, int, int] | None:
@@ -1077,24 +1127,53 @@ def _runs(
     if any(not _joins_label(g) for g in gaps):
         return
     for i in range(len(inside) - n + 1):
-        run = inside[i : i + n]
-        if [fold(text[a:b]) for a, b in run] != wanted:
-            continue
-        spoken = [text[x[1] : y[0]] for x, y in zip(run, run[1:], strict=False)]
-        if any(_gap(a) != _gap(b) for a, b in zip(spoken, gaps, strict=True)):
-            continue
-        first, last = run[0][0], run[-1][1] + len(tail)
-        if last > end or text[run[-1][1] : last] != tail:
-            continue
-        if _part_of_name(text, first, last):
-            continue
-        yield first, last
+        for head in _word_starts(text, inside[i]):
+            run = [head, *inside[i + 1 : i + n]]
+            if [fold(text[a:b]) for a, b in run] != wanted:
+                continue
+            spoken = [text[x[1] : y[0]] for x, y in zip(run, run[1:], strict=False)]
+            if any(_gap(a) != _gap(b) for a, b in zip(spoken, gaps, strict=True)):
+                continue
+            first, last = run[0][0], run[-1][1] + len(tail)
+            if last > end or text[run[-1][1] : last] != tail:
+                continue
+            if _part_of_name(text, first, last):
+                continue
+            yield first, last
+
+
+def _word_starts(text: str, word: tuple[int, int]) -> Iterator[tuple[int, int]]:
+    """The range of `word`, then, when it opens with an elided article or pronoun
+    (`l'accueil`, `d'abord`), the range of what follows the apostrophe."""
+    a, b = word
+    yield a, b
+    for k in range(a + 1, min(b, a + 8)):
+        if text[k] in _APOSTROPHE_CHARS:
+            if k + 1 < b and text[a:k].casefold() in _ELISIONS:
+                yield k + 1, b
+            return
+
+
+def _elided(text: str, first: int) -> bool:
+    """True when `text[first]` follows the apostrophe of an elided article or pronoun."""
+    if first < 2 or text[first - 1] not in _APOSTROPHE_CHARS:
+        return False
+    k = first - 1
+    a = k
+    while a > 0 and _word_char(text[a - 1]):
+        a -= 1
+    return text[a:k].casefold() in _ELISIONS
 
 
 def _part_of_name(text: str, first: int, last: int) -> bool:
     """True when joining punctuation ties `text[first:last]` to a word next to it, as `L` is
     tied to `S` in `L&S`: the run is then only part of a name."""
-    before = first >= 2 and text[first - 1] in _LABEL_JOINERS and _word_char(text[first - 2])
+    before = (
+        first >= 2
+        and text[first - 1] in _LABEL_JOINERS
+        and _word_char(text[first - 2])
+        and not _elided(text, first)
+    )
     after = last + 1 < len(text) and text[last] in _LABEL_JOINERS and _word_char(text[last + 1])
     return before or after
 
@@ -1189,7 +1268,7 @@ def _valid_label(label: str) -> bool:
 
 
 def _fold(word: str) -> str:
-    return singular(unicodedata.normalize("NFKC", word).casefold())
+    return singular_word(unicodedata.normalize("NFKC", word).casefold())
 
 
 def _action(raw: str) -> str:
@@ -1493,16 +1572,17 @@ def _same(a: End, b: End) -> bool:
 
 
 def _phrases(text: str) -> set[str]:
-    words = _WORDS.findall(text.lower())
-    out: set[str] = set()
-    for n in (1, 2, 3):
-        for i in range(len(words) - n + 1):
-            gram = " ".join(words[i : i + n])
-            out.add(gram)
-            out.add(" ".join([*words[i : i + n - 1], singular(words[i + n - 1])]))
-    return out
+    """The one- to three-word runs of `text`, each as a label key, so a label matches a run
+    whatever the singular or plural of any of its words."""
+    words = [singular_word(_after_elision(w)) for w in _WORDS.findall(text.lower())]
+    return {" ".join(words[i : i + n]) for n in (1, 2, 3) for i in range(len(words) - n + 1)}
+
+
+def _after_elision(word: str) -> str:
+    """`word` without an elided article or pronoun in front (`l'accueil` gives `accueil`)."""
+    prefix, apostrophe, rest = word.partition("'")
+    return rest if apostrophe and rest and prefix in _ELISIONS else word
 
 
 def _matches(label: str, phrases: set[str]) -> bool:
-    lower = label.lower()
-    return lower in phrases or singular(lower) in phrases
+    return label_key(label) in phrases

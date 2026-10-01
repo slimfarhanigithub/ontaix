@@ -43,7 +43,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import cache
 
-from app.utilities.teach_parser import singular
+from app.utilities.label_forms import singular_word
 from evals.teach_case import ExpectedAttribute, ExpectedConcept, ExpectedRelation, TeachCase
 
 _LEADING_WORDS = frozenset({"the", "a", "an", "our", "its", "their", "each", "every", "all"})
@@ -167,12 +167,12 @@ class CaseScore:
 
 
 def normalise_label(label: str) -> str:
+    """Lower case, no punctuation, leading articles removed, every word singular (so `features
+    of interest` and `Feature Of Interest` are one label, as the pipeline resolves them)."""
     words = _words(label)
     while len(words) > 1 and words[0] in _LEADING_WORDS:
         words = words[1:]
-    if words:
-        words[-1] = singular(words[-1])
-    return " ".join(words)
+    return " ".join(singular_word(w) for w in words)
 
 
 def normalise_action(action: str) -> str:
@@ -203,10 +203,10 @@ def action_matches(predicted: str, accepted: list[str]) -> bool:
 def grounded(label: str, source_text: str) -> bool:
     """Whether `label` occurs in `source_text` as whole words, both normalised word by word
     (NFKC, case folded, singular)."""
-    wanted = [singular(w) for w in _words(label)]
+    wanted = [singular_word(w) for w in _words(label)]
     if not wanted:
         return False
-    words = [singular(w) for w in _words(source_text)]
+    words = [singular_word(w) for w in _words(source_text)]
     n = len(wanted)
     return any(words[i : i + n] == wanted for i in range(len(words) - n + 1))
 
