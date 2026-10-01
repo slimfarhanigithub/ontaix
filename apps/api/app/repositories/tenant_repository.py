@@ -8,6 +8,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.storage.tenant import Tenant
+from app.repositories import tenant_domain_repository
 
 
 async def get_by_slug(session: AsyncSession, slug: str) -> Tenant | None:
@@ -39,9 +40,11 @@ async def slug_exists(session: AsyncSession, slug: str) -> bool:
 
 
 async def create(session: AsyncSession, slug: str, name: str) -> Tenant:
+    """The tenant row with its nine template domains copied into `tenant_domain`."""
     tenant = Tenant(slug=slug, name=name)
     session.add(tenant)
     await session.flush()
+    await tenant_domain_repository.copy_templates(session, tenant.id)
     return tenant
 
 

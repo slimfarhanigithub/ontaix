@@ -4,19 +4,25 @@
  * group edit, members and roles, the role-to-groups list, the scope choice and the agent
  * registry. Behaviour and copy from reference/ontaix-studio-reference.html lines 947-1053.
  * Ontology changes are proposals; settings, directory and source-state changes are immediate.
+ * The ontology-editing dialogs (move to domain, company removal named from the deletion impact,
+ * domain creation, edit and deletion, bulk deletion) are owner additions in the same markup.
  */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { api } from '../api/client';
-import type { Group, ProposalDraft, Scope, User } from '../api/types';
-import { DOMAIN_TEMPLATES } from '../canvas/constants';
-import type { Company, Link, Node } from '../canvas/types';
+import type { DeletionImpact, DomainInput, DomainPatch, Group, ProposalDraft, Scope, TenantDomain, User } from '../api/types';
+import { DOMAIN_TEMPLATES, NEUTRAL, PALETTE } from '../canvas/constants';
+import type { Company, Domain, Link, Node } from '../canvas/types';
 import { title } from '../nl/parser';
 import { BusyButton, useBusyAction } from '../shell/busy';
 import { DialogFrame } from '../shell/Dialog';
 import { store } from '../store/store';
 import { attempt, directory, failed, fetchAll, invalidateDirectory } from './adminData';
-import { conceptDeletion, deletionText } from './conceptDeletion';
+import { conceptDeletion, deletionText, impactText } from './conceptDeletion';
+
+/** Most concepts and domain products one bulk deletion may name. */
+export const BULK_CONCEPTS = 200;
+export const BULK_PRODUCTS = 20;
 import { isDisableConfirmed } from './confirmText';
 import { List, type Column } from './List';
 import { en } from './listModel';
@@ -430,25 +436,254 @@ export function removeSourceDialog(n: Node): void {
   );
 }
 
-export function removeCompanyDialog(c: Company): void {
-  const cells = store.s.nodes.filter((x) => x.company === c).length;
-  confirmDialog(
-    `Remove ${c.name}?`,
-    `This proposes a change for approval. Its ${cells} cells, its sources and its equivalences with other companies would leave the view.`,
-    'Propose removal',
-    () => {
-      const sid = c.sid;
-      if (sid)
-        return attemptThen(
+/**
+ * Confirms removing a company, naming what goes from `POST /deletion-impact` (concepts, relations
+ * with cross-company ones counted, sources, bindings, attributes) in the style of concept
+ * deletion; the confirmation proposes the removal. The home company is never offered.
+ */
+export function removeCompanyDialog(c: Company): Promise<void> {
+  const sid = c.sid;
+  if (!sid) return Promise.resolve();
+  return attempt(() => api.deletionImpact({ companyId: sid, wholeCompany: true })).then((impact) => {
+    if (!impact) return;
+    confirmDialog(
+      `Remove ${c.name}?`,
+      impactText(impact, true),
+      'Propose removal',
+      () =>
+        attemptThen(
           () => api.proposeRemoveCompany(sid),
           () => {
             store.toast2('Proposed', `removal of ${c.name} · approve it on the canvas`);
             renderAdmin();
           },
-        );
-    },
-    true,
+        ),
+      true,
+    );
+  });
+}
+
+// ------------------------------------------------------------ domains, moves, bulk deletion
+
+/** Proposes moving a concept to another domain product, chosen from the tenant's domains. */
+export function moveDialog(n: Node): void {
+  const sid = n.sid;
+  const current = n.domain?.key ?? null;
+  const options = store.ui.domains.filter((d) => d.key !== current);
+  if (!sid || !options.length) return;
+  store.openDialog({
+    title: `Move ${n.label}`,
+    sub: `from ${n.domain ? n.domain.name : 'the company'} to another domain product`,
+    small: true,
+    body: (
+      <div className="form" style={{ gridTemplateColumns: '90px 1fr' }}>
+        <label>Domain</label>
+        <select id="mvDomain">
+          {options.map((d) => (
+            <option key={d.key} value={d.key}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+        <label></label>
+        <small style={{ color: 'var(--ink-3)' }}>Its children, relations and bindings stay as they are. This proposes a change for approval.</small>
+      </div>
+    ),
+    buttons: [
+      { label: 'Cancel' },
+      {
+        label: 'Propose move',
+        cls: 'primary',
+        onClick: (bk) => {
+          const key = bk.querySelector<HTMLSelectElement>('#mvDomain')?.value;
+          const target = options.find((d) => d.key === key);
+          if (!target) return;
+          return attemptThen(
+            () => api.proposeMoveConcept(sid, target.key),
+            () => {
+              store.toast2('Proposed', `move of ${n.label} to ${target.name}`);
+              renderAdmin();
+            },
+          );
+        },
+      },
+    ],
+  });
+}
+
+/** A colour for a new domain: the first of the reference palette no domain uses, else the neutral. */
+function freshColour(): string {
+  const used = new Set(store.ui.domains.map((d) => d.color.toLowerCase()));
+  return PALETTE.find((c) => !used.has(c.toLowerCase())) || NEUTRAL;
+}
+
+/** The name, owner and colour fields shared by the new-domain and edit-domain dialogs, with the Appearance colour input. */
+function domainForm(d: { name: string; owner: string; color: string } | null) {
+  return (
+    <div className="form" style={{ gridTemplateColumns: '90px 1fr' }}>
+      <label>Name</label>
+      <input id="dmName" defaultValue={d ? d.name : ''} maxLength={60} placeholder="e.g. Sustainability" />
+      <label>Owner</label>
+      <input id="dmOwner" defaultValue={d ? d.owner : ''} maxLength={60} placeholder="e.g. Facilities" />
+      <label>Colour</label>
+      <label className="col">
+        <input type="color" id="dmColor" defaultValue={d ? d.color : freshColour()} data-col="__domain" />
+        <span>
+          <b>Domain colour</b>
+          <small>the same in every company</small>
+        </span>
+      </label>
+    </div>
   );
+}
+
+function readDomainForm(bk: HTMLDivElement): DomainInput {
+  return {
+    name: (bk.querySelector<HTMLInputElement>('#dmName')?.value || '').trim(),
+    owner: (bk.querySelector<HTMLInputElement>('#dmOwner')?.value || '').trim(),
+    color: (bk.querySelector<HTMLInputElement>('#dmColor')?.value || '').toLowerCase(),
+  };
+}
+
+/** Proposes a new tenant domain: name, owner and colour, available to every company once approved. */
+export function newDomainDialog(): void {
+  store.openDialog({
+    title: 'New domain',
+    sub: 'a domain product for every company, once approved',
+    small: true,
+    body: domainForm(null),
+    buttons: [
+      { label: 'Cancel' },
+      {
+        label: 'Propose domain',
+        cls: 'primary',
+        onClick: (bk) => {
+          const input = readDomainForm(bk);
+          if (!input.name) {
+            bk.querySelector<HTMLInputElement>('#dmName')?.focus();
+            return false;
+          }
+          return attemptThen(
+            () => api.proposeCreateDomain(input),
+            () => {
+              store.toast2('Proposed', `new domain ${input.name} · approve it on the canvas`);
+              renderAdmin();
+            },
+          );
+        },
+      },
+    ],
+  });
+}
+
+/** Proposes renaming, recolouring or re-owning a tenant domain; only what changed is sent. */
+export function editDomainDialog(d: TenantDomain): void {
+  store.openDialog({
+    title: `Edit ${d.name}`,
+    sub: 'the change applies in every company once approved',
+    small: true,
+    body: domainForm(d),
+    buttons: [
+      { label: 'Cancel' },
+      {
+        label: 'Propose change',
+        cls: 'primary',
+        onClick: (bk) => {
+          const input = readDomainForm(bk);
+          const patch: DomainPatch = {};
+          if (input.name && input.name !== d.name) patch.name = input.name;
+          if ((input.owner ?? '') !== d.owner) patch.owner = input.owner;
+          if (input.color && input.color !== d.color.toLowerCase()) patch.color = input.color;
+          if (!Object.keys(patch).length) {
+            bk.querySelector<HTMLInputElement>('#dmName')?.focus();
+            return false;
+          }
+          return attemptThen(
+            () => api.proposeEditDomain(d.key, patch),
+            () => {
+              store.toast2('Proposed', `change of ${d.name} · approve it on the canvas`);
+              renderAdmin();
+            },
+          );
+        },
+      },
+    ],
+  });
+}
+
+/** Confirms deleting one company's domain product with its concepts, naming what goes from the deletion impact. */
+export function deleteDomainDialog(d: Domain): Promise<void> {
+  const sid = d.sid,
+    companyId = d.company.sid;
+  if (!sid || !companyId) return Promise.resolve();
+  return attempt(() => api.deletionImpact({ companyId, domainProductIds: [sid] })).then((impact) => {
+    if (!impact) return;
+    confirmDialog(
+      `Delete ${d.name} of ${d.company.name}?`,
+      impactText(impact, false),
+      'Propose deletion',
+      () =>
+        attemptThen(
+          () => api.proposeDeleteDomain(sid),
+          () => {
+            store.toast2('Proposed', `deletion of ${d.name} · approve it on the canvas`);
+            renderAdmin();
+          },
+        ),
+      true,
+    );
+  });
+}
+
+/** `3 concepts and 1 domain product`. */
+export function bulkWhat(concepts: number, products: number): string {
+  return [concepts ? plural(concepts, 'concept') : '', products ? plural(products, 'domain product') : ''].filter(Boolean).join(' and ');
+}
+
+/**
+ * Confirms deleting several concepts and/or domain products of one company in one proposal,
+ * naming what goes from the deletion impact. Refuses more than the API takes at once.
+ */
+export function bulkDeleteDialog(company: Company, concepts: Node[], products: Domain[]): Promise<void> {
+  const companyId = company.sid;
+  const conceptIds = concepts.map((n) => n.sid).filter((x): x is string => !!x);
+  const productIds = products.map((d) => d.sid).filter((x): x is string => !!x);
+  if (!companyId || (!conceptIds.length && !productIds.length)) return Promise.resolve();
+  if (conceptIds.length > BULK_CONCEPTS || productIds.length > BULK_PRODUCTS) {
+    store.toast2('Too many', `at most ${BULK_CONCEPTS} concepts and ${BULK_PRODUCTS} domain products at once`);
+    return Promise.resolve();
+  }
+  const what = bulkWhat(conceptIds.length, productIds.length);
+  return attempt(() => api.deletionImpact({ companyId, conceptIds, domainProductIds: productIds })).then((impact: DeletionImpact | null) => {
+    if (!impact) return;
+    confirmDialog(
+      `Delete ${what}?`,
+      impactText(impact, false),
+      'Propose deletion',
+      () =>
+        attemptThen(
+          () => api.proposeBulkDelete({ companyId, conceptIds, domainProductIds: productIds }),
+          () => {
+            store.toast2('Proposed', `deletion of ${what} · approve it on the canvas`);
+            store.clearSelection();
+            renderAdmin();
+          },
+        ),
+      true,
+    );
+  });
+}
+
+/** The canvas selection as one bulk deletion; a selection across companies is explained, not sent. */
+export function bulkDeleteSelection(): Promise<void> {
+  const cells = [...store.s.selected];
+  const companies = [...new Set(cells.map((n) => n.company))];
+  if (!cells.length) return Promise.resolve();
+  if (companies.length > 1 || !companies[0]) {
+    store.toast2('One company at a time', 'a bulk deletion covers the cells of one company');
+    return Promise.resolve();
+  }
+  return bulkDeleteDialog(companies[0], cells, []);
 }
 
 // ------------------------------------------------------------ groups, roles, agents

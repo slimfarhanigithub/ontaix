@@ -1,4 +1,4 @@
-"""Companies: reads, immediate creation with nine domain products and a root, removal proposals."""
+"""Companies: reads, immediate creation with domain products and a root, removal proposals."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from app.repositories import (
     concept_repository,
     domain_product_repository,
     organization_settings_repository,
+    tenant_settings_repository,
 )
 from app.seed.starter_vocabulary import STARTER_VOCABULARY
 from app.services import audit_service, outbox_service, proposal_service
@@ -68,7 +69,13 @@ async def get_company(session: AsyncSession, caller: Caller, company_id: uuid.UU
 async def create_company(
     session: AsyncSession, caller: Caller, body: CompanyCreate
 ) -> CompanyCreated:
-    """Immediate and audited: the company, its domain products, its root, then starter proposals."""
+    """Immediate and audited: the company, its domain products, its root, then starter proposals.
+
+    Refused for every caller while the `companyCreation` setting is off.
+    """
+    settings = await tenant_settings_repository.get(session, caller.tenant_id)
+    if settings is not None and not settings.company_creation:
+        raise conflict("company_creation_disabled", "adding companies is off in the settings")
     if not can_manage(caller.grants):
         raise forbidden("Adding a company requires Administrator")
     view = await load_view(session, caller.tenant_id)
@@ -119,7 +126,7 @@ async def create_company(
 async def add_company(
     session: AsyncSession, view: OntologyView, name: str, sub: str, *, is_home: bool
 ) -> Company:
-    """Write the company, its nine domain products and its root cell; no proposal involved."""
+    """Write the company, a domain product per tenant domain and its root cell; no proposal."""
     position = await company_repository.next_position(session, view.tenant_id)
     company = await company_repository.create(
         session,
@@ -131,9 +138,9 @@ async def add_company(
         is_home=is_home,
     )
     view.register_company(company)
-    for template in view.templates.values():
+    for domain in view.domains.values():
         product = await domain_product_repository.create(
-            session, view.tenant_id, company.id, template.key
+            session, view.tenant_id, company.id, domain.key
         )
         view.register_domain_product(product)
     x, y = company_centre(position, len(view.companies))
@@ -164,7 +171,7 @@ async def propose_starter_vocabulary(
     """The thirteen starter concepts, proposed by the system in the company's own words."""
     created = []
     for label, domain_key, action, parent_label in STARTER_VOCABULARY:
-        domain_name = view.templates[domain_key].name
+        domain_name = view.domains[domain_key].name
         draft = ConceptDraft(
             company_id=company.id,
             parent_label=parent_label or company.name,

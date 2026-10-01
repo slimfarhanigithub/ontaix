@@ -112,9 +112,10 @@ describe('admin review fixes', () => {
 
   it('a refused company removal shows the refusal, not Proposed', async () => {
     const { other } = model();
+    vi.spyOn(api, 'deletionImpact').mockResolvedValue({ concepts: 1, descendants: 0, relations: 0, crossCompanyRelations: 0, bindings: 0, attributes: 0, sources: 0, cascadedProposals: 0, names: ['Valve'] });
     vi.spyOn(api, 'proposeRemoveCompany').mockRejectedValue(refusal(403, 'forbidden'));
     const { container } = render(<Dialog />);
-    act(() => removeCompanyDialog(other));
+    await act(() => removeCompanyDialog(other));
     fireEvent.click(container.querySelector('.df .btn.danger') as HTMLButtonElement);
     await flush();
     expect(toastLeads()).toEqual(['Refused']);

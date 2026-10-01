@@ -33,18 +33,6 @@ _EXAMPLES: dict[str, list[dict[str, Any]]] = json.loads(EXAMPLES_FILE.read_text(
 FIXED_EXAMPLES: list[dict[str, Any]] = _EXAMPLES["fixed"]
 EXAMPLE_LIBRARY: list[dict[str, Any]] = _EXAMPLES["library"]
 
-DOMAIN_KEYS = (
-    "production",
-    "supply",
-    "sales",
-    "logistics",
-    "quality",
-    "maintenance",
-    "finance",
-    "people",
-    "engineering",
-)
-
 _CANONICAL_ACTIONS = ", ".join(v for v in VERBS_LEX if v not in {"have", "is a kind of"})
 
 _INSTRUCTIONS = f"""\
@@ -231,7 +219,8 @@ Return one intent per fact:
   "sells" or "focuses on". When one of these canonical actions has the same meaning, use it:
   {_CANONICAL_ACTIONS}.
 - "is a" is never an action: express it as a spec intent. "equivalent to" is not available.
-- domainKey is the domain template of a new concept, or null to inherit from its parent.
+- domainKey is the domain of a new concept, one of the keys in domainTemplates and no other,
+  or null to inherit from its parent.
 - confidence is between 0 and 1. explanation is one short plain-text reason, for example which
   earlier concept a back-reference points to. source is the range of the words the intent comes
   from, inside its segment. span is always given: an exact copy of those words from sentence,
@@ -317,9 +306,9 @@ def _intent(kind: str, required: list[str], properties: dict[str, Any]) -> dict[
     }
 
 
-_DOMAIN_KEY: dict[str, Any] = {
-    "anyOf": [{"type": "string", "enum": list(DOMAIN_KEYS)}, {"type": "null"}]
-}
+# A domain key is one of the request's domainTemplates; the API refuses any other key after
+# parsing, so the format lists no fixed set.
+_DOMAIN_KEY: dict[str, Any] = {"anyOf": [{"type": "string"}, {"type": "null"}]}
 
 # One shape per kind, so a rel or spec intent cannot leave out its object and an attr intent
 # cannot carry one: a model whose structured outputs keep optional properties optional drops

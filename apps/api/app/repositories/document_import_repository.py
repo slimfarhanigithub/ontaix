@@ -51,6 +51,20 @@ async def get(
     )
 
 
+async def delete_many(
+    session: AsyncSession, tenant_id: uuid.UUID, import_ids: list[uuid.UUID]
+) -> int:
+    """Delete the listed imports of the tenant; their sentences cascade."""
+    if not import_ids:
+        return 0
+    result = await session.execute(
+        delete(DocumentImport).where(
+            DocumentImport.tenant_id == tenant_id, DocumentImport.id.in_(import_ids)
+        )
+    )
+    return result.rowcount or 0
+
+
 async def delete_expired_before(session: AsyncSession, cutoff: datetime) -> int:
     """Delete every import whose `expires_at` is older than `cutoff`; sentences cascade."""
     result = await session.execute(delete(DocumentImport).where(DocumentImport.expires_at < cutoff))

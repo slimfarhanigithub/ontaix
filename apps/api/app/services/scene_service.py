@@ -12,8 +12,6 @@ from app.models.api.scene import Scene
 from app.models.api.settings import (
     DEFAULT_LLM_MONTHLY_TOKEN_CAP,
     DEFAULT_OCR_MONTHLY_PAGE_CAP,
-    Appearance,
-    AppearanceDefaults,
     Settings,
 )
 from app.models.api.view_state import ViewState
@@ -26,8 +24,9 @@ from app.repositories import (
     proposal_repository,
     view_state_repository,
 )
+from app.services.appearance_service import appearance_dto
 from app.services.company_service import readable_companies
-from app.services.ontology_view_service import OntologyView, load_view
+from app.services.ontology_view_service import load_view
 from app.services.proposal_branch_service import BranchIndex, annotate
 from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.clock import get_clock
@@ -36,9 +35,6 @@ from app.utilities.problems import forbidden
 from app.utilities.proposal_scope import proposal_company_ids
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_ACCENT = "#3fb8a9"
-DEFAULT_SOURCE_COLOUR = "#d6bd8a"
 
 
 async def get_scene(session: AsyncSession, caller: Caller) -> Scene:
@@ -101,6 +97,7 @@ def settings_dto(settings: TenantSettings | None, company_mode: CompanyMode) -> 
             auto_attrs=False,
             notify_owners=True,
             multi_company=True,
+            company_creation=True,
             cross_company=True,
             animations=True,
             coverage_default=False,
@@ -123,6 +120,7 @@ def settings_dto(settings: TenantSettings | None, company_mode: CompanyMode) -> 
         auto_attrs=settings.auto_attrs,
         notify_owners=settings.notify_owners,
         multi_company=settings.multi_company,
+        company_creation=settings.company_creation,
         cross_company=settings.cross_company,
         animations=settings.animations,
         coverage_default=settings.coverage_default,
@@ -134,17 +132,4 @@ def settings_dto(settings: TenantSettings | None, company_mode: CompanyMode) -> 
         llm_monthly_token_cap=settings.llm_monthly_token_cap,
         ocr_monthly_page_cap=settings.ocr_monthly_page_cap,
         egress_allowlist=list(settings.egress_allowlist or []),
-    )
-
-
-def appearance_dto(view: OntologyView, settings: TenantSettings | None) -> Appearance:
-    defaults = {key: t.color for key, t in view.templates.items()}
-    return Appearance(
-        theme=settings.theme.value if settings else "dark",
-        colors={key: view.effective_color(key) for key in view.templates},
-        accent=settings.accent if settings else DEFAULT_ACCENT,
-        source=settings.source_colour if settings else DEFAULT_SOURCE_COLOUR,
-        defaults=AppearanceDefaults(
-            colors=defaults, accent=DEFAULT_ACCENT, source=DEFAULT_SOURCE_COLOUR
-        ),
     )

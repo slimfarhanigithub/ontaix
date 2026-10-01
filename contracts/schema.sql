@@ -25,7 +25,8 @@ CREATE TYPE proposal_state AS ENUM ('pending', 'half_approved', 'approved', 'rej
 CREATE TYPE proposal_origin AS ENUM ('text', 'speech', 'document', 'suggestion', 'ontology_import');
 CREATE TYPE change_kind AS ENUM (
   'rename', 'delete_concept', 'edit_relation', 'remove_relation', 'unbind',
-  'rename_source', 'remove_source', 'remove_company', 'resolve_conflict', 'remove_cross_company_links'
+  'rename_source', 'remove_source', 'remove_company', 'resolve_conflict', 'remove_cross_company_links',
+  'create_domain', 'edit_domain', 'delete_domain', 'move_concept_domain', 'delete_bulk'
 );
 CREATE TYPE attribute_type AS ENUM ('id', 'text', 'number', 'ref', 'date');
 CREATE TYPE attribute_state AS ENUM ('proposed', 'approved');
@@ -89,6 +90,7 @@ CREATE TABLE tenant_settings (
   auto_attrs           boolean NOT NULL DEFAULT false,
   notify_owners        boolean NOT NULL DEFAULT true,
   multi_company        boolean NOT NULL DEFAULT true,
+  company_creation     boolean NOT NULL DEFAULT true,
   cross_company        boolean NOT NULL DEFAULT true,
   animations           boolean NOT NULL DEFAULT true,
   coverage_default     boolean NOT NULL DEFAULT false,
@@ -141,21 +143,55 @@ CREATE TABLE domain_template (
   color       text NOT NULL,
   position    integer NOT NULL UNIQUE
 );
-COMMENT ON TABLE domain_template IS 'The nine fixed domain product templates every company is instantiated from, in ring order.';
+COMMENT ON TABLE domain_template IS 'The nine fixed domain product templates every tenant starts from, in ring order. Each tenant copies them into tenant_domain when it is created, where they can be renamed; the templates themselves never change.';
+
+CREATE TABLE tenant_domain (
+  tenant_id      uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  key            text NOT NULL CHECK (key ~ '^[a-z][a-z0-9_]{1,39}$'),
+  name           text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 60 AND name = btrim(name)
+                   AND name !~ '[<>-- ­؜᠎​-‏ -‮⁠-⁤⁦-⁯﻿]'),
+  owner          text NOT NULL DEFAULT '' CHECK (char_length(owner) <= 60
+                   AND owner !~ '[<>-- ­؜᠎​-‏ -‮⁠-⁤⁦-⁯﻿]'),
+  default_color  text NOT NULL CHECK (default_color ~ '^#[0-9a-f]{6}$'),
+  template_key   text REFERENCES domain_template(key),
+  position       integer NOT NULL CHECK (position BETWEEN 0 AND 63),
+  revision       integer NOT NULL DEFAULT 0 CHECK (revision >= 0),
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, key),
+  UNIQUE (tenant_id, position),
+  CONSTRAINT tenant_domain_template_keeps_key CHECK (template_key IS NULL OR template_key = key)
+);
+CREATE UNIQUE INDEX tenant_domain_name_unique ON tenant_domain (tenant_id, lower(name));
+COMMENT ON TABLE tenant_domain IS 'The domains of one tenant (ADR 0015): the nine templates copied at tenant creation (template_key set) and custom domains created through an approved create_domain proposal (template_key null), at most 64. A domain is tenant-wide: its name, owner and colour are the same in every company, as the UI contract requires for colour. The effective colour is tenant_settings.colors[key] when set, else default_color; an approved edit_domain writes that override, exactly as Appearance does. revision counts approved edit_domain changes; tenant_domain_revision keeps each version. A domain is never deleted: delete_domain removes one company''s domain product and its concepts, and the domain stays available.';
+
+CREATE TABLE tenant_domain_revision (
+  tenant_id    uuid NOT NULL,
+  key          text NOT NULL,
+  revision     integer NOT NULL CHECK (revision >= 0),
+  name         text NOT NULL,
+  color        text NOT NULL CHECK (color ~ '^#[0-9a-f]{6}$'),
+  owner        text NOT NULL,
+  proposal_id  uuid,
+  changed_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, key, revision),
+  FOREIGN KEY (tenant_id, key) REFERENCES tenant_domain(tenant_id, key) ON DELETE CASCADE
+);
+COMMENT ON TABLE tenant_domain_revision IS 'Name, colour and owner of a tenant domain at each revision: revision 0 when the domain is created or copied from its template, one row per approved edit_domain (proposal_id set, a plain uuid so the history survives the proposal). A colour set immediately through Appearance is recorded in the audit log, not here.';
 
 CREATE TABLE domain_product (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
   company_id    uuid NOT NULL,
-  template_key  text NOT NULL REFERENCES domain_template(key),
+  template_key  text NOT NULL,
   revision      integer NOT NULL DEFAULT 0 CHECK (revision >= 0),
   hidden        boolean NOT NULL DEFAULT false,
   created_at    timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id, id),
   UNIQUE (company_id, template_key),
-  FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE CASCADE
+  FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, template_key) REFERENCES tenant_domain(tenant_id, key) ON DELETE RESTRICT
 );
-COMMENT ON TABLE domain_product IS 'One owned, versioned slice per company and template; revision increments by one on every approved change that carries the domain.';
+COMMENT ON TABLE domain_product IS 'One owned, versioned slice per company and tenant domain (template_key holds the tenant domain key, a template key or a custom one; a company''s product for a custom domain is created when its first concept joins it); revision increments by one on every approved change that carries the domain.';
 
 CREATE TABLE concept (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -364,10 +400,11 @@ CREATE TABLE group_role (
   role              role_name NOT NULL,
   scope_kind        scope_kind NOT NULL,
   scope_company_id  uuid,
-  scope_domain_key  text REFERENCES domain_template(key),
+  scope_domain_key  text,
   created_at        timestamptz NOT NULL DEFAULT now(),
   FOREIGN KEY (tenant_id, group_id) REFERENCES user_group(tenant_id, id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, scope_company_id) REFERENCES company(tenant_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id, scope_domain_key) REFERENCES tenant_domain(tenant_id, key) ON DELETE CASCADE,
   CONSTRAINT group_role_scope_shape CHECK (
     (scope_kind = 'tenant'  AND scope_company_id IS NULL     AND scope_domain_key IS NULL) OR
     (scope_kind = 'company' AND scope_company_id IS NOT NULL AND scope_domain_key IS NULL) OR
@@ -381,7 +418,7 @@ CREATE UNIQUE INDEX group_role_unique ON group_role (
   coalesce(scope_company_id, '00000000-0000-0000-0000-000000000000'::uuid),
   coalesce(scope_domain_key, '')
 );
-COMMENT ON TABLE group_role IS 'A role held by a group on one scope: the tenant, one company, or one domain product family (a template key, covering that domain product in every company); duplicates are refused.';
+COMMENT ON TABLE group_role IS 'A role held by a group on one scope: the tenant, one company, or one domain (a tenant_domain key, a template or a custom domain, covering that domain product in every company); duplicates are refused. A role on a domain goes with the domain (CASCADE), never widening to another scope.';
 
 CREATE TABLE agent (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -391,7 +428,7 @@ CREATE TABLE agent (
   issuer       text NOT NULL,
   subject      text NOT NULL,
   company_id   uuid,
-  domain_key   text REFERENCES domain_template(key),
+  domain_key   text,
   owner_text   text NOT NULL DEFAULT '',
   access       boolean NOT NULL DEFAULT true,
   created_at   timestamptz NOT NULL DEFAULT now(),
@@ -399,10 +436,11 @@ CREATE TABLE agent (
   UNIQUE (tenant_id, id),
   UNIQUE (tenant_id, name),
   UNIQUE (issuer, subject),
-  FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE SET NULL (company_id)
+  FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE SET NULL (company_id),
+  FOREIGN KEY (tenant_id, domain_key) REFERENCES tenant_domain(tenant_id, key) ON DELETE RESTRICT
 );
 CREATE INDEX agent_by_platform ON agent (tenant_id, platform);
-COMMENT ON TABLE agent IS 'A machine identity from any platform: its token (issuer, subject) maps to this row; company_id null means tenant-wide scope; access can be switched off.';
+COMMENT ON TABLE agent IS 'A machine identity from any platform: its token (issuer, subject) maps to this row; company_id null means tenant-wide scope; domain_key narrows it to one tenant domain and is RESTRICT, because clearing it would widen the agent''s scope; access can be switched off.';
 
 CREATE TABLE agent_month_usage (
   tenant_id  uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
@@ -461,7 +499,7 @@ CREATE TABLE rate_budget_window (
   tenant_id     uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
   actor_kind    actor_kind NOT NULL CHECK (actor_kind IN ('user', 'agent')),
   actor_id      uuid NOT NULL,
-  budget        text NOT NULL CHECK (budget IN ('import', 'parse', 'proposal', 'llm', 'expand', 'extraction', 'ocr', 'speech')),
+  budget        text NOT NULL CHECK (budget IN ('import', 'parse', 'proposal', 'llm', 'expand', 'extraction', 'ocr', 'speech', 'export')),
   window_start  timestamptz NOT NULL CHECK (extract(epoch FROM window_start) = floor(extract(epoch FROM window_start) / 3600) * 3600),
   spent         integer NOT NULL CHECK (spent >= 0),
   PRIMARY KEY (tenant_id, actor_kind, actor_id, budget, window_start)
@@ -735,6 +773,7 @@ CREATE TABLE proposal (
   proposer_user_id   uuid,
   proposer_agent_id  uuid,
   bulk               boolean NOT NULL DEFAULT false,
+  revision           integer NOT NULL DEFAULT 0 CHECK (revision BETWEEN 0 AND 1000),
   origin             proposal_origin NOT NULL DEFAULT 'text',
   origin_detail      jsonb,
   created_at         timestamptz NOT NULL DEFAULT now(),
@@ -749,6 +788,7 @@ CREATE TABLE proposal (
   FOREIGN KEY (tenant_id, proposer_user_id) REFERENCES app_user(tenant_id, id) ON DELETE SET NULL (proposer_user_id),
   FOREIGN KEY (tenant_id, proposer_agent_id) REFERENCES agent(tenant_id, id) ON DELETE SET NULL (proposer_agent_id),
   CONSTRAINT proposal_change_kind_only_for_change CHECK ((type = 'change') = (change_kind IS NOT NULL)),
+  CONSTRAINT proposal_revision_only_for_editable CHECK (revision = 0 OR type IN ('concept', 'spec', 'relation')),
   CONSTRAINT proposal_deps_is_array CHECK (jsonb_typeof(deps) = 'array'),
   CONSTRAINT proposal_origin_detail_iff_document CHECK ((origin = 'document') = (origin_detail IS NOT NULL)),
   CONSTRAINT proposal_origin_detail_shape CHECK (
@@ -950,8 +990,9 @@ CREATE TABLE audit_entry (
   proposal_id     uuid,
   origin          proposal_origin,
   company_ids     uuid[] NOT NULL DEFAULT '{}',
-  domain_key      text REFERENCES domain_template(key),
+  domain_key      text,
   CHECK (array_position(company_ids, NULL) IS NULL),
+  FOREIGN KEY (tenant_id, domain_key) REFERENCES tenant_domain(tenant_id, key) ON DELETE SET NULL (domain_key),
   CONSTRAINT audit_entry_origin_only_for_proposal CHECK (origin IS NULL OR proposal_id IS NOT NULL),
   CONSTRAINT audit_entry_platform_actor CHECK ((actor_kind = 'platform') = (actor_account_id IS NOT NULL))
 );
@@ -1138,7 +1179,7 @@ CREATE TABLE outbox (
   subject       text NOT NULL,
   visibility    text NOT NULL CHECK (visibility IN ('model.read', 'audit.read', 'group.manage', 'agent.manage')),
   company_ids   uuid[] NOT NULL DEFAULT '{}',
-  domain_key    text REFERENCES domain_template(key),
+  domain_key    text,
   recipient_user_id uuid,
   actor_kind    actor_kind NOT NULL,
   actor_id      uuid,
@@ -1148,6 +1189,7 @@ CREATE TABLE outbox (
   published_at  timestamptz,
   CHECK (array_position(company_ids, NULL) IS NULL),
   CONSTRAINT outbox_domain_key_only_for_audit CHECK (domain_key IS NULL OR visibility = 'audit.read'),
+  FOREIGN KEY (tenant_id, domain_key) REFERENCES tenant_domain(tenant_id, key) ON DELETE SET NULL (domain_key),
   CONSTRAINT outbox_recipient_iff_extraction CHECK ((aggregate = 'extraction') = (recipient_user_id IS NOT NULL)),
   CONSTRAINT outbox_extraction_shape CHECK (aggregate <> 'extraction' OR (visibility = 'model.read' AND cardinality(company_ids) = 1))
 );
@@ -1171,7 +1213,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-COMMENT ON COLUMN audit_entry.domain_key IS 'The template key of the domain product of the proposal the entry records, when that proposal has one; null for every other entry. A holder of audit.read on the domain scope with this key reads the entry whatever its company_ids, because that scope covers the domain product in every company and matches the proposals it may decide.';
+COMMENT ON COLUMN audit_entry.domain_key IS 'The tenant domain key (template or custom, same tenant through the composite foreign key; ON DELETE SET NULL, which the append-only trigger refuses, so a tenant domain still named by the log cannot be deleted - domains are never deleted in any case) of the domain product of the proposal the entry records, when that proposal has one; null for every other entry. A holder of audit.read on the domain scope with this key reads the entry whatever its company_ids, because that scope covers the domain product in every company and matches the proposals it may decide.';
 COMMENT ON FUNCTION company_ids_belong_to_tenant() IS 'Composite tenant safety for company_ids arrays, which cannot carry a foreign key: every listed company must exist in the row''s tenant when the row is inserted. A removed company is marked dying before its row is deleted, so its removal events and audit entries still pass.';
 
 CREATE TRIGGER outbox_company_ids_in_tenant

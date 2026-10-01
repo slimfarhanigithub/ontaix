@@ -45,8 +45,13 @@ import {
   type Source,
   type SourceUpdate,
   type User,
+  type BulkDeleteRequest,
   type BulkResult,
   type BranchResult,
+  type DeletionImpact,
+  type DeletionTarget,
+  type DomainInput,
+  type DomainPatch,
   type DocumentExtraction,
   type DocumentExtractionResult,
   type ExpansionRequest,
@@ -64,12 +69,14 @@ import {
   type Problem,
   type Proposal,
   type ProposalDraft,
+  type ProposalEdit,
   type Scene,
   type Settings,
   type SettingsPatch,
   type SpeechToken,
   type TeachRequest,
   type TeachResult,
+  type TenantDomain,
   type TeachStreamEvent,
   type TeachStreamListener,
   type ViewState,
@@ -233,6 +240,9 @@ export function listQuery(p: ListParams = {}): string {
 
 type Paged<T> = Page & { items: T[] };
 
+const revisionQuery = (revision: number | undefined): string =>
+  revision === undefined ? '' : `?expectedRevision=${encodeURIComponent(String(revision))}`;
+
 export const api = {
   getScene: () => call<Scene>('GET', '/scene'),
   listProposals: () => call<Page & { items: Proposal[] }>('GET', '/proposals'),
@@ -242,8 +252,12 @@ export const api = {
       drafts: drafts.map(contractDraft),
       ...(parseId ? { parseId } : {}),
     }),
-  approve: (id: string) => call<DecisionResult>('POST', `/proposals/${id}/approve`),
-  secondApprove: (id: string) => call<DecisionResult>('POST', `/proposals/${id}/second-approve`),
+  /** Approves at the revision the approver reviewed; the API refuses with `409 proposal_changed` when it moved. */
+  approve: (id: string, expectedRevision?: number) =>
+    call<DecisionResult>('POST', `/proposals/${id}/approve${revisionQuery(expectedRevision)}`),
+  secondApprove: (id: string, expectedRevision?: number) =>
+    call<DecisionResult>('POST', `/proposals/${id}/second-approve${revisionQuery(expectedRevision)}`),
+  editProposal: (id: string, body: ProposalEdit) => call<Proposal>('PATCH', `/proposals/${id}`, body),
   reject: (id: string, reason?: string) =>
     call<DecisionResult>('POST', `/proposals/${id}/reject`, reason ? { reason } : undefined),
   approveAll: () => call<BulkResult>('POST', '/proposals/approve-all'),
@@ -263,6 +277,13 @@ export const api = {
   createCompany: (body: CompanyCreate) => call<CompanyCreated>('POST', '/companies', body),
   updateDomainProduct: (id: string, patch: { hidden?: boolean }) =>
     call<DomainProduct>('PATCH', `/domain-products/${id}`, patch),
+  proposeDeleteDomain: (id: string) => call<Proposal>('DELETE', `/domain-products/${id}`),
+  listDomains: () => call<TenantDomain[]>('GET', '/domains'),
+  proposeCreateDomain: (body: DomainInput) => call<Proposal>('POST', '/domains', body),
+  proposeEditDomain: (key: string, patch: DomainPatch) => call<Proposal>('PATCH', `/domains/${encodeURIComponent(key)}`, patch),
+  proposeMoveConcept: (conceptId: string, domainKey: string) => call<Proposal>('POST', `/concepts/${conceptId}/move`, { domainKey }),
+  deletionImpact: (target: DeletionTarget) => call<DeletionImpact>('POST', '/deletion-impact', target),
+  proposeBulkDelete: (body: BulkDeleteRequest) => call<Proposal>('POST', '/proposals/bulk-delete', body),
   patchSettings: (patch: SettingsPatch) => call<Settings>('PATCH', '/settings', patch),
   patchAppearance: (patch: AppearancePatch) => call<Appearance>('PATCH', '/appearance', patch),
   putViewState: (state: Partial<ViewState>) => call<ViewState>('PUT', '/view-state', state),

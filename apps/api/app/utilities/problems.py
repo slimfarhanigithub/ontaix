@@ -59,6 +59,10 @@ TITLES: dict[str, str] = {
     "duplicate_organization": "Duplicate organization",
     "organization_disabled": "Organization disabled",
     "company_limit": "Company limit",
+    "proposal_changed": "Proposal changed",
+    "proposal_not_editable": "Proposal not editable",
+    "company_creation_disabled": "Company creation disabled",
+    "domain_limit": "Domain limit",
 }
 
 

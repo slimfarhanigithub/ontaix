@@ -125,7 +125,60 @@ def test_upgrade_is_a_no_op_on_a_database_created_from_the_contract(
         conn.execute(CONTRACT.read_text(encoding="utf-8"))
     with psycopg.connect(migrated_url) as a, psycopg.connect(contract_url) as b:
         for name, query in CATALOG_QUERIES.items():
-            assert a.execute(query).fetchall() == b.execute(query).fetchall(), name
+            got, want = a.execute(query).fetchall(), b.execute(query).fetchall()
+            assert got == want, f"{name} differ: {sorted(set(got) ^ set(want))[:10]}"
+
+
+def test_upgrade_to_0007_copies_the_templates_for_existing_tenants(
+    scratch_databases: tuple[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tenant with a company and domain products at 0006 gets the nine tenant domains."""
+    migrated_url, _ = scratch_databases
+    monkeypatch.setenv("ONTAIX_SCHEMA_SQL", str(OLD_SCHEMA))
+    _upgrade(migrated_url, "0001")
+    monkeypatch.delenv("ONTAIX_SCHEMA_SQL")
+    _upgrade(migrated_url, "0006")
+    with psycopg.connect(migrated_url, autocommit=True) as conn:
+        conn.execute("SET search_path TO ontaix, public")
+        tenant_id = conn.execute(
+            "INSERT INTO tenant (slug, name) VALUES ('old', 'Old') RETURNING id"
+        ).fetchone()[0]
+        company_id = conn.execute(
+            "INSERT INTO company (tenant_id, key, name, position, is_home)"
+            " VALUES (%s, 'aurora', 'Aurora', 0, true) RETURNING id",
+            (tenant_id,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO domain_product (tenant_id, company_id, template_key)"
+            " SELECT %s, %s, key FROM domain_template",
+            (tenant_id, company_id),
+        )
+    _upgrade(migrated_url, "head")
+    with psycopg.connect(migrated_url) as conn:
+        conn.execute("SET search_path TO ontaix, public")
+        domains = conn.execute(
+            "SELECT d.key, d.name, d.owner, d.default_color, d.template_key, d.position, d.revision"
+            " FROM tenant_domain d WHERE d.tenant_id = %s ORDER BY d.position",
+            (tenant_id,),
+        ).fetchall()
+        templates = conn.execute(
+            "SELECT key, name, owner, color, key, position, 0 FROM domain_template"
+            " ORDER BY position"
+        ).fetchall()
+        revisions = conn.execute(
+            "SELECT key, revision, name, color, owner, proposal_id FROM tenant_domain_revision"
+            " WHERE tenant_id = %s ORDER BY key",
+            (tenant_id,),
+        ).fetchall()
+        products = conn.execute(
+            "SELECT count(*) FROM domain_product p JOIN tenant_domain d"
+            " ON d.tenant_id = p.tenant_id AND d.key = p.template_key WHERE p.company_id = %s",
+            (company_id,),
+        ).fetchone()[0]
+    assert domains == templates
+    assert len(domains) == 9
+    assert [(r[0], r[1], r[5]) for r in revisions] == sorted((d[0], 0, None) for d in domains)
+    assert products == 9
 
 
 def _upgrade(url: str, target: str) -> None:

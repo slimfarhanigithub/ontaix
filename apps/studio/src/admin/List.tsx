@@ -12,6 +12,8 @@ export interface Column {
   key?: string;
   num?: boolean;
   w?: string;
+  /** An owner addition: the header cell carries `data-ox-new`, and so do its cells, so the screenshot suite hides both. */
+  ox?: boolean;
 }
 
 export interface ListProps<R extends Row> {
@@ -25,6 +27,8 @@ export interface ListProps<R extends Row> {
   renderRow: (r: R) => ReactNode;
   footer?: (list: R[]) => string;
   height?: string;
+  /** Owner additions shown under the filters, hidden from the screenshot suite. */
+  extra?: ReactNode;
   /** A click on a row outside its action buttons. */
   onRowClick?: (r: R) => void;
 }
@@ -35,7 +39,7 @@ const thStyle = (c: Column): CSSProperties => ({
   ...(c.w ? { width: c.w } : {}),
 });
 
-export function List<R extends Row>({ columns, rows, rowKey, searchKeys, filterKey, pageSize = 50, renderRow, footer, height, onRowClick }: ListProps<R>) {
+export function List<R extends Row>({ columns, rows, rowKey, searchKeys, filterKey, pageSize = 50, renderRow, footer, height, extra, onRowClick }: ListProps<R>) {
   const [query, setQuery] = useState<ListQuery>(EMPTY_QUERY);
 
   const view = viewList(rows, { searchKeys, filterKey, pageSize }, query);
@@ -63,13 +67,18 @@ export function List<R extends Row>({ columns, rows, rowKey, searchKeys, filterK
               ]
             : null}
         </div>
+        {extra ? (
+          <div data-ox-new="" style={{ display: 'flex', gap: '8px' }}>
+            {extra}
+          </div>
+        ) : null}
       </div>
       <div className="lst-wrap" style={height ? { maxHeight: height } : undefined}>
         <table className="tbl">
           <thead>
             <tr>
               {columns.map((c, i) => (
-                <th key={i} data-i={i} style={thStyle(c)} onClick={() => setQuery(toggleSort(query, c.key))}>
+                <th key={i} data-i={i} data-ox-new={c.ox ? '' : undefined} style={thStyle(c)} onClick={() => setQuery(toggleSort(query, c.key))}>
                   {c.label}
                 </th>
               ))}

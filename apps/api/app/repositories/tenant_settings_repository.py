@@ -18,3 +18,11 @@ async def create(session: AsyncSession, tenant_id: uuid.UUID, **values: object) 
     session.add(settings)
     await session.flush()
     return settings
+
+
+async def set_color(
+    session: AsyncSession, settings: TenantSettings, domain_key: str, color: str
+) -> None:
+    """Write the tenant-wide colour override of one domain into the appearance colours."""
+    settings.colors = {**(settings.colors or {}), domain_key: color}
+    await session.flush()

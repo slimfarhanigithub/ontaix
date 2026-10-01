@@ -2,7 +2,7 @@
  * Constants of the canvas renderer, ported from reference/ontaix-studio-reference.html lines
  * 239-300 and 571. Values are verbatim; a unit test pins them to contracts/design-tokens.json.
  */
-import type { DomainKey } from './types';
+import type { TemplateKey } from './types';
 
 /** Cell radius. */
 export const CELL = 24;
@@ -23,7 +23,7 @@ export const C = {
 export const PALETTE = [C.line, C.product, C.plant, C.material, C.supplier, C.customer, C.machine, C.order];
 
 export interface DomainTemplate {
-  key: DomainKey;
+  key: TemplateKey;
   name: string;
   owner: string;
   color: string;
@@ -45,6 +45,13 @@ export const DEFAULT_COLORS: Record<string, string> = Object.fromEntries(DOMAIN_
 
 /** Radius of the ring the nine domain centres sit on. */
 export const DOMAIN_R = Math.max(470, DOMAIN_TEMPLATES.length * 74);
+
+/** Ring positions 0 to TEMPLATE_COUNT - 1 belong to the templates; custom domains take 9 to 63. */
+export const TEMPLATE_COUNT = DOMAIN_TEMPLATES.length;
+/** Most domains a tenant may hold, the templates included. */
+export const MAX_DOMAINS = 64;
+/** Custom domains sit between the templates on the same ring, then on outer rings this far apart. */
+export const CUSTOM_RING_STEP = 300;
 
 export const GREEN = '#4fc98f';
 export const RED = '#d95a68';
