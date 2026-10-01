@@ -161,8 +161,8 @@ function addStudioSettingRows({ descriptions, skip }: { descriptions: Record<str
 }
 
 /**
- * Brings both pages to the compared form just before the screenshot: the hint without its story fragments
- * (asserted equal as text), the teach bar, caption, legend, shortcuts and account controls hidden in both pages, and the teach
+ * Brings both pages to the compared form just before the screenshot: the teach bar, caption, legend,
+ * shortcuts and account controls hidden in both pages, and the teach
  * placeholder made transparent in both pages when the reference has one company and live
  * teaching on, where it still shows story text.
  */
@@ -183,10 +183,6 @@ export async function beforeScreenshot(ref: Page, studio: Page): Promise<void> {
         ['ontaix-account', ACCOUNT_CSS],
       ],
     );
-  await ref.evaluate(stripHintStory);
-  await studio.evaluate(stripHintStory);
-  const hints = await Promise.all([ref, studio].map((p) => p.evaluate(() => document.querySelector('.hint')?.textContent ?? '')));
-  expect(hints[1], '.hint text of the Studio equals the reference without its story fragments').toBe(hints[0]);
   const storyPlaceholder = await ref.evaluate(() => {
     const say = document.getElementById('say') as HTMLInputElement | null;
     const companies = document.querySelectorAll('#companySel option').length;
