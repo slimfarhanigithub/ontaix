@@ -7531,7 +7531,7 @@ components:
           $ref: '#/components/schemas/Actor'
         kind:
           type: string
-          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`, `speech` (a speech recognition token was issued, ADR 0013), `learning` (usage learning switched, a lesson deleted or a company's learning reset, ADR 0014), `auth` (a member signed in, failed to, signed out, or changed their password; ADR 0017), `platform` (a super admin created or changed an account, reset a password, renamed, disabled or re-enabled the organization, changed its company mode, or opened or ended a support session in it; actor kind `platform`), `edit` (a pending proposal edited in place, ADR 0015), `export` (an export, ADR 0016).
+          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`, `speech` (a speech recognition token was issued, ADR 0013), `learning` (usage learning switched, a lesson deleted or a company's learning reset, ADR 0014), `auth` (a member signed in, failed to, signed out, or changed their password; ADR 0017), `platform` (a super admin created or changed an account, reset a password, renamed, disabled or re-enabled the organization, changed its company mode, or opened or ended a support session in it; actor kind `platform`), `edit` (a pending proposal edited in place, ADR 0015), `export` (an export, ADR 0016), `edit` (a pending proposal edited in place, ADR 0015), `export` (an export, ADR 0016).
         what:
           type: string
         ok:

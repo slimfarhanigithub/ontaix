@@ -407,6 +407,31 @@ async def test_the_domains_of_b_are_invisible_to_a(
         await s.rollback()
 
 
+async def test_the_export_of_b_is_not_for_a(
+    client: httpx.AsyncClient, tenant: TenantFixture, organization_b: OrganizationB
+) -> None:
+    """A exports neither B's company nor B's domain product, and A's export of every readable
+    company never names B."""
+    b = organization_b
+    by_company = await client.get(
+        "/export",
+        params={"format": "owl", "scope": "company", "companyId": str(b.tenant.company_id)},
+        headers=tenant.governor.headers,
+    )
+    assert by_company.status_code == 404, by_company.text
+    by_domain = await client.get(
+        "/export",
+        params={"format": "owl", "scope": "domain", "domainProductId": b.domain_product_id},
+        headers=tenant.governor.headers,
+    )
+    assert by_domain.status_code == 404, by_domain.text
+    everything = await client.get(
+        "/export", params={"format": "turtle", "scope": "all"}, headers=tenant.governor.headers
+    )
+    assert everything.status_code == 200, everything.text
+    assert not any(marker in everything.text for marker in b.markers)
+
+
 def test_only_the_listed_modules_use_the_platform_role() -> None:
     """Every other module reaches the database through a session bound to an organization."""
     offenders = []

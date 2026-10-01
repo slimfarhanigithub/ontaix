@@ -251,7 +251,8 @@ export type OntologySkipReason =
   | 'individual_skipped'
   | 'forbidden_action'
   | 'cycle'
-  | 'unknown_parent';
+  | 'unknown_parent'
+  | 'unknown_domain';
 
 export interface OntologyImportNote {
   source: string;

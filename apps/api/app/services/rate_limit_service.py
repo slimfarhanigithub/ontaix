@@ -1,5 +1,5 @@
 """Per-actor hourly budgets for imports, teach parses, proposal creation, model calls, concept
-expansions, whole-document extraction jobs, OCR pages and speech tokens.
+expansions, whole-document extraction jobs, OCR pages, speech tokens and exports.
 
 Each actor of each tenant holds one budget per kind and clock hour (UTC), counted in the
 `rate_budget_window` table that every API replica and worker shares. A charge takes every unit
@@ -39,6 +39,7 @@ class Budget(StrEnum):
     EXPAND = "expand"
     EXTRACTION = "extraction"
     SPEECH = "speech"
+    EXPORT = "export"
 
 
 UNITS_PER_WINDOW: dict[Budget, int] = {
@@ -102,6 +103,8 @@ def limit_of(budget: Budget) -> int:
         return settings.ocr_pages_per_hour
     if budget is Budget.SPEECH:
         return settings.speech_tokens_per_hour
+    if budget is Budget.EXPORT:
+        return settings.export_per_hour
     return UNITS_PER_WINDOW[budget]
 
 

@@ -13,6 +13,7 @@ import { store } from '../../store/store';
 import { attempt } from '../adminData';
 import { openAddCompany } from '../../shell/AddCompany';
 import { BusyButton } from '../../shell/busy';
+import { openExport } from '../ExportDialog';
 import { useStore } from '../../shell/dom';
 import { api } from '../../api/client';
 import {
@@ -430,6 +431,9 @@ export function Companies() {
       <div style={{ marginTop: '12px', display: st.ui.settings?.companyCreation === false ? 'none' : undefined }}>
         <button className="btn primary" data-act="addCompany" onClick={() => openAddCompany()}>
           + Add a company
+        </button>
+        <button className="btn" data-ox-new="" data-act="export" style={{ marginLeft: '8px' }} onClick={() => openExport()}>
+          Export
         </button>
       </div>
     </>

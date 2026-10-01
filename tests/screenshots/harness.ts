@@ -47,9 +47,10 @@ const STORY_ONLY_CSS = '#sceneNum,#sceneName,#next,#finalise{display:none!import
  * drawer's Expand and Delete buttons, the changes panel's `Approve branch` button, and every
  * element marked `data-ox-new` (the drawer's Rename and Move to domain, the panel's
  * Edit, the selection bar, the admin tables' checkbox columns, Move, New domain, Edit and Delete
- * buttons, header and cells together, and the Company creation setting row). The reference has
- * no such elements, so the rule changes nothing there; in the Studio the drawer's other actions,
- * each proposal's row and each table lay out as the reference's.
+ * buttons, header and cells together, the Company creation setting row and the admin portal's
+ * Export button). The reference has no such elements, so the rule changes nothing there; in the
+ * Studio the drawer's other actions, each proposal's row and each table lay out as the
+ * reference's.
  */
 const OWNER_ADDITIONS_CSS = '#drExpand,#drDelete,#imAs,.prop .act .branch,[data-ox-new]{display:none!important}';
 /** The caption, hidden while the reference still shows the story's opening caption. */

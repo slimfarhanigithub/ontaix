@@ -179,6 +179,17 @@ class Settings(BaseSettings):
     ontology_import_max_bytes: int = Field(default=20 * 1024 * 1024, ge=1)
     ontology_import_max_nodes: int = Field(default=5000, ge=1, le=MAX_ONTOLOGY_IMPORT_NODES)
     ontology_import_parse_timeout_seconds: float = Field(default=60.0, gt=0)
+    # Export (`GET /export`): the concept limit (`413` above), the hourly budget per caller, the
+    # child-process time limit, and the base of every exported IRI.
+    export_max_concepts: int = Field(default=20_000, ge=1)
+    export_per_hour: int = Field(default=20, ge=0)
+    export_timeout_seconds: float = Field(default=60.0, gt=0)
+    export_base_iri: str = Field(
+        default="urn:ontaix:",
+        min_length=1,
+        max_length=200,
+        pattern=r"^[A-Za-z][A-Za-z0-9+.-]*:\S*$",
+    )
     retention_purge_interval_seconds: float = Field(default=15 * 60, gt=0)
     # The Azure AI Speech resource the microphone streams to: its full resource id, region and
     # endpoint (custom subdomain). Unset id or endpoint answers `POST /speech/token` with 503 and

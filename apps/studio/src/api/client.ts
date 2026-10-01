@@ -216,6 +216,32 @@ export function busyRetryDelayMs(retryAfter: string | null): number {
   return Math.min(seconds * 1000, BUSY_RETRY_CAP_MS);
 }
 
+export type ExportFormat = 'owl' | 'owx' | 'turtle' | 'jsonld' | 'skos' | 'docx';
+
+/** `GET /export`: a company, one domain product, or every company the caller may read. */
+export type ExportRequest =
+  | { scope: 'all'; format: ExportFormat }
+  | { scope: 'company'; companyId: string; format: ExportFormat }
+  | { scope: 'domain'; domainProductId: string; format: ExportFormat };
+
+export interface ExportedFile {
+  blob: Blob;
+  fileName: string;
+}
+
+/** The file name of a `Content-Disposition: attachment; filename="…"` header. */
+export function attachmentName(disposition: string | null): string | null {
+  const match = /filename="([^"]+)"/.exec(disposition || '');
+  return match ? match[1] : null;
+}
+
+async function exportFile(body: ExportRequest): Promise<ExportedFile> {
+  const query = new URLSearchParams(Object.entries(body)).toString();
+  const res = await send('GET', `/export?${query}`, undefined);
+  if (!res.ok) throw new ApiError(res.status, await problemOf(res), retryAfterSeconds(res.headers.get('Retry-After')));
+  return { blob: await res.blob(), fileName: attachmentName(res.headers.get('Content-Disposition')) || 'ontaix-export' };
+}
+
 /** Query parameters of a list operation: paging, search, `filter[field]`, sort and order. */
 export interface ListParams {
   page?: number;
@@ -345,6 +371,7 @@ export const api = {
     call<CrossCompanyDisabled>('POST', '/settings/cross-company/disable', { confirmation }),
   resetAppearance: () => call<Appearance>('POST', '/appearance/reset'),
   listAudit: (p?: ListParams) => call<Paged<AuditEntry>>('GET', `/audit${listQuery(p)}`),
+  exportOntology: (body: ExportRequest) => exportFile(body),
 
   signIn: (body: SignInRequest) => call<Session>('POST', '/auth/sign-in', body).then(rememberSession),
   signOut: () => call<void>('POST', '/auth/sign-out').finally(forgetSession),
