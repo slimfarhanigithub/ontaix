@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     # Sign-in, the platform portal and cross-organization jobs connect here as the database role
     # `ontaix_platform`; unset, the same login as `database_url` switches to that role.
     platform_database_url: str | None = None
+    # The login name inside `database_url`, for `python -m app.admin grant-database-roles`, which
+    # grants it `ontaix_app`. A login name, never a secret; unset, the command grants nothing.
+    app_database_login: str | None = None
+    # The login name inside `platform_database_url`, granted `ontaix_platform` by the same
+    # command; unset, `app_database_login` holds both roles.
+    platform_database_login: str | None = None
     # `X-Ontaix-User: <email>` names a seeded `dev` user without a session. Accepted only when
     # this is true and `environment` is dev or test; true anywhere else stops start-up.
     dev_identity_header: bool = False
@@ -262,6 +268,8 @@ class Settings(BaseSettings):
         "ocr_endpoint",
         "ocr_model",
         "platform_database_url",
+        "app_database_login",
+        "platform_database_login",
         mode="before",
     )
     @classmethod
@@ -320,6 +328,10 @@ class Settings(BaseSettings):
     def platform_database_url_or_default(self) -> str | None:
         """The platform role's connection: its own setting, else `database_url`."""
         return self.platform_database_url or self.database_url
+
+    def platform_database_login_or_default(self) -> str | None:
+        """The login granted `ontaix_platform`: its own setting, else `app_database_login`."""
+        return self.platform_database_login or self.app_database_login
 
 
 @lru_cache

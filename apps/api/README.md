@@ -41,7 +41,7 @@ uv run pytest
 uv run ruff check
 ```
 
-`ONTAIX_DATABASE_URL` must point at a PostgreSQL 16 database. Its login must be a member of the NOLOGIN roles `ontaix_app` (organization requests, confined by row-level security to one organization per transaction) and `ontaix_platform` (sign-in, the platform portal, cross-organization jobs), or give the platform login in `ONTAIX_PLATFORM_DATABASE_URL`; the migration creates both roles.
+`ONTAIX_DATABASE_URL` must point at a PostgreSQL 16 database. Its login must be a member of the NOLOGIN roles `ontaix_app` (organization requests, confined by row-level security to one organization per transaction) and `ontaix_platform` (sign-in, the platform portal, cross-organization jobs), or give the platform login in `ONTAIX_PLATFORM_DATABASE_URL`; the migration creates both roles. A superuser login (the embedded test server, the compose stack) can `SET ROLE` to them as it is. Any other login is granted its role once, with the schema owner's login in `ONTAIX_DATABASE_URL` and the login names in `ONTAIX_APP_DATABASE_LOGIN` and `ONTAIX_PLATFORM_DATABASE_LOGIN` (default the same): `uv run python -m app.admin grant-database-roles`, safe to repeat.
 
 Users sign in with an email and a password at `POST /api/v1/auth/sign-in`, which sets the `__Host-ontaix_session` cookie. There is no sign-up: the only default account is the super admin, created once by the owner in a terminal with the schema owner's login in `ONTAIX_DATABASE_URL` (only that login may grant the platform role):
 
