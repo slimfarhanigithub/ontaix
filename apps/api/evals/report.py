@@ -30,6 +30,7 @@ class RunRecord:
 def write(record: RunRecord, json_path: Path, markdown_path: Path) -> None:
     plain = _plain(record)
     plain["speechComprehension"] = {s.name: speech_rows(s) for s in record.stages}
+    plain["reviewPass"] = {s.name: review_rows(s) for s in record.stages}
     json_path.write_text(
         json.dumps(plain, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
     )
@@ -49,6 +50,7 @@ def markdown(record: RunRecord) -> str:
         lines += _stage(stage)
         lines += _speech(stage)
         lines += _timings(stage)
+        lines += _review(stage)
     lines += _cases(record)
     lines += _documents(record)
     if record.notes:
@@ -229,6 +231,90 @@ def _timings(stage: StageResult) -> list[str]:
                     f"| {name} | {label} | {p.count} | {p.p50_ms} | {p.p90_ms} | {p.max_ms} |"
                 )
         lines.append("")
+    return lines
+
+
+def review_rows(stage: StageResult) -> list[dict[str, Any]]:
+    """The reviewer's pass over each scored speech case: the recording's scores before and
+    after its corrections, what became of the corrections, and the review's cost."""
+    rows: list[dict[str, Any]] = []
+    for run in stage.runs:
+        for r in run.results:
+            v = r.review
+            if v is None or v.before is None:
+                continue
+            after = v.after or v.before
+            rows.append(
+                {
+                    "case": r.case_id,
+                    "configuration": r.run_key,
+                    "repeat": r.repeat,
+                    "sentences": len(r.units),
+                    "expected": v.before.concepts_expected,
+                    "parentAtDepthBefore": v.before.parent_at_depth,
+                    "parentAtDepthAfter": after.parent_at_depth,
+                    "inventedBefore": len(v.before.invented),
+                    "inventedAfter": len(after.invented),
+                    "missedBefore": len(v.before.missed),
+                    "missedAfter": len(after.missed),
+                    "relationsBefore": v.before.relation_action_correct,
+                    "relationsAfter": after.relation_action_correct,
+                    "relationsExpected": v.before.relations_expected,
+                    "corrections": v.corrections,
+                    "applied": v.applied,
+                    "refused": dict(v.refused),
+                    "inputTokens": v.input_tokens,
+                    "outputTokens": v.output_tokens,
+                    "costEur": v.cost_eur,
+                    "latencyMs": v.latency_ms,
+                    "error": v.error,
+                }
+            )
+    return sorted(rows, key=lambda row: (row["case"], row["configuration"], row["repeat"]))
+
+
+def _review(stage: StageResult) -> list[str]:
+    rows = review_rows(stage)
+    if not rows:
+        return []
+    lines = [
+        f"### {stage.name.title()} Review Pass",
+        "",
+        "The deeper model reviews each scored recording's drafts after the run's own model and "
+        "returns corrections (rename, delete, move, add), applied to the drafted tree with "
+        "every new label grounded in the recording; the recording is scored again. Cost and "
+        "time are the review's own, apart from the run's model.",
+        "",
+        "| Case | Configuration | Sentences | Parent at depth | Invented | Missed | Relations | "
+        "Corrections (applied / refused) | Cost EUR | s |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for row in rows:
+        refused = sum(row["refused"].values())
+        note = f" ({row['error']})" if row["error"] else ""
+        lines.append(
+            f"| {row['case']} | {row['configuration']} | {row['sentences']} | "
+            f"{row['parentAtDepthBefore']} to {row['parentAtDepthAfter']} of {row['expected']} | "
+            f"{row['inventedBefore']} to {row['inventedAfter']} | "
+            f"{row['missedBefore']} to {row['missedAfter']} | "
+            f"{row['relationsBefore']} to {row['relationsAfter']} of {row['relationsExpected']} | "
+            f"{row['corrections']} ({row['applied']} / {refused}){note} | {row['costEur']:.4f} | "
+            f"{row['latencyMs'] / 1000:.1f} |"
+        )
+    total_cost = sum(row["costEur"] for row in rows)
+    sentences = sum(row["sentences"] for row in rows)
+    before = sum(row["parentAtDepthBefore"] for row in rows)
+    after = sum(row["parentAtDepthAfter"] for row in rows)
+    expected = sum(row["expected"] for row in rows)
+    lines += [
+        "",
+        f"Over {len(rows)} recordings and {sentences} sentences: parent at depth {before} to "
+        f"{after} of {expected}, invented {sum(r['inventedBefore'] for r in rows)} to "
+        f"{sum(r['inventedAfter'] for r in rows)}, missed {sum(r['missedBefore'] for r in rows)} "
+        f"to {sum(r['missedAfter'] for r in rows)}; review cost {total_cost:.4f} EUR, "
+        f"{(total_cost / sentences if sentences else 0):.4f} EUR per reviewed sentence.",
+        "",
+    ]
     return lines
 
 

@@ -50,6 +50,10 @@ Each stage's report holds, per configuration, a Timing Breakdown table: for ever
 
 `uv run python -m evals.rescore results/<run>.json [--out totals.json]` scores a run's JSON record again with the scorer as it is now, without a model call: the record keeps every case's gold and every drafted concept, relation and attribute. It prints, per configuration, the speech tuning totals (parent at depth, verb, relations, invented, missed, concept F1) as stored and as rescored, and the cases whose numbers moved. Use it when the scorer changes, so runs made under the old scorer stay comparable with new ones.
 
+## Review Pass
+
+`--review <deployment> [--review-effort low]` names a second, deeper model that reviews each scored speech case after the run's own model: it reads the recording's sentences and the drafted tree and returns corrections (rename to the recording's words, delete a concept the recording does not state or that repeats another, move under another parent, add a stated concept). The harness applies them to the predicted tree, grounding every new or renamed label in the recording and refusing what it cannot place, scores the recording again and reports both scores with the review's own tokens, cost and latency (Review Pass table; `reviewPass` in the JSON). The review touches no proposal and no product code: it measures what a background review by the deep profile would be worth, and its cost per reviewed sentence, before one is built.
+
 ## Cases
 
 | Origin | Where | Notes |
