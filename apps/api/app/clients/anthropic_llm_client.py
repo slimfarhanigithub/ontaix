@@ -25,6 +25,7 @@ import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 
@@ -124,18 +125,23 @@ async def stream_messages(
     its usage exactly as the whole call does."""
     started = time.monotonic()
     arguments = _arguments(model, request, options)
+    # Milliseconds to the first fragment of the answering attempt.
+    first: list[int | None] = [None]
 
     async def attempt(remaining: float) -> Message:
         timed = client.with_options(timeout=anthropic.Timeout(remaining, connect=remaining))
+        first[0] = None
         async with timed.messages.stream(**arguments) as stream:
             text = ""
             async for fragment in stream.text_stream:
+                if first[0] is None:
+                    first[0] = elapsed_ms(started)
                 text += fragment
                 await on_text(text)
             return await stream.get_final_message()
 
     message = await _call(request, started, attempt)
-    return _answer(message, model, price, request, started)
+    return replace(_answer(message, model, price, request, started), first_token_ms=first[0])
 
 
 def answer_text(raw: str, request: LlmRequest) -> str:
