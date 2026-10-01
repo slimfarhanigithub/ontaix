@@ -1,17 +1,29 @@
 /**
- * Arrange: a radial tree from the company with sectors by subtree size, or the highlighted set
- * staged in a clear area to the right of everything else. Ported from
- * reference/ontaix-studio-reference.html lines 506-547 (`fitTo`, `tw`, `stageOrigin`,
- * `arrangeLineage`, `arrangeDomain`, `arrangeCell`, `arrange`).
+ * Arrange: lays the model out for reading. Every arrangement is a layered tree read from left to
+ * right (`layered.ts`), with room for each cell's labels and each link's action chip, so no two
+ * cells, labels or chips overlap and tree links never cross; the order of children keeps the
+ * other links from crossing.
+ *
+ * With nothing highlighted, each company's birth tree grows from its root to both sides. With a
+ * highlighted set (lineage, cell, domain), only that set moves, staged in a clear area to the
+ * right of everything else, and the camera fits it. `fitTo`, `tw` and `stageOrigin` are ported
+ * from reference/ontaix-studio-reference.html lines 506-511.
  */
 import { now } from '../runtime/clock';
 import { clamp } from './colour';
 import { DOMAIN_R } from './constants';
 import { focusOnDomain } from './focus';
-import { ancestorsOf, childrenOf, descendantsOf } from './lineage';
-import { domainCentre, neighbours, shown, type SceneState } from './state';
+import { cellFootprint, chipWidth, estimateWidth, measureWith, type Measure } from './footprint';
+import { layoutForest, type LayoutBlock, type LayoutItem, type LayoutLink } from './layered';
+import { ancestorsOf, descendantsOf } from './lineage';
+import { neighbours, shown, type SceneState } from './state';
 import type { Domain, Node } from './types';
 import { panelW, type View } from './view';
+
+/** Room between the right edge of everything else and the left edge of a staged set. */
+const STAGE_CLEAR = 560;
+/** Room kept free between two companies' arranged trees. */
+const COMPANY_CLEAR = 420;
 
 export function fitTo(s: SceneState, v: View, set: Iterable<Node>, padX = 260, padY = 220): void {
   let x0 = 1e9,
@@ -38,8 +50,8 @@ export const tw = (n: Node, x: number, y: number, t: number): void => {
   n.tween = { fx: n.x, fy: n.y, tx: x, ty: y, start: t };
 };
 
-/** An empty area to the right of everything that is not highlighted. */
-export function stageOrigin(s: SceneState, set: Set<Node>): [number, number] {
+/** Right edge and vertical middle of every shown cell outside `set`; null when there is none. */
+function rest(s: SceneState, set: Set<Node>): { x1: number; y: number } | null {
   let x1 = -1e9,
     y0 = 1e9,
     y1 = -1e9,
@@ -51,151 +63,193 @@ export function stageOrigin(s: SceneState, set: Set<Node>): [number, number] {
     y0 = Math.min(y0, n.y);
     y1 = Math.max(y1, n.y);
   }
-  if (!any) return [0, 0];
-  return [x1 + DOMAIN_R * 1.6, (y0 + y1) / 2];
+  return any ? { x1, y: (y0 + y1) / 2 } : null;
 }
 
-/** Ancestors in a column above, descendants as a tree below. */
-export function arrangeLineage(s: SceneState, v: View, n: Node): void {
+/** An empty area to the right of everything that is not highlighted. */
+export function stageOrigin(s: SceneState, set: Set<Node>): [number, number] {
+  const r = rest(s, set);
+  return r ? [r.x1 + DOMAIN_R * 1.6, r.y] : [0, 0];
+}
+
+/** Group key of a cell: its company and domain product. */
+const groupOf = (n: Node): string | null => (n.domain ? `${n.domain.company.key}/${n.domain.key}` : null);
+
+/** Siblings keep the ring order of domain products, company by company. */
+function groupRank(s: SceneState): (g: string | null) => number {
+  const rank = new Map<string, number>();
+  s.companies.forEach((c, ci) => c.domains.forEach((d) => rank.set(`${c.key}/${d.key}`, ci * 1000 + d.position)));
+  return (g) => (g === null ? -1 : (rank.get(g) ?? 999));
+}
+
+function itemOf(n: Node, measure: Measure): LayoutItem {
+  const f = cellFootprint(n, measure);
+  return { id: n.id, r: Math.max(n.r, n.rt), halfW: f.halfW, up: f.up, down: f.down, group: groupOf(n) };
+}
+
+function linksAmong(s: SceneState, set: Set<Node>, measure: Measure): LayoutLink[] {
+  const out: LayoutLink[] = [];
+  for (const l of s.links)
+    if (!l.dying && l.a !== l.b && set.has(l.a) && set.has(l.b))
+      out.push({ a: l.a.id, b: l.b.id, chipW: chipWidth(l, measure), seed: l.seed });
+  return out;
+}
+
+/** Lays out `set` as one block whose positions are then moved into the clear area. */
+function stageBlock(
+  s: SceneState,
+  set: Set<Node>,
+  parent: Map<number, number>,
+  block: Omit<LayoutBlock, 'at'>,
+  measure: Measure,
+  t: number,
+): void {
+  const nodes = [...set];
+  const items = nodes.map((n) => itemOf(n, measure));
+  const { pos } = layoutForest({
+    items,
+    parent,
+    blocks: [{ ...block, at: [0, 0] }],
+    links: linksAmong(s, set, measure),
+    groupRank: groupRank(s),
+  });
+  let x0 = 1e9,
+    x1 = -1e9,
+    y0 = 1e9,
+    y1 = -1e9;
+  items.forEach((it) => {
+    const [x, y] = pos.get(it.id) as [number, number];
+    x0 = Math.min(x0, x - it.halfW);
+    x1 = Math.max(x1, x + it.halfW);
+    y0 = Math.min(y0, y - it.up);
+    y1 = Math.max(y1, y + it.down);
+  });
+  const r = rest(s, set);
+  const dx = r ? r.x1 + STAGE_CLEAR - x0 : -(x0 + x1) / 2,
+    dy = (r ? r.y : 0) - (y0 + y1) / 2;
+  for (const n of nodes) {
+    if (n.fixed) continue;
+    const [x, y] = pos.get(n.id) as [number, number];
+    tw(n, x + dx, y + dy, t);
+  }
+}
+
+/** The lineage as a tree from its oldest ancestor on the left to its last descendants on the right. */
+export function arrangeLineage(s: SceneState, v: View, n: Node, measure: Measure = estimateWidth): void {
   const t = now();
   const anc = ancestorsOf(n).filter((a) => !a.fixed);
   const desc = descendantsOf(s, n);
   const set = new Set([n, ...anc, ...desc]);
-  const depth = (x: Node): number => {
-    let d = 0;
-    for (const k of childrenOf(s, x)) d = Math.max(d, 1 + depth(k));
-    return d;
-  };
-  const V = 130,
-    Hs = 140;
-  const [sx, sy] = stageOrigin(s, set);
-  const ex = sx,
-    ey = sy - ((depth(n) - anc.length) * V) / 2;
-  tw(n, ex, ey, t);
-  anc.forEach((a, i) => tw(a, ex, ey - V * (anc.length - i), t));
-  const leaves = new Map<Node, number>();
-  const count = (x: Node): number => {
-    const k = childrenOf(s, x);
-    const c = k.length ? k.reduce((a, ch) => a + count(ch), 0) : 1;
-    leaves.set(x, c);
-    return c;
-  };
-  count(n);
-  const place = (x: Node, left: number, d: number): void => {
-    const k = childrenOf(s, x);
-    let cur = left;
-    for (const c of k) {
-      const w = (leaves.get(c) as number) * Hs;
-      tw(c, cur + w / 2, ey + V * d, t);
-      place(c, cur, d + 1);
-      cur += w;
-    }
-  };
-  const total = (leaves.get(n) as number) * Hs;
-  place(n, ex - total / 2, 1);
+  const parent = new Map<number, number>();
+  for (const x of set) if (x.parent && set.has(x.parent)) parent.set(x.id, x.parent.id);
+  const top = anc[0] ?? n;
+  parent.delete(top.id);
+  stageBlock(s, set, parent, { root: top.id, sides: 'right' }, measure, t);
   fitTo(s, v, set);
   s.effects.caption(
     `Lineage of ${n.label}, arranged`,
-    `Moved to a clear area: ancestors above, descendants below, siblings side by side. The rest of the model is untouched and out of the way.`,
+    `Moved to a clear area: ancestors on the left, descendants to the right, siblings one under another. The rest of the model is untouched and out of the way.`,
   );
 }
 
-/** Members in a tidy spiral, related cells of other domains on an outer ring beside the member they touch. */
-export function arrangeDomain(s: SceneState, v: View, d: Domain): void {
+/** The domain's members as their own trees, each related cell of another domain beside the member it touches. */
+export function arrangeDomain(s: SceneState, v: View, d: Domain, measure: Measure = estimateWidth): void {
   const t = now();
   const members = s.nodes.filter((x) => x.domain === d && !x.dying);
   if (!members.length) return;
-  const pre = new Set(members);
-  for (const l of s.links) {
-    if (l.kind === 'bind') continue;
-    if (pre.has(l.a) && !l.b.fixed) pre.add(l.b);
-    if (pre.has(l.b) && !l.a.fixed) pre.add(l.a);
-  }
-  const [cx, cy] = stageOrigin(s, pre);
-  members.sort(
-    (a, b) =>
-      (s.links.some((l) => l.b === a && l.a.domain !== d) ? 0 : 1) -
-      (s.links.some((l) => l.b === b && l.a.domain !== d) ? 0 : 1),
-  );
-  members.forEach((x, k) => {
-    const rr = k === 0 ? 0 : 78 * Math.sqrt(k + 0.5),
-      a = k * 2.399963;
-    tw(x, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, t);
-  });
-  const R = 78 * Math.sqrt(members.length + 0.5) + 150;
-  const ext: [Node, Node][] = [];
   const mset = new Set(members);
+  const via = new Map<Node, Node>();
   for (const l of s.links) {
-    if (l.kind === 'bind') continue;
+    if (l.kind === 'bind' || l.dying) continue;
     const [a, b] = [l.a, l.b];
-    if (mset.has(a) && !mset.has(b) && !b.dying && !b.fixed) ext.push([b, a]);
-    if (mset.has(b) && !mset.has(a) && !a.dying && !a.fixed) ext.push([a, b]);
+    if (mset.has(a) && !mset.has(b) && !b.dying && !b.fixed && !via.has(b)) via.set(b, a);
+    if (mset.has(b) && !mset.has(a) && !a.dying && !a.fixed && !via.has(a)) via.set(a, b);
   }
-  const seen = new Map<Node, Node>();
-  for (const [x, via] of ext) if (!seen.has(x)) seen.set(x, via);
-  const placed = [...seen.entries()]
-    .map(([x, via]) => {
-      const m = via.tween ? { x: via.tween.tx, y: via.tween.ty } : via;
-      return { x, ang: Math.atan2(m.y - cy, m.x - cx) };
-    })
-    .sort((p, q) => p.ang - q.ang);
-  const minGap = Math.min(0.55, (2 * Math.PI) / Math.max(placed.length, 1));
-  for (let i = 1; i < placed.length; i++)
-    if (placed[i].ang - placed[i - 1].ang < minGap) placed[i].ang = placed[i - 1].ang + minGap;
-  for (const p of placed) tw(p.x, cx + Math.cos(p.ang) * R, cy + Math.sin(p.ang) * R, t);
-  const set = new Set([...members, ...placed.map((p) => p.x)]);
+  const set = new Set([...members, ...via.keys()]);
+  const parent = new Map<number, number>();
+  const tops: number[] = [];
+  for (const m of members) {
+    if (m.parent && mset.has(m.parent)) parent.set(m.id, m.parent.id);
+    else tops.push(m.id);
+  }
+  for (const [x, m] of via) parent.set(x.id, m.id);
+  stageBlock(s, set, parent, { root: null, tops, sides: 'right' }, measure, t);
   focusOnDomain(s, d);
   fitTo(s, v, set);
   s.effects.caption(
     `${d.name}, arranged`,
-    `Moved to a clear area: ${members.length} concepts of ${d.name} in the centre, the ${placed.length} concept${placed.length === 1 ? '' : 's'} it relates to on the outer ring, next to what they touch. Press Arrange with nothing selected to put everything back.`,
+    `Moved to a clear area: ${members.length} concepts of ${d.name} from left to right, the ${via.size} concept${via.size === 1 ? '' : 's'} it relates to beside what they touch. Press Arrange with nothing selected to put everything back.`,
   );
 }
 
-/** One cell and everything linked to it: the cell in the middle, its neighbours on a ring grouped by domain product. */
-export function arrangeCell(s: SceneState, v: View, n: Node): void {
+/** One cell and everything linked to it: what points to it on the left, what it points to on the right. */
+export function arrangeCell(s: SceneState, v: View, n: Node, measure: Measure = estimateWidth): void {
   const t = now();
   const nb = [...neighbours(s, n)].filter((x) => x !== n && !x.dying && !x.fixed);
-  const set = new Set([n, ...nb]);
-  const [cx, cy] = stageOrigin(s, set);
   nb.sort((a, b) =>
     ((a.domain ? a.domain.name : '') + a.label).localeCompare((b.domain ? b.domain.name : '') + b.label),
   );
-  const R = Math.max(170, nb.length * 26);
-  if (!n.fixed) tw(n, cx, cy, t);
-  nb.forEach((x, i) => {
-    const a = -Math.PI / 2 + (i * 2 * Math.PI) / nb.length;
-    tw(x, cx + Math.cos(a) * R, cy + Math.sin(a) * R, t);
-  });
+  const set = new Set([n, ...nb]);
+  const parent = new Map<number, number>();
+  const side = new Map<number, -1 | 1>();
+  for (const x of nb) {
+    parent.set(x.id, n.id);
+    const out = s.links.some((l) => l.a === n && l.b === x && !l.dying);
+    side.set(x.id, out ? 1 : -1);
+  }
+  stageBlock(s, set, parent, { root: n.id, sides: 'both', side }, measure, t);
   fitTo(s, v, set);
   s.effects.caption(
     `${n.label} and its relations, arranged`,
-    `Moved to a clear area: ${n.label} in the middle, its ${nb.length} linked concept${nb.length === 1 ? '' : 's'} around it, grouped by domain product. Press Arrange with nothing selected to put everything back.`,
+    `Moved to a clear area: ${n.label} in the middle, its ${nb.length} linked concept${nb.length === 1 ? '' : 's'} around it, what points to it on the left and what it points to on the right, grouped by domain product. Press Arrange with nothing selected to put everything back.`,
   );
 }
 
-/** Whole-model layout: each domain in a spiral around its centre, parents first. */
-export function arrangeAll(s: SceneState): void {
+/**
+ * Whole-model layout: each company's birth tree from its root, split between the root's two
+ * sides, a source beside the first concept bound to it. Cells left without a living parent hang
+ * from their company's root.
+ */
+export function arrangeAll(s: SceneState, measure: Measure = estimateWidth): void {
   const t = now();
   for (const c of s.companies) if (c.root) c.root.tween = null;
-  for (const d of s.DOMAINS) {
-    const members = s.nodes.filter((n) => n.domain === d && !n.dying);
-    if (!members.length) continue;
-    const [cx, cy] = domainCentre(d);
-    members.sort(
-      (a, b) =>
-        (s.links.some((l) => l.b === a && l.a.domain !== d) ? 0 : 1) -
-        (s.links.some((l) => l.b === b && l.a.domain !== d) ? 0 : 1),
-    );
-    members.forEach((n, k) => {
-      const rr = k === 0 ? 0 : 70 * Math.sqrt(k + 0.5),
-        a = k * 2.399963;
-      n.tween = { fx: n.x, fy: n.y, tx: cx + Math.cos(a) * rr, ty: cy + Math.sin(a) * rr, start: t };
-    });
+  const companies = s.companies.filter((c) => c.root).sort((a, b) => a.x - b.x);
+  const set = new Set<Node>();
+  const parent = new Map<number, number>();
+  const blocks: LayoutBlock[] = [];
+  for (const c of companies) {
+    const root = c.root as Node;
+    set.add(root);
+    blocks.push({ root: root.id, at: [root.x, root.y], sides: 'both' });
   }
-  for (const n of s.nodes)
-    if (!n.domain && !n.fixed && !n.dying)
-      n.tween = { fx: n.x, fy: n.y, tx: n.company ? n.company.x : 0, ty: n.company ? n.company.y : 0, start: t };
+  const roots = new Map(companies.map((c) => [c, c.root as Node]));
+  for (const n of s.nodes) if (!n.dying && !n.fixed && n.company && roots.has(n.company)) set.add(n);
+  for (const n of set) {
+    if (n.fixed || !n.company) continue;
+    const root = roots.get(n.company) as Node;
+    let p: Node | undefined = n.parent;
+    if (n.kind === 'source') {
+      const l = s.links.find((x) => x.kind === 'bind' && x.a === n && !x.dying && set.has(x.b));
+      p = l ? l.b : undefined;
+    }
+    parent.set(n.id, p && set.has(p) && p.company === n.company ? p.id : root.id);
+  }
+  if (!blocks.length) return;
+  const { pos } = layoutForest({
+    items: [...set].map((n) => itemOf(n, measure)),
+    parent,
+    blocks,
+    links: linksAmong(s, set, measure),
+    groupRank: groupRank(s),
+    budget: set.size > 200 ? 40 : set.size > 100 ? 80 : 400,
+    apart: COMPANY_CLEAR,
+  });
+  for (const n of set) {
+    if (n.fixed) continue;
+    const [x, y] = pos.get(n.id) as [number, number];
+    n.tween = { fx: n.x, fy: n.y, tx: x, ty: y, start: t };
+    if (n.kind === 'source') n.anchor = [x, y];
+  }
   s.cam.tx = s.cam.ty = 0;
   s.userZoomed = false;
   s.lastInteract = now();
@@ -203,8 +257,9 @@ export function arrangeAll(s: SceneState): void {
 
 /** Arrange acts on the highlighted set: lineage, then cell, then domain, else everything. */
 export function arrange(s: SceneState, v: View): void {
-  if (s.lineageNode) return arrangeLineage(s, v, s.lineageNode);
-  if (s.cellFocus) return arrangeCell(s, v, s.cellFocus);
-  if (s.domainFocus) return arrangeDomain(s, v, s.domainFocus);
-  arrangeAll(s);
+  const measure = measureWith(v.ctx);
+  if (s.lineageNode) return arrangeLineage(s, v, s.lineageNode, measure);
+  if (s.cellFocus) return arrangeCell(s, v, s.cellFocus, measure);
+  if (s.domainFocus) return arrangeDomain(s, v, s.domainFocus, measure);
+  arrangeAll(s, measure);
 }
