@@ -71,19 +71,12 @@
           "description": "spec only: the condition that defines the child, as in a machine that has run 5,000 hours."
         },
         "domainKey": {
-          "enum": [
-            "production",
-            "supply",
-            "sales",
-            "logistics",
-            "quality",
-            "maintenance",
-            "finance",
-            "people",
-            "engineering",
-            null
+          "type": [
+            "string",
+            "null"
           ],
-          "description": "The domain template the new concept belongs to, or null to inherit from its parent. A domain prefix typed in the sentence always wins."
+          "pattern": "^[a-z][a-z0-9_]{1,39}$",
+          "description": "The domain template the new concept belongs to, or null to inherit from its parent. A domain prefix typed in the sentence always wins. A domain key the API sent in the request's domain list (the tenant's domains, ADR 0015); any other key makes the answer invalid."
         },
         "confidence": {
           "type": "number",

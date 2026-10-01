@@ -4,11 +4,15 @@
  * scene counter and scene name. "Show changes" sits in the header row after the admin button, in
  * the same style, so the two never overlap when the panel's width goes to 0.
  */
+import { useAuth } from '../auth/authStore';
 import { refStyle, useStore } from './dom';
 
 export function Header() {
   const st = useStore();
+  const { session } = useAuth();
   const { proposals, listening } = st.ui;
+  // A super admin's support session shows the organization read-only; the pill says so for its whole life.
+  const support = session?.support ?? null;
   return (
     <>
       <header>
@@ -16,9 +20,9 @@ export function Header() {
           <div className="wordmark">
             <i></i>Ontaix <small>business as a product</small>
           </div>
-          <div className={`status${listening ? ' on' : ''}`} id="status">
+          <div className={`status${listening || support ? ' on' : ''}`} id="status">
             <i></i>
-            <span>Listening</span>
+            <span>{support ? `Support · ${support.organization.name} · read-only` : 'Listening'}</span>
           </div>
         </div>
         <div className="scene">

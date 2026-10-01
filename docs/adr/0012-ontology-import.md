@@ -1,6 +1,6 @@
 # ADR 0012: Ontology Import
 
-Status: Accepted. The feature is an owner decision, final (decision row 113); the derived choices (rows 114 and 115, and row 119 from the PR #21 review) are approved under owner delegation (2026-09-29).
+Status: Accepted. The feature is an owner decision, final (decision row 113); the derived choices (rows 114 and 115, and row 119 from the PR #21 review) are approved under owner delegation (2026-09-29; amended by row 149 for the round trip of Ontaix OWL exports, ADR 0016).
 
 ## Context
 
@@ -46,7 +46,7 @@ Synchronous rather than a job: parsing and mapping are deterministic and bounded
 | CSV (`text/csv`) | Header row | Hierarchy table |
 | XLSX | OOXML sniffing of ADR 0011 | Hierarchy table, first sheet |
 
-SKOS vocabularies arrive in any RDF syntax. The detected format must agree with the declared media type or file extension (`415`). XML is read with no DTD and no entity expansion.
+SKOS vocabularies arrive in any RDF syntax. The detected format must agree with the declared one (`415`): the optional form field `format` when given (amendment, row 137; `turtle` also accepts N-Triples content; an unknown value is `422`), else the file extension, else the media type. `format` lets a file be read in a chosen format whatever its name says. XML is read with no DTD and no entity expansion. Whether a file is an ontology at all is answered by `POST /import/detect` (ADR 0011, amendment of row 137), which applies the same content sniffing and tells a CSV or XLSX hierarchy from a document table by its header row.
 
 ### Mapping
 
@@ -67,6 +67,8 @@ Deterministic, in file order after a stable sort by source identifier, so the sa
 | `owl:equivalentClass`, `owl:sameAs`, `skos:exactMatch` | Skipped, `equivalence_not_imported` |
 | Datatype properties, annotations other than labels | Skipped, `datatype_property` or not reported |
 | Unions, intersections, cardinalities, property chains, other axioms | Skipped, `unsupported_axiom` |
+
+Ontaix annotations (row 149): when the file declares the `https://ontaix.dev/ns#` vocabulary, as an Ontaix OWL export (ADR 0016) does, `ox:bornFrom`, `ox:birthAction` and `ox:birthReverse` place a class under its birth parent with that action, `ox:domain` sets its domain when the tenant has that domain (else the parent's domain and the skip reason `unknown_domain`), and annotation assertions of properties typed by `ox:attributeType` become taught attributes; a `someValuesFrom` restriction that repeats a birth relation is not drafted twice. An OWL export of a company therefore round-trips into the same model, which a contract test checks.
 
 Verbs: the property's chosen label, or its local name split at camel case and underscores, lower-cased, whitespace collapsed, at most 60 characters, normalised as every action (NFKC); a verb that normalises to `is a` or `equivalent to` is skipped (`forbidden_action`). The `action` column of a CSV or XLSX hierarchy goes through the same normalisation and check: a forbidden value is reported `forbidden_action` and the row is born with `includes`, so specialisation comes only from `subClassOf` or `is_a`. XLSX hierarchies are read with the OOXML sniffing and byte-bounded decompression of ADR 0011. Domains: `domainKey` when given, else the parent's domain, else `production`; a hierarchy row's `domain` column, when it names a template key, wins. Cycles in the class hierarchy are broken at the first repeated class (`cycle`).
 
@@ -101,10 +103,10 @@ Per item, the first non-empty candidate of: `skos:prefLabel`, `rdfs:label`, `sko
 
 ### Review And Studio
 
-The Studio submits every draft, and the tree is reviewed with branch approval and the cascading reject of ADR 0010. Recorded deviation (row 115): the import dialog's `#imMode` gains a third `.chk` radio row, `Ontology`; the label languages come from the browser's language list, individuals are skipped and the tree goes under the taught company's root, with no new field; progress and outcome use the existing `.caption`. Exact texts are in `docs/ui-contract.md`.
+The Studio submits every draft, and the tree is reviewed with branch approval and the cascading reject of ADR 0010. Recorded deviation (rows 115 and 135): an imported file detected as an ontology goes to ontology import in the detected format, sent as `format`; the owner can read it another way from the `#imAs` pill beside Import; the label languages come from the browser's language list, individuals are skipped and the tree goes under the taught company's root; progress and outcome use the existing `.caption`. Exact texts are in `docs/ui-contract.md`.
 
 ## Consequences
 
 - An existing ontology or hierarchy becomes a reviewable proposal tree in one step, with provenance per proposal, and without any model call or egress.
 - Semantics beyond classes, hierarchy, labels and object relations are reported, not silently lost, and never reasoned over.
-- One new table, one new origin value, three new endpoints and two new Problem codes (`ontology_import_expired`, `ontology_import_submitted`).
+- One new table, one new origin value, three new endpoints and two new Problem codes (`ontology_import_expired`, `ontology_import_submitted`); row 137 adds the optional `format` form field.

@@ -69,6 +69,23 @@ async def get(
     )
 
 
+async def get_birth(
+    session: AsyncSession, tenant_id: uuid.UUID, concept_id: uuid.UUID
+) -> Proposal | None:
+    """The approved concept or spec proposal that created the concept, if any."""
+    return await session.scalar(
+        select(Proposal)
+        .where(
+            Proposal.tenant_id == tenant_id,
+            Proposal.concept_id == concept_id,
+            Proposal.type.in_((ProposalType.CONCEPT, ProposalType.SPEC)),
+            Proposal.state == ProposalState.APPROVED,
+        )
+        .order_by(Proposal.created_at)
+        .limit(1)
+    )
+
+
 async def get_for_update(
     session: AsyncSession, tenant_id: uuid.UUID, proposal_id: uuid.UUID
 ) -> Proposal | None:
@@ -113,6 +130,31 @@ async def mark_decided(
 ) -> None:
     proposal.state = state
     proposal.decided_at = decided_at
+    await session.flush()
+
+
+async def edit_draft(
+    session: AsyncSession, proposal: Proposal, *, title: str, html: str, revision: int
+) -> None:
+    """Rewrite a pending draft's texts at its next revision."""
+    proposal.title = title
+    proposal.html = html
+    proposal.revision = revision
+    await session.flush()
+
+
+async def rewrite_dependencies(
+    session: AsyncSession,
+    proposal: Proposal,
+    *,
+    deps: list[Any],
+    wait_for: str | None,
+    parent_label: str | None,
+) -> None:
+    """Replace the labels a proposal waits for, after one of them was edited."""
+    proposal.deps = deps
+    proposal.wait_for = wait_for
+    proposal.parent_label = parent_label
     await session.flush()
 
 

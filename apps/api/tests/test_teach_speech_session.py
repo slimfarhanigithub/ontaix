@@ -287,3 +287,46 @@ async def test_a_group_keeps_each_left_out_members_own_reason(
         {"text": heard, "reason": "ambiguous_reference"},
         {"text": heard, "reason": "ungrounded_label"},
     ]
+
+
+async def test_a_label_starting_with_the_company_name_misheard_reuses_the_companys_concept(
+    client: httpx.AsyncClient, tenant: TenantFixture, fake_llm: FakeLlmClient
+) -> None:
+    company_id, root_id = await add_company(tenant, "Insight")
+    await configure(tenant)
+    sales = {
+        "type": "concept",
+        "companyId": str(company_id),
+        "parentId": str(root_id),
+        "label": "Sales",
+        "domainKey": "sales",
+        "action": "has",
+    }
+    await submit(client, tenant, [sales])
+    heard = "Inside sales come from software licenses or from services"
+    fake_llm.answer(
+        answer(
+            heard,
+            [
+                rel(heard, cand("c0"), "has", new("Inside sales"), "Inside sales"),
+                rel(
+                    heard,
+                    new("Inside sales"),
+                    "comes from",
+                    new("Software licenses"),
+                    "Inside sales come from software licenses",
+                ),
+                rel(heard, new("Inside sales"), "comes from", new("Services"), heard),
+            ],
+        )
+    )
+
+    spoken = await speak(client, tenant, company_id, heard)
+
+    labels = [d.get("label") for d in spoken["drafts"]]
+    assert "Inside sales" not in labels
+    assert spoken["statements"] == [
+        "Insight has Sales (already in the model)",
+        "Sales comes from Software licenses (new)",
+        "Sales comes from Services (new)",
+    ]

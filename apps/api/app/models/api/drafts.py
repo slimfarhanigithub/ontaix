@@ -15,6 +15,8 @@ from app.models.api.base import ApiModel
 from app.models.api.origin import ImportRef, InputOrigin
 
 DEFAULT_ACTION = "relates to"
+DOMAIN_KEY_PATTERN = r"^[a-z][a-z0-9_]{1,39}$"
+HEX_PATTERN = r"^#[0-9a-f]{6}$"
 
 Seed = Annotated[float, Field(ge=0, lt=1)]
 
@@ -27,7 +29,7 @@ class ConceptDraft(ApiModel):
     parent_id: uuid.UUID | None = None
     parent_label: str | None = Field(default=None, max_length=120)
     label: str = Field(min_length=1, max_length=120)
-    domain_key: str
+    domain_key: str = Field(pattern=DOMAIN_KEY_PATTERN)
     action: str = Field(default=DEFAULT_ACTION, min_length=1, max_length=60)
     reverse: bool = False
     caption: str | None = Field(default=None, max_length=300)
@@ -49,7 +51,7 @@ class SpecDraft(ApiModel):
     parent_label: str | None = Field(default=None, max_length=120)
     label: str = Field(min_length=1, max_length=120)
     rule: str | None = Field(default=None, max_length=200)
-    domain_key: str
+    domain_key: str = Field(pattern=DOMAIN_KEY_PATTERN)
     caption: str | None = Field(default=None, max_length=300)
     seed: Seed | None = None
 
@@ -169,6 +171,13 @@ class ChangePayload(ApiModel):
     source_id: uuid.UUID | None = None
     company_id: uuid.UUID | None = None
     conflict_concept_ids: list[uuid.UUID] | None = Field(default=None, min_length=2, max_length=2)
+    domain_key: str | None = Field(default=None, pattern=DOMAIN_KEY_PATTERN)
+    domain_product_id: uuid.UUID | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    color: str | None = Field(default=None, pattern=HEX_PATTERN)
+    owner: str | None = Field(default=None, max_length=60)
+    concept_ids: list[uuid.UUID] | None = Field(default=None, max_length=200)
+    domain_product_ids: list[uuid.UUID] | None = Field(default=None, max_length=20)
 
 
 class ChangeDraft(ApiModel):
@@ -185,6 +194,11 @@ class ChangeDraft(ApiModel):
         "remove_source",
         "remove_company",
         "resolve_conflict",
+        "create_domain",
+        "edit_domain",
+        "delete_domain",
+        "move_concept_domain",
+        "delete_bulk",
     ]
     payload: ChangePayload
     caption: str | None = Field(default=None, max_length=300)
@@ -205,8 +219,11 @@ ConceptOrSpecDraft = Annotated[ConceptDraft | SpecDraft, Field(discriminator="ty
 
 
 class ProposalBatch(ApiModel):
-    """`origin` and `import_ref` apply to every draft that sets none of its own."""
+    """`origin` and `import_ref` apply to every draft that sets none of its own. `parse_id` is
+    the `TeachResult.parseId` the drafts came from: advisory, it only links the created
+    proposals to the stored parse for usage learning and never changes what is created."""
 
     origin: InputOrigin | None = None
     import_ref: ImportRef | None = None
+    parse_id: uuid.UUID | None = None
     drafts: list[ProposalDraft] = Field(min_length=1, max_length=200)

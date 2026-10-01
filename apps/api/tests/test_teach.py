@@ -13,7 +13,7 @@ pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
 async def set_settings(tenant: TenantFixture, **values: bool) -> None:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         settings = await tenant_settings_repository.get(s, tenant.tenant_id)
         assert settings is not None
         for name, value in values.items():

@@ -74,6 +74,12 @@ Image-only pages are sent to an OCR client in `apps/api/app/clients/`, behind a 
 
 Data residency: the image-only pages of a PDF leave Azure France Central for the EU DataZone OCR deployment, within the EU data zone, under the same Azure terms as the teach deployment (ADR 0008, Data Residency). Nothing else of the import is sent. The Foundry deployment of the OCR model and its role assignment are an infrastructure change in `infra/terraform/azure`, not part of this contract change.
 
+### Detection And Chosen Type (Amendment, Row 135)
+
+Amended by decision row 137 (owner decision, final, 2026-09-30). The input kind is detected, not chosen first. `POST /import/detect` reads one upload and answers `kind` (`document` or `ontology`), the ontology `format` (null for a document) and the document `mediaType` the bytes read as. The bytes decide when they are unambiguous: PDF, DOCX, PPTX and HTML are documents; an RDF/XML or OWL/XML root, JSON naming `@context` or `@graph`, an OBO header with terms, a Turtle directive or lines of full N-Triples are ontologies; a CSV or XLSX is an ontology only when its header row is a hierarchy header (`label` and `parent`, or `Level <n>` columns), else a document. Other text follows its extension, then its media type. Detection spends no import unit, stores nothing, reads XML only to its root with no DTD, and reads an Office archive's header row in the child process of ADR 0011's extraction.
+
+`POST /import/sentences` gains one optional form field, `mediaType`, one of the supported document types; when given it replaces the extension and the part media type as the declared type, and the sniffed bytes must still agree with it. It lets a file be read as a document whatever its name says (a PDF named `.txt`, or an ontology file read as plain text). Every other rule of this ADR is unchanged.
+
 ### Unchanged
 
 Stored imports (`document_import`, one hour, the same actor), `importRef`, the parse and draft claims, grounding in the extracted text, the per-sentence and whole-document paths, the import and parse budgets, and the rule that every limit refuses the whole import.

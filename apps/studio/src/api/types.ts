@@ -2,9 +2,9 @@
  * Shapes of the Ontaix API as contracts/openapi.yaml defines them, limited to what the Studio
  * canvas and the proposal flow read and write.
  */
-import type { DomainKey } from '../canvas/types';
+import type { DomainKey, TemplateKey } from '../canvas/types';
 
-export type { DomainKey };
+export type { DomainKey, TemplateKey };
 
 export type ActorKind = 'user' | 'agent' | 'system';
 
@@ -230,6 +230,15 @@ export interface ImportResult {
 
 export type OntologyFormat = 'rdf_xml' | 'turtle' | 'owl_xml' | 'json_ld' | 'n_triples' | 'obo' | 'csv' | 'xlsx';
 
+/** `POST /import/detect`: whether a file is a document or an ontology, decided from its bytes first. */
+export interface ImportDetection {
+  kind: 'document' | 'ontology';
+  /** The ontology format when `kind` is ontology, else null. */
+  format: OntologyFormat | null;
+  /** The document media type the bytes read as, for reading the file as a document. */
+  mediaType: ImportMediaType;
+}
+
 export type OntologySkipReason =
   | 'already_known'
   | 'reused_existing'
@@ -242,7 +251,8 @@ export type OntologySkipReason =
   | 'individual_skipped'
   | 'forbidden_action'
   | 'cycle'
-  | 'unknown_parent';
+  | 'unknown_parent'
+  | 'unknown_domain';
 
 export interface OntologyImportNote {
   source: string;
@@ -272,6 +282,8 @@ export interface OntologyImportRequest {
   languages?: string;
   individuals?: 'skip' | 'as_concepts';
   domainKey?: DomainKey;
+  /** The format to read the file as, in place of its extension and media type. */
+  format?: OntologyFormat;
 }
 
 export interface ConceptDraft extends DraftSeed, DraftOrigin {
@@ -354,7 +366,12 @@ export type ChangeKind =
   | 'remove_source'
   | 'remove_company'
   | 'rename_source'
-  | 'resolve_conflict';
+  | 'resolve_conflict'
+  | 'create_domain'
+  | 'edit_domain'
+  | 'delete_domain'
+  | 'move_concept_domain'
+  | 'delete_bulk';
 
 export interface ChangeDraft extends DraftOrigin {
   type: 'change';
@@ -369,6 +386,13 @@ export interface ChangeDraft extends DraftOrigin {
     sourceId?: string;
     companyId?: string;
     conflictConceptIds?: [string, string];
+    domainKey?: DomainKey;
+    domainProductId?: string;
+    name?: string;
+    color?: string;
+    owner?: string;
+    conceptIds?: string[];
+    domainProductIds?: string[];
   };
   caption?: string;
 }
@@ -423,11 +447,20 @@ export interface Proposal {
   originDetail: OriginDetail | null;
   approvals: { ordinal: 1 | 2; userId: string; userName?: string; approvedAt: string }[];
   bulk?: boolean;
+  /** Incremented by every in-place edit of a pending draft; 0 when never edited. */
+  revision?: number;
   createdAt: string;
   decidedAt?: string | null;
   artefacts?: Artefacts;
   /** Open proposals in the branch of a `concept` or `spec` proposal other than itself; 0 or absent otherwise. */
   openBelow?: number;
+}
+
+/** `PATCH /proposals/{proposalId}`: a pending draft's new label and/or action, with the revision the editor saw. */
+export interface ProposalEdit {
+  revision: number;
+  label?: string;
+  action?: string;
 }
 
 export interface AuditEntry {
@@ -469,6 +502,8 @@ export interface Settings {
   autoAttrs: boolean;
   notifyOwners: boolean;
   multiCompany: boolean;
+  /** When false, `POST /companies` is refused and the Studio hides Add company; distinct from `multiCompany`. */
+  companyCreation: boolean;
   crossCompany: boolean;
   animations: boolean;
   coverageDefault: boolean;
@@ -576,6 +611,8 @@ export type LlmOutcome =
   | 'invalid_output';
 
 export interface TeachResult {
+  /** Set when the parse was recorded for usage learning; sent back with the drafts' batch. */
+  parseId?: string | null;
   outcome: 'understood' | 'partly_understood' | 'not_understood';
   domainKey: DomainKey | null;
   intents: Intent[];
@@ -594,12 +631,36 @@ export interface TeachResult {
   segments: SourceSegment[];
 }
 
+/** A line of `POST /teach/parse/stream`: a draft known early, the drafts the final result takes back, the result, or a failure. */
+export type TeachStreamEvent =
+  | TeachDraftEvent
+  | TeachRetractEvent
+  | { type: 'result'; result: TeachResult }
+  | { type: 'error'; problem: Problem };
+
+/** A draft the valid part of the model's answer gives, sent once; `index` counts the stream's drafts from 0. */
+export interface TeachDraftEvent {
+  type: 'draft';
+  index: number;
+  draft: ProposalDraft;
+  note: DraftNote;
+}
+
+/** Streamed drafts the final result does not hold, all of them when the whole answer is refused. */
+export interface TeachRetractEvent {
+  type: 'retract';
+  indexes: number[];
+}
+
+/** Receives a streamed parse's draft and retract lines as they arrive. */
+export type TeachStreamListener = (event: TeachDraftEvent | TeachRetractEvent) => void;
+
 /** `POST /speech/token`: a short-lived Azure AI Speech token for the microphone. */
 export interface SpeechToken {
-  /** `aad#<resource id>#<access token>` for the Speech SDK; held in memory only. */
+  /** The Speech resource's STS token for the Speech SDK, valid about 10 minutes; held in memory only. */
   token: string;
   region: string;
-  /** ISO date-time the access token expires. */
+  /** ISO date-time the Speech token expires. */
   expiresAt: string;
   language: 'en-GB' | 'en-US';
 }
@@ -895,6 +956,64 @@ export interface LlmUsage {
   }[];
 }
 
+// ------------------------------------------------------------ domains, deletion impact, bulk deletion
+
+/** A tenant domain: one of the nine templates (possibly renamed) or a custom domain, the same in every company. */
+export interface TenantDomain {
+  key: DomainKey;
+  name: string;
+  owner: string;
+  /** The effective colour, the value Appearance edits. */
+  color: string;
+  defaultColor: string;
+  template: boolean;
+  /** Ring position, 0 to 63; the templates take 0 to 8. */
+  position: number;
+  revision: number;
+}
+
+/** `POST /domains`: a new domain; its key is derived from the name by the server. */
+export interface DomainInput {
+  name: string;
+  color: string;
+  owner?: string;
+}
+
+/** `PATCH /domains/{domainKey}`: at least one of a new name, colour or owner. */
+export interface DomainPatch {
+  name?: string;
+  color?: string;
+  owner?: string;
+}
+
+/** `POST /deletion-impact`: a whole company, or concepts and domain products of one company. */
+export interface DeletionTarget {
+  companyId: string;
+  wholeCompany?: boolean;
+  conceptIds?: string[];
+  domainProductIds?: string[];
+}
+
+/** What approving a deletion would remove; `names` holds at most six labels, named concepts first. */
+export interface DeletionImpact {
+  concepts: number;
+  descendants: number;
+  relations: number;
+  crossCompanyRelations: number;
+  bindings: number;
+  attributes: number;
+  sources: number;
+  cascadedProposals: number;
+  names: string[];
+}
+
+/** `POST /proposals/bulk-delete`: up to 200 concepts and 20 domain products of one company. */
+export interface BulkDeleteRequest {
+  companyId: string;
+  conceptIds?: string[];
+  domainProductIds?: string[];
+}
+
 export interface CrossCompanyDisabled {
   removedRelations: number;
   rejectedProposals: number;
@@ -906,4 +1025,137 @@ export interface CrossCompanyDisabled {
 export interface RefreshAllResult {
   sources: number;
   bindings: number;
+}
+
+// ------------------------------------------------------------ sign-in, sessions and the platform
+
+export interface OrganizationRef {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+/** `GET /auth/session`: the browser's live session; a member names its organization, a platform account none. */
+export interface Session {
+  kind: 'member' | 'platform';
+  account: { id: string; email: string; name: string };
+  organization?: OrganizationRef | null;
+  userId?: string | null;
+  platformRoles?: 'super_admin'[];
+  /** The open read-only support session of a super admin, else null. */
+  support?: { organization: OrganizationRef; until: string; reason: string } | null;
+  /** Sent back as `X-CSRF-Token` on every POST, PUT, PATCH and DELETE while the session lives. */
+  csrfToken: string;
+  mustChangePassword: boolean;
+  idleExpiresAt: string;
+  absoluteExpiresAt: string;
+}
+
+export interface SignInRequest {
+  email: string;
+  password: string;
+}
+
+export interface PasswordChange {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface PasswordReset {
+  newPassword: string;
+}
+
+/** `single` caps the organization at one company; `multiple` leaves it to the organization's own setting. */
+export type CompanyMode = 'single' | 'multiple';
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  companyMode: CompanyMode;
+  status: 'active' | 'disabled';
+  companies: number;
+  /** Accounts of the organization, disabled included. */
+  users: number;
+  createdAt: string;
+  disabledAt?: string | null;
+}
+
+export interface OrganizationCreate {
+  name: string;
+  companyMode: CompanyMode;
+}
+
+export interface OrganizationUpdate {
+  name?: string;
+  companyMode?: CompanyMode;
+}
+
+export interface OrganizationUser {
+  id: string;
+  accountId: string;
+  email: string;
+  name: string;
+  department?: string | null;
+  status: 'active' | 'disabled';
+  mustChangePassword: boolean;
+  /** The email is inside a 15-minute sign-in lock. */
+  locked: boolean;
+  groups: { id: string; name: string }[];
+  createdAt: string;
+  lastSignInAt?: string | null;
+}
+
+export interface OrganizationUserCreate {
+  email: string;
+  name: string;
+  department?: string | null;
+  password: string;
+  groupIds: string[];
+}
+
+export interface OrganizationUserUpdate {
+  name?: string;
+  department?: string | null;
+  groupIds?: string[];
+}
+
+export interface SupportSessionStart {
+  reason: string;
+}
+
+export type PlatformAuditAction =
+  | 'sign_in'
+  | 'sign_in_failed'
+  | 'sign_in_locked'
+  | 'sign_out'
+  | 'session_expired'
+  | 'password_changed'
+  | 'password_change_failed'
+  | 'password_reset'
+  | 'account_created'
+  | 'account_updated'
+  | 'account_disabled'
+  | 'account_enabled'
+  | 'organization_created'
+  | 'organization_renamed'
+  | 'organization_company_mode'
+  | 'organization_disabled'
+  | 'organization_enabled'
+  | 'support_session_started'
+  | 'support_session_ended'
+  | 'super_admin_created'
+  | 'super_admin_password_set';
+
+export interface PlatformAuditEntry {
+  id: number;
+  at: string;
+  /** The account that acted; null for a failed sign-in with an unknown email and for the system. */
+  actor?: { accountId: string; email: string } | null;
+  action: PlatformAuditAction;
+  ok: boolean;
+  organization?: OrganizationRef | null;
+  targetAccountId?: string | null;
+  what: string;
+  clientIp?: string | null;
 }

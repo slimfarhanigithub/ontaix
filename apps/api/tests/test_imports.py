@@ -118,7 +118,7 @@ async def test_text_import_is_stored_and_its_sentences_become_document_proposals
     assert body["positions"] == [None, None]
     assert body["origin"] == "document"
     assert body["originDetail"] == {"fileName": "plant notes.txt", "mediaType": "text/plain"}
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         row = await s.get(DocumentImport, uuid.UUID(body["importId"]))
         assert row is not None and len(row.sha256) == 32 and row.sentence_count == 2
         assert row.expires_at - row.created_at == timedelta(hours=1)
@@ -243,7 +243,7 @@ async def test_an_import_belongs_to_its_actor_and_expires(
     import_id = (await upload(client, tenant.builder, "a.txt", TXT)).json()["importId"]
 
     other_actor = await cite(client, tenant, tenant.owner, import_id, 0)
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         await s.execute(
             update(DocumentImport)
             .where(DocumentImport.id == uuid.UUID(import_id))
@@ -327,7 +327,7 @@ async def test_the_parse_budget_must_cover_every_sentence(
     refused = await upload(client, tenant.builder, "a.txt", TXT)
 
     assert refused.status_code == 429
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         stored = await s.scalars(
             select(DocumentImport).where(DocumentImport.tenant_id == tenant.tenant_id)
         )
@@ -338,7 +338,7 @@ async def test_purge_deletes_imports_a_day_past_expiry(
     client: httpx.AsyncClient, tenant: TenantFixture
 ) -> None:
     import_id = uuid.UUID((await upload(client, tenant.builder, "a.txt", TXT)).json()["importId"])
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         await s.execute(
             update(DocumentImport)
             .where(DocumentImport.id == import_id)
@@ -348,10 +348,10 @@ async def test_purge_deletes_imports_a_day_past_expiry(
             )
         )
         await s.commit()
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         assert await import_service.purge_expired(s) >= 1
         await s.commit()
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         assert await s.get(DocumentImport, import_id) is None
         left = await s.scalars(
             select(DocumentImportSentence).where(DocumentImportSentence.import_id == import_id)

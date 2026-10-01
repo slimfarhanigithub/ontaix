@@ -29,19 +29,19 @@ from app.repositories import (
     proposal_repository,
     relation_repository,
 )
-from app.services import audit_service, decision_lock_service, outbox_service
+from app.services import (
+    audit_service,
+    decision_lock_service,
+    learning_capture_service,
+    outbox_service,
+)
 from app.services.decision_event_service import emit_proposal_event
 from app.services.ontology_view_service import OntologyView, load_view
 from app.services.proposal_apply_service import apply, delete_removed_company
 from app.services.rejection_service import OPEN_STATES, reject_one
 from app.utilities.artefact_visibility import readable_artefacts, readable_proposal
 from app.utilities.clock import get_clock
-from app.utilities.permissions import (
-    Scope,
-    can_approve,
-    can_read_proposal,
-    holds_approving_role,
-)
+from app.utilities.permissions import can_approve, can_read_proposal, holds_approving_role
 from app.utilities.problems import conflict, forbidden, not_found
 from app.utilities.proposal_relations import own_relation_ids
 from app.utilities.proposal_scope import proposal_company_ids
@@ -55,10 +55,24 @@ MAX_BULK_ROUNDS = 200
 
 
 async def approve(
-    session: AsyncSession, caller: Caller, proposal_id: uuid.UUID, *, bulk: bool = False
+    session: AsyncSession,
+    caller: Caller,
+    proposal_id: uuid.UUID,
+    *,
+    bulk: bool = False,
+    expected_revision: int | None = None,
 ) -> DecisionResult:
-    """Approve a proposal; on a half-approved change this completes the second approval."""
+    """Approve a proposal; on a half-approved change this completes the second approval.
+
+    `expected_revision` is the draft revision the approver reviewed: when given and the draft
+    was edited since, the approval is refused with `409 proposal_changed`.
+    """
     proposal = await _load_decidable(session, caller, proposal_id)
+    if expected_revision is not None and proposal.revision != expected_revision:
+        raise conflict(
+            "proposal_changed",
+            f"the proposal was edited since revision {expected_revision}; review it again",
+        )
     proposals = await proposal_repository.list_open(session, caller.tenant_id)
     view = await load_view(session, caller.tenant_id, proposals)
     _ensure_can_approve(caller, view, proposal)
@@ -98,6 +112,7 @@ async def reject(
     view = await load_view(session, caller.tenant_id, proposals)
     _ensure_can_approve(caller, view, proposal, "reject")
     outcome = await reject_one(session, caller, view, proposal, proposals, reason, False)
+    await learning_capture_service.on_rejected(session, caller, view, proposal)
     return _result(caller, view, proposal, outcome, proposals)
 
 
@@ -192,16 +207,9 @@ async def _lock_open(session: AsyncSession, caller: Caller) -> list[Proposal]:
     return await proposal_repository.lock_open(session, caller.tenant_id)
 
 
-def _scope_of(view: OntologyView, proposal: Proposal) -> Scope:
-    """The proposal's domain product, else its company, else the tenant (cross-company)."""
-    product = (
-        view.domain_products.get(proposal.domain_product_id) if proposal.domain_product_id else None
-    )
-    return Scope(proposal.company_id, product.template_key if product else None)
-
-
 def _may_approve(caller: Caller, view: OntologyView, proposal: Proposal) -> bool:
-    return can_approve(caller.grants, _scope_of(view, proposal))
+    """An approving role in every scope the proposal is decided in."""
+    return all(can_approve(caller.grants, scope) for scope in view.proposal_scopes(proposal))
 
 
 def _ensure_can_approve(
@@ -279,12 +287,17 @@ async def _complete_approval(
         session, proposal, ProposalState.APPROVED, get_clock().now()
     )
     await _clear_pending(session, view, proposal)
+    previous_label = learning_capture_service.label_before(view, proposal)
     outcome = await apply(session, caller, view, proposal, open_proposals, bulk)
+    await learning_capture_service.on_approved(
+        session, caller, view, proposal, previous_label, bulk
+    )
     if proposal.domain_product_id and proposal.domain_product_id in view.domain_products:
         product = view.domain_products[proposal.domain_product_id]
         await domain_product_repository.bump_revision(session, product)
         dto = view.domain_product_dto(product)
-        outcome.artefacts.domain_products = [dto]
+        others = [p for p in outcome.artefacts.domain_products if p.id != product.id]
+        outcome.artefacts.domain_products = [dto, *others]
         await outbox_service.emit(
             session,
             caller.tenant_id,

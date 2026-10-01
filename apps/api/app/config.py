@@ -8,12 +8,20 @@ from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DEV_ENVIRONMENT = "dev"
-
 Environment = Literal["dev", "test", "staging", "production"]
+# The only environments where the development identity header may be switched on.
+DEV_IDENTITY_ENVIRONMENTS: tuple[Environment, ...] = ("dev", "test")
 
 MAX_LLM_TIMEOUT_SECONDS = 15.0
 MAX_LLM_SPEECH_TIMEOUT_SECONDS = 45.0
@@ -82,7 +90,21 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("ONTAIX_ENVIRONMENT", "ONTAIX_ENV"),
     )
     log_level: str = "INFO"
+    # Organization requests and per-organization jobs connect here as the database role
+    # `ontaix_app`, which row-level security confines to one organization per transaction.
     database_url: str | None = None
+    # Sign-in, the platform portal and cross-organization jobs connect here as the database role
+    # `ontaix_platform`; unset, the same login as `database_url` switches to that role.
+    platform_database_url: str | None = None
+    # `X-Ontaix-User: <email>` names a seeded `dev` user without a session. Accepted only when
+    # this is true and `environment` is dev or test; true anywhere else stops start-up.
+    dev_identity_header: bool = False
+    # Origins allowed to send cookie-authenticated writes and sign-in (`Origin` header), as a
+    # JSON list, for example ["https://studio.example"]. Empty refuses every such request.
+    allowed_origins: list[str] = Field(default_factory=list)
+    # Reverse proxies in front of the API whose `X-Forwarded-For` entry is trusted: 0 uses the
+    # socket peer, 1 the entry the ingress appended, and so on.
+    trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
     test_seed: int | None = None
     seed: SeedMode = "fixture"
     import_purge_interval_seconds: float = Field(default=15 * 60, gt=0)
@@ -157,6 +179,17 @@ class Settings(BaseSettings):
     ontology_import_max_bytes: int = Field(default=20 * 1024 * 1024, ge=1)
     ontology_import_max_nodes: int = Field(default=5000, ge=1, le=MAX_ONTOLOGY_IMPORT_NODES)
     ontology_import_parse_timeout_seconds: float = Field(default=60.0, gt=0)
+    # Export (`GET /export`): the concept limit (`413` above), the hourly budget per caller, the
+    # child-process time limit, and the base of every exported IRI.
+    export_max_concepts: int = Field(default=20_000, ge=1)
+    export_per_hour: int = Field(default=20, ge=0)
+    export_timeout_seconds: float = Field(default=60.0, gt=0)
+    export_base_iri: str = Field(
+        default="urn:ontaix:",
+        min_length=1,
+        max_length=200,
+        pattern=r"^[A-Za-z][A-Za-z0-9+.-]*:\S*$",
+    )
     retention_purge_interval_seconds: float = Field(default=15 * 60, gt=0)
     # The Azure AI Speech resource the microphone streams to: its full resource id, region and
     # endpoint (custom subdomain). Unset id or endpoint answers `POST /speech/token` with 503 and
@@ -166,11 +199,18 @@ class Settings(BaseSettings):
     )
     speech_region: SpeechRegion = "francecentral"
     speech_endpoint: str | None = Field(default=None, pattern=r"^https://[^\s/?#]+/?$")
-    # Client id of the dedicated managed identity that mints speech tokens; it holds only
-    # Cognitive Services Speech User on the Speech resource. Unset answers 503 in every
-    # environment: no other identity ever mints a token for the browser.
+    # Client id of the dedicated managed identity whose Entra token the API exchanges at the
+    # Speech resource's STS endpoint; it holds roles on the Speech resource only. Unset, the
+    # developer's `az login` is used instead, only in `dev` and only without
+    # AZURE_FEDERATED_TOKEN_FILE; otherwise the answer is 503. The browser only ever receives
+    # the Speech STS token.
     speech_client_id: str | None = Field(
         default=None, pattern=r"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$"
+    )
+    # Set by Kubernetes workload identity in a pod; its presence rules out the `az login`
+    # fallback for speech tokens.
+    azure_federated_token_file: str | None = Field(
+        default=None, validation_alias="AZURE_FEDERATED_TOKEN_FILE"
     )
     speech_language: SpeechLanguage = "en-GB"
     speech_tokens_per_hour: int = Field(default=60, ge=0)
@@ -203,16 +243,25 @@ class Settings(BaseSettings):
     branch_approve_batch: int = Field(default=200, ge=1, le=5000)
     branch_approve_max_rounds: int = Field(default=50, ge=1, le=10_000)
 
+    # Usage learning: the deployment switch (false stops all capture and retrieval; the eval
+    # harness sets it false), the token budget of lessons and negatives per model call, and how
+    # long after a reject a re-teach outside the same session still links as a correction.
+    learning_enabled: bool = True
+    learning_context_tokens: int = Field(default=1500, ge=0, le=100_000)
+    learning_correction_window_minutes: float = Field(default=10, ge=0, le=24 * 60)
+
     @field_validator(
         "foundry_endpoint",
         "speech_resource_id",
         "speech_endpoint",
         "speech_client_id",
+        "azure_federated_token_file",
         "foundry_deep_deployment",
         "foundry_deep_reasoning_effort",
         "llm_deep_reasoning_allowance_tokens",
         "ocr_endpoint",
         "ocr_model",
+        "platform_database_url",
         mode="before",
     )
     @classmethod
@@ -250,10 +299,27 @@ class Settings(BaseSettings):
         """Extractions one process runs at once: configured, else half the CPUs, at least 2."""
         return self.extraction_concurrency or max(2, (os.cpu_count() or 1) // 2)
 
+    @model_validator(mode="after")
+    def _dev_identity_only_in_dev_or_test(self) -> Settings:
+        if self.dev_identity_header and self.environment not in DEV_IDENTITY_ENVIRONMENTS:
+            raise ValueError(
+                "ONTAIX_DEV_IDENTITY_HEADER may be true only when ONTAIX_ENVIRONMENT is dev or test"
+            )
+        return self
+
+    @property
+    def accepts_dev_identity_header(self) -> bool:
+        """True only in dev or test with ONTAIX_DEV_IDENTITY_HEADER on."""
+        return self.dev_identity_header and self.environment in DEV_IDENTITY_ENVIRONMENTS
+
     @property
     def is_dev(self) -> bool:
-        """True only when the environment is exactly `dev`: the dev identity header is accepted."""
-        return self.environment == DEV_ENVIRONMENT
+        """True only when the environment is exactly `dev`: the Azure CLI may hand out tokens."""
+        return self.environment == "dev"
+
+    def platform_database_url_or_default(self) -> str | None:
+        """The platform role's connection: its own setting, else `database_url`."""
+        return self.platform_database_url or self.database_url
 
 
 @lru_cache

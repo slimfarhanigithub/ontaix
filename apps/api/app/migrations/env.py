@@ -1,7 +1,9 @@
 """Alembic environment: runs migrations over a synchronous psycopg 3 connection.
 
 The URL comes from `ONTAIX_DATABASE_URL`, or from the `sqlalchemy.url` option when a caller
-(the test fixture, the seed command) sets it programmatically.
+(the test fixture, the seed command) sets it programmatically. Each revision runs and commits in
+a transaction of its own: PostgreSQL lets a later revision use an enum value an earlier one
+added only once that addition is committed.
 """
 
 from __future__ import annotations
@@ -27,7 +29,12 @@ def _database_url() -> str:
 
 
 def run_migrations_offline() -> None:
-    context.configure(url=_database_url(), target_metadata=target_metadata, literal_binds=True)
+    context.configure(
+        url=_database_url(),
+        target_metadata=target_metadata,
+        literal_binds=True,
+        transaction_per_migration=True,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
@@ -35,7 +42,11 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     engine = create_engine(_database_url(), poolclass=None)
     with engine.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            transaction_per_migration=True,
+        )
         with context.begin_transaction():
             context.run_migrations()
     engine.dispose()

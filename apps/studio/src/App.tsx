@@ -14,6 +14,7 @@ import { Header } from './shell/Header';
 import { Hint } from './shell/Hint';
 import { Legend } from './shell/Legend';
 import { Panel } from './shell/Panel';
+import { SelectionBar } from './shell/SelectionBar';
 import { TeachBar } from './shell/TeachBar';
 import { Tools } from './shell/Tools';
 import { Toasts } from './shell/Toasts';
@@ -32,6 +33,7 @@ export function App() {
       <Toasts />
       <AdminOverlay />
       <Tools />
+      <SelectionBar />
       <TeachBar />
       <Panel />
       <Drawer />

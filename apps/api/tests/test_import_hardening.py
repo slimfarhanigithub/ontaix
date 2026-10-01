@@ -245,7 +245,7 @@ async def test_the_app_lifespan_purges_expired_imports_on_a_schedule(
 ) -> None:
     monkeypatch.setattr(get_settings(), "import_purge_interval_seconds", 0.2)
     import_id = uuid.UUID((await upload(client, tenant.builder, "a.txt", TXT)).json()["importId"])
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         await s.execute(
             update(DocumentImport)
             .where(DocumentImport.id == import_id)
@@ -257,7 +257,7 @@ async def test_the_app_lifespan_purges_expired_imports_on_a_schedule(
         await s.commit()
 
     async def gone() -> bool:
-        async with db_client.get_session_factory()() as s:
+        async with db_client.get_platform_session_factory()() as s:
             return await s.get(DocumentImport, import_id) is None
 
     async with app.router.lifespan_context(app):
