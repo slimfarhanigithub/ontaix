@@ -4,13 +4,17 @@
  * `Approve branch`, on a ready concept or specialisation with open proposals below it, is an
  * owner addition absent from the reference, in the row's existing button style. `Reject all`, and
  * `Reject` on a proposal with open proposals below it, ask first in the reference's own
- * `confirmDialog`, as neither can be undone.
+ * `confirmDialog`, as neither can be undone. `Edit`, on a pending concept, specialisation or
+ * relation, is an owner addition that edits the draft in place at its revision.
  */
+import { useState } from 'react';
+
 import { confirmDialog } from '../admin/actions';
 import type { Proposal } from '../api/types';
 import { NEUTRAL } from '../canvas/constants';
 import { BusyButton } from './busy';
 import { refStyle, useStore } from './dom';
+import { editableFields, PendingEdit } from './PendingEdit';
 import { sanitizeHtml } from './sanitize';
 
 const KIND: Record<Proposal['type'], string> = {
@@ -54,6 +58,8 @@ export function branchSize(p: Proposal): number {
 export function Panel() {
   const st = useStore();
   const proposals = st.ui.proposals;
+  /** The proposal whose draft is being edited in place. */
+  const [editing, setEditing] = useState<string | null>(null);
   return (
     <aside className="panel" aria-label="Proposed changes">
       <h2>
@@ -86,6 +92,19 @@ export function Panel() {
           proposals.map((p) => {
             const ok = p.ready;
             const color = p.color || NEUTRAL;
+            if (editing === p.id && editableFields(p))
+              return (
+                <div key={p.id} className={'prop' + (ok ? '' : ' blocked')}>
+                  <div className="top">
+                    <i
+                      className={p.type === 'spec' ? 'spec' : p.type === 'relation' || p.type === 'bind' ? 'rel' : ''}
+                      style={{ color, background: p.type === 'spec' ? 'transparent' : color }}
+                    ></i>
+                    {p.heading || KIND[p.type]}
+                  </div>
+                  <PendingEdit p={p} onDone={() => setEditing(null)} />
+                </div>
+              );
             return (
               <div key={p.id} className={'prop' + (ok ? '' : ' blocked')}>
                 <div className="top">
@@ -108,6 +127,11 @@ export function Panel() {
                     <BusyButton className="branch" onClick={() => st.approveBranch(p)}>
                       {`Approve branch (${branchSize(p)})`}
                     </BusyButton>
+                  ) : null}
+                  {editableFields(p) ? (
+                    <button className="edit" data-ox-new="" title="Edit the draft before it is approved" onClick={() => setEditing(p.id)}>
+                      Edit
+                    </button>
                   ) : null}
                   {ok ? null : <span className="wait">{`after ${p.waitFor || 'a previous item'}`}</span>}
                 </div>

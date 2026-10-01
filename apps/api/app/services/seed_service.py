@@ -22,11 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import Caller
 from app.models.api.drafts import ConceptDraft, RelationDraft, SpecDraft
 from app.models.storage.app_user import AppUser
-from app.models.storage.base import RoleName, ScopeKind
+from app.models.storage.base import CompanyMode, RoleName, ScopeKind
 from app.repositories import (
     app_user_repository,
     group_member_repository,
     group_role_repository,
+    organization_settings_repository,
     tenant_repository,
     tenant_settings_repository,
     user_group_repository,
@@ -66,6 +67,7 @@ async def _create_tenant(session: AsyncSession) -> dict[str, AppUser] | None:
         return None
     tenant = await tenant_repository.create(session, directory.TENANT_SLUG, directory.TENANT_NAME)
     await tenant_settings_repository.create(session, tenant.id)
+    await organization_settings_repository.create(session, tenant.id, CompanyMode.MULTIPLE)
     await view_state_repository.create(session, tenant.id)
     return await _seed_directory(session, tenant.id)
 

@@ -5,19 +5,28 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Query, Request, status
 
 from app.auth import CallerDependency, SessionDependency
+from app.models.api.deletion_impact import DeletionImpact, DeletionTarget
 from app.models.api.drafts import ProposalBatch, ProposalDraft
 from app.models.api.page import PageOf
 from app.models.api.proposal import (
     BranchResult,
+    BulkDeleteRequest,
     BulkResult,
     DecisionResult,
     Proposal,
+    ProposalEdit,
     RejectRequest,
 )
-from app.services import branch_approval_service, decision_service, proposal_read_service
+from app.services import (
+    branch_approval_service,
+    decision_service,
+    deletion_impact_service,
+    proposal_edit_service,
+    proposal_read_service,
+)
 from app.utilities.listing import parse_list_query
 
 logger = logging.getLogger(__name__)
@@ -61,6 +70,22 @@ async def reject_all(session: SessionDependency, caller: CallerDependency) -> Bu
     return await decision_service.reject_all(session, caller)
 
 
+@router.post(
+    "/proposals/bulk-delete", response_model=Proposal, status_code=status.HTTP_202_ACCEPTED
+)
+async def propose_bulk_delete(
+    body: BulkDeleteRequest, session: SessionDependency, caller: CallerDependency
+) -> Proposal:
+    return await proposal_read_service.propose_bulk_delete(session, caller, body)
+
+
+@router.post("/deletion-impact", response_model=DeletionImpact)
+async def get_deletion_impact(
+    body: DeletionTarget, session: SessionDependency, caller: CallerDependency
+) -> DeletionImpact:
+    return await deletion_impact_service.impact_for(session, caller, body)
+
+
 @router.get("/proposals/{proposal_id}", response_model=Proposal)
 async def get_proposal(
     proposal_id: uuid.UUID, session: SessionDependency, caller: CallerDependency
@@ -68,11 +93,26 @@ async def get_proposal(
     return await proposal_read_service.get_proposal(session, caller, proposal_id)
 
 
+@router.patch("/proposals/{proposal_id}", response_model=Proposal)
+async def edit_pending_proposal(
+    proposal_id: uuid.UUID,
+    body: ProposalEdit,
+    session: SessionDependency,
+    caller: CallerDependency,
+) -> Proposal:
+    return await proposal_edit_service.edit_proposal(session, caller, proposal_id, body)
+
+
 @router.post("/proposals/{proposal_id}/approve", response_model=DecisionResult)
 async def approve_proposal(
-    proposal_id: uuid.UUID, session: SessionDependency, caller: CallerDependency
+    proposal_id: uuid.UUID,
+    session: SessionDependency,
+    caller: CallerDependency,
+    expectedRevision: int | None = Query(default=None, ge=0),  # noqa: N803 - contract name
 ) -> DecisionResult:
-    return await decision_service.approve(session, caller, proposal_id)
+    return await decision_service.approve(
+        session, caller, proposal_id, expected_revision=expectedRevision
+    )
 
 
 @router.post("/proposals/{proposal_id}/approve-branch", response_model=BranchResult)

@@ -1,10 +1,9 @@
 /**
  * The domain products card and its toggle. Markup from reference/ontaix-studio-reference.html
- * lines 222-223; behaviour from `renderDomains` (lines 621-632) and `toggleDomainsCard` /
- * `placeDomainsToggle` (lines 552-554).
+ * lines 222-223; behaviour from `renderDomains` (lines 621-632) and `toggleDomainsCard`
+ * (lines 552-554). The toggle and the card stack in the left-hand dock (`.dock-l`), which keeps
+ * the toggle 8 px above the card as `placeDomainsToggle` does, without measuring.
  */
-import { useEffect, useRef } from 'react';
-
 import { liveOf } from '../canvas/state';
 import { refStyle, useStore } from './dom';
 
@@ -12,49 +11,20 @@ export function DomainsCard() {
   const st = useStore();
   const s = st.s;
   const off = st.ui.domainsOff;
-  const nav = useRef<HTMLElement>(null);
-  const toggle = useRef<HTMLButtonElement>(null);
-
-  const place = () => {
-    const d = nav.current,
-      b = toggle.current;
-    if (!d || !b) return;
-    const h = d.classList.contains('off') ? 0 : d.offsetHeight + 8;
-    b.style.bottom = `calc(${30 + h}px + env(safe-area-inset-bottom,0px))`;
-  };
-
-  useEffect(() => {
-    const t = setTimeout(place, 60);
-    addEventListener('resize', place);
-    return () => {
-      clearTimeout(t);
-      removeEventListener('resize', place);
-    };
-  }, []);
-
-  // Every re-render of the card re-measures it, as `renderDomains` does.
-  useEffect(() => {
-    const t = setTimeout(place, 0);
-    return () => clearTimeout(t);
-  });
-
   const allOn = s.DOMAINS.every((d) => !d.hidden);
   return (
-    <>
+    <div className="dock-l">
       <button
         className="legend-toggle"
         id="domainsToggle"
-        ref={(el) => {
-          toggle.current = el;
-          refStyle('left:24px;right:auto')(el);
-        }}
         aria-expanded={!off}
+        aria-controls="domains"
         title="Show or hide the domain list (D)"
         onClick={() => st.toggleDomainsCard()}
       >
         {off ? 'Show domains' : 'Hide domains'}
       </button>
-      <nav className={`domains${off ? ' off' : ''}`} id="domains" aria-label="Domain products" ref={nav}>
+      <nav className={`domains${off ? ' off' : ''}`} id="domains" aria-label="Domain products">
         <div className="title">
           <span>Domain products</span>
           <button id="domAll" onClick={() => st.toggleAllDomains()}>
@@ -68,7 +38,7 @@ export function DomainsCard() {
           );
         })}
       </nav>
-    </>
+    </div>
   );
 }
 

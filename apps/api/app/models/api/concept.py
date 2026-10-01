@@ -41,3 +41,7 @@ class Concept(ApiModel):
 
 class ConceptRename(ApiModel):
     label: str = Field(min_length=1, max_length=120)
+
+
+class ConceptMove(ApiModel):
+    domain_key: str = Field(pattern=r"^[a-z][a-z0-9_]{1,39}$")

@@ -106,8 +106,10 @@ def touches_any(view: OntologyView, proposal: Proposal, concepts: list[Concept])
     ids = {c.id for c in concepts}
     if proposal.concept_id in ids:
         return True
-    payload_concept = proposal.payload.get("conceptId") if proposal.payload else None
-    if payload_concept and uuid.UUID(str(payload_concept)) in ids:
+    payload = proposal.payload or {}
+    targets = [payload["conceptId"]] if payload.get("conceptId") else []
+    targets.extend(payload.get("conceptIds") or [])
+    if any(uuid.UUID(str(target)) in ids for target in targets):
         return True
     if any(_touches_attribute(view, proposal, cid) for cid in ids):
         return True

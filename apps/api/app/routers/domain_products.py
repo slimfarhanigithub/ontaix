@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, status
 
 from app.auth import CallerDependency, SessionDependency
 from app.models.api.domain_product import DomainProduct, DomainProductPatch
+from app.models.api.proposal import Proposal
 from app.services import domain_product_service
 
 logger = logging.getLogger(__name__)
@@ -40,3 +41,14 @@ async def update_domain_product(
     caller: CallerDependency,
 ) -> DomainProduct:
     return await domain_product_service.set_hidden(session, caller, domain_product_id, body.hidden)
+
+
+@router.delete(
+    "/domain-products/{domain_product_id}",
+    response_model=Proposal,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def propose_delete_domain(
+    domain_product_id: uuid.UUID, session: SessionDependency, caller: CallerDependency
+) -> Proposal:
+    return await domain_product_service.propose_delete(session, caller, domain_product_id)

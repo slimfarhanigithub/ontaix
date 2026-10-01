@@ -463,10 +463,10 @@ async def test_the_database_holds_an_attribute_read_or_taught_never_both(
         {"name": "e", "type": "text", "col": None, "fill": None, "value": ""},
     )
     for values in refused:
-        async with db_client.get_session_factory()() as s:
+        async with db_client.get_platform_session_factory()() as s:
             with pytest.raises(IntegrityError):
                 await s.execute(text(insert), {**base, **values})
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         await s.execute(
             text(insert),
             {**base, "name": "f", "type": "number", "col": None, "fill": None, "value": "40"},
@@ -526,7 +526,7 @@ async def test_a_proposal_whose_attribute_is_gone_is_not_ready(
         "value": "monthly",
     }
     [created] = await submit(client, tenant, [draft])
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         await s.execute(
             text("DELETE FROM ontaix.attribute WHERE id = :id"), {"id": created["attributeId"]}
         )

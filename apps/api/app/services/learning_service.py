@@ -23,7 +23,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
-from app.clients.db_client import get_session_factory
+from app.clients.db_client import platform_session, tenant_session
 from app.clients.llm_client import LlmRequest, estimate_tokens
 from app.config import get_settings
 from app.models.api.learning import (
@@ -109,7 +109,7 @@ async def context_for(
     if company is None or not enabled(company):
         return None
     try:
-        async with get_session_factory()() as session:
+        async with tenant_session(view.tenant_id) as session:
             lessons = await learning_example_repository.list_active(
                 session, view.tenant_id, company_id
             )
@@ -278,8 +278,8 @@ async def reset(
 
 async def purge_expired() -> tuple[int, int]:
     """Delete expired teach parse records and rows retired more than 30 days ago, in their own
-    transaction; returns the two counts."""
-    async with get_session_factory()() as session:
+    transaction across every organization; returns the two counts."""
+    async with platform_session() as session:
         parses = await teach_parse_repository.delete_expired(session)
         cutoff = get_clock().now() - RETIRED_RETENTION
         retired = await learning_example_repository.delete_retired_before(session, cutoff)

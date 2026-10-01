@@ -520,7 +520,7 @@ def _context(
         "candidates": candidates,
         "domainTemplates": [
             {"key": key, "name": t.name}
-            for key, t in sorted(view.templates.items(), key=lambda kv: kv[1].position)
+            for key, t in sorted(view.domains.items(), key=lambda kv: kv[1].position)
         ],
     }
     if reading.mode == "document":
@@ -582,6 +582,8 @@ def _interpret(
     checked: list[_Checked] = []
     earlier = _grounded_labels(answer, sources, text)
     for intent, source, index in zip(answer.intents, sources, owners, strict=True):
+        if intent.domain_key is not None and intent.domain_key not in drafter.view.domains:
+            raise _InvalidAnswer("an intent names a domain key the tenant does not hold")
         if reading.speech and intent.segment is None:
             raise _InvalidAnswer("a transcript intent names no segment")
         if index >= len(segments):

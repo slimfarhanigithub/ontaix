@@ -63,6 +63,11 @@ class ChangeKind(enum.StrEnum):
     REMOVE_COMPANY = "remove_company"
     RESOLVE_CONFLICT = "resolve_conflict"
     REMOVE_CROSS_COMPANY_LINKS = "remove_cross_company_links"
+    CREATE_DOMAIN = "create_domain"
+    EDIT_DOMAIN = "edit_domain"
+    DELETE_DOMAIN = "delete_domain"
+    MOVE_CONCEPT_DOMAIN = "move_concept_domain"
+    DELETE_BULK = "delete_bulk"
 
 
 class AttributeType(enum.StrEnum):
@@ -98,6 +103,38 @@ class ActorKind(enum.StrEnum):
     USER = "user"
     AGENT = "agent"
     SYSTEM = "system"
+    PLATFORM = "platform"
+
+
+class CompanyMode(enum.StrEnum):
+    SINGLE = "single"
+    MULTIPLE = "multiple"
+
+
+class PlatformRoleName(enum.StrEnum):
+    SUPER_ADMIN = "super_admin"
+
+
+class PasswordSetReason(enum.StrEnum):
+    BOOTSTRAP = "bootstrap"
+    INITIAL = "initial"
+    RESET = "reset"
+    CHANGE = "change"
+
+
+class SessionEndReason(enum.StrEnum):
+    SIGN_OUT = "sign_out"
+    PASSWORD_CHANGED = "password_changed"
+    PASSWORD_RESET = "password_reset"
+    ACCOUNT_DISABLED = "account_disabled"
+    ORGANIZATION_DISABLED = "organization_disabled"
+    SESSION_LIMIT = "session_limit"
+    SUPPORT_CHANGED = "support_changed"
+
+
+class ThrottleKeyKind(enum.StrEnum):
+    EMAIL = "email"
+    IP = "ip"
 
 
 class SourceAuth(enum.StrEnum):

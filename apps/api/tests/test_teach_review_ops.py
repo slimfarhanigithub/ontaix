@@ -41,7 +41,7 @@ SECRET = "dummy-REVIEWDUMMY-value"
 
 
 async def month_tokens(tenant_id) -> int:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         v = (
             await s.execute(
                 text(
@@ -54,7 +54,7 @@ async def month_tokens(tenant_id) -> int:
 
 
 async def calls(tenant_id) -> list[dict]:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         r = await s.execute(
             text("SELECT * FROM ontaix.llm_call WHERE tenant_id=:t ORDER BY occurred_at"),
             {"t": tenant_id},
@@ -150,7 +150,7 @@ async def test_settle_to_reserved_month(client, tenant: TenantFixture):
         await post(client, tenant, company_id, "these services sell stuff")
     finally:
         clock.freeze(None)
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         rows = (
             await s.execute(
                 text(
@@ -176,7 +176,7 @@ async def test_turn_allocation_concurrent_and_isolation(client, tenant: TenantFi
             for i in range(12)
         ]
     )
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         idx = (
             (
                 await s.execute(
@@ -203,7 +203,7 @@ async def test_turn_allocation_concurrent_and_isolation(client, tenant: TenantFi
     assert json.loads(fake.requests[-1].user)["sessionTurns"] == []
     r = await client.post("/teach/parse", json=body, headers=tenant.builder.headers)
     assert len(json.loads(fake.requests[-1].user)["sessionTurns"]) == 8
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         await s.execute(
             text(
                 "UPDATE ontaix.teach_session_turn"
@@ -327,7 +327,7 @@ async def test_real_adapter_never_leaks_key(client, tenant: TenantFixture, monke
             logging.getLogger(name).removeHandler(cap)
         get_settings.cache_clear()
     logs = cap.buf.getvalue()
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         tables = (
             (await s.execute(text("SELECT tablename FROM pg_tables WHERE schemaname='ontaix'")))
             .scalars()
@@ -364,7 +364,7 @@ async def test_a_transcripts_segment_turns_are_stored_together(client, tenant: T
         assert r.status_code == 200, r.text
 
     await asyncio.gather(speak("Alpha"), speak("Beta"))
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         sentences = (
             (
                 await s.execute(

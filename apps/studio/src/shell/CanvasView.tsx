@@ -14,6 +14,8 @@ export function CanvasView() {
     const renderer = createRenderer(canvas, store.s, {
       openDrawer: (n) => store.openDrawer(n),
       closeDrawer: () => store.closeDrawer(),
+      toggleSelected: (n) => store.toggleSelected(n),
+      clearSelection: () => store.clearSelection(),
       openLinkBox: (a, b, sx, sy, link) => store.openLinkBox(a, b, sx, sy, link ?? null),
       closeNewBox: () => store.closeNewBox(),
       closeLinkBox: () => store.closeLinkBox(),

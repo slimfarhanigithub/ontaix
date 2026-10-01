@@ -34,6 +34,7 @@ class TenantSettings(Base):
     auto_attrs: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     notify_owners: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     multi_company: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    company_creation: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     cross_company: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     animations: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     coverage_default: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
