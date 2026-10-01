@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { ADDED_DESCRIPTIONS, SKIP_ANIMATION_ROW } from '../../apps/studio/src/admin/rowText';
 import { mulberry32 } from '../../apps/studio/src/runtime/mulberry32';
 import { expect, pixelmatch, PNG, type Page, type TestInfo } from '../../apps/studio/test-support/playwright';
 
@@ -53,17 +54,30 @@ const STORY_ONLY_CSS = '#sceneNum,#sceneName,#next,#finalise{display:none!import
  * reference's.
  */
 const OWNER_ADDITIONS_CSS = '#drExpand,#drDelete,#imAs,.prop .act .branch,[data-ox-new]{display:none!important}';
+/**
+ * The reference's Skip animation tool button, which the Studio moves to the admin portal's
+ * Appearance page: hidden with `display: none`, so the reference's tool row closes up as the
+ * Studio's does. Both pages still skip animations with the S key.
+ */
+const MOVED_SKIP_CSS = '#skip{display:none!important}';
+/**
+ * The Studio's admin row layout (apps/studio/src/styles/admin-rows.css), added to both pages: the
+ * Studio already loads it, and in the reference it lays out the same `.set` markup the same way.
+ */
+const ADMIN_ROWS_CSS = readFileSync(resolve(here, '../../apps/studio/src/styles/admin-rows.css'), 'utf-8');
 /** The caption, hidden while the reference still shows the story's opening caption. */
 const OPENING_CAPTION_CSS = '.caption{visibility:hidden!important}';
 /** The teach placeholder, made transparent in one-company scenes with live teaching on, where the reference shows story text. */
 const PLACEHOLDER_CSS = '#say::placeholder{color:transparent!important}';
 /**
- * The teach bar and the caption, hidden in both pages just before the screenshot: the Studio's
- * compact teach bar holds the caption and has no counterpart in the reference, so its own
- * baselines (teachbar.spec.ts) cover it. `visibility` keeps the Studio bar's height, which places
- * the tools row exactly where the reference has it.
+ * The Studio's own bottom-of-canvas elements, hidden in both pages just before the screenshot: the
+ * compact teach bar, which holds the caption, and the right-hand dock's legend, legend toggle and
+ * shortcuts, which the Studio draws with its own icons, labels and placement. None has a
+ * counterpart in the reference, so the Studio-only baselines (teachbar.spec.ts) cover them.
+ * `visibility` keeps the Studio bar's height, which places the tools row exactly where the
+ * reference has it.
  */
-const TEACH_BAR_CSS = '.caption,form.bar{visibility:hidden!important}';
+const TEACH_BAR_CSS = '.caption,form.bar,.legend,#legendToggle,.hint{visibility:hidden!important}';
 /**
  * The account controls of the admin head (`#adminAccount`: the signed-in email, Change password,
  * Sign out, End support), hidden in both pages just before the screenshot the same way. The
@@ -80,6 +94,8 @@ const ACCEPTANCE_STYLES = `(() => {
     for (const [id, css] of ${JSON.stringify([
       ['ontaix-story-only', STORY_ONLY_CSS],
       ['ontaix-owner-additions', OWNER_ADDITIONS_CSS],
+      ['ontaix-moved-skip', MOVED_SKIP_CSS],
+      ['ontaix-admin-rows', ADMIN_ROWS_CSS],
       ['ontaix-opening-caption', OPENING_CAPTION_CSS],
     ])}) {
       if (document.getElementById(id)) continue;
@@ -94,24 +110,18 @@ const ACCEPTANCE_STYLES = `(() => {
 })();`;
 
 /**
- * Removes the two story fragments of `.hint`: the first `kbd` (`Space`) with the text node after
- * it, the last `kbd` (`R`) with the text node after it, and sets the text node after `<kbd>F</kbd>`
- * to exactly ` full screen`. The Studio renders the hint in that form already, so nothing changes there.
+ * Runs `addStudioSettingRows` on the reference's admin page each time the reference renders it,
+ * before its layout, so the reference scrolls and lays out the page exactly as the Studio, which
+ * holds the texts from the start.
  */
-function stripHintStory(): void {
-  const hint = document.querySelector('.hint');
-  if (!hint) return;
-  const kbds = hint.querySelectorAll('kbd');
-  const drop = (k: Element | undefined, text: string) => {
-    if (!k || k.textContent !== text) return;
-    if (k.nextSibling && k.nextSibling.nodeType === Node.TEXT_NODE) k.nextSibling.remove();
-    k.remove();
-  };
-  drop(kbds[0], 'Space');
-  drop(kbds[kbds.length - 1], 'R');
-  const f = Array.from(hint.querySelectorAll('kbd')).find((k) => k.textContent === 'F');
-  if (f && f.nextSibling && f.nextSibling.nodeType === Node.TEXT_NODE) f.nextSibling.textContent = ' full screen';
-}
+const ADD_SETTING_ROWS = `document.addEventListener('DOMContentLoaded', () => {
+  const main = document.getElementById('adminMain');
+  if (!main) return;
+  const add = ${addStudioSettingRows.toString()};
+  const texts = ${JSON.stringify({ descriptions: ADDED_DESCRIPTIONS, skip: SKIP_ANIMATION_ROW })};
+  add(texts);
+  new MutationObserver(() => add(texts)).observe(main, { childList: true, subtree: true });
+}, { once: true });`;
 
 /** Shows the caption once the first teach, import, company or decision has replaced the reference's opening caption. */
 export async function revealCaption(page: Page): Promise<void> {
@@ -119,8 +129,40 @@ export async function revealCaption(page: Page): Promise<void> {
 }
 
 /**
- * Brings both pages to the compared form just before the screenshot: the hint without its story fragments
- * (asserted equal as text), the teach bar, caption and account controls hidden in both pages, and the teach
+ * Gives the reference's admin page what the Studio adds to it: the description of each setting
+ * row the reference leaves empty, and on Appearance the Motion heading and the Skip animation row,
+ * its toggle showing the reference's own skip state. Changes nothing once the page has them. Runs
+ * in the reference page.
+ */
+function addStudioSettingRows({ descriptions, skip }: { descriptions: Record<string, string>; skip: typeof SKIP_ANIMATION_ROW }): void {
+  for (const row of Array.from(document.querySelectorAll('#adminMain .set'))) {
+    const p = row.querySelector('p');
+    const text = descriptions[row.querySelector('b')?.textContent ?? ''];
+    if (p && !p.textContent && text) p.textContent = text;
+  }
+  const theme = document.querySelector('#adminMain [data-act="theme"]');
+  if (!theme?.parentElement || document.querySelector('#adminMain [data-act="skipAnimation"]')) return;
+  const on = document.getElementById('skip')?.getAttribute('aria-pressed') === 'true';
+  const h3 = document.createElement('h3');
+  h3.textContent = skip.heading;
+  const set = document.createElement('div');
+  set.className = 'set';
+  const b = document.createElement('b');
+  b.textContent = skip.title;
+  const tg = document.createElement('button');
+  tg.className = on ? 'tg' : 'tg off';
+  tg.setAttribute('data-act', 'skipAnimation');
+  tg.setAttribute('aria-pressed', on ? 'true' : 'false');
+  tg.append(document.createElement('i'), on ? 'Disable' : 'Enable');
+  const p = document.createElement('p');
+  p.textContent = skip.desc;
+  set.append(b, tg, p);
+  theme.parentElement.after(h3, set);
+}
+
+/**
+ * Brings both pages to the compared form just before the screenshot: the teach bar, caption, legend,
+ * shortcuts and account controls hidden in both pages, and the teach
  * placeholder made transparent in both pages when the reference has one company and live
  * teaching on, where it still shows story text.
  */
@@ -141,10 +183,6 @@ export async function beforeScreenshot(ref: Page, studio: Page): Promise<void> {
         ['ontaix-account', ACCOUNT_CSS],
       ],
     );
-  await ref.evaluate(stripHintStory);
-  await studio.evaluate(stripHintStory);
-  const hints = await Promise.all([ref, studio].map((p) => p.evaluate(() => document.querySelector('.hint')?.textContent ?? '')));
-  expect(hints[1], '.hint text of the Studio equals the reference without its story fragments').toBe(hints[0]);
   const storyPlaceholder = await ref.evaluate(() => {
     const say = document.getElementById('say') as HTMLInputElement | null;
     const companies = document.querySelectorAll('#companySel option').length;
@@ -209,6 +247,7 @@ export async function alignClock(page: Page): Promise<void> {
 
 export async function openReference(page: Page): Promise<void> {
   await prepare(page, { seedMathRandom: true });
+  await page.addInitScript(ADD_SETTING_ROWS);
   await page.goto(REFERENCE_URL);
   await page.waitForSelector('canvas#brain');
   await alignClock(page);
@@ -413,7 +452,7 @@ export const FIRST_MODEL = [
 export async function teachFirstModel(page: Page): Promise<void> {
   await fontsReady(page);
   await advance(page, 500);
-  await page.click('#skip');
+  await page.keyboard.press('s');
   for (const sentence of FIRST_MODEL) {
     await teachText(page, sentence);
     await advance(page, 400);

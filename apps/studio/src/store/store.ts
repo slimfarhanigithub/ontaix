@@ -57,6 +57,7 @@ import type { Attr, Company, Domain, Link, Node } from '../canvas/types';
 import { random } from '../runtime/rng';
 import { now } from '../runtime/clock';
 import type { CustomDialog, DialogEntry, DialogSpec } from '../shell/Dialog';
+import { readSkipAnimation, writeSkipAnimation } from './skipAnimation';
 
 /** An attribute as the canvas holds it: a taught one keeps its value and has no column or fill. */
 function toAttr(a: Attribute, state: Attr['state'] = a.state): Attr {
@@ -144,6 +145,8 @@ export interface UiState {
   /** The cell whose Expand suggestions are loading. */
   expanding: Node | null;
   listening: boolean;
+  /** The user's Skip animation choice (Admin portal, Appearance, or S); the tenant's Animations off skips too. */
+  skipAnimation: boolean;
   /** Open dialogs, bottom first. */
   dialogs: DialogEntry[];
   /** Page the admin portal shows; kept while the portal is closed. */
@@ -209,11 +212,13 @@ class StudioStore {
       processing: 0,
       expanding: null,
       listening: false,
+      skipAnimation: readSkipAnimation(),
       dialogs: [],
       adminPage: 'sources',
       adminRev: 0,
       connectors: [],
     };
+    this.syncSkip();
   }
 
   // ------------------------------------------------------------ subscription
@@ -1136,9 +1141,18 @@ class StudioStore {
     this.bump();
   }
 
+  /** Flips the user's Skip animation choice and remembers it in this browser. */
   toggleSkip(): void {
-    this.s.SKIP = !this.s.SKIP;
+    this.ui.skipAnimation = !this.ui.skipAnimation;
+    writeSkipAnimation(this.ui.skipAnimation);
+    this.syncSkip();
     this.bump();
+  }
+
+  /** Animations are skipped when the user chose to or the tenant turned them off. */
+  syncSkip(): void {
+    const st = this.ui.settings;
+    this.s.SKIP = this.ui.skipAnimation || (!!st && !st.animations);
   }
 
   toggleCoverage(): void {
@@ -1204,7 +1218,7 @@ class StudioStore {
     const st = this.ui.settings;
     if (!st) return;
     this.ui.legendOff = !st.legend ? true : this.ui.legendOff;
-    if (this.s.SKIP === st.animations) this.toggleSkip();
+    this.syncSkip();
     this.bump();
   }
 

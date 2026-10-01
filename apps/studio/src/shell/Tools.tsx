@@ -1,9 +1,10 @@
 /**
  * The tool row above the teach bar. Markup from reference/ontaix-studio-reference.html lines
- * 194-201 without the Finalise all button; behaviours from lines 548-565 (arrange, coverage,
- * skip), 616 (add a company) and 904-906 (import, drag and drop). The file is read the way
- * its detection says; `#imAs` reads it another way. Add company is hidden while the
- * `companyCreation` setting is off, as well as while `multiCompany` is off.
+ * 194-201 without the Finalise all and Skip animation buttons (Skip animation is a setting on the
+ * admin portal's Appearance page); behaviours from lines 548-565 (arrange, coverage), 616 (add a
+ * company) and 904-906 (import, drag and drop). The file is read the way its detection says;
+ * `#imAs` reads it another way. Add company is hidden while the `companyCreation` setting is off,
+ * as well as while `multiCompany` is off.
  */
 import { useEffect, useRef } from 'react';
 
@@ -100,12 +101,6 @@ export function Tools() {
           <path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" stroke="none" opacity=".6" />
         </svg>
         Coverage
-      </button>
-      <button type="button" id="skip" title="Skip animations (S)" aria-pressed={st.s.SKIP} onClick={() => st.toggleSkip()}>
-        <svg viewBox="0 0 16 16">
-          <path d="M3 3l6 5-6 5zM11 3v10" />
-        </svg>
-        {st.s.SKIP ? 'Animations off' : 'Skip animation'}
       </button>
     </div>
   );

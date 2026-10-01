@@ -40,8 +40,10 @@ export function App() {
       <NewBox />
       <LinkBox />
       <DomainsCard />
-      <Legend />
-      <Hint />
+      <div className="dock-r">
+        <Legend />
+        <Hint />
+      </div>
       <Dialog />
     </>
   );

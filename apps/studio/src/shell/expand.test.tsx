@@ -93,7 +93,10 @@ describe('Expand', () => {
     expect(container.querySelector('.dlg .dh span')?.textContent).toBe('4 suggestions · 1 skipped');
     const rows = [...container.querySelectorAll('.dlg .chk')];
     expect(rows.map((r) => r.querySelector('b')?.textContent)).toEqual(['After-sales', 'Warranty', PAYLOAD, 'Warranty supports Sales']);
-    expect(rows[1].querySelector('small')?.textContent).toBe('level 2 · covers After-sales · 80% · Repairs under warranty');
+    expect(rows[1].querySelector('.ex-verb')?.textContent).toBe('covers After-sales');
+    expect(rows[1].querySelector('.ex-conf')?.textContent).toBe('80%');
+    expect(rows[1].querySelector('small')?.textContent).toBe('level 2 · Repairs under warranty');
+    expect(rows[3].querySelector('.ex-verb')?.textContent).toBe('relation');
     expect(container.querySelector('.dlg img')).toBeNull();
     const boxes = () => [...container.querySelectorAll<HTMLInputElement>('.dlg .chk input')].map((b) => b.checked);
     const primary = () => container.querySelector('.dlg .df .btn.primary') as HTMLButtonElement;
@@ -110,6 +113,28 @@ describe('Expand', () => {
     await flush();
     expect(propose).toHaveBeenCalledWith('x-1', [0, 1, 3]);
     expect(container.querySelector('.dlg')).toBeNull();
+  });
+
+  it('lays the suggestions out as a full-width list with aligned label, link and confidence columns', async () => {
+    const { sales } = model();
+    vi.spyOn(api, 'expandConcept').mockResolvedValue(result);
+    const { container } = render(<Dialog />);
+    act(() => openExpandDialog(sales));
+    fireEvent.click(container.querySelector('.dlg .df .btn.primary') as HTMLButtonElement);
+    await flush();
+
+    const list = container.querySelector('.dlg .db > .ex-list') as HTMLElement;
+    expect(list).not.toBeNull();
+    expect(list.closest('.form')).toBeNull();
+    expect(list.getAttribute('role')).toBe('group');
+    expect([...list.querySelectorAll('.ex-head span')].map((s) => s.textContent)).toEqual(['', 'Suggestion', 'Link', 'Confidence']);
+    const rows = [...list.querySelectorAll('label.chk.ex-row')];
+    expect(rows).toHaveLength(4);
+    for (const row of rows)
+      expect([...row.children].map((c) => c.className || c.tagName.toLowerCase())).toEqual(['input', 'ex-label', 'ex-verb', 'ex-conf', 'ex-note']);
+    expect(rows.map((r) => r.querySelector('.ex-conf')?.textContent)).toEqual(['91%', '80%', '50%', '70%']);
+    expect(rows[0].querySelector('.ex-note')?.textContent).toBe('level 1 · Service after the sale');
+    expect(rows[3].querySelector('.ex-note')?.textContent).toBe('Warranty supports sales');
   });
 
   it('closes with a toast when nothing is suggested', async () => {
