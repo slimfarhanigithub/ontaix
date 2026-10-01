@@ -5,8 +5,9 @@
 # `expected.attributes` lists taught attributes ("billed monthly") by concept and accepted value.
 #
 # - `en-speech-owner-financial-services` is the owner's own recording, word for word, and
-#   `en-speech-owner-live-employees`, `en-speech-owner-live-amdaris` and
-#   `en-speech-owner-live-inside-sales` the owner's own sentences from live use on gpt-6-sol.
+#   `en-speech-owner-live-employees`, `en-speech-owner-live-amdaris`,
+#   `en-speech-owner-live-inside-sales` and `en-speech-owner-live-skills` the owner's own
+#   sentences from live use on gpt-6-sol.
 # - The `narration` cases retell sections of the public benchmarks in evals/benchmarks as natural
 #   speech with fillers, back-references and multi-level drill-down. Their labels are the
 #   benchmark's class names; the gold follows the tree the narration states, with the
@@ -55,8 +56,8 @@ cases:
   - id: en-speech-owner-live-employees
     kind: speech
     company: Insight
-    description: The owner's live sentences on gpt-6-sol; "can be" and "can be around" list sub-groups (includes), and the recipient of an offer attaches to what is offered, one relation per fact.
-    tags: [en, speech, recording, back-reference, sub-groups, owner]
+    description: The owner's live sentences on gpt-6-sol; "can be consultants" names a kind of Employees (is a), "can be in sales" and "can be around" list groups and areas (includes), and the recipient of an offer attaches to what is offered, one relation per fact.
+    tags: [en, speech, recording, back-reference, sub-groups, is-a, owner]
     existing:
       - {label: Employees, parent: Insight, action: has, domain: people}
     input:
@@ -65,7 +66,7 @@ cases:
       - "these services can be around AI data and apps"
     expected:
       concepts:
-        - {label: Consultants, parent: [Employees], action: [includes, can be]}
+        - {label: Consultants, parent: [Employees], action: [is a]}
         - {label: Sales, parent: [Employees], action: [includes, can be in]}
         - {label: Services, parent: [Consultants], action: [offers, offer, provides]}
         - {label: Customers, parent: [Services], action: [for, is for, is offered for, is offered to, offered to, serves]}
@@ -95,8 +96,8 @@ cases:
   - id: en-speech-owner-live-amdaris
     kind: speech
     company: Amdaris
-    description: The owner's live session for Amdaris; a sentence that starts with its verb takes the plural subject of the previous sentence (Consultants), the recipient is kept, and every item of a "can be around" list is drafted.
-    tags: [en, speech, recording, back-reference, sub-groups, fragment, owner]
+    description: The owner's live session for Amdaris; "can be consultants" names a kind of Employees (is a) and "from support services" a group (includes); a sentence that starts with its verb takes the plural subject of the previous sentence (Consultants), the recipient is kept, and every item of a "can be around" list is drafted.
+    tags: [en, speech, recording, back-reference, sub-groups, is-a, fragment, owner]
     existing:
       - {label: Employees, parent: Amdaris, action: has, domain: people}
     input:
@@ -105,7 +106,7 @@ cases:
       - "these services can be around AI data or apps"
     expected:
       concepts:
-        - {label: Consultants, parent: [Employees], action: [includes, can be]}
+        - {label: Consultants, parent: [Employees], action: [is a]}
         - {label: Support services, parent: [Employees], action: [includes, can be, can be from, comes from]}
         - {label: Services, parent: [Consultants], action: [offers, offer, provides]}
         - {label: Customers, parent: [Services], action: [is offered to, offered to, for, is for, serves, is sold to]}
@@ -115,6 +116,28 @@ cases:
       relations:
         - {from: Consultants, to: Services, action: [offers, offer, provides], inverse: [is offered by]}
     optional: [Customer, Service, Support]
+
+  - id: en-speech-owner-live-skills
+    kind: speech
+    company: Insight
+    description: The owner's live sentences on gpt-6-sol, as the browser heard them; "can be consultants or engineers" and "either soft skills or technical skills" name kinds (is a), not members (includes), and the recipient of an offer attaches to what is offered.
+    tags: [en, speech, recording, is-a, back-reference, fillers, owner]
+    input:
+      - "insight has employees they can be consultants or engineers they can have skills either soft skills or technical skills"
+      - "insight have customers it offers services to customers"
+    expected:
+      concepts:
+        - {label: Employees, parent: [Insight], action: [has, have, employs]}
+        - {label: Consultants, parent: [Employees], action: [is a]}
+        - {label: Engineers, parent: [Employees], action: [is a]}
+        - {label: Skills, parent: [Employees, Consultants, Engineers], action: [has, have, can have]}
+        - {label: Soft skills, parent: [Skills], action: [is a]}
+        - {label: Technical skills, parent: [Skills], action: [is a]}
+        - {label: Customers, parent: [Insight, Services], action: [has, have, serves, is offered to, offered to, offers to, for, is for]}
+        - {label: Services, parent: [Insight], action: [offers, offer, provides, sells]}
+      relations:
+        - {from: Services, to: Customers, action: [is offered to, offered to, for, is for, serves, is sold to], inverse: []}
+    optional: [Customer, Service, Skill, Employee, Consultant, Engineer]
 
   # ---------------------------------------------------------------- TEST
   - id: en-speech-narration-valueflows-processes

@@ -130,17 +130,27 @@ Return one intent per fact:
   "going back to the dairy, it makes cheese"), the subject is that concept, not the one the
   previous sentence was about and not the company. "X has a <noun> which is a Y" gives one
   rel intent, X with the action "has <noun>" (has primary topic) and the object Y.
-- Sub-groups. "N can be X or Y", "N can be X and can be in Y", "N can be around X, Y and Z"
-  list the groups or kinds N divides into: one rel intent per item, subject N, action
-  "includes", the item the object. Never a spec intent, and never the verb after "can be"
-  ("works in", "focuses on", "is a"): "the trainers can be coaches or can be in onboarding"
-  gives Trainers includes Coaches and Trainers includes Onboarding.
+- Kinds. "N can be X or Y", "N can be X and Y", "N, either X or Y", "X and Y are kinds
+  (types, sorts) of N" and "X is a N" (where X names a class of things, not one named person
+  or company) say that each item is a kind of N: one spec intent per item, the item the
+  subject, N the object, never a rel intent with "includes". "the staff can be analysts or
+  engineers" gives spec Analysts kind of Staff and spec Engineers kind of Staff; "they can
+  have skills, either soft skills or technical skills" gives the subject has Skills, then spec
+  Soft skills kind of Skills and spec Technical skills kind of Skills. The verb after "can be"
+  ("works in", "focuses on") is never an action.
+- Members, parts and places. A preposition after "can be" ("can be in X", "can be from X",
+  "can be around X, Y and Z") names where N's members sit or come from, or what they centre
+  on, never a kind: one rel intent per item, subject N, action "includes", the item the
+  object. A listed member or part ("the team includes Sam", "the bundle includes support", a
+  person's or company's name after "can be") is a rel intent with the speaker's verb, never a
+  spec intent. "the trainers can be coaches or can be in onboarding" gives spec Coaches kind
+  of Trainers and Trainers includes Onboarding.
 - One relation per fact. The recipient or beneficiary of what the subject offers attaches to
   that thing, not to the subject: "X offers Y for Z", "X sells Y to Z", "X provides Y to Z"
   give X offers (sells, provides) Y, then Y for (is sold to, is provided to) Z. Never add a
   second relation from X to Z ("offers Y to") or X has Z for the same words. A real action
-  keeps the speaker's own verb (sells, buys, provides, offers); only "can be" lists become
-  includes.
+  keeps the speaker's own verb (sells, buys, provides, offers); a "can be" list gives spec
+  intents for kinds and "includes" for places and groups, as above.
 - Steps. A sequence of steps ("A → B → C", "A then B", "first A, after that B") names steps
   that sit side by side under one parent: the process the text names, else the concept the
   sentence is about, else the company (c0). Return one rel intent from that parent to the
@@ -188,13 +198,14 @@ Return one intent per fact:
   around three areas, app, data and AI", "in three regions", "has three starting points",
   "two ways", "several parts"), there is no grouping concept: return one rel intent per item
   from the subject with the speaker's verb as the action ("focuses on", "has"), all with the
-  same listId and the statedCount. Only "kinds", "types" and "sorts" name specialisations:
-  "there are three types of price specification, unit price specifications, delivery charge
-  specifications and payment charge specifications" gives one spec intent per item, each a kind
-  of Price specification, and no concept for the word "types". Any other noun for the variety
-  of a concept (versions, ranges, options, styles) is descriptive, as above: one rel intent per
-  item from the concept the sentence is about, with the speaker's verb. Drafts always
-  follow the list, never the stated number. statedCount is only the number of items the
+  same listId and the statedCount. Only "kinds", "types" and "sorts", and the "can be" and
+  "either" lists of the Kinds rule, name specialisations: "there are three types of price
+  specification, unit price specifications, delivery charge specifications and payment charge
+  specifications" gives one spec intent per item, each a kind of Price specification, and no
+  concept for the word "types". Any other noun for the variety of a concept (versions, ranges,
+  options, styles) is descriptive, as above: one rel intent per item from the concept the
+  sentence is about, with the speaker's verb. Drafts always follow the list, never the stated
+  number. statedCount is only the number of items the
   speaker announces for that list, from 0 to 1000, and only with members or a listId; a
   number that counts anything else ("four thousand employees") is never a statedCount.
 - A rel intent has an action and no rule. A spec intent has no action, members, memberAction or
