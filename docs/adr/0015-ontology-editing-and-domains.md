@@ -1,6 +1,6 @@
 # ADR 0015: Ontology Editing And Domains
 
-Status: Accepted. The features are owner decisions, final (decision rows 135 to 140); the derived choices named in those rows are approved under owner delegation (2026-09-30).
+Status: Accepted. The features are owner decisions, final (decision rows 142 to 147); the derived choices named in those rows are approved under owner delegation (2026-09-30).
 
 ## Context
 

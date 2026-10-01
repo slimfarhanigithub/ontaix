@@ -1,5 +1,5 @@
 /**
- * The Export dialog of the admin portal's Companies page (decision rows 141 and 142, ADR 0016),
+ * The Export dialog of the admin portal's Companies page (ADR 0016),
  * an owner addition absent from the reference, in the reference's own `dialog()` markup: a format
  * and a scope, then the file the API writes from the approved model, saved by the browser.
  */

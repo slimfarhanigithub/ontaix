@@ -1,6 +1,6 @@
 # ADR 0016: Export
 
-Status: Accepted. Export, with OWL as a first-class format, is an owner decision, final (decision rows 141 and 142); the mapping details are approved under owner delegation (2026-09-30).
+Status: Accepted. Export, with OWL as a first-class format, is an owner decision, final (decision rows 148 and 149); the mapping details are approved under owner delegation (2026-09-30).
 
 ## Context
 
@@ -70,7 +70,7 @@ One `skos:ConceptScheme` per company (`skos:prefLabel` the company name); each c
 
 ### Round Trip
 
-An OWL export (any of the four formats) of one company imports back through `POST /ontology-imports` into an empty company of a tenant with the same domains and produces the same approved model after approval: the same labels, the same birth parents and actions (from `ox:bornFrom` and `ox:birthAction`), the same specialisations (`rdfs:subClassOf` to a named class), the same relations (`someValuesFrom` restrictions), the same domains (`ox:domain`) and the same taught attributes (annotation assertions of properties typed by `ox:attributeType`). Ontology import reads the `ox:` annotations when present (ADR 0012, amended by decision row 142). Out of the round trip, by design: source attributes, bindings and sources (they need a connected source), cross-company relations and equivalences (import is per company), and conflicts. A contract test exports the fixture companies in each OWL format, re-imports each into an empty company, approves everything, and compares the models; it fails on any difference.
+An OWL export (any of the four formats) of one company imports back through `POST /ontology-imports` into an empty company of a tenant with the same domains and produces the same approved model after approval: the same labels, the same birth parents and actions (from `ox:bornFrom` and `ox:birthAction`), the same specialisations (`rdfs:subClassOf` to a named class), the same relations (`someValuesFrom` restrictions), the same domains (`ox:domain`) and the same taught attributes (annotation assertions of properties typed by `ox:attributeType`). Ontology import reads the `ox:` annotations when present (ADR 0012, amended by decision row 149). Out of the round trip, by design: source attributes, bindings and sources (they need a connected source), cross-company relations and equivalences (import is per company), and conflicts. A contract test exports the fixture companies in each OWL format, re-imports each into an empty company, approves everything, and compares the models; it fails on any difference.
 
 ### Word Document
 
