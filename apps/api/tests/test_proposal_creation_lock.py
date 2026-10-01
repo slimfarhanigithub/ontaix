@@ -36,7 +36,7 @@ async def test_child_created_while_its_parent_is_rejected_is_cascaded(
             client, tenant, tenant.builder, "RaceParent", tenant.root_id, domain_key="sales"
         )
     ).json()
-    factory = db_client.get_session_factory()
+    factory = db_client.get_platform_session_factory()
     creating, rejecting = factory(), factory()
     try:
         view = await load_view(creating, tenant.tenant_id)
@@ -77,7 +77,7 @@ async def test_child_proposed_after_its_parent_was_rejected_answers_409(
             client, tenant, tenant.builder, "LateParent", tenant.root_id, domain_key="sales"
         )
     ).json()
-    factory = db_client.get_session_factory()
+    factory = db_client.get_platform_session_factory()
     creating, rejecting = factory(), factory()
     try:
         view = await load_view(creating, tenant.tenant_id)
@@ -117,7 +117,7 @@ async def test_decision_lock_wait_is_bounded_and_answers_503_busy(
         await propose_concept(client, tenant, tenant.builder, "Waiting", tenant.root_id)
     ).json()
     monkeypatch.setattr(proposal_repository, "DECISION_LOCK_TIMEOUT_MS", SHORT_LOCK_TIMEOUT_MS)
-    holder = db_client.get_session_factory()()
+    holder = db_client.get_platform_session_factory()()
     try:
         await decision_service.approve(
             holder, _caller(tenant, tenant.governor, RoleName.GOVERNOR), uuid.UUID(held["id"])

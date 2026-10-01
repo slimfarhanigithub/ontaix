@@ -35,7 +35,7 @@ async def test_concurrent_approve_and_reject_exactly_one_wins(
     ).json()
     proposal_id = uuid.UUID(created["id"])
     concept_id = uuid.UUID(created["conceptId"])
-    factory = db_client.get_session_factory()
+    factory = db_client.get_platform_session_factory()
     first, second = factory(), factory()
     try:
         await decision_service.approve(first, _governor(tenant, tenant.governor), proposal_id)

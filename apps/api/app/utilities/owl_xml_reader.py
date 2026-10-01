@@ -6,7 +6,10 @@ named classes gives parents, and a `SubClassOf` whose super class is an
 statement; `ObjectPropertyDomain` and `ObjectPropertyRange` give a property's ends;
 `ClassAssertion` types an individual; `AnnotationAssertion` of `rdfs:label`, `skos:prefLabel`
 or `skos:altLabel` gives labels. Equivalences, imports, data properties and every other axiom
-are reported, never reasoned over.
+are reported, never reasoned over. A file that uses the Ontaix vocabulary (`ox:`), as an Ontaix
+export does, has its `ox:` annotations read onto its classes; its own vocabulary terms and its
+company and domain individuals are not items, and its object properties' domains and ranges are
+left to the restrictions, which carry every relation.
 """
 
 from __future__ import annotations
@@ -29,6 +32,8 @@ from app.models.ontology_import.parsed_ontology import (
     SkipReason,
 )
 from app.utilities.document_errors import DocumentUnreadableError
+from app.utilities.ontaix_annotations import Annotations, AnnotationValue, apply_ontaix
+from app.utilities.ontaix_vocabulary import is_ontaix_term
 from app.utilities.rdf_ontology_reader import local_name
 
 OWL = "{http://www.w3.org/2002/07/owl#}"
@@ -86,12 +91,19 @@ class _Reader:
         self.items: dict[str, OntologyItem] = {}
         self.classes: set[str] = set()
         self.individuals: set[str] = set()
+        self.annotations: Annotations = {}
 
     def read(self) -> ParsedOntology:
         axioms = list(self.root)
         for element in axioms:
             if _name(element) == "Prefix":
                 self.prefixes[element.get("name", "")] = element.get("IRI", "")
+        self.parsed.ontaix = any(
+            _name(element) == "AnnotationAssertion"
+            and len(element)
+            and is_ontaix_term(self._iri(element[0]))
+            for element in axioms
+        )
         for element in axioms:
             if _name(element) == "Import":
                 self._skip((element.text or "").strip(), "remote_import_not_fetched")
@@ -108,13 +120,15 @@ class _Reader:
             self._item(iri, individual=True)
         for element in axioms:
             self._axiom(element)
+        if self.parsed.ontaix:
+            apply_ontaix(self.items, self.annotations)
         self.parsed.items = sorted(self.items.values(), key=lambda i: i.source)
         return self.parsed
 
     def _declaration(self, element: Any) -> None:
         for child in element:
             kind, iri = _name(child), self._iri(child)
-            if not iri:
+            if not iri or (self.parsed.ontaix and is_ontaix_term(iri)):
                 continue
             if kind == "Class" and iri not in TOP_CLASSES:
                 self.classes.add(iri)
@@ -140,6 +154,8 @@ class _Reader:
                 if _name(child) in ("Class", "NamedIndividual"):
                     self._skip(self._iri(child), "equivalence_not_imported")
                     return
+        if kind in ("ObjectPropertyDomain", "ObjectPropertyRange") and self.parsed.ontaix:
+            return
         if kind in ("ObjectPropertyDomain", "ObjectPropertyRange") and len(children) == 2:
             prop = self._iri(children[0])
             end = self._iri(children[1]) if _name(children[1]) == "Class" else ""
@@ -149,6 +165,10 @@ class _Reader:
                 return
         if kind == "ClassAssertion" and len(children) == 2:
             cls, individual = self._iri(children[0]), self._iri(children[1])
+            if self.parsed.ontaix and is_ontaix_term(cls):
+                self.individuals.discard(individual)
+                self.items.pop(individual, None)
+                return
             if _name(children[0]) == "Class" and cls in self.classes and individual:
                 item = self._item(individual, individual=True)
                 item.parents.append((cls, "instance"))
@@ -177,6 +197,8 @@ class _Reader:
     def _annotation(self, children: list[Any]) -> None:
         if len(children) < 3 or _name(children[0]) != "AnnotationProperty":
             return
+        if self.parsed.ontaix:
+            self._any_annotation(children)
         prop = LABEL_ANNOTATIONS.get(self._iri(children[0]))
         subject = self._iri(children[1]) if _name(children[1]) in ("IRI", "AbbreviatedIRI") else ""
         value = children[2]
@@ -189,6 +211,23 @@ class _Reader:
             self.parsed.properties[subject].add_label(prop, literal)
         elif subject in self.individuals:
             self._item(subject, individual=True).add_label(prop, literal)
+
+    def _any_annotation(self, children: list[Any]) -> None:
+        """Record the annotation for the `ox:` reading: an IRI or a literal value."""
+        prop = self._iri(children[0])
+        subject = self._iri(children[1]) if _name(children[1]) in ("IRI", "AbbreviatedIRI") else ""
+        value = children[2]
+        if not subject:
+            return
+        if _name(value) == "Literal":
+            language = (value.get(XML_LANG) or "").lower() or None
+            datatype = None if language else value.get("datatypeIRI")
+            entry = AnnotationValue(value.text or "", False, datatype, language)
+        elif _name(value) in ("IRI", "AbbreviatedIRI"):
+            entry = AnnotationValue(self._iri(value), True)
+        else:
+            return
+        self.annotations.setdefault(subject, {}).setdefault(prop, []).append(entry)
 
     def _item(self, iri: str, individual: bool) -> OntologyItem:
         found = self.items.get(iri)

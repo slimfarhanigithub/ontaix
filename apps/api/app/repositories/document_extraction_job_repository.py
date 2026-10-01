@@ -71,6 +71,18 @@ async def exists_for_import(
     return found is not None
 
 
+async def import_ids_for_company(
+    session: AsyncSession, tenant_id: uuid.UUID, company_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """The document imports the company's extraction jobs were started from."""
+    result = await session.scalars(
+        select(Job.import_id).where(
+            Job.tenant_id == tenant_id, Job.company_id == company_id, Job.import_id.is_not(None)
+        )
+    )
+    return list(dict.fromkeys(result))
+
+
 async def has_active(session: AsyncSession, tenant_id: uuid.UUID, user_id: uuid.UUID) -> bool:
     found = await session.scalar(
         select(Job.id).where(

@@ -3,10 +3,14 @@
  * contracts/events.yaml defines for the WebSocket. The in-browser mock publishes onto this bus
  * directly; a WebSocket client publishes onto the same bus when a real API is configured.
  */
-import type { Actor, Artefacts, Concept, Proposal, Relation } from './types';
+import type { Actor, Artefacts, Concept, Proposal, Relation, TenantDomain } from './types';
 
 export type EventType =
   | 'proposal.created'
+  /** A pending proposal's draft was edited in place; the payload is the proposal at its new revision. */
+  | 'proposal.changed'
+  /** A tenant domain was created, renamed, recoloured or given another owner. */
+  | 'domain.changed'
   | 'proposal.half_approved'
   | 'proposal.approved'
   | 'proposal.rejected'
@@ -51,6 +55,11 @@ export interface ProposalEventPayload {
   artefacts: Artefacts;
   cascaded: Proposal[];
   caption?: string;
+}
+
+export interface DomainChangedPayload {
+  domain: TenantDomain;
+  created: boolean;
 }
 
 export interface ConceptConflictPayload {

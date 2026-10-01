@@ -354,7 +354,7 @@ async def test_settlement_counts_reasoning_tokens_as_output(
         get_settings.cache_clear()
     assert r.status_code == 200, r.text
     assert "TOKENDUMMY" not in r.text
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         rows = (
             await s.execute(
                 text(

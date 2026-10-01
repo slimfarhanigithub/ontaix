@@ -1,11 +1,16 @@
 /**
  * The Portal group of the admin portal: Overview, Tenant settings and Appearance
- * (`pageOverview`, `pageSettings`, `pageAppearance`, reference lines 971-984).
+ * (`pageOverview`, `pageSettings`, `pageAppearance`, reference lines 971-984). Every setting row
+ * has a description (./rowText adds the ones the reference leaves empty), Appearance holds the
+ * user's Skip animation choice under Motion, and owner additions for ontology editing, marked
+ * `data-ox-new`: the `Company creation` setting row and a colour input per custom domain in
+ * Appearance.
  */
 import { DOMAIN_TEMPLATES, DEFAULT_COLORS } from '../../canvas/constants';
 import { BusyButton } from '../../shell/busy';
 import { useStore } from '../../shell/dom';
 import { changeColour, changeRefresh, renderAdmin, resetColours } from '../actions';
+import { ADDED_DESCRIPTIONS, SKIP_ANIMATION_ROW } from '../rowText';
 import { SetRow, Tg } from '../Toggle';
 
 export function Overview() {
@@ -69,7 +74,12 @@ export function TenantSettings() {
       <SetRow k="importDocs" title="Document import" desc="Read documents into proposals." />
       <SetRow k="everyoneTeaches" title="Members can teach" desc="When off, only Builders and Owners can propose; Members can only read." />
       <h3>Governance</h3>
-      <SetRow k="approvalRequired" title="Approval required for every change" desc="" locked />
+      <SetRow
+        k="approvalRequired"
+        title="Approval required for every change"
+        desc={ADDED_DESCRIPTIONS['Approval required for every change']}
+        locked
+      />
       <SetRow
         k="twoApprovers"
         title="Two approvers for changes"
@@ -82,7 +92,8 @@ export function TenantSettings() {
       />
       <SetRow k="notifyOwners" title="Notify domain owners" desc="Owners are notified when a proposal lands in their domain product." />
       <h3>Portfolio</h3>
-      <SetRow k="multiCompany" title="Several companies in one view" desc="" />
+      <SetRow k="multiCompany" title="Several companies in one view" desc={ADDED_DESCRIPTIONS['Several companies in one view']} />
+      <SetRow ox k="companyCreation" title="Company creation" desc="Allow adding companies." />
       <SetRow
         k="crossCompany"
         title="Companies may interact"
@@ -109,7 +120,7 @@ export function TenantSettings() {
       <h3>Display</h3>
       <SetRow k="animations" title="Animations" desc="Cell division and line tracing. Off makes changes instant." />
       <SetRow k="coverageDefault" title="Coverage view by default" desc="Open the canvas with data coverage colouring on." />
-      <SetRow k="legend" title="Show the relationship legend" desc="" />
+      <SetRow k="legend" title="Show the relationship legend" desc={ADDED_DESCRIPTIONS['Show the relationship legend']} />
     </>
   );
 }
@@ -130,11 +141,22 @@ export function Appearance() {
           <label className="col" key={t.key}>
             <input type="color" value={colour(t.key)} data-col={t.key} onChange={(e) => changeColour(t.key, e.target.value)} />
             <span>
-              <b>{t.name}</b>
+              <b>{st.ui.domains.find((d) => d.key === t.key)?.name ?? t.name}</b>
               <small>{colour(t.key)}</small>
             </span>
           </label>
         ))}
+        {st.ui.domains
+          .filter((d) => !d.template)
+          .map((d) => (
+            <label className="col" key={d.key} data-ox-new="">
+              <input type="color" value={ap?.colors[d.key] || d.color} data-col={d.key} onChange={(e) => changeColour(d.key, e.target.value)} />
+              <span>
+                <b>{d.name}</b>
+                <small>{ap?.colors[d.key] || d.color}</small>
+              </span>
+            </label>
+          ))}
       </div>
       <h3>Theme</h3>
       <div className="set">
@@ -148,6 +170,19 @@ export function Appearance() {
           }}
         />
         <p>Light interface and canvas. Domain colours stay the same; the company and domain regions adapt.</p>
+      </div>
+      <h3>{SKIP_ANIMATION_ROW.heading}</h3>
+      <div className="set">
+        <b>{SKIP_ANIMATION_ROW.title}</b>
+        <Tg
+          on={st.ui.skipAnimation}
+          data-act="skipAnimation"
+          onClick={() => {
+            st.toggleSkip();
+            renderAdmin();
+          }}
+        />
+        <p>{SKIP_ANIMATION_ROW.desc}</p>
       </div>
       <h3>Interface</h3>
       <div className="colors">

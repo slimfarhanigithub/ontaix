@@ -279,7 +279,7 @@ async def test_get_returns_the_stored_tree_to_its_actor_only(
 
     assert mine.status_code == 200 and mine.json() == result
     assert theirs.status_code == 404
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         await s.execute(
             update(OntologyImport)
             .where(OntologyImport.id == uuid.UUID(result["ontologyImportId"]))
@@ -425,7 +425,7 @@ async def test_sources_hide_nothing_and_cycles_are_broken() -> None:
 
 
 async def _stored(tenant: TenantFixture) -> int:
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         return int(
             await s.scalar(
                 text("SELECT count(*) FROM ontaix.ontology_import WHERE tenant_id = :t"),

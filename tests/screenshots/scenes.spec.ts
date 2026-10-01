@@ -87,7 +87,7 @@ const scenes: SceneScript[] = [
     play: (pair) =>
       both(pair, async (page) => {
         await settle(page, 500);
-        await page.click('#skip');
+        await page.keyboard.press('s');
         await addCompanyWithStarter(page, AURORA, AURORA_SUB);
         await advance(page, 5000);
       }),

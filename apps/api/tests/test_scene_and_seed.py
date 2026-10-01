@@ -19,10 +19,10 @@ SEED_HEADERS = {"X-Ontaix-User": directory.APPROVER_EMAIL}
 @pytest_asyncio.fixture(scope="module", loop_scope="session")
 async def demo_seeded(migrated_database: str) -> bool:
     """Seed the demo tenant once per module and prove a second run changes nothing."""
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         created = await seed_demo_tenant(s)
         await s.commit()
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
         assert await seed_demo_tenant(s) is False
     return created
 

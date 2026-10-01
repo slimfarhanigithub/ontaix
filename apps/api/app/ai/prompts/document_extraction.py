@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.ai.prompts.teach_extraction import DOMAIN_KEYS
 from app.utilities.teach_parser import VERBS_LEX
 
 OUTLINE_MAX_OUTPUT_TOKENS = 16_384
@@ -65,8 +64,9 @@ to you. A human reviews every node; you only return nodes.
 {_DATA}
 Return the new outline nodes this part adds, parents before children, as pass "outline". Each
 node has a key (k1, k2, ...), its parent, its label, the action from the parent, its role
-(domain_area, process, subprocess, step, entity or group - advisory only), a domainKey or null
-to inherit, its confidence, the sentenceIndex its label comes from and the span quoting it.
+(domain_area, process, subprocess, step, entity or group - advisory only), a domainKey (one of
+the keys in domainTemplates and no other) or null to inherit, its confidence, the
+sentenceIndex its label comes from and the span quoting it.
 Do not repeat a node that is already in the outline or a candidate: attach to it instead.
 
 {_GROUNDING}"""
@@ -84,7 +84,8 @@ Return pass "section" with intents and unresolved sentences:
 - kind "spec": the subject is a kind of the object, with an optional rule; no action.
 - subject and object are each a handle, a key-less path, or {{"newLabel": "<Label>"}} for a new
   concept grounded in the cited sentence.
-- domainKey for a new concept or null; confidence; explanation, one short plain-text reason;
+- domainKey for a new concept (one of the keys in domainTemplates and no other) or null;
+  confidence; explanation, one short plain-text reason;
   sentenceIndex and span as for labels.
 - Do not restate what the outline already holds.
 - unresolved lists sentences you cannot place, with reason not_understood, ambiguous_reference
@@ -129,7 +130,9 @@ _INTENT_REF: dict[str, Any] = {
     ]
 }
 
-_DOMAIN = {"anyOf": [{"type": "string", "enum": list(DOMAIN_KEYS)}, {"type": "null"}]}
+# A domain key is one of the request's domainTemplates; the API refuses any other key after
+# parsing, so the format lists no fixed set.
+_DOMAIN = {"anyOf": [{"type": "string"}, {"type": "null"}]}
 
 OUTLINE_SCHEMA: dict[str, Any] = {
     "type": "object",

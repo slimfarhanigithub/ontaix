@@ -14,12 +14,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import Caller
 from app.models.api.actor import Actor
+from app.models.api.deletion_impact import DeletionTarget
 from app.models.api.drafts import ChangeDraft
 from app.models.proposals.provenance import TYPED_TEXT, Provenance
 from app.models.storage.base import ChangeKind, NodeKind, ProposalType, RelationKind
 from app.models.storage.concept import Concept
 from app.models.storage.proposal import Proposal
 from app.models.storage.relation import Relation
+from app.repositories import proposal_repository
+from app.services import deletion_change_service, domain_change_service
+from app.services.deletion_impact_service import describe, names_line, resolve, to_impact
 from app.services.ontology_view_service import OntologyView
 from app.services.proposal_store_service import (
     ensure_can_propose,
@@ -37,6 +41,7 @@ from app.utilities.problems import ProblemError, conflict, not_found, validation
 logger = logging.getLogger(__name__)
 
 STRUCTURAL_KINDS = frozenset({RelationKind.ISA, RelationKind.SAME})
+REMOVE_COMPANY_WHY = "cross-company relations and equivalences to it are removed too"
 UNAVAILABLE_CHANGE_KINDS = frozenset(
     {"unbind", "rename_source", "remove_source", "resolve_conflict"}
 )
@@ -71,6 +76,14 @@ async def propose_change(
             )
         case "remove_relation":
             return await _propose_remove_relation(
+                session, caller, proposer, view, draft, bulk, enforce, provenance
+            )
+        case "create_domain" | "edit_domain" | "move_concept_domain":
+            return await domain_change_service.propose(
+                session, caller, proposer, view, draft, bulk, enforce, provenance
+            )
+        case "delete_domain" | "delete_bulk":
+            return await deletion_change_service.propose(
                 session, caller, proposer, view, draft, bulk, enforce, provenance
             )
         case _:
@@ -303,7 +316,15 @@ async def _propose_remove_company(
     if enforce:
         ensure_can_propose(caller, Scope(company.id, None))
     await ensure_company_still_live(session, view, company)
-    cells = sum(1 for c in view.live_concepts() if c.company_id == company.id)
+    impact = to_impact(
+        resolve(
+            view,
+            caller.grants,
+            DeletionTarget(company_id=company.id, whole_company=True),
+            await proposal_repository.list_open(session, view.tenant_id),
+        )
+    )
+    names = names_line(impact)
     return await store(
         session,
         proposer,
@@ -317,8 +338,10 @@ async def _propose_remove_company(
         parent_label=None,
         deps=[],
         wait_for=None,
-        html=f"Remove <b>{esc(company.name)}</b> from the portfolio with its {cells} cells",
-        why="equivalences to other companies are removed too",
+        html=(
+            f"Remove <b>{esc(company.name)}</b> from the portfolio with its {esc(describe(impact))}"
+        ),
+        why=f"{names} go with it · {REMOVE_COMPANY_WHY}" if names else REMOVE_COMPANY_WHY,
         caption=draft.caption or f"{company.name} left the view.",
         payload={"companyId": str(company.id)},
         touched_company_ids=[company.id],

@@ -1,18 +1,30 @@
 /**
  * The Model group of the admin portal: Entities, Relationships, Bindings, Companies and Domain
  * products (`pageEntities` to `pageDomains`, reference lines 991-1014). Rows come from the scene
- * the canvas shows; every change they offer is a proposal.
+ * the canvas shows; every change they offer is a proposal. The owner additions for editing, each
+ * marked `data-ox-new` and hidden from the screenshot suite: a checkbox column and `Delete
+ * selected` on Entities and Domain products, `Move` per entity, `New domain`, `Edit` and `Delete`
+ * per domain product, and rows for tenant domains no company has cells in yet.
  */
+import { useEffect, useState } from 'react';
+
 import type { Domain, Link, Node } from '../../canvas/types';
 import { store } from '../../store/store';
 import { attempt } from '../adminData';
 import { openAddCompany } from '../../shell/AddCompany';
+import { BusyButton } from '../../shell/busy';
+import { openExport } from '../ExportDialog';
 import { useStore } from '../../shell/dom';
 import { api } from '../../api/client';
 import {
   bindDialog,
+  bulkDeleteDialog,
+  deleteDomainDialog,
   deleteNodeDialog,
   deleteRelationDialog,
+  editDomainDialog,
+  moveDialog,
+  newDomainDialog,
   removeCompanyDialog,
   renameDialog,
   unbindDialog,
@@ -23,6 +35,31 @@ import { Tg } from '../Toggle';
 
 const HOST_STYLE = { height: 'calc(100% - 80px)' };
 const ACT = (w: number) => ({ width: `${w}px`, textAlign: 'center' as const });
+
+/** A set of picked row keys that empties whenever the portal re-renders from scratch. */
+function usePicked<K>(rev: number): [Set<K>, (k: K, on: boolean) => void, () => void] {
+  const [picked, setPicked] = useState<Set<K>>(() => new Set());
+  useEffect(() => setPicked(new Set()), [rev]);
+  const pick = (k: K, on: boolean) =>
+    setPicked((cur) => {
+      const next = new Set(cur);
+      if (on) next.add(k);
+      else next.delete(k);
+      return next;
+    });
+  return [picked, pick, () => setPicked(new Set())];
+}
+
+/** Opens the bulk deletion for picked rows of one company; a pick across companies is explained, not sent. */
+function deletePicked(concepts: Node[], products: Domain[]): Promise<void> {
+  const companies = [...new Set([...concepts.map((n) => n.company), ...products.map((d) => d.company)])];
+  if (!concepts.length && !products.length) return Promise.resolve();
+  if (companies.length > 1 || !companies[0]) {
+    store.toast2('One company at a time', 'a bulk deletion covers the cells of one company');
+    return Promise.resolve();
+  }
+  return bulkDeleteDialog(companies[0], concepts, products);
+}
 
 interface EntityRow extends Record<string, unknown> {
   id: number;
@@ -39,6 +76,7 @@ interface EntityRow extends Record<string, unknown> {
 export function Entities() {
   const st = useStore();
   const { nodes, links } = st.s;
+  const [picked, pick] = usePicked<number>(st.ui.adminRev);
   const rows: EntityRow[] = nodes
     .filter((n) => n.kind === 'concept' && !n.dying)
     .map((n) => ({
@@ -53,6 +91,7 @@ export function Entities() {
       bound: n.bound ? n.bound.source.label : '—',
     }));
   const columns: Column[] = [
+    { label: 'Select', w: '32px', ox: true },
     { label: 'Entity', key: 'name' },
     { label: 'Kind', key: 'kind' },
     { label: 'Company', key: 'company' },
@@ -62,6 +101,7 @@ export function Entities() {
     { label: 'Bound to', key: 'bound' },
     { label: '', w: '300px' },
   ];
+  const chosen = rows.filter((r) => picked.has(r.id)).map((r) => r.n);
   return (
     <>
       <h2>Entities</h2>
@@ -77,8 +117,22 @@ export function Entities() {
           searchKeys={['name', 'company', 'domain', 'kind', 'bound']}
           filterKey="company"
           pageSize={40}
+          extra={
+            <BusyButton className="btn danger" id="entDeleteSelected" disabled={!chosen.length} onClick={() => deletePicked(chosen, [])}>
+              {`Delete selected (${chosen.length})`}
+            </BusyButton>
+          }
           renderRow={(r) => (
             <>
+              <td data-ox-new="">
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${r.name}`}
+                  checked={picked.has(r.id)}
+                  disabled={r.state === 'awaiting approval'}
+                  onChange={(e) => pick(r.id, e.target.checked)}
+                />
+              </td>
               <td>
                 <b>{r.name}</b>
               </td>
@@ -109,6 +163,9 @@ export function Entities() {
                 </button>
                 <button data-fn="rename" style={ACT(66)} onClick={() => renameDialog(r.n)}>
                   Rename
+                </button>
+                <button data-fn="move" data-ox-new="" style={ACT(54)} disabled={r.state === 'awaiting approval'} onClick={() => moveDialog(r.n)}>
+                  Move
                 </button>
                 <button className="danger" data-fn="del" style={ACT(64)} onClick={() => deleteNodeDialog(r.n)}>
                   Delete
@@ -362,18 +419,21 @@ export function Companies() {
               <td>{links.filter((l) => l.kind === 'same' && (l.a.company === c || l.b.company === c)).length}</td>
               <td className="act">
                 {i > 0 ? (
-                  <button className="danger" data-act="removeCompany" data-id={i} onClick={() => removeCompanyDialog(c)}>
+                  <BusyButton className="danger" data-act="removeCompany" data-id={i} onClick={() => removeCompanyDialog(c)}>
                     Remove
-                  </button>
+                  </BusyButton>
                 ) : null}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <div style={{ marginTop: '12px' }}>
+      <div style={{ marginTop: '12px', display: st.ui.settings?.companyCreation === false ? 'none' : undefined }}>
         <button className="btn primary" data-act="addCompany" onClick={() => openAddCompany()}>
           + Add a company
+        </button>
+        <button className="btn" data-ox-new="" data-act="export" style={{ marginLeft: '8px' }} onClick={() => openExport()}>
+          Export
         </button>
       </div>
     </>
@@ -383,6 +443,12 @@ export function Companies() {
 export function DomainProducts() {
   const st = useStore();
   const { DOMAINS, nodes } = st.s;
+  const [picked, pick] = usePicked<string>(st.ui.adminRev);
+  const shown = DOMAINS.filter((d) => nodes.some((n) => n.domain === d));
+  const chosen = shown.filter((d) => d.sid && picked.has(d.sid));
+  const tenant = (d: Domain) => st.ui.domains.find((t) => t.key === d.key);
+  /** Tenant domains no company has cells in: shown as owner-addition rows so they can be edited. */
+  const idle = st.ui.domains.filter((t) => !shown.some((d) => d.key === t.key));
   return (
     <>
       <h2>Domain products</h2>
@@ -390,6 +456,9 @@ export function DomainProducts() {
       <table className="tbl">
         <thead>
           <tr>
+            <th data-ox-new="" style={{ width: '32px' }}>
+              Select
+            </th>
             <th>Company</th>
             <th>Domain product</th>
             <th>Owner</th>
@@ -397,13 +466,24 @@ export function DomainProducts() {
             <th>Concepts</th>
             <th>Bound</th>
             <th>Visible</th>
+            <th data-ox-new=""></th>
           </tr>
         </thead>
         <tbody>
-          {DOMAINS.filter((d) => nodes.some((n) => n.domain === d)).map((d) => {
+          {shown.map((d) => {
             const ms = nodes.filter((n) => n.domain === d && !n.dying);
+            const td = tenant(d);
             return (
               <tr key={`${d.company.key}:${d.key}`}>
+                <td data-ox-new="">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${d.name} of ${d.company.name}`}
+                    checked={!!d.sid && picked.has(d.sid)}
+                    disabled={!d.sid}
+                    onChange={(e) => d.sid && pick(d.sid, e.target.checked)}
+                  />
+                </td>
                 <td>{d.company.name}</td>
                 <td>
                   <b style={{ color: d.color }}>{d.name}</b>
@@ -419,11 +499,46 @@ export function DomainProducts() {
                     onClick={() => toggleDomainVisible(d)}
                   />
                 </td>
+                <td className="act" data-ox-new="">
+                  <button data-fn="editDomain" style={ACT(54)} disabled={!td} onClick={() => td && editDomainDialog(td)}>
+                    Edit
+                  </button>
+                  <BusyButton className="danger" data-fn="delDomain" style={ACT(64)} disabled={!d.sid} onClick={() => deleteDomainDialog(d)}>
+                    Delete
+                  </BusyButton>
+                </td>
               </tr>
             );
           })}
+          {idle.map((t) => (
+            <tr key={`tenant:${t.key}`} data-ox-new="">
+              <td></td>
+              <td>—</td>
+              <td>
+                <b style={{ color: t.color }}>{t.name}</b>
+              </td>
+              <td>{t.owner}</td>
+              <td>—</td>
+              <td>0</td>
+              <td>0</td>
+              <td style={{ width: '100px' }}></td>
+              <td className="act">
+                <button data-fn="editDomain" style={ACT(54)} onClick={() => editDomainDialog(t)}>
+                  Edit
+                </button>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
+      <div data-ox-new="" style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+        <button className="btn primary" data-act="newDomain" onClick={() => newDomainDialog()}>
+          + New domain
+        </button>
+        <BusyButton className="btn danger" id="domDeleteSelected" disabled={!chosen.length} onClick={() => deletePicked([], chosen)}>
+          {`Delete selected (${chosen.length})`}
+        </BusyButton>
+      </div>
     </>
   );
 }

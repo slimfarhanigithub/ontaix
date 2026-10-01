@@ -45,6 +45,7 @@ async def record(
         tenant_id=tenant_id,
         actor_kind=ActorKind(actor.kind),
         actor_user_id=actor.id if actor.kind == "user" else None,
+        actor_account_id=actor.id if actor.kind == "platform" else None,
         kind=kind,
         what=what,
         ok=ok,
@@ -68,7 +69,12 @@ async def record(
 
 
 def to_dto(entry: AuditEntry, names: Mapping[uuid.UUID | None, str | None]) -> AuditEntryDto:
-    actor_id = entry.actor_user_id if entry.actor_kind is ActorKind.USER else entry.actor_agent_id
+    if entry.actor_kind is ActorKind.USER:
+        actor_id = entry.actor_user_id
+    elif entry.actor_kind is ActorKind.PLATFORM:
+        actor_id = entry.actor_account_id
+    else:
+        actor_id = entry.actor_agent_id
     return AuditEntryDto(
         id=entry.id,
         at=entry.at,
