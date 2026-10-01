@@ -45,10 +45,10 @@ async def empty_seeded(migrated_database: str) -> AsyncIterator[bool]:
         upgrade_to_head(url)
         await db_client.dispose_engine()
         db_client.configure_engine(url)
-        async with db_client.get_session_factory()() as s:
+        async with db_client.get_platform_session_factory()() as s:
             created = await seed_empty_tenant(s)
             await s.commit()
-        async with db_client.get_session_factory()() as s:
+        async with db_client.get_platform_session_factory()() as s:
             assert await seed_empty_tenant(s) is False
         yield created
     finally:
@@ -60,7 +60,7 @@ async def empty_seeded(migrated_database: str) -> AsyncIterator[bool]:
 
 async def test_the_empty_seed_holds_the_directory_and_no_company(empty_seeded: bool) -> None:
     assert empty_seeded is True
-    async with db_client.get_session_factory()() as s:
+    async with db_client.get_platform_session_factory()() as s:
 
         async def count(model: type) -> int:
             return await s.scalar(select(func.count()).select_from(model)) or 0

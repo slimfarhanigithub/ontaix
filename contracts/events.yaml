@@ -29,7 +29,7 @@ servers:
     host: localhost:8000
     pathname: /api/v1/ws
     protocol: ws
-    description: Studio live-update channel. Authentication is a one-time ticket minted by `POST /api/v1/ws/ticket` and passed as the `ticket` query parameter; a bearer token is never accepted in the URL. The `since` query parameter resumes from a sequence.
+    description: Studio live-update channel. Authentication is a one-time ticket minted by `POST /api/v1/ws/ticket` and passed as the `ticket` query parameter; a bearer token is never accepted in the URL. The `since` query parameter resumes from a sequence. A ticket is bound to the session that minted it (ADR 0017); the hub re-resolves that session at least every 60 seconds and before each delivery batch, and closes the socket with code 4401 once the session has ended, expired, or lost its account or organization, so a signed-out, reset, disabled or support-ended session stops receiving events.
 
 channels:
   proposalCreated:
@@ -42,6 +42,28 @@ channels:
     messages:
       proposalCreated:
         $ref: '#/components/messages/ProposalCreated'
+  proposalChanged:
+    address: ontaix.{tenantId}.proposal.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    description: A pending proposal's draft was edited in place (ADR 0015); the payload is the proposal at its new `revision`. Clients replace the panel item and treat an approval they prepared for an older revision as stale.
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      proposalChanged:
+        $ref: '#/components/messages/ProposalChanged'
+  domainChanged:
+    address: ontaix.{tenantId}.domain.changed
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: tenant
+    description: A tenant domain was created, renamed, recoloured or had its owner changed through an approved proposal (ADR 0015). Tenant-wide, since a domain is the same in every company; the payload carries the domain definition only, no company data.
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      domainChanged:
+        $ref: '#/components/messages/DomainChanged'
   proposalHalfApproved:
     address: ontaix.{tenantId}.proposal.half_approved
     x-ontaix-visibility: model.read
@@ -360,6 +382,14 @@ operations:
     action: send
     channel:
       $ref: '#/channels/proposalCreated'
+  publishProposalChanged:
+    action: send
+    channel:
+      $ref: '#/channels/proposalChanged'
+  publishDomainChanged:
+    action: send
+    channel:
+      $ref: '#/channels/domainChanged'
   publishProposalHalfApproved:
     action: send
     channel:
@@ -520,6 +550,48 @@ components:
       summary: A proposal was created; its pending artefacts exist.
       payload:
         $ref: '#/components/schemas/ProposalEvent'
+    ProposalChanged:
+      name: ProposalChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: proposal.changed
+      summary: A pending proposal's draft was edited in place.
+      payload:
+        $ref: '#/components/schemas/ProposalEvent'
+    DomainChanged:
+      name: DomainChanged
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: domain.changed
+      summary: A tenant domain was created or edited.
+      payload:
+        type: object
+        required: [domain, created]
+        properties:
+          created:
+            type: boolean
+          domain:
+            type: object
+            description: Same shape as `TenantDomain` in contracts/openapi.yaml.
+            required: [key, name, owner, color, defaultColor, template, position, revision]
+            properties:
+              key:
+                type: string
+                pattern: '^[a-z][a-z0-9_]{1,39}$'
+              name:
+                type: string
+              owner:
+                type: string
+              color:
+                type: string
+              defaultColor:
+                type: string
+              template:
+                type: boolean
+              position:
+                type: integer
+              revision:
+                type: integer
     ProposalHalfApproved:
       name: ProposalHalfApproved
       traits:
@@ -931,6 +1003,7 @@ components:
         - $ref: '#/components/messageTraits/Audience'
       title: settings.changed
       summary: One or more tenant settings changed.
+      description: '`settings` is the full `Settings` of `contracts/openapi.yaml`, including the read-only `companyMode`. A super admin''s company mode change (ADR 0017) emits this event to the organization with actor kind `platform` and `changed` naming `companyMode`, plus `multiCompany` when single mode turned it off.'
       payload:
         type: object
         required: [settings, changed]
@@ -1099,6 +1172,8 @@ components:
           description: '`<aggregate>.<action>`, for example `proposal.approved`.'
           enum:
             - proposal.created
+            - proposal.changed
+            - domain.changed
             - proposal.half_approved
             - proposal.approved
             - proposal.rejected
@@ -1159,7 +1234,8 @@ components:
       properties:
         kind:
           type: string
-          enum: [user, agent, system]
+          enum: [user, agent, system, platform]
+          description: '`platform` - a super admin acting on the organization (ADR 0017); `id` is the platform account.'
         id:
           type: string
           format: uuid
@@ -1266,6 +1342,11 @@ components:
           enum: [concept, spec, relation, source, bind, attr, change]
         changeKind:
           type: [string, 'null']
+          description: As `Proposal.changeKind` in contracts/openapi.yaml, including `create_domain`, `edit_domain`, `delete_domain`, `move_concept_domain` and `delete_bulk` (ADR 0015).
+        revision:
+          type: integer
+          minimum: 0
+          description: Incremented by every in-place edit of a pending draft (ADR 0015).
         state:
           type: string
           enum: [pending, half_approved, approved, rejected]

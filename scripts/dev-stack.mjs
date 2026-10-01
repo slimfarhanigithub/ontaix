@@ -11,12 +11,29 @@
  *   ONTAIX_DATABASE_URL    use this PostgreSQL instead of the embedded one (CI: postgres:16 service)
  *   ONTAIX_SEED            empty (default here: the demo tenant and its users, no company) or
  *                          fixture (the Northwind and Aurora example)
- *   VITE_ONTAIX_DEV_USER   dev identity the Studio sends (default: the seed's full-access demo user)
+ *   VITE_ONTAIX_DEV_USER   dev identity the Studio sends as X-Ontaix-User (default: the seed's
+ *                          full-access demo user demo@northwind.com); set it empty to see the
+ *                          sign-in page, which needs an account (python -m app.admin, see below)
+ *   ONTAIX_DEV_IDENTITY_HEADER  whether the API accepts X-Ontaix-User (default here: true). The API
+ *                          accepts the header only in dev or test with this flag on; it is off by
+ *                          default everywhere else, and the API refuses to start with it on outside
+ *                          dev and test
  *   ONTAIX_PGDATA          folder of the embedded database (default: %LOCALAPPDATA%\Ontaix\pgdata on
  *                          Windows, ~/.local/share/ontaix/pgdata elsewhere); `ephemeral` uses a
  *                          temporary folder deleted on exit, as the end-to-end tests do
  *
  *   pnpm dev:stack -- --reset        # delete the embedded database first, then seed afresh
+ *
+ * Sign-in: the stack runs the API with ONTAIX_DEV_IDENTITY_HEADER=true and allows the Studio's
+ * origins (http://localhost:<port> and http://127.0.0.1:<port>) for the session cookie's CSRF check.
+ * The seed creates no account. To sign in with a password, create the super admin once from
+ * apps/api with the stack's database in ONTAIX_DATABASE_URL:
+ *   .venv/Scripts/python -m app.admin create-super-admin <email>   (prompts twice, no echo)
+ * then create organizations and accounts from the platform portal.
+ *
+ * When started by another Node process with an IPC channel, the stack also sends
+ * { type: 'database', url } once the database is migrated and seeded, so end-to-end tests can
+ * bootstrap an account in it.
  *
  * The embedded database keeps its data between runs; the seed never changes an existing tenant,
  * so ONTAIX_SEED only matters for a new or reset database. The stack stops on Ctrl+C, SIGTERM, or, when started by another Node
@@ -197,13 +214,17 @@ async function main() {
   await ensureFree(studioPort);
   const py = python();
   const databaseUrl = process.env.ONTAIX_DATABASE_URL || (await startPostgres(py));
+  const studioOrigins = [`http://localhost:${studioPort}`, `http://127.0.0.1:${studioPort}`];
   const apiEnv = {
     ...process.env,
     ONTAIX_ENVIRONMENT: 'dev',
+    ONTAIX_DEV_IDENTITY_HEADER: process.env.ONTAIX_DEV_IDENTITY_HEADER ?? 'true',
+    ONTAIX_ALLOWED_ORIGINS: process.env.ONTAIX_ALLOWED_ORIGINS || JSON.stringify(studioOrigins),
     ONTAIX_DATABASE_URL: databaseUrl,
     ONTAIX_SEED: process.env.ONTAIX_SEED || 'empty',
   };
   seed(py, apiEnv);
+  process.send?.({ type: 'database', url: databaseUrl });
 
   // psycopg's async driver needs a selector loop; uvicorn picks the proactor loop on Windows.
   const loop = isWindows ? ['--loop', 'asyncio:SelectorEventLoop'] : [];
@@ -217,7 +238,12 @@ async function main() {
   const vite = join(studioDir, 'node_modules', 'vite', 'bin', 'vite.js');
   start('studio', process.execPath, [vite, '--host', '127.0.0.1', '--port', String(studioPort), '--strictPort'], {
     cwd: studioDir,
-    env: { ...process.env, VITE_ONTAIX_API_URL: '/api/v1', ONTAIX_API_PROXY: apiUrl },
+    env: {
+      ...process.env,
+      VITE_ONTAIX_API_URL: '/api/v1',
+      VITE_ONTAIX_DEV_USER: process.env.VITE_ONTAIX_DEV_USER ?? 'demo@northwind.com',
+      ONTAIX_API_PROXY: apiUrl,
+    },
   });
   await waitFor(studioUrl, 60_000);
   log(`ready: Studio ${studioUrl} against the API ${apiUrl}`);

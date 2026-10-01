@@ -54,3 +54,8 @@ async def create(
     session.add(assignment)
     await session.flush()
     return assignment
+
+
+async def list_for_tenant(session: AsyncSession, tenant_id: uuid.UUID) -> list[GroupRole]:
+    result = await session.scalars(select(GroupRole).where(GroupRole.tenant_id == tenant_id))
+    return list(result)

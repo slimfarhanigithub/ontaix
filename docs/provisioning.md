@@ -93,6 +93,10 @@ OCR of scanned PDF pages (ADR 0011) calls a Mistral document model deployed on t
 | `ONTAIX_ONTOLOGY_IMPORT_MAX_BYTES` | 20971520 | 20 MiB |
 | `ONTAIX_ONTOLOGY_IMPORT_MAX_NODES` | 5000 | Drafts per import, at most 20,000; no depth limit |
 | `ONTAIX_ONTOLOGY_IMPORT_PARSE_TIMEOUT_SECONDS` | 60 | Child-process wall clock |
+| `ONTAIX_EXPORT_MAX_CONCEPTS` | 20000 | Concepts per export (ADR 0016); `413` above |
+| `ONTAIX_EXPORT_PER_HOUR` | 20 | Exports per user or agent |
+| `ONTAIX_EXPORT_TIMEOUT_SECONDS` | 60 | Child-process wall clock; `503 unavailable` past it |
+| `ONTAIX_EXPORT_BASE_IRI` | `urn:ontaix:` | Base of every exported IRI |
 
 Without `ONTAIX_FOUNDRY_ENDPOINT` the API runs normally and the teach bar uses the rule-based grammar alone (`llmOutcome` `not_configured`).
 
@@ -103,6 +107,37 @@ Only when `ONTAIX_LLM_PROVIDER` is `anthropic` (with `ONTAIX_LLM_MODEL` set to a
 - Local development: the ignored `.env` file, variable `ONTAIX_ANTHROPIC_API_KEY`.
 
 The key is never in settings, API responses, events, audit entries, logs, tests, fixtures, commits or documentation, and no agent asks the owner for it in a conversation. This provider sends prompts to Anthropic outside Azure, with no EU residency guarantee (ADR 0008, Data Residency).
+
+## Sign-In and Organizations
+Users sign in with an email and a password held by Ontaix (ADR 0017, decision row 140). There is no sign-up: the only default account is the super admin, created once by the owner from a terminal attached to the API image, so the password travels only over his own TTY and never enters chat, code, logs, commits or Key Vault:
+
+```bash
+kubectl exec -it <api pod> -- python -m app.admin create-super-admin slim.farhani@outlook.com   # prompts twice, no echo
+kubectl exec -it <api pod> -- python -m app.admin set-password slim.farhani@outlook.com        # his own recovery
+```
+
+The API opens two connection pools on `ONTAIX_DATABASE_URL`, and each connection switches with `SET ROLE` as it opens: organization requests to the NOLOGIN role `ontaix_app`, which row-level security confines to the organization of the session, and sign-in, the platform portal and cross-organization jobs to `ontaix_platform`. Migration `0008` creates both roles and grants them to no login; the login the API connects with must be able to `SET ROLE` to the role it switches to. A separate platform login goes in `ONTAIX_PLATFORM_DATABASE_URL`. The bootstrap commands run with the schema owner's login (the `database-url` secret), because only that login may grant the platform role.
+
+### Database Role Grant (Once per Database)
+
+On Azure the API connects with the server's administrator login `ontaix_admin` (the `database-url` secret; the password lives in Key Vault only). That login is not a superuser: on PostgreSQL 16 a login that creates a role gets ADMIN OPTION on it but not the SET option, so after the migration `SET ROLE ontaix_app` is refused with `permission denied to set role` and the API cannot serve a request. The embedded and compose databases do not show this, because their login is a superuser. Decision row 152.
+
+The grant is applied by the bootstrap CLI, with the schema owner's login (the roles' creator, which holds ADMIN OPTION on both) and the login names from the environment. Login names are not secrets; the command takes no password and prints no URL:
+
+```bash
+kubectl exec -it <api pod> -- env ONTAIX_APP_DATABASE_LOGIN=ontaix_admin python -m app.admin grant-database-roles
+```
+
+It runs `GRANT ontaix_app TO <app login> WITH INHERIT FALSE, SET TRUE` and `GRANT ontaix_platform TO <platform login> WITH INHERIT FALSE, SET TRUE` in one transaction, then confirms each login can `SET ROLE` to its role. `INHERIT FALSE` means the login holds none of the role's privileges outside `SET ROLE`. It grants nothing else and revokes nothing; a second run is a no-op (PostgreSQL answers a repeated grant with a notice). Run it once after the first migration that reaches `0008`, and again only when the login changes or a new login is added. When the platform pool has its own login, name it in `ONTAIX_PLATFORM_DATABASE_LOGIN`: each login then holds only its own role. A connection that lacks ADMIN OPTION on the roles (any login other than their creator or a superuser) is refused by the server and the command exits 1.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `ONTAIX_ALLOWED_ORIGINS` | none | JSON list of the Studio's origins, checked on sign-in and on every cookie-authenticated write |
+| `ONTAIX_TRUSTED_PROXY_HOPS` | 0 | 1 behind the ingress: the client IP of the sign-in throttle comes from that hop of `X-Forwarded-For` |
+| `ONTAIX_DEV_IDENTITY_HEADER` | false | Accept `X-Ontaix-User`; only in `dev` or `test`, the API refuses to start with it on elsewhere. Never set in the cluster |
+| `ONTAIX_PLATFORM_DATABASE_URL` | `ONTAIX_DATABASE_URL` | A distinct login for the platform pool, when the deployment wants one |
+| `ONTAIX_APP_DATABASE_LOGIN` | none | Login name inside `ONTAIX_DATABASE_URL`, granted `ontaix_app` by `grant-database-roles`; `ontaix_admin` on Azure. Not a secret |
+| `ONTAIX_PLATFORM_DATABASE_LOGIN` | `ONTAIX_APP_DATABASE_LOGIN` | Login name inside `ONTAIX_PLATFORM_DATABASE_URL`, granted `ontaix_platform` |
 
 ## Security posture
 - No client secret anywhere: CI uses OIDC federation; pods use workload identity; images are pulled

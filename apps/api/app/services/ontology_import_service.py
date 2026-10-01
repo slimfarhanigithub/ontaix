@@ -214,9 +214,7 @@ def _target(
         caller.grants, Scope(company_id, view.domain_key(parent)), caller.everyone_teaches
     ):
         raise forbidden("Your roles do not allow proposing in this company")
-    keys = frozenset(
-        p.template_key for p in view.domain_products.values() if p.company_id == company_id
-    )
+    keys = frozenset(view.domains)
     if domain_key is not None and domain_key not in keys:
         raise validation_failed("domainKey", f"unknown domain key {domain_key!r}")
     return MappingTarget(

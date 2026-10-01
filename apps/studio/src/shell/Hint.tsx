@@ -1,11 +1,29 @@
 /**
- * The keyboard hint line. Markup from reference/ontaix-studio-reference.html line 233, without
- * the `Space next` and `R restart` shortcuts.
+ * The keyboard and mouse hint. The shortcuts of reference/ontaix-studio-reference.html line 233,
+ * without the story's `Space next` and `R restart` and without `S skip animation` (Skip animation
+ * is a setting on the admin portal's Appearance page; S still toggles it). Each shortcut is one
+ * unit that never breaks across lines, so the hint wraps cleanly in the right-hand dock.
  */
+const SHORTCUTS: [string, string][] = [
+  ['P', 'changes'],
+  ['D', 'domains'],
+  ['I', 'import · drop a file'],
+  ['C', 'coverage'],
+  ['A', 'arrange'],
+  ['click', 'new concept'],
+  ['drop on a cell', 'relate'],
+  ['wheel', 'zoom'],
+  ['F', 'full screen'],
+];
+
 export function Hint() {
   return (
-    <div className="hint">
-      <kbd>P</kbd> changes &nbsp; <kbd>D</kbd> domains &nbsp; <kbd>I</kbd> import · drop a file &nbsp; <kbd>C</kbd> coverage &nbsp; <kbd>A</kbd> arrange &nbsp; <kbd>S</kbd> skip animation &nbsp; <kbd>click</kbd> new concept · <kbd>drop on a cell</kbd> relate &nbsp; <kbd>wheel</kbd> zoom &nbsp; <kbd>F</kbd> full screen
-    </div>
+    <ul className="hint" aria-label="Shortcuts">
+      {SHORTCUTS.map(([key, what]) => (
+        <li key={key}>
+          <kbd>{key}</kbd> {what}
+        </li>
+      ))}
+    </ul>
   );
 }

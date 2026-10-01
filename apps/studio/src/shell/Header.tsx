@@ -1,13 +1,18 @@
 /**
  * Wordmark, listening status, admin button and the "Show changes" button that appears while the
  * panel is hidden. Markup from reference/ontaix-studio-reference.html lines 186-190, without the
- * scene counter and scene name.
+ * scene counter and scene name. "Show changes" sits in the header row after the admin button, in
+ * the same style, so the two never overlap when the panel's width goes to 0.
  */
+import { useAuth } from '../auth/authStore';
 import { refStyle, useStore } from './dom';
 
 export function Header() {
   const st = useStore();
+  const { session } = useAuth();
   const { proposals, listening } = st.ui;
+  // A super admin's support session shows the organization read-only; the pill says so for its whole life.
+  const support = session?.support ?? null;
   return (
     <>
       <header>
@@ -15,9 +20,9 @@ export function Header() {
           <div className="wordmark">
             <i></i>Ontaix <small>business as a product</small>
           </div>
-          <div className={`status${listening ? ' on' : ''}`} id="status">
+          <div className={`status${listening || support ? ' on' : ''}`} id="status">
             <i></i>
-            <span>Listening</span>
+            <span>{support ? `Support · ${support.organization.name} · read-only` : 'Listening'}</span>
           </div>
         </div>
         <div className="scene">
@@ -29,18 +34,18 @@ export function Header() {
               </svg>
               Admin portal
             </button>
+            <button
+              className="admin-open"
+              id="panelShow"
+              ref={refStyle('display:none')}
+              title="Show the changes panel (P)"
+              onClick={() => st.togglePanel()}
+            >
+              {`Show changes${proposals.length ? ' (' + proposals.length + ')' : ''}`}
+            </button>
           </div>
         </div>
       </header>
-      <button
-        className="legend-toggle"
-        id="panelShow"
-        ref={refStyle('right:24px;top:calc(18px + env(safe-area-inset-top,0px));bottom:auto;display:none')}
-        title="Show the changes panel (P)"
-        onClick={() => st.togglePanel()}
-      >
-        {`Show changes${proposals.length ? ' (' + proposals.length + ')' : ''}`}
-      </button>
     </>
   );
 }

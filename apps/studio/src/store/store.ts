@@ -5,7 +5,13 @@
  * response, so the same path serves the in-browser mock and a WebSocket-fed API.
  */
 import { api } from '../api/client';
-import { liveEvents, type ConceptConflictPayload, type Envelope, type ProposalEventPayload } from '../api/events';
+import {
+  liveEvents,
+  type ConceptConflictPayload,
+  type DomainChangedPayload,
+  type Envelope,
+  type ProposalEventPayload,
+} from '../api/events';
 import {
   ApiError,
   isBinding,
@@ -21,9 +27,11 @@ import {
   type ProposalDraft,
   type ConceptDraft,
   type SpecDraft,
+  type ProposalEdit,
   type Scene,
   type Settings,
   type Source,
+  type TenantDomain,
 } from '../api/types';
 import { arrange as arrangeCanvas } from '../canvas/arrange';
 import { GREEN, RED, DEFAULT_BRASS, DEFAULT_COLORS, DOMAIN_TEMPLATES } from '../canvas/constants';
@@ -40,14 +48,28 @@ import {
   bySid,
   createScene,
   domainOf,
+  ensureDomain,
   layoutCompanies,
   linkBySid,
   type SceneState,
 } from '../canvas/state';
 import type { Attr, Company, Domain, Link, Node } from '../canvas/types';
+import { singular } from '../nl/parser';
 import { random } from '../runtime/rng';
 import { now } from '../runtime/clock';
 import type { CustomDialog, DialogEntry, DialogSpec } from '../shell/Dialog';
+import { readSkipAnimation, writeSkipAnimation } from './skipAnimation';
+
+/**
+ * The key an early cell or a remembered birth is kept under: the concept a draft names, its label
+ * compared lower case with its last word in the singular, so a proposal that refines the label's
+ * number takes the cell over.
+ */
+function earlyKey(companyId: string, label: string): string {
+  const words = label.trim().toLowerCase().split(/\s+/);
+  const last = singular(words[words.length - 1] ?? '');
+  return `${companyId}|${[...words.slice(0, -1), last].join(' ')}`;
+}
 
 /** An attribute as the canvas holds it: a taught one keeps its value and has no column or fill. */
 function toAttr(a: Attribute, state: Attr['state'] = a.state): Attr {
@@ -56,6 +78,19 @@ function toAttr(a: Attribute, state: Attr['state'] = a.state): Attr {
 
 /** 409 codes that mean the proposal changed under the caller, so the scene is reloaded. */
 const STALE_PROPOSAL_CODES = new Set(['proposal_decided', 'proposal_not_ready']);
+
+/** The nine templates as tenant domains, the Studio's domains until `GET /domains` answers. */
+export const templateDomains = (): TenantDomain[] =>
+  DOMAIN_TEMPLATES.map((t, position) => ({
+    key: t.key,
+    name: t.name,
+    owner: t.owner,
+    color: t.color,
+    defaultColor: t.color,
+    template: true,
+    position,
+    revision: 0,
+  }));
 
 /** A toast: a strong lead word and plain text, both rendered as text nodes. */
 export interface Toast {
@@ -106,6 +141,8 @@ export interface UiState {
   theme: 'dark' | 'light';
   settings: Settings | null;
   appearance: Appearance | null;
+  /** The tenant's domains in ring order: the nine templates, possibly renamed, and custom domains. */
+  domains: TenantDomain[];
   drawerNode: Node | null;
   drawerSeq: number;
   lineageOn: boolean;
@@ -120,6 +157,8 @@ export interface UiState {
   /** The cell whose Expand suggestions are loading. */
   expanding: Node | null;
   listening: boolean;
+  /** The user's Skip animation choice (Admin portal, Appearance, or S); the tenant's Animations off skips too. */
+  skipAnimation: boolean;
   /** Open dialogs, bottom first. */
   dialogs: DialogEntry[];
   /** Page the admin portal shows; kept while the portal is closed. */
@@ -173,6 +212,7 @@ class StudioStore {
       theme: 'dark',
       settings: null,
       appearance: null,
+      domains: templateDomains(),
       drawerNode: null,
       drawerSeq: 0,
       lineageOn: false,
@@ -184,11 +224,13 @@ class StudioStore {
       processing: 0,
       expanding: null,
       listening: false,
+      skipAnimation: readSkipAnimation(),
       dialogs: [],
       adminPage: 'sources',
       adminRev: 0,
       connectors: [],
     };
+    this.syncSkip();
   }
 
   // ------------------------------------------------------------ subscription
@@ -224,7 +266,8 @@ class StudioStore {
   private async loadOnce(): Promise<void> {
     if (!this.unsubscribeEvents) this.unsubscribeEvents = liveEvents.subscribe((e) => this.handleEvent(e));
     try {
-      const scene = await api.getScene();
+      const [scene, domains] = await Promise.all([api.getScene(), this.fetchDomains()]);
+      this.ui.domains = domains;
       this.applyScene(scene);
       this.ui.status = 'ready';
     } catch (err) {
@@ -233,6 +276,26 @@ class StudioStore {
     }
     document.documentElement.dataset.ontaixReady = this.ui.status;
     this.bump();
+  }
+
+  /** `GET /domains`; an API without it (or a refusal) leaves the nine templates. */
+  private async fetchDomains(): Promise<TenantDomain[]> {
+    try {
+      const list = await api.listDomains();
+      return list.length ? [...list].sort((a, b) => a.position - b.position) : templateDomains();
+    } catch {
+      return this.ui.domains.length ? this.ui.domains : templateDomains();
+    }
+  }
+
+  /** The effective colour of a tenant domain: Appearance first, then the domain's own colour, then the template default. */
+  private domainColour(d: TenantDomain): string {
+    return this.ui.appearance?.colors[d.key] || d.color || DEFAULT_COLORS[d.key] || d.defaultColor;
+  }
+
+  /** Gives a company its domain for every tenant domain, custom ones included, in ring order. */
+  private applyTenantDomains(c: Company): void {
+    for (const d of this.ui.domains) ensureDomain(this.s, c, { key: d.key, name: d.name, owner: d.owner, color: this.domainColour(d), position: d.position });
   }
 
   /** Fills the canvas arrays from a snapshot, the way the reference's `restore` does. */
@@ -244,9 +307,11 @@ class StudioStore {
     s.DOMAINS = [];
     s.activeCompany = null;
     s.BRASS = scene.appearance.source || DEFAULT_BRASS;
+    this.ui.appearance = scene.appearance;
     for (const t of DOMAIN_TEMPLATES) t.color = scene.appearance.colors[t.key] || DEFAULT_COLORS[t.key];
     for (const co of [...scene.companies].sort((a, b) => a.position - b.position)) {
       const c = addCompany(s, co.name, co.sub);
+      this.applyTenantDomains(c);
       this.bindCompany(c, co);
     }
     for (const n of scene.nodes) {
@@ -368,6 +433,13 @@ class StudioStore {
         this.applyCreated((e.payload as unknown as ProposalEventPayload).proposal);
         this.queueRefresh();
         break;
+      case 'proposal.changed':
+        this.applyChanged((e.payload as unknown as ProposalEventPayload).proposal);
+        this.queueRefresh();
+        break;
+      case 'domain.changed':
+        this.applyDomainChanged(e.payload as unknown as DomainChangedPayload);
+        break;
       case 'proposal.approved':
         this.applyApproved(e.payload as unknown as ProposalEventPayload, e.bulk);
         this.queueRefresh();
@@ -395,6 +467,7 @@ class StudioStore {
         const co = e.payload.company as ApiCompany;
         if (this.companyBySid(co.id)) break;
         const c = addCompany(this.s, co.name, co.sub);
+        this.applyTenantDomains(c);
         this.bindCompany(c, co);
         this.bump();
         break;
@@ -432,7 +505,8 @@ class StudioStore {
   /** Brings the whole canvas back to the server snapshot, keeping the camera. */
   async reloadScene(): Promise<void> {
     try {
-      const scene = await api.getScene();
+      const [scene, domains] = await Promise.all([api.getScene(), this.fetchDomains()]);
+      this.ui.domains = domains;
       this.applyScene(scene);
     } catch (err) {
       this.refused(err);
@@ -461,12 +535,12 @@ class StudioStore {
 
   /** Remembers the draws made for a draft so the birth reuses them when its event arrives. */
   rememberBirth(companyId: string, label: string, draws: BirthDraws): void {
-    this.births.set(`${companyId}|${label.toLowerCase()}`, draws);
+    this.births.set(earlyKey(companyId, label), draws);
   }
 
   /** Drops the draws remembered for a draft that is not proposed after all. */
   forgetBirth(companyId: string, label: string): void {
-    this.births.delete(`${companyId}|${label.toLowerCase()}`);
+    this.births.delete(earlyKey(companyId, label));
   }
 
   /**
@@ -476,10 +550,10 @@ class StudioStore {
    */
   drawEarly(draft: ConceptDraft | SpecDraft, draws: BirthDraws): Node | null {
     const s = this.s;
-    const key = `${draft.companyId}|${draft.label.toLowerCase()}`;
+    const key = earlyKey(draft.companyId, draft.label);
     if (this.early.has(key)) return null;
     const parent = draft.parentLabel
-      ? this.early.get(`${draft.companyId}|${draft.parentLabel.toLowerCase()}`) || this.conceptLabelled(draft.companyId, draft.parentLabel)
+      ? this.early.get(earlyKey(draft.companyId, draft.parentLabel)) || this.conceptLabelled(draft.companyId, draft.parentLabel)
       : bySid(s, draft.parentId);
     if (!parent || parent.dying) return null;
     const action = draft.type === 'concept' ? draft.action.normalize('NFKC').replace(/s+/g, ' ').trim().toLowerCase() : '';
@@ -526,7 +600,7 @@ class StudioStore {
   }
 
   private takeBirth(companyId: string, label: string): BirthDraws | undefined {
-    const k = `${companyId}|${label.toLowerCase()}`;
+    const k = earlyKey(companyId, label);
     const d = this.births.get(k);
     this.births.delete(k);
     return d;
@@ -542,12 +616,14 @@ class StudioStore {
         const c = art.concepts?.[0],
           r = art.relations?.[0];
         if (!c || !r || bySid(s, c.id)) return;
-        const earlyKey = `${c.companyId}|${c.label.toLowerCase()}`;
-        const early = this.early.get(earlyKey);
+        const key = earlyKey(c.companyId, c.label);
+        const early = this.early.get(key);
         if (early && !early.dying) {
           // The cell a streamed draft drew is this proposal's: it takes the ids, nothing is drawn again.
-          this.early.delete(earlyKey);
+          this.early.delete(key);
           early.sid = c.id;
+          // The proposal's label is the concept's: a preview drawn in the singular reads as proposed.
+          early.label = c.label;
           if (early.birthLink) {
             early.birthLink.sid = r.id;
             if (r.kind !== 'isa') early.birthLink.label = r.label;
@@ -624,6 +700,36 @@ class StudioStore {
     }
   }
 
+  /**
+   * A pending draft was edited in place: the panel item is replaced at its new revision, so an
+   * approval prepared for an older revision is stale (its click sends the revision it read and
+   * the API refuses it), and the pending cell or line takes the new label.
+   */
+  applyChanged(p: Proposal): void {
+    const s = this.s;
+    const i = this.ui.proposals.findIndex((q) => q.id === p.id);
+    if (i >= 0) this.ui.proposals = this.ui.proposals.map((q, j) => (j === i ? p : q));
+    for (const c of p.artefacts?.concepts || []) {
+      const n = bySid(s, c.id);
+      if (n) n.label = c.label;
+    }
+    for (const r of p.artefacts?.relations || []) {
+      const l = linkBySid(s, r.id);
+      if (l) l.label = r.label;
+    }
+    this.bump();
+  }
+
+  /** A tenant domain was created or edited: every company's domain takes its name, owner, colour and position. */
+  applyDomainChanged(payload: DomainChangedPayload): void {
+    const d = payload.domain;
+    const rest = this.ui.domains.filter((x) => x.key !== d.key);
+    this.ui.domains = [...rest, d].sort((a, b) => a.position - b.position);
+    for (const c of this.s.companies) this.applyTenantDomains(c);
+    this.applyColors();
+    this.bump();
+  }
+
   applyApproved(payload: ProposalEventPayload, bulk: boolean): void {
     const s = this.s;
     const p = payload.proposal;
@@ -672,6 +778,7 @@ class StudioStore {
       else if (q.state === 'approved' && q.artefacts) this.reconcile(q.artefacts, false);
     }
     if (p.caption) this.caption('Approved', p.caption);
+    this.pruneSelection();
     this.bump();
   }
 
@@ -705,6 +812,7 @@ class StudioStore {
     for (const q of payload.cascaded) apply(q);
     apply(payload.proposal);
     if (payload.caption) this.caption('Rejected', payload.caption);
+    this.pruneSelection();
     this.bump();
   }
 
@@ -766,8 +874,19 @@ class StudioStore {
       }
     }
     for (const dp of art.domainProducts || []) {
-      const d = this.domainBySid(dp.id);
+      const d = this.domainBySid(dp.id) || domainOf(s, dp.key, this.companyBySid(dp.companyId));
       if (d) this.bindDomain(d, dp);
+    }
+    for (const c of art.concepts || []) {
+      const n = bySid(s, c.id);
+      const co = n?.company;
+      if (!n || !co) continue;
+      const d = c.domainKey ? domainOf(s, c.domainKey, co) : null;
+      if (d && n.domain !== d) {
+        n.domain = d;
+        n.finalColor = d.color;
+        if (!n.split && !n.diff) n.color = d.color;
+      }
     }
     for (const src of art.sources || []) {
       const n = bySid(s, src.id);
@@ -835,17 +954,21 @@ class StudioStore {
     this.bump();
   }
 
-  /** Domain colours, accent and source colour onto the canvas and the page, the reference's `applyColors`. */
+  /**
+   * Domain colours, accent and source colour onto the canvas and the page, the reference's
+   * `applyColors`, over every tenant domain: a custom domain's colour is its own until Appearance
+   * holds one for its key.
+   */
   applyColors(): void {
     const s = this.s;
     const ap = this.ui.appearance;
     if (!ap) return;
-    for (const t of DOMAIN_TEMPLATES) {
-      const c = ap.colors[t.key] || DEFAULT_COLORS[t.key];
-      t.color = c;
-      for (const d of s.DOMAINS) if (d.key === t.key) d.color = c;
+    for (const t of DOMAIN_TEMPLATES) t.color = ap.colors[t.key] || DEFAULT_COLORS[t.key];
+    for (const td of this.ui.domains) {
+      const c = this.domainColour(td);
+      for (const d of s.DOMAINS) if (d.key === td.key) d.color = c;
       for (const n of s.nodes)
-        if (n.domain && n.domain.key === t.key) {
+        if (n.domain && n.domain.key === td.key) {
           n.finalColor = c;
           if (!n.split && !n.diff) n.color = c;
         }
@@ -924,12 +1047,33 @@ class StudioStore {
     }
   }
 
+  /** Approves at the revision the panel shows, so text edited meanwhile is never approved unseen. */
   async approve(p: Proposal): Promise<void> {
     if (!p.ready) return;
     try {
-      await api.approve(p.id);
+      await api.approve(p.id, p.revision ?? 0);
     } catch (err) {
       await this.decisionRefused(err);
+    }
+  }
+
+  /**
+   * Edits a pending draft in place at the revision the editor saw. True once the API accepted it;
+   * the panel item is replaced by the returned proposal. An edit made elsewhere meanwhile is
+   * `409 proposal_changed`: the panel takes the newer text and the toast says so.
+   */
+  async editProposal(p: Proposal, patch: Omit<ProposalEdit, 'revision'>): Promise<boolean> {
+    try {
+      const next = await api.editProposal(p.id, { revision: p.revision ?? 0, ...patch });
+      this.applyChanged(next);
+      return true;
+    } catch (err) {
+      if (err instanceof ApiError && err.problem.code === 'duplicate_label') this.caption('Already there', err.problem.detail || err.problem.title);
+      else if (err instanceof ApiError && err.status === 409 && err.problem.code === 'proposal_changed') {
+        this.refused(err);
+        await this.refreshProposals();
+      } else this.refused(err);
+      return false;
     }
   }
 
@@ -942,11 +1086,14 @@ class StudioStore {
   }
 
   /** A proposal decided elsewhere or no longer ready means the panel is stale: reload the scene
-   * and its proposals silently. Every other refusal, other 409s included, is the reference's toast. */
+   * and its proposals silently. A proposal edited since the approver read it shows the toast and
+   * brings the panel to the new text. Every other refusal, other 409s included, is the reference's toast. */
   private async decisionRefused(err: unknown): Promise<void> {
-    if (err instanceof ApiError && err.status === 409 && STALE_PROPOSAL_CODES.has(err.problem.code))
-      await this.reloadScene();
-    else this.refused(err);
+    if (err instanceof ApiError && err.status === 409 && STALE_PROPOSAL_CODES.has(err.problem.code)) await this.reloadScene();
+    else if (err instanceof ApiError && err.status === 409 && err.problem.code === 'proposal_changed') {
+      this.refused(err);
+      await this.refreshProposals();
+    } else this.refused(err);
   }
 
   async approveAll(): Promise<void> {
@@ -1008,9 +1155,18 @@ class StudioStore {
     this.bump();
   }
 
+  /** Flips the user's Skip animation choice and remembers it in this browser. */
   toggleSkip(): void {
-    this.s.SKIP = !this.s.SKIP;
+    this.ui.skipAnimation = !this.ui.skipAnimation;
+    writeSkipAnimation(this.ui.skipAnimation);
+    this.syncSkip();
     this.bump();
+  }
+
+  /** Animations are skipped when the user chose to or the tenant turned them off. */
+  syncSkip(): void {
+    const st = this.ui.settings;
+    this.s.SKIP = this.ui.skipAnimation || (!!st && !st.animations);
   }
 
   toggleCoverage(): void {
@@ -1076,7 +1232,7 @@ class StudioStore {
     const st = this.ui.settings;
     if (!st) return;
     this.ui.legendOff = !st.legend ? true : this.ui.legendOff;
-    if (this.s.SKIP === st.animations) this.toggleSkip();
+    this.syncSkip();
     this.bump();
   }
 
@@ -1233,9 +1389,55 @@ class StudioStore {
     this.bump();
   }
 
+  // ------------------------------------------------------------ selection
+
+  /**
+   * Shift+click or Ctrl+click on a cell adds it to the selection or takes it out. The selection
+   * is shown as the sticky focus set (selected cells lit, the rest dimmed) and the selection bar
+   * offers a bulk deletion. Only approved, live concepts can be selected.
+   */
+  toggleSelected(n: Node): void {
+    const s = this.s;
+    if (n.kind !== 'concept' || n.pending || n.dying || !n.sid) return;
+    if (s.selected.has(n)) s.selected.delete(n);
+    else s.selected.add(n);
+    s.cellFocus = null;
+    focusOnDomain(s, null);
+    this.closeNewBox();
+    this.closeLinkBox();
+    this.showSelection();
+  }
+
+  clearSelection(): void {
+    const s = this.s;
+    if (!s.selected.size) return;
+    s.selected.clear();
+    this.showSelection();
+  }
+
+  /** Cells that left the model (rejected, deleted) leave the selection too. */
+  pruneSelection(): void {
+    const s = this.s;
+    let changed = false;
+    for (const n of [...s.selected])
+      if (n.dying || !s.nodes.includes(n)) {
+        s.selected.delete(n);
+        changed = true;
+      }
+    if (changed) this.showSelection();
+  }
+
+  private showSelection(): void {
+    const s = this.s;
+    const set = s.selected.size ? new Set(s.selected) : null;
+    s.stickyFocus = set;
+    s.focusSet = set;
+    this.bump();
+  }
+
   // ------------------------------------------------------------ keyboard escape
 
-  /** Escape on the canvas: zoom, focus, boxes, drawer and lineage all release. */
+  /** Escape on the canvas: zoom, focus, selection, boxes, drawer and lineage all release. */
   escape(): void {
     const s = this.s;
     s.userZoomed = false;
@@ -1245,6 +1447,7 @@ class StudioStore {
     this.closeLinkBox();
     this.closeDrawer();
     this.hideLineage();
+    this.clearSelection();
   }
 
   /** Label of a lineage stamp, `dd MMM HH:mm` in en-GB. */

@@ -81,7 +81,7 @@ class Workspace:
 
     async def open(self) -> None:
         slug = f"eval-{uuid.uuid4().hex[:12]}"
-        async with db_client.get_session_factory()() as s:
+        async with db_client.platform_session() as s:
             tenant = await tenant_repository.create(s, slug, f"Bake-off {slug}")
             await tenant_settings_repository.create(s, tenant.id)
             await view_state_repository.create(s, tenant.id)
@@ -242,7 +242,7 @@ class Workspace:
 
     async def labels(self) -> dict[str, str]:
         """Every concept id of the tenant (approved and pending) with its label."""
-        async with db_client.get_session_factory()() as s:
+        async with db_client.platform_session() as s:
             view = await load_view(s, self.tenant_id)
             return {str(c.id): c.label for c in view.concepts.values()}
 
