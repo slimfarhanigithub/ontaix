@@ -3011,30 +3011,26 @@
    }
   },
   {
-   "id": "goodrelations-business-entity",
+   "id": "en-speech-can-be-kinds-and-either",
    "source": {
-    "set": "benchmark",
-    "id": "goodrelations"
+    "set": "case",
+    "id": "en-speech-owner-live-skills"
    },
    "tags": [
-    "document",
-    "benchmark",
-    "reuse"
+    "speech",
+    "is-a",
+    "kinds",
+    "back-reference"
    ],
    "input": {
-    "mode": "document",
-    "company": "GoodRelations",
-    "sentence": "A business entity has at least a primary mailing address and contact details.",
+    "mode": "speech",
+    "company": "Insight",
+    "sentence": "insight has employees they can be consultants or engineers they can have skills either soft skills or technical skills",
     "candidates": [
      {
       "handle": "c0",
-      "label": "GoodRelations",
+      "label": "Insight",
       "parent": null
-     },
-     {
-      "handle": "c1",
-      "label": "Business entity",
-      "parent": "c0"
      }
     ]
    },
@@ -3043,37 +3039,123 @@
      {
       "kind": "rel",
       "subject": {
-       "candidate": "c1"
+       "candidate": "c0"
       },
       "action": "has",
       "object": {
-       "newLabel": "Primary mailing address"
+       "newLabel": "Employees"
       },
       "confidence": 0.9,
-      "span": "A business entity has at least a primary mailing address",
+      "span": "insight has employees",
       "source": {
        "start": 0,
-       "end": 56
-      }
+       "end": 21
+      },
+      "segment": 0
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Consultants"
+      },
+      "object": {
+       "newLabel": "Employees"
+      },
+      "confidence": 0.9,
+      "explanation": "they can be: Consultants is a kind of Employees, not a member",
+      "span": "they can be consultants or engineers",
+      "source": {
+       "start": 22,
+       "end": 58
+      },
+      "segment": 1
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Engineers"
+      },
+      "object": {
+       "newLabel": "Employees"
+      },
+      "confidence": 0.9,
+      "span": "they can be consultants or engineers",
+      "source": {
+       "start": 22,
+       "end": 58
+      },
+      "segment": 1
      },
      {
       "kind": "rel",
       "subject": {
-       "candidate": "c1"
+       "newLabel": "Employees"
       },
       "action": "has",
       "object": {
-       "newLabel": "Contact details"
+       "newLabel": "Skills"
+      },
+      "confidence": 0.85,
+      "explanation": "they: the employees",
+      "span": "they can have skills",
+      "source": {
+       "start": 59,
+       "end": 79
+      },
+      "segment": 2
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Soft skills"
+      },
+      "object": {
+       "newLabel": "Skills"
       },
       "confidence": 0.9,
-      "span": "contact details",
+      "explanation": "either: Soft skills is a kind of Skills",
+      "span": "either soft skills or technical skills",
       "source": {
-       "start": 61,
-       "end": 76
-      }
+       "start": 80,
+       "end": 118
+      },
+      "segment": 2
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Technical skills"
+      },
+      "object": {
+       "newLabel": "Skills"
+      },
+      "confidence": 0.9,
+      "span": "either soft skills or technical skills",
+      "source": {
+       "start": 80,
+       "end": 118
+      },
+      "segment": 2
      }
     ],
-    "unresolved": []
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 0,
+      "end": 21
+     },
+     {
+      "index": 1,
+      "start": 22,
+      "end": 58
+     },
+     {
+      "index": 2,
+      "start": 59,
+      "end": 118
+     }
+    ]
    }
   },
   {
@@ -4018,6 +4100,7 @@
    },
    "tags": [
     "speech",
+    "is-a",
     "sub-groups",
     "back-reference",
     "multi-turn",
@@ -4054,16 +4137,15 @@
    "output": {
     "intents": [
      {
-      "kind": "rel",
+      "kind": "spec",
       "subject": {
-       "candidate": "c1"
-      },
-      "action": "includes",
-      "object": {
        "newLabel": "Analysts"
       },
+      "object": {
+       "candidate": "c1"
+      },
       "confidence": 0.9,
-      "explanation": "can be: a group of Staff, not a kind",
+      "explanation": "can be analysts: Analysts is a kind of Staff",
       "span": "the staff can be analysts",
       "source": {
        "start": 0,
@@ -4081,6 +4163,7 @@
        "newLabel": "Support"
       },
       "confidence": 0.9,
+      "explanation": "can be in support: a place the staff sit, not a kind",
       "span": "can be in support",
       "source": {
        "start": 29,
