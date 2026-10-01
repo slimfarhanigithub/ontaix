@@ -54,10 +54,22 @@ import {
   type SceneState,
 } from '../canvas/state';
 import type { Attr, Company, Domain, Link, Node } from '../canvas/types';
+import { singular } from '../nl/parser';
 import { random } from '../runtime/rng';
 import { now } from '../runtime/clock';
 import type { CustomDialog, DialogEntry, DialogSpec } from '../shell/Dialog';
 import { readSkipAnimation, writeSkipAnimation } from './skipAnimation';
+
+/**
+ * The key an early cell or a remembered birth is kept under: the concept a draft names, its label
+ * compared lower case with its last word in the singular, so a proposal that refines the label's
+ * number takes the cell over.
+ */
+function earlyKey(companyId: string, label: string): string {
+  const words = label.trim().toLowerCase().split(/\s+/);
+  const last = singular(words[words.length - 1] ?? '');
+  return `${companyId}|${[...words.slice(0, -1), last].join(' ')}`;
+}
 
 /** An attribute as the canvas holds it: a taught one keeps its value and has no column or fill. */
 function toAttr(a: Attribute, state: Attr['state'] = a.state): Attr {
@@ -523,12 +535,12 @@ class StudioStore {
 
   /** Remembers the draws made for a draft so the birth reuses them when its event arrives. */
   rememberBirth(companyId: string, label: string, draws: BirthDraws): void {
-    this.births.set(`${companyId}|${label.toLowerCase()}`, draws);
+    this.births.set(earlyKey(companyId, label), draws);
   }
 
   /** Drops the draws remembered for a draft that is not proposed after all. */
   forgetBirth(companyId: string, label: string): void {
-    this.births.delete(`${companyId}|${label.toLowerCase()}`);
+    this.births.delete(earlyKey(companyId, label));
   }
 
   /**
@@ -538,10 +550,10 @@ class StudioStore {
    */
   drawEarly(draft: ConceptDraft | SpecDraft, draws: BirthDraws): Node | null {
     const s = this.s;
-    const key = `${draft.companyId}|${draft.label.toLowerCase()}`;
+    const key = earlyKey(draft.companyId, draft.label);
     if (this.early.has(key)) return null;
     const parent = draft.parentLabel
-      ? this.early.get(`${draft.companyId}|${draft.parentLabel.toLowerCase()}`) || this.conceptLabelled(draft.companyId, draft.parentLabel)
+      ? this.early.get(earlyKey(draft.companyId, draft.parentLabel)) || this.conceptLabelled(draft.companyId, draft.parentLabel)
       : bySid(s, draft.parentId);
     if (!parent || parent.dying) return null;
     const action = draft.type === 'concept' ? draft.action.normalize('NFKC').replace(/s+/g, ' ').trim().toLowerCase() : '';
@@ -588,7 +600,7 @@ class StudioStore {
   }
 
   private takeBirth(companyId: string, label: string): BirthDraws | undefined {
-    const k = `${companyId}|${label.toLowerCase()}`;
+    const k = earlyKey(companyId, label);
     const d = this.births.get(k);
     this.births.delete(k);
     return d;
@@ -604,12 +616,14 @@ class StudioStore {
         const c = art.concepts?.[0],
           r = art.relations?.[0];
         if (!c || !r || bySid(s, c.id)) return;
-        const earlyKey = `${c.companyId}|${c.label.toLowerCase()}`;
-        const early = this.early.get(earlyKey);
+        const key = earlyKey(c.companyId, c.label);
+        const early = this.early.get(key);
         if (early && !early.dying) {
           // The cell a streamed draft drew is this proposal's: it takes the ids, nothing is drawn again.
-          this.early.delete(earlyKey);
+          this.early.delete(key);
           early.sid = c.id;
+          // The proposal's label is the concept's: a preview drawn in the singular reads as proposed.
+          early.label = c.label;
           if (early.birthLink) {
             early.birthLink.sid = r.id;
             if (r.kind !== 'isa') early.birthLink.label = r.label;

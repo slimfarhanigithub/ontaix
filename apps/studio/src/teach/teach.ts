@@ -22,6 +22,7 @@ import {
 import { drawBirth } from '../canvas/division';
 import { bySid } from '../canvas/state';
 import type { Node } from '../canvas/types';
+import { singular } from '../nl/parser';
 import { random } from '../runtime/rng';
 import { store } from '../store/store';
 import { beginProcessing } from './processing';
@@ -92,9 +93,10 @@ interface EarlyDraft {
 /**
  * The drafts one streamed parse sent before its result. Each draft's birth draws are made when it
  * arrives, in arrival order, exactly as `withSeed` makes them, and a concept's cell is drawn at once.
- * The final result reconciles them: a final draft equal to an early one is proposed with the early
- * seed and its proposal takes the early cell over; a retracted draft, and any early cell no proposal
- * took over once the batch settles, fades out.
+ * The final result reconciles them: a final draft that is an early one (equal, or the same concept
+ * for a concept or spec draft) is proposed with the early seed and its proposal takes the early cell
+ * over; a retracted draft, and any early cell no proposal took over once the batch settles, fades
+ * out.
  */
 export class EarlyDrafts {
   private drafts: EarlyDraft[] = [];
@@ -125,14 +127,19 @@ export class EarlyDrafts {
     this.drafts[event.index] = { key: draftKey(draft), seeded, node, retracted: false, used: false };
   };
 
-  /** The final drafts, seeded: a draft streamed earlier keeps its seed, any other is seeded now. */
+  /**
+   * The final drafts, seeded: a draft streamed earlier (the same draft, or the same concept) takes
+   * the seed drawn for it then, so its proposal takes the early cell over; any other is seeded now.
+   * The final draft itself is what goes out, never the early one.
+   */
   seeded(drafts: ProposalDraft[]): ProposalDraft[] {
     return drafts.map((draft) => {
       const key = draftKey(draft);
       const early = this.drafts.find((e) => e && !e.used && !e.retracted && e.key === key);
       if (!early) return withSeed(draft);
       early.used = true;
-      return early.seeded;
+      const seed = (early.seeded as ProposalDraft & { seed?: number }).seed;
+      return seed === undefined ? withSeed(draft) : ({ ...draft, seed } as ProposalDraft);
     });
   }
 
@@ -149,10 +156,24 @@ export class EarlyDrafts {
   }
 }
 
-/** A draft compared as the API sent it: its fields in name order, the seed left out. */
+/**
+ * A draft compared as the API matches streamed drafts: a concept or spec draft by the concept it
+ * names (type, company, label up to singular and plural, and parent), so a draft the model refines
+ * keeps the cell already shown; any other draft by its fields in name order, the seed left out.
+ */
 function draftKey(draft: ProposalDraft): string {
+  if (draft.type === 'concept' || draft.type === 'spec') {
+    const parent = draft.parentId ? `id:${draft.parentId}` : `label:${draft.parentLabel ?? ''}`;
+    return JSON.stringify([draft.type, draft.companyId, labelKey(draft.label), parent]);
+  }
   const { seed: _, ...rest } = draft as ProposalDraft & { seed?: number };
   return JSON.stringify(Object.fromEntries(Object.entries(rest).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))));
+}
+
+/** A label as compared with another: lower case, its last word singular. */
+function labelKey(label: string): string {
+  const words = label.trim().toLowerCase().split(/\s+/);
+  return [...words.slice(0, -1), singular(words[words.length - 1] ?? '')].join(' ');
 }
 
 /**

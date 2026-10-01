@@ -110,6 +110,30 @@ describe('cells of streamed drafts', () => {
     expect(services.birthLink?.seed).toBe(seed);
   });
 
+  it('keeps the early cell when the result refines the same concept, and relabels it', async () => {
+    const sent = batches();
+    let preview: Node | undefined;
+    vi.spyOn(api, 'teachParse').mockImplementation(async (_body, listen) => {
+      // The grammar's preview, in the singular with the default domain; the model refines it.
+      listen?.(draftLine(0, { ...born('Service'), action: 'has', domainKey: 'production' } as ProposalDraft));
+      preview = cells('Service')[0];
+      return { ...base, drafts: [born('Services')] };
+    });
+
+    expect(await teach('Insight has services')).toBe(true);
+
+    expect(preview).toBeDefined();
+    expect(cells('Service')).toHaveLength(0);
+    const [services] = cells('Services');
+    expect(cells('Services')).toHaveLength(1);
+    expect(services).toBe(preview);
+    expect(services.sid).toBe('c1-0');
+    expect(services.dying).toBeFalsy();
+    const seed = (sent[0][0] as ProposalDraft & { seed: number }).seed;
+    expect(services.birthLink?.seed).toBe(seed);
+    expect((sent[0][0] as ProposalDraft & { label: string }).label).toBe('Services');
+  });
+
   it('fades a retracted cell and proposes nothing for it', async () => {
     const sent = batches();
     vi.spyOn(api, 'teachParse').mockImplementation(async (_body, listen) => {
