@@ -246,6 +246,8 @@ class Settings(BaseSettings):
     document_extraction_max_attempts: int = Field(default=3, ge=1, le=10)
     # How often an idle runner looks for queued work.
     document_extraction_poll_seconds: float = Field(default=5, gt=0)
+    # Section-pass chunks read at once; the outline pass stays one chunk after another.
+    document_extraction_concurrency: int = Field(default=3, ge=1, le=8)
     branch_approve_batch: int = Field(default=200, ge=1, le=5000)
     branch_approve_max_rounds: int = Field(default=50, ge=1, le=10_000)
 

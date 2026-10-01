@@ -6,8 +6,10 @@
   are proposed before the next sentence goes out, so back-references resolve.
 - `sentences`: a document is imported (`POST /import/sentences`) and each stored sentence is
   parsed with its neighbours, in order, as the Studio's import panel does.
-- `whole`: the whole document in one request. The endpoint is still being designed, so this
-  mode reports itself unavailable; a case run in it is recorded as skipped.
+- `whole`: the whole document read by one extraction job (`POST /import/{importId}/extraction`),
+  as the Studio's import dialog offers it: the API's job runner runs in process until the job
+  ends, the result's drafts are proposed, and the job's figures land on the document record.
+  Jobs run one at a time, since the runner claims the oldest waiting job of any tenant.
 
 A new mode implements `InputMode` and is added to `MODES`. Documents are read once per process
 through `DocumentCache`, so an OCR step is paid and measured once, separately from the models.
@@ -107,8 +109,17 @@ class WholeDocumentMode:
     name = "whole"
     kind: CaseKind = "document"
 
+    def __init__(self) -> None:
+        self._one_at_a_time = asyncio.Lock()
+
     async def run(self, ws: Workspace, case: TeachCase, docs: DocumentCache) -> ModeOutput:
-        raise ModeUnavailable("the whole-document teach endpoint is not implemented yet")
+        name, data, source_text, info = await _document(case, docs)
+        async with self._one_at_a_time:
+            import_id, count = await ws.upload(name, data)
+            info["sentences"] = count
+            unit, figures = await ws.extract_whole(import_id)
+        info["job"] = figures
+        return ModeOutput([unit], source_text, info)
 
 
 MODES: dict[str, InputMode] = {

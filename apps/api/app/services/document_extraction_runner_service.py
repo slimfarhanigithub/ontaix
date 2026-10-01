@@ -227,12 +227,14 @@ class _Run:
         stopped: str | None = None
         try:
             for chunk in chunks[job.outline_chunks_done :]:
-                await self._chunk(client, view, company.name, chunk, len(chunks), "outline", cap)
+                result = await self._chunk(
+                    client, view, company.name, chunk, len(chunks), "outline", cap
+                )
+                if result is not None:
+                    self._add_unresolved(result.unresolved)
                 await self._progress({"outline_chunks_done": chunk.number + 1, "phase": "outline"})
             await self._progress({"phase": "sections"})
-            for chunk in chunks[self.job.section_chunks_done :]:
-                await self._chunk(client, view, company.name, chunk, len(chunks), "section", cap)
-                await self._progress({"section_chunks_done": chunk.number + 1})
+            await self._sections(client, view, company.name, chunks, cap)
         except _Stop as stop:
             stopped = stop.reason
             if stop.reason == "cancelled":
@@ -246,6 +248,50 @@ class _Run:
             )
         await self._map(details, stopped)
 
+    async def _sections(
+        self,
+        client: LlmClient | None,
+        view: OntologyView,
+        company_name: str,
+        chunks: list[Chunk],
+        cap: int,
+    ) -> None:
+        """Pass 2 over the chunks not read yet, at most `document_extraction_concurrency`
+        model calls at once. The outline is frozen, so the chunks are independent; each chunk's
+        entries join the outline in chunk order, and the progress written after each one counts
+        the chunks whose entries have joined, so a resumed job reads on from there."""
+        results: dict[int, ChunkResult | None] = {}
+        joined = self.job.section_chunks_done
+        gate = asyncio.Semaphore(self.settings.document_extraction_concurrency)
+        writing = asyncio.Lock()
+
+        async def join() -> None:
+            nonlocal joined
+            async with writing:
+                while joined in results:
+                    result = results.pop(joined)
+                    if result is not None:
+                        self.entries.extend(result.entries)
+                        self._add_unresolved(result.unresolved)
+                    joined += 1
+                    await self._progress({"section_chunks_done": joined})
+
+        async def one(chunk: Chunk) -> None:
+            async with gate:
+                results[chunk.number] = await self._chunk(
+                    client, view, company_name, chunk, len(chunks), "section", cap
+                )
+            await join()
+
+        try:
+            async with asyncio.TaskGroup() as group:
+                for chunk in chunks[joined:]:
+                    group.create_task(one(chunk))
+        except* _Stop as stops:
+            raise stops.exceptions[0] from None
+        except* _LeaseLost as lost:
+            raise lost.exceptions[0] from None
+
     async def _chunk(
         self,
         client: LlmClient | None,
@@ -255,8 +301,10 @@ class _Run:
         total: int,
         pass_name: str,
         cap: int,
-    ) -> None:
-        """One model call for one chunk; its outcome is added to the job's state in memory."""
+    ) -> ChunkResult | None:
+        """One model call for one chunk: what its answer added, or None when there was no
+        usable answer, the chunk then listed as unresolved. An outline answer's nodes join the
+        outline as they are read; a section answer's entries are the caller's to add."""
         if self.job.cancel_requested:
             raise _Stop("cancelled")
         if get_clock().now() >= self.deadline:
@@ -336,8 +384,7 @@ class _Run:
             self.degraded = True
             reason = "model_invalid_output" if outcome == "invalid_output" else outcome
             self._add_unresolved([unresolved_chunk(chunk, reason)])
-            return
-        self._add_unresolved(result.unresolved)
+        return result
 
     async def _complete_renewing(self, client: LlmClient, request: LlmRequest) -> LlmAnswer:
         """The model call, with the lease renewed every minute while it runs."""
