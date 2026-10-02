@@ -173,6 +173,50 @@ describe('live events of editing and domains', () => {
   });
 });
 
+describe('an approved move to another domain', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    store.ui.toasts = [];
+    store.ui.proposals = [];
+  });
+
+  const moved = (domainKey: string, color: string) =>
+    ({
+      id: 'c-plant',
+      label: 'Plant',
+      sub: '',
+      domainKey,
+      color,
+      conflict: false,
+      pending: false,
+      dyingAt: null,
+      bound: null,
+      attributes: [],
+    }) as never;
+
+  it('recolours the cell and lets it join the cluster of its new domain, even after Arrange pinned it', () => {
+    vi.spyOn(api, 'listProposals').mockResolvedValue({ items: [], page: 1, pageSize: 0, total: 0 });
+    const c = reset();
+    const free = addNode(store.s, { label: 'Line', kind: 'concept', company: c, domain: domainOf(store.s, 'production', c), sid: 'c-line', color: '#3fb8a9' });
+    const plant = addNode(store.s, { label: 'Plant', kind: 'concept', company: c, domain: domainOf(store.s, 'production', c), sid: 'c-plant', color: '#3fb8a9' });
+    // Arrange leaves every cell it placed pinned where it put it.
+    plant.pinned = true;
+    plant.tween = { fx: 0, fy: 0, tx: 10, ty: 10, start: 0 };
+    const sales = domainOf(store.s, 'sales', c)!;
+    const proposal = pending({ type: 'change', changeKind: 'move_concept_domain', state: 'approved', conceptId: null, artefacts: undefined });
+
+    store.handleEvent(
+      envelope('proposal.approved', { proposal, artefacts: { concepts: [moved('sales', sales.color)], domainProducts: [] }, cascaded: [], caption: null }),
+    );
+
+    expect(plant.domain).toBe(sales);
+    expect(plant.color).toBe(sales.color);
+    expect(plant.pinned).toBe(false);
+    expect(plant.tween).toBeNull();
+    expect(free.domain?.key).toBe('production');
+  });
+});
+
 describe('custom domain placement', () => {
   it('keeps the nine templates on the reference ring and puts custom domains between them, then on outer rings', () => {
     const c = reset();

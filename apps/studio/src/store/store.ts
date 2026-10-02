@@ -886,6 +886,9 @@ class StudioStore {
         n.domain = d;
         n.finalColor = d.color;
         if (!n.split && !n.diff) n.color = d.color;
+        // A cell Arrange pinned leaves its spot, so the layout pulls it into its new domain's cluster.
+        n.tween = null;
+        n.pinned = false;
       }
     }
     for (const src of art.sources || []) {
