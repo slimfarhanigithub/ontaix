@@ -153,9 +153,9 @@ def test_upgrade_to_0007_copies_the_templates_for_existing_tenants(
             " SELECT %s, %s, key FROM domain_template",
             (tenant_id, company_id),
         )
-    # The copies are taken at 0009 and keep the templates' colours of that time; 0010 recolours the
+    # The copies are taken at 0009 and keep the templates' colours of that time; 0011 recolours the
     # templates only, never a tenant's copies.
-    _upgrade(migrated_url, "0009")
+    _upgrade(migrated_url, "0010")
     with psycopg.connect(migrated_url) as conn:
         conn.execute("SET search_path TO ontaix, public")
         templates = conn.execute(
