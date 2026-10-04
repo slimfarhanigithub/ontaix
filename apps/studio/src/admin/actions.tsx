@@ -805,7 +805,7 @@ function MembersDialog({ g, close }: { g: Group; close: () => void }) {
             <td>
               <b>{r.name}</b>
             </td>
-            <td style={{ color: 'var(--ink-2)' }}>{r.email}</td>
+            <td className="wrap" style={{ color: 'var(--ink-2)' }}>{r.email}</td>
             <td>{r.dept}</td>
             <td>{r.company}</td>
             <td>

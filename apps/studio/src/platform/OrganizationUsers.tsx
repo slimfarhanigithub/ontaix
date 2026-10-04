@@ -113,7 +113,7 @@ function UsersDialog({ org, close, changed }: { org: Organization; close: () => 
                 <td>
                   <b>{r.name}</b>
                 </td>
-                <td style={{ color: 'var(--ink-2)' }}>{r.email}</td>
+                <td className="wrap" style={{ color: 'var(--ink-2)' }}>{r.email}</td>
                 <td>{r.groups}</td>
                 <td>
                   <span className={`st${r.status === 'Disabled' ? ' off' : r.status === 'Active' ? '' : ' pend'}`}>
