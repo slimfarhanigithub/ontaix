@@ -1,7 +1,8 @@
 /**
  * Which screen the Studio shows for the browser's session, and the moves between them: the
  * sign-in page, the "Choose a new password" page, the Studio (a member, or a super admin inside
- * a read-only support session) and the platform portal (a super admin at home). The gate runs
+ * an organization he entered or inside a read-only support session) and the platform portal (a
+ * super admin at home). The gate runs
  * only against a real API; the in-browser mock has no sessions.
  */
 import { useSyncExternalStore } from 'react';
@@ -110,7 +111,7 @@ class AuthStore {
     this.show('signIn', null);
   }
 
-  /** A password change or a support session's start replaced the session with the one the API returned. */
+  /** A password change, a support session's start or an organization entered replaced the session with the one the API returned. */
   replaceSession(session: Session): void {
     this.enter(session);
   }
@@ -120,9 +121,14 @@ class AuthStore {
     this.enter(await api.endSupportSession());
   }
 
+  /** Leaves the organization the super admin entered; hands back the session at the platform portal. */
+  async exitOrganization(): Promise<void> {
+    this.enter(await api.exitOrganization());
+  }
+
   private enter(session: Session): void {
     if (session.mustChangePassword) this.show('password', session);
-    else if (session.kind === 'platform' && !session.support) this.show('platform', session);
+    else if (session.kind === 'platform' && !session.support && !session.acting) this.show('platform', session);
     else this.show('studio', session);
   }
 
@@ -150,7 +156,7 @@ class AuthStore {
       store.ui.dialogs = [];
       store.bump();
     }
-    // A Studio entered again, after another session or with a support session's organization, starts from the server's scene.
+    // A Studio entered again, after another session or with an entered or support organization, starts from the server's scene.
     if (mode === 'studio' && leaving !== 'studio' && store.ui.status !== 'loading') void store.reloadScene();
     this.bump();
   }

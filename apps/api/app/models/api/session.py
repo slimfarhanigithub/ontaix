@@ -40,6 +40,11 @@ class SupportInfo(ApiModel):
     reason: str
 
 
+class ActingInfo(ApiModel):
+    organization: OrganizationRef
+    since: datetime
+
+
 class Session(ApiModel):
     kind: Literal["member", "platform"]
     account: SessionAccount
@@ -47,6 +52,7 @@ class Session(ApiModel):
     user_id: uuid.UUID | None = None
     platform_roles: list[Literal["super_admin"]] | None = None
     support: SupportInfo | None = None
+    acting: ActingInfo | None = None
     csrf_token: str
     must_change_password: bool
     idle_expires_at: datetime

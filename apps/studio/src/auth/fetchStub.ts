@@ -39,6 +39,7 @@ export function session(over: Partial<Session> = {}): Session {
     organization: { id: 'org-1', name: 'Acme', slug: 'acme' },
     userId: 'u-1',
     support: null,
+    acting: null,
     csrfToken: CSRF,
     mustChangePassword: false,
     idleExpiresAt: '2026-09-30T10:00:00Z',

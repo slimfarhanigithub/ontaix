@@ -40,7 +40,7 @@ CREATE TYPE binding_freshness AS ENUM ('2 min', '4 min', '11 min', '1 h', 'pause
 CREATE TYPE company_mode AS ENUM ('single', 'multiple');
 CREATE TYPE platform_role_name AS ENUM ('super_admin');
 CREATE TYPE password_set_reason AS ENUM ('bootstrap', 'initial', 'reset', 'change');
-CREATE TYPE session_end_reason AS ENUM ('sign_out', 'password_changed', 'password_reset', 'account_disabled', 'organization_disabled', 'session_limit', 'support_changed');
+CREATE TYPE session_end_reason AS ENUM ('sign_out', 'password_changed', 'password_reset', 'account_disabled', 'organization_disabled', 'session_limit', 'support_changed', 'access_changed');
 CREATE TYPE throttle_key_kind AS ENUM ('email', 'ip');
 
 -- ---------------------------------------------------------------------------
@@ -367,7 +367,7 @@ CREATE TABLE app_user (
   FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE SET NULL (company_id)
 );
 CREATE UNIQUE INDEX app_user_email_unique_per_tenant ON app_user (tenant_id, lower(email));
-COMMENT ON TABLE app_user IS 'The native user directory of an organization. A user who signs in with a password has issuer ''local'' and the id of its account as subject, and is created with its account by a super admin; a user signing in through OIDC is provisioned on first sign-in into the tenant that owns the token issuer; the development seed''s users have issuer ''dev''. How a user authenticates never decides what the user may do.';
+COMMENT ON TABLE app_user IS 'The native user directory of an organization. A user who signs in with a password has issuer ''local'' and the id of its account as subject, and is created with its account by a super admin; a user signing in through OIDC is provisioned on first sign-in into the tenant that owns the token issuer; the development seed''s users have issuer ''dev''. A super admin who enters the organization acts through a directory user with issuer ''platform'' and subject ''<account id>:<tenant id>'', created at the first entry, so that proposals, approvals and every other row he writes name a user of the organization; it belongs to no group and its roles come from the platform access alone. How a user authenticates never decides what the user may do.';
 
 CREATE TABLE user_group (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -994,13 +994,13 @@ CREATE TABLE audit_entry (
   CHECK (array_position(company_ids, NULL) IS NULL),
   FOREIGN KEY (tenant_id, domain_key) REFERENCES tenant_domain(tenant_id, key) ON DELETE SET NULL (domain_key),
   CONSTRAINT audit_entry_origin_only_for_proposal CHECK (origin IS NULL OR proposal_id IS NOT NULL),
-  CONSTRAINT audit_entry_platform_actor CHECK ((actor_kind = 'platform') = (actor_account_id IS NOT NULL))
+  CONSTRAINT audit_entry_platform_actor CHECK (CASE actor_kind WHEN 'platform' THEN actor_account_id IS NOT NULL WHEN 'user' THEN true ELSE actor_account_id IS NULL END)
 );
 CREATE INDEX audit_entry_by_tenant_time ON audit_entry (tenant_id, at DESC);
 CREATE INDEX audit_entry_by_company_ids ON audit_entry USING gin (company_ids);
 CREATE INDEX audit_entry_by_domain_key ON audit_entry (tenant_id, domain_key, at DESC) WHERE domain_key IS NOT NULL;
 COMMENT ON TABLE audit_entry IS 'Append-only log of every approval, rejection, setting change and connection; actor and proposal ids are plain columns without foreign keys so deletions elsewhere never touch the log; update, delete and truncate are refused by trigger and the application role holds INSERT and SELECT only.';
-COMMENT ON COLUMN audit_entry.actor_account_id IS 'Set exactly when actor_kind is platform: the super admin''s platform account, for the organization''s entries of kind platform (a user created, a password reset, a support session started or ended, the organization renamed, disabled or re-enabled, its company mode changed).';
+COMMENT ON COLUMN audit_entry.actor_account_id IS 'The super admin''s platform account. Set always when actor_kind is platform, for the organization''s entries of kind platform (a user created, a password reset, a support session started or ended, the organization entered or left, the organization renamed, disabled or re-enabled, its company mode changed). Set on an entry of actor_kind user exactly when that user is the super admin acting inside the organization after entering it, which marks the entry as platform access; null for every other user entry, and always null for agent and system entries.';
 COMMENT ON COLUMN audit_entry.company_ids IS 'Audience: every company whose name, labels or artefacts the entry mentions (both companies of a cross-company proposal, the added company of a company entry, the company of a role scope). Empty means tenant-wide. A reader sees the entry if it holds audit.read in a scope containing every listed company, or on the domain scope named by domain_key; an empty list needs audit.read at any scope. Checked against the tenant''s companies on insert; no foreign key, so a later company deletion never touches the log.';
 
 CREATE FUNCTION audit_entry_is_append_only() RETURNS trigger
@@ -1067,7 +1067,7 @@ CREATE TABLE platform_role_assignment (
   PRIMARY KEY (account_id, role),
   FOREIGN KEY (account_id, is_platform) REFERENCES account(id, is_platform) ON DELETE CASCADE
 );
-COMMENT ON TABLE platform_role_assignment IS 'Platform roles, held only by platform accounts (the composite foreign key refuses a member account). super_admin creates, renames, disables and enables organizations, sets their company mode, creates their accounts, resets passwords and opens audited read-only support sessions; it grants nothing inside an organization outside a support session. Written only by the local admin CLI.';
+COMMENT ON TABLE platform_role_assignment IS 'Platform roles, held only by platform accounts (the composite foreign key refuses a member account). super_admin creates, renames, disables and enables organizations, sets their company mode, creates their accounts, resets passwords, opens audited read-only support sessions and enters organizations (auth_session.acting_tenant_id), where it holds every tenant role; it grants nothing inside an organization outside a support session or an entry. Written only by the local admin CLI.';
 
 CREATE TABLE auth_session (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1076,6 +1076,7 @@ CREATE TABLE auth_session (
   account_id           uuid NOT NULL REFERENCES account(id) ON DELETE CASCADE,
   support_tenant_id    uuid REFERENCES tenant(id) ON DELETE CASCADE,
   support_until        timestamptz,
+  acting_tenant_id     uuid REFERENCES tenant(id) ON DELETE CASCADE,
   created_at           timestamptz NOT NULL DEFAULT now(),
   last_seen_at         timestamptz NOT NULL DEFAULT now(),
   idle_expires_at      timestamptz NOT NULL,
@@ -1085,11 +1086,12 @@ CREATE TABLE auth_session (
   client_ip            inet,
   user_agent           text CHECK (char_length(user_agent) <= 256),
   CONSTRAINT auth_session_support_pair CHECK ((support_tenant_id IS NULL) = (support_until IS NULL)),
+  CONSTRAINT auth_session_one_access CHECK (support_tenant_id IS NULL OR acting_tenant_id IS NULL),
   CONSTRAINT auth_session_end_pair CHECK ((ended_at IS NULL) = (end_reason IS NULL)),
   CONSTRAINT auth_session_expiry_order CHECK (idle_expires_at <= absolute_expires_at AND created_at < absolute_expires_at)
 );
 CREATE INDEX auth_session_by_account ON auth_session (account_id) WHERE ended_at IS NULL;
-COMMENT ON TABLE auth_session IS 'A server-side browser session. The cookie carries a 256-bit random token; only its SHA-256 is stored, so a database read never yields a usable cookie. A session is valid while ended_at is null, now() is before idle_expires_at (30 minutes, slid forward on use) and absolute_expires_at (12 hours after sign-in), the account is enabled and, for a member, the organization is enabled. Sign-in, a password change and the start or end of a support session each issue a new token and end the old row, so a token never survives a change of privilege. support_tenant_id is set only on a super admin''s session during an audited read-only support session in that organization, until support_until.';
+COMMENT ON TABLE auth_session IS 'A server-side browser session. The cookie carries a 256-bit random token; only its SHA-256 is stored, so a database read never yields a usable cookie. A session is valid while ended_at is null, now() is before idle_expires_at (30 minutes, slid forward on use) and absolute_expires_at (12 hours after sign-in), the account is enabled and, for a member, the organization is enabled. Sign-in, a password change, the start or end of a support session and entering or leaving an organization each issue a new token and end the old row, so a token never survives a change of privilege. support_tenant_id is set only on a super admin''s session during an audited read-only support session in that organization, until support_until. acting_tenant_id is set only on a super admin''s session after he entered that organization: until he leaves it or the session ends, every organization request of the session acts inside it with every tenant role, on the application role and under its row-level security, and is audited as platform access. A session holds a support organization or an acting organization, never both.';
 COMMENT ON COLUMN auth_session.csrf_token IS 'The synchronizer token the Studio echoes in X-CSRF-Token on every unsafe request; returned only by sign-in, GET /auth/session and the calls that issue a new session token. It is useless without the session cookie, so it is stored as issued.';
 
 CREATE TABLE sign_in_throttle (
@@ -1113,6 +1115,7 @@ CREATE TABLE platform_audit_entry (
                        'organization_created', 'organization_renamed', 'organization_company_mode',
                        'organization_disabled', 'organization_enabled',
                        'support_session_started', 'support_session_ended',
+                       'organization_entered', 'organization_exited',
                        'super_admin_created', 'super_admin_password_set')),
   ok                 boolean NOT NULL,
   target_tenant_id   uuid,
@@ -1140,6 +1143,7 @@ RETURNS TABLE (
   user_id               uuid,
   is_platform           boolean,
   support_tenant_id     uuid,
+  acting_tenant_id      uuid,
   must_change_password  boolean,
   csrf_token            text
 )
@@ -1165,10 +1169,12 @@ BEGIN
      AND (a.tenant_id IS NULL OR t.disabled_at IS NULL)
   RETURNING s.id, a.id, a.tenant_id, a.user_id, a.is_platform,
             CASE WHEN s.support_until > now() THEN s.support_tenant_id END,
+            CASE WHEN a.is_platform AND (SELECT x.disabled_at FROM ontaix.tenant x WHERE x.id = s.acting_tenant_id) IS NULL
+                 THEN s.acting_tenant_id END,
             coalesce(pc.must_change, false), s.csrf_token;
 END;
 $$;
-COMMENT ON FUNCTION resolve_session(bytea) IS 'The only way the application role reads a session: given the SHA-256 of a presented cookie token, returns the live session''s account, organization, user, platform flag, active support organization, forced-change flag and CSRF token, and slides the 30-minute idle expiry (never past the absolute expiry). Returns no row for an unknown, ended, expired or disabled session, account or organization. The caller then sets ontaix.tenant_id for the transaction; a session with must_change_password true may only read GET /auth/session, change its password and sign out.';
+COMMENT ON FUNCTION resolve_session(bytea) IS 'The only way the application role reads a session: given the SHA-256 of a presented cookie token, returns the live session''s account, organization, user, platform flag, active support organization, the organization a super admin entered (null unless it is enabled), forced-change flag and CSRF token, and slides the 30-minute idle expiry (never past the absolute expiry). Returns no row for an unknown, ended, expired or disabled session, account or organization. The caller then sets ontaix.tenant_id for the transaction; a session with must_change_password true may only read GET /auth/session, change its password and sign out.';
 
 CREATE TABLE outbox (
   id            bigserial PRIMARY KEY,

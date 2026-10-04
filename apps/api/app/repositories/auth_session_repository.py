@@ -34,7 +34,8 @@ _CLOSE_EXPIRED_SUPPORT = text(
 )
 _RESOLVE = text(
     "SELECT session_id, account_id, tenant_id, user_id, is_platform, support_tenant_id,"
-    " must_change_password, csrf_token FROM ontaix.resolve_session(:token_hash)"
+    " acting_tenant_id, must_change_password, csrf_token"
+    " FROM ontaix.resolve_session(:token_hash)"
 )
 
 
@@ -48,6 +49,7 @@ class ResolvedSession:
     user_id: uuid.UUID | None
     is_platform: bool
     support_tenant_id: uuid.UUID | None
+    acting_tenant_id: uuid.UUID | None
     must_change_password: bool
     csrf_token: str
 
@@ -92,10 +94,13 @@ async def create(
     user_agent: str | None,
     absolute_expires_at: datetime | None = None,
     support_tenant_id: uuid.UUID | None = None,
+    acting_tenant_id: uuid.UUID | None = None,
 ) -> AuthSession:
     """A new live session. Without `absolute_expires_at` it ends 12 hours from now; a rotated
     session passes its predecessor's, so rotation never extends a session. A support session
-    lasts 60 minutes, never past the absolute expiry."""
+    lasts 60 minutes, never past the absolute expiry. An acting session (a super admin inside
+    `acting_tenant_id`) lasts as long as the session itself."""
+    assert support_tenant_id is None or acting_tenant_id is None
     absolute = (
         func.now() + text(f"interval '{ABSOLUTE_TIMEOUT}'")
         if absolute_expires_at is None
@@ -115,6 +120,7 @@ async def create(
             account_id=account_id,
             support_tenant_id=support_tenant_id,
             support_until=support_until,
+            acting_tenant_id=acting_tenant_id,
             idle_expires_at=idle,
             absolute_expires_at=absolute,
             client_ip=client_ip,
@@ -160,14 +166,16 @@ async def end_for_account(
 
 
 async def end_for_tenant(session: AsyncSession, tenant_id: uuid.UUID) -> int:
-    """End every live session of the organization's accounts and every support session in it."""
+    """End every live session of the organization's accounts, every support session in it and
+    every super admin session acting inside it."""
     member_accounts = select(Account.id).where(Account.tenant_id == tenant_id)
     result = await session.execute(
         update(AuthSession)
         .where(
             AuthSession.ended_at.is_(None),
             AuthSession.account_id.in_(member_accounts)
-            | (AuthSession.support_tenant_id == tenant_id),
+            | (AuthSession.support_tenant_id == tenant_id)
+            | (AuthSession.acting_tenant_id == tenant_id),
         )
         .values(ended_at=func.now(), end_reason=SessionEndReason.ORGANIZATION_DISABLED)
         .returning(AuthSession.id)

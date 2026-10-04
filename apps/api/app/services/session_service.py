@@ -2,8 +2,9 @@
 
 A session is a random 256-bit token in the `__Host-ontaix_session` cookie; the database keeps
 only its SHA-256. It lives 30 minutes after the last authenticated call and never more than 12
-hours after sign-in. Sign-in, a password change and the start or end of a support session each
-issue a new token and end the old row, so a token never survives a change of privilege. An
+hours after sign-in. Sign-in, a password change, the start or end of a support session and
+entering or leaving an organization each issue a new token and end the old row, so a token
+never survives a change of privilege. An
 account has at most 10 live sessions; the oldest ends first.
 """
 
@@ -16,8 +17,8 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.api.organization import OrganizationRef
+from app.models.api.session import ActingInfo, SessionAccount, SupportInfo
 from app.models.api.session import Session as SessionDto
-from app.models.api.session import SessionAccount, SupportInfo
 from app.models.storage.account import Account
 from app.models.storage.auth_session import AuthSession
 from app.models.storage.tenant import Tenant
@@ -80,6 +81,7 @@ async def issue(
     user_agent: str | None,
     rotates: AuthSession | None = None,
     support_tenant_id: uuid.UUID | None = None,
+    acting_tenant_id: uuid.UUID | None = None,
 ) -> IssuedSession:
     """A new session for the account. `rotates` is the session it replaces, which the caller
     has ended: the new one keeps its absolute expiry, so rotation never lengthens a session."""
@@ -94,6 +96,7 @@ async def issue(
         user_agent=user_agent,
         absolute_expires_at=rotates.absolute_expires_at if rotates is not None else None,
         support_tenant_id=support_tenant_id,
+        acting_tenant_id=acting_tenant_id,
     )
     return IssuedSession(token=token, session=await describe(session, row, account), row=row)
 
@@ -114,6 +117,11 @@ async def describe(session: AsyncSession, row: AuthSession, account: Account) ->
                 until=row.support_until,
                 reason=await _support_reason(session, account.id, support_tenant.id),
             )
+    acting = None
+    if row.acting_tenant_id is not None:
+        acting_tenant = await tenant_repository.get(session, row.acting_tenant_id)
+        if acting_tenant is not None:
+            acting = ActingInfo(organization=_ref(acting_tenant), since=row.created_at)
     roles = None
     if account.is_platform:
         roles = await platform_role_repository.roles_of(session, account.id)
@@ -124,6 +132,7 @@ async def describe(session: AsyncSession, row: AuthSession, account: Account) ->
         user_id=account.user_id,
         platform_roles=[r.value for r in roles] if roles is not None else None,
         support=support,
+        acting=acting,
         csrf_token=row.csrf_token,
         must_change_password=bool(credential and credential.must_change),
         idle_expires_at=row.idle_expires_at,

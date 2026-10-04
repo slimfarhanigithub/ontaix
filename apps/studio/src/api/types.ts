@@ -12,6 +12,8 @@ export interface Actor {
   kind: ActorKind;
   id?: string;
   name?: string;
+  /** On a `user` actor: the super admin's platform account when the user is him acting inside the organization he entered. */
+  platformAccountId?: string | null;
 }
 
 export interface Company {
@@ -1044,6 +1046,8 @@ export interface Session {
   platformRoles?: 'super_admin'[];
   /** The open read-only support session of a super admin, else null. */
   support?: { organization: OrganizationRef; until: string; reason: string } | null;
+  /** The organization a super admin entered and acts inside with every role, else null. */
+  acting?: { organization: OrganizationRef; since: string } | null;
   /** Sent back as `X-CSRF-Token` on every POST, PUT, PATCH and DELETE while the session lives. */
   csrfToken: string;
   mustChangePassword: boolean;

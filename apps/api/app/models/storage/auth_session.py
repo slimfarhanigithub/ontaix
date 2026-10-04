@@ -30,6 +30,9 @@ class AuthSession(Base):
         Uuid, ForeignKey("tenant.id", ondelete="CASCADE")
     )
     support_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    acting_tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("tenant.id", ondelete="CASCADE")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )

@@ -1,7 +1,7 @@
 /**
  * The platform portal's Organizations page: the list of organizations in the reference's list
- * pattern, `+ Create an organization`, and the row actions Users, Open, Rename and Disable or
- * Enable. Clicking a row opens `Edit <name>`, where the company mode is changed.
+ * pattern, `+ Create an organization`, and the row actions Users, Enter, Open, Rename and
+ * Disable or Enable. Clicking a row opens `Edit <name>`, where the company mode is changed.
  */
 import { useCallback, useEffect, useState } from 'react';
 
@@ -14,6 +14,7 @@ import {
   disableOrganizationDialog,
   editOrganizationDialog,
   enableOrganization,
+  enterOrganizationDialog,
   openSupportDialog,
   renameOrganizationDialog,
 } from './organizationDialogs';
@@ -78,9 +79,10 @@ export function Organizations() {
     { label: 'Users', key: 'users', num: true },
     { label: 'Status', key: 'status' },
     { label: 'Created', key: 'createdAt' },
-    // Four buttons (48, 44, 56 and 56 wide plus 22 of padding and border each), three 6px gaps and
-    // the cell padding: 330px, which leaves the five text columns their room at 1440 wide.
-    { label: '', w: '330px' },
+    // Five buttons (38, 36, 36, 52 and 50 wide plus 16 of padding and border each, the padding
+    // narrowed for this list), four 6px gaps and the cell padding: 336px, which leaves the five
+    // text columns their room at 1440 wide.
+    { label: '', w: '336px' },
   ];
   return (
     <>
@@ -119,21 +121,24 @@ export function Organizations() {
                 </td>
                 <td style={{ color: 'var(--ink-2)' }}>{r.created}</td>
                 <td className="act">
-                  <button data-fn="users" style={ACT(48)} onClick={() => usersDialog(r.org, refresh)}>
+                  <button data-fn="users" style={ACT(38)} onClick={() => usersDialog(r.org, refresh)}>
                     Users
                   </button>
-                  <button data-fn="open" style={ACT(44)} onClick={() => openSupportDialog(r.org)}>
+                  <button data-fn="enter" style={ACT(36)} onClick={() => enterOrganizationDialog(r.org)}>
+                    Enter
+                  </button>
+                  <button data-fn="open" style={ACT(36)} onClick={() => openSupportDialog(r.org)}>
                     Open
                   </button>
-                  <button data-fn="rename" style={ACT(56)} onClick={() => renameOrganizationDialog(r.org, refresh)}>
+                  <button data-fn="rename" style={ACT(52)} onClick={() => renameOrganizationDialog(r.org, refresh)}>
                     Rename
                   </button>
                   {r.org.status === 'disabled' ? (
-                    <button data-fn="enable" style={ACT(56)} onClick={() => void enableOrganization(r.org, refresh)}>
+                    <button data-fn="enable" style={ACT(50)} onClick={() => void enableOrganization(r.org, refresh)}>
                       Enable
                     </button>
                   ) : (
-                    <button className="danger" data-fn="disable" style={ACT(56)} onClick={() => disableOrganizationDialog(r.org, refresh)}>
+                    <button className="danger" data-fn="disable" style={ACT(50)} onClick={() => disableOrganizationDialog(r.org, refresh)}>
                       Disable
                     </button>
                   )}

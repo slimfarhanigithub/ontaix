@@ -6,6 +6,9 @@ import { auth } from '../auth/authStore';
 import { CSRF, json, noContent, platformSession, problem, stubFetch, type FetchStub } from '../auth/fetchStub';
 import { Header } from '../shell/Header';
 import { store } from '../store/store';
+import { actingText, PlatformAccessBanner } from '../auth/PlatformAccessBanner';
+import { AuditLog } from '../admin/pages/GovernancePages';
+import { directory } from '../admin/adminData';
 import { ADD_USER_NOTE, RESET_NOTE, userStatus } from './OrganizationUsers';
 import { PlatformPortal } from './PlatformPortal';
 
@@ -125,8 +128,8 @@ describe('the platform portal', () => {
     expect(acme.slice(0, 5)).toEqual(['Acme', 'Several companies', '3', 'Active', '01 Sept 2026']);
     const beta = [...rowOf('Beta Ltd').querySelectorAll('td')].map((td) => td.textContent);
     expect(beta.slice(0, 4)).toEqual(['Beta Ltd', 'One company', '0', 'Disabled']);
-    expect([...rowOf('Acme').querySelectorAll('.act button')].map((b) => b.textContent)).toEqual(['Users', 'Open', 'Rename', 'Disable']);
-    expect([...rowOf('Beta Ltd').querySelectorAll('.act button')].map((b) => b.textContent)).toEqual(['Users', 'Open', 'Rename', 'Enable']);
+    expect([...rowOf('Acme').querySelectorAll('.act button')].map((b) => b.textContent)).toEqual(['Users', 'Enter', 'Open', 'Rename', 'Disable']);
+    expect([...rowOf('Beta Ltd').querySelectorAll('.act button')].map((b) => b.textContent)).toEqual(['Users', 'Enter', 'Open', 'Rename', 'Enable']);
   });
 
   it('creates an organization from the dialog, several companies by default, and shows a refusal in .msg', async () => {
@@ -302,6 +305,64 @@ describe('the users of an organization', () => {
     fireEvent.click(footerButton('Disable'));
     await flush();
     expect(stub.to('POST /admin/organizations/org-1/users/u-1/disable')).toHaveLength(1);
+  });
+});
+
+describe('entering an organization', () => {
+  it('asks first, then opens the Studio with the banner and Exit, which returns to the portal', async () => {
+    const stub = await openPortal();
+    const acting = platformSession({
+      csrfToken: 'acting-csrf-'.padEnd(43, 'z'),
+      acting: { organization: { id: 'org-1', name: 'Acme', slug: 'acme' }, since: '2026-09-30T09:00:00Z' },
+    });
+    stub.on('POST /admin/organizations/org-1/enter', json(200, acting));
+    fireEvent.click(rowAction('Acme', 'Enter'));
+    expect(dialogTitle()).toBe('Enter Acme?');
+    expect(topDialog().textContent).toContain('You act inside Acme with every role, as platform super admin. Everything you do there is recorded in its audit log.');
+    fireEvent.click(footerButton('Enter'));
+    await flush();
+    expect(stub.to('POST /admin/organizations/org-1/enter')[0].headers['x-csrf-token']).toBe(CSRF);
+    expect(auth.state.mode).toBe('studio');
+    expect(auth.state.session?.acting?.organization.name).toBe('Acme');
+
+    cleanup();
+    render(
+      <>
+        <Header />
+        <PlatformAccessBanner />
+      </>,
+    );
+    const banner = document.getElementById('platformAccess') as HTMLElement;
+    expect(banner.querySelector('span')?.textContent).toBe(actingText('Acme'));
+    expect(banner.textContent).toBe('Acting in Acme as platform super adminExit');
+    expect((document.getElementById('status') as HTMLElement).classList.contains('on')).toBe(false);
+    stub.on('POST /admin/exit', json(200, platformSession()));
+    fireEvent.click(screen.getByRole('button', { name: 'Exit' }));
+    await flush();
+    expect(stub.to('POST /admin/exit')[0].headers['x-csrf-token']).toBe(acting.csrfToken);
+    expect(auth.state.mode).toBe('platform');
+    expect(document.getElementById('platformAccess')).toBeNull();
+  });
+
+  it('shows a refusal as a toast and stays in the portal', async () => {
+    const stub = await openPortal();
+    stub.on('POST /admin/organizations/org-2/enter', problem(409, 'organization_disabled', 'The organization is disabled; enable it first'));
+    fireEvent.click(rowAction('Beta Ltd', 'Enter'));
+    fireEvent.click(footerButton('Enter'));
+    await flush();
+    expect(auth.state.mode).toBe('platform');
+    expect(store.ui.toasts.map((t) => t.text)).toContain('The organization is disabled; enable it first');
+  });
+
+  it('marks the audit log entries written through platform access', () => {
+    directory.audit = [
+      { id: 2, at: '2026-09-30T09:05:00Z', actor: { kind: 'user', id: 'u-9', name: 'Admin', platformAccountId: 'acc-sa' }, kind: 'concept', what: 'Approved Boiler', ok: true, origin: null, companyIds: [] },
+      { id: 1, at: '2026-09-30T09:00:00Z', actor: { kind: 'user', id: 'u-1', name: 'Ana' }, kind: 'concept', what: 'Approved Pump', ok: true, origin: null, companyIds: [] },
+    ];
+    render(<AuditLog />);
+    const rows = Array.from(document.querySelectorAll('.log > div')).map((row) => row.children[2].textContent);
+    expect(rows).toEqual(['Approved Boiler · platform super admin', 'Approved Pump']);
+    directory.audit = [];
   });
 });
 

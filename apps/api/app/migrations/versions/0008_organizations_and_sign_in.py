@@ -197,7 +197,10 @@ CREATE OR REPLACE TRIGGER platform_audit_entry_no_truncate
   BEFORE TRUNCATE ON platform_audit_entry
   FOR EACH STATEMENT EXECUTE FUNCTION audit_entry_is_append_only();
 
-CREATE OR REPLACE FUNCTION resolve_session(p_token_hash bytea)
+-- A later revision changes the function's result row, which CREATE OR REPLACE cannot do, so a
+-- database created from a later contract has it dropped here and created again as of 0008.
+DROP FUNCTION IF EXISTS resolve_session(bytea);
+CREATE FUNCTION resolve_session(p_token_hash bytea)
 RETURNS TABLE (
   session_id            uuid,
   account_id            uuid,
