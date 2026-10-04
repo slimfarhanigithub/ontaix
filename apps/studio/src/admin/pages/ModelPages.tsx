@@ -353,7 +353,7 @@ export function Bindings() {
               <td>{r.fresh}</td>
               <td className="num">
                 {r.pendingAttrs ? `${r.attrs} ` : r.attrs}
-                {r.pendingAttrs ? <span style={{ color: '#d6bd8a' }}>{`+${r.pendingAttrs}`}</span> : null}
+                {r.pendingAttrs ? <span style={{ color: 'var(--human-text)' }}>{`+${r.pendingAttrs}`}</span> : null}
               </td>
               <td>
                 <span className={`st ${r.state === 'bound' ? '' : 'off'}`}>

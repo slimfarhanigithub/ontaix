@@ -290,7 +290,7 @@ function SourceWizard({ n, src, cat, close }: { n: Node | null; src: Source | nu
         <div id="wzTest">
           {found ? (
             <>
-              <div style={{ color: '#4fc98f', marginBottom: '8px' }}>{found.statusText}</div>
+              <div style={{ color: 'var(--good)', marginBottom: '8px' }}>{found.statusText}</div>
               <div className="discover">
                 {found.objects.map((o, i) => (
                   <div key={i}>

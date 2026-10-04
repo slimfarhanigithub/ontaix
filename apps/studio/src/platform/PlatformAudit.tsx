@@ -84,7 +84,7 @@ export function PlatformAudit() {
                 <td>{r.action}</td>
                 <td>{r.organization}</td>
                 <td style={{ whiteSpace: 'normal' }}>{r.what}</td>
-                <td style={{ color: r.result === 'ok' ? '#4fc98f' : 'var(--conflict)' }}>{r.result}</td>
+                <td style={{ color: r.result === 'ok' ? 'var(--good)' : 'var(--conflict)' }}>{r.result}</td>
               </>
             )}
             footer={(l) => `${l.filter((r) => r.result === 'refused').length} refused`}

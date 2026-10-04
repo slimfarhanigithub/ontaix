@@ -8,6 +8,7 @@
  */
 import { useEffect } from 'react';
 
+import { C, DEFAULT_BRASS, NEUTRAL } from '../canvas/constants';
 import { ancestorsOf, childrenOf, descendantsOf } from '../canvas/lineage';
 import type { Node } from '../canvas/types';
 import { useDelayed } from './busy';
@@ -117,7 +118,7 @@ export function Drawer() {
         ×
       </button>
       <h2>
-        <i id="drDot" style={{ color: safeColour(n.kind === 'source' ? s.BRASS : n.color, '#a9b3cc') }}></i>
+        <i id="drDot" style={{ color: safeColour(n.kind === 'source' ? s.BRASS : n.color, NEUTRAL) }}></i>
         <span id="drName">{n.label + (n.sub && n.kind !== 'source' ? ' · ' + n.sub : '')}</span>
       </h2>
       <div className="meta" id="drMeta">
@@ -177,7 +178,7 @@ function Lineage({ n }: { n: Node }) {
     <div className="lin">
       <h3>{`Ancestry · ${anc.length} generation${anc.length === 1 ? '' : 's'} from ${anc[0] ? anc[0].label : n.label}`}</h3>
       {[...anc, n].map((x) => (
-        <div key={x.id} className={`step${x === n ? ' me' : ''}`} style={{ color: safeColour(x.kind === 'root' ? '#d8deee' : x.color, '#a9b3cc') }}>
+        <div key={x.id} className={`step${x === n ? ' me' : ''}`} style={{ color: safeColour(x.kind === 'root' ? C.root : x.color, NEUTRAL) }}>
           <i></i>
           <div>
             <b onClick={() => st.goTo(x)}>{x.label}</b>
@@ -208,14 +209,14 @@ function Lineage({ n }: { n: Node }) {
       <h3>Data lineage</h3>
       {n.bound ? (
         <>
-          <div className="step" style={{ color: safeColour(s.BRASS, '#d6bd8a') }}>
+          <div className="step" style={{ color: safeColour(s.BRASS, DEFAULT_BRASS) }}>
             <i></i>
             <div>
               <b onClick={() => n.bound && st.goTo(n.bound.source)}>{n.bound.source.label}</b>
               <small>{`feeds ${n.label} · ${n.bound.records.toLocaleString('en-GB')} records · fresh ${n.bound.fresh}`}</small>
             </div>
           </div>
-          <div className="step me" style={{ color: safeColour(n.color, '#a9b3cc') }}>
+          <div className="step me" style={{ color: safeColour(n.color, NEUTRAL) }}>
             <i></i>
             <div>
               <b>{n.label}</b>

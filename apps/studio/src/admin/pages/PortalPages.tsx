@@ -6,7 +6,7 @@
  * `data-ox-new`: the `Company creation` setting row and a colour input per custom domain in
  * Appearance.
  */
-import { DOMAIN_TEMPLATES, DEFAULT_COLORS } from '../../canvas/constants';
+import { DEFAULT_BRASS, DEFAULT_COLORS, DOMAIN_TEMPLATES } from '../../canvas/constants';
 import { DEFAULT_ACCENT } from '../../design/tokens';
 import { BusyButton } from '../../shell/busy';
 import { useStore } from '../../shell/dom';
@@ -60,7 +60,7 @@ export function Overview() {
 
 const REFRESH = ['5 min', '15 min', '1 h', 'daily'];
 const REFRESH_STYLE =
-  'font:inherit;font-size:12px;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;padding:6px 8px;color:var(--ink);grid-row:1/3;width:88px;justify-self:end;box-sizing:border-box';
+  'font:inherit;font-size:12px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:8px;padding:6px 8px;color:var(--ink);grid-row:1/3;width:88px;justify-self:end;box-sizing:border-box';
 
 export function TenantSettings() {
   const st = useStore();
@@ -195,7 +195,7 @@ export function Appearance() {
           </span>
         </label>
         <label className="col">
-          <input type="color" value={ap?.source || '#d6bd8a'} data-col="__source" onChange={(e) => changeColour('__source', e.target.value)} />
+          <input type="color" value={ap?.source || DEFAULT_BRASS} data-col="__source" onChange={(e) => changeColour('__source', e.target.value)} />
           <span>
             <b>Data sources</b>
             <small>systems and bindings</small>
