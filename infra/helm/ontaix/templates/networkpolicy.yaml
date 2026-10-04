@@ -1,0 +1,162 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $np := .Values.networkPolicy }}
+{{- $release := dict "app.kubernetes.io/name" .Chart.Name "app.kubernetes.io/instance" .Release.Name }}
+# Nothing in or out unless a policy below allows it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ontaix.fullname" . }}-default-deny
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# Every pod of the release resolves names at the cluster DNS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ontaix.fullname" . }}-dns
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $release | nindent 6 }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $np.dns.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $np.dns.podLabels | nindent 14 }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# The API answers the ingress controller, the Studio's proxy and the gateway; it reaches the
+# database and HTTPS endpoints (Entra ID, Key Vault, Foundry, Speech).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ontaix.api.name" . }}
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ontaix.selectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $np.ingressNamespace }}
+        - podSelector:
+            matchLabels:
+              {{- include "ontaix.selectorLabels" (dict "root" . "component" "studio") | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "ontaix.selectorLabels" (dict "root" . "component" "gateway") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.port }}
+  egress:
+    - to:
+        {{- range $np.database.cidrs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ $np.database.port }}
+    - to:
+        {{- range $np.https.cidrs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# The Studio answers the ingress controller and forwards /api to the API.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ontaix.studio.name" . }}
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: studio
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ontaix.selectorLabels" (dict "root" . "component" "studio") | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $np.ingressNamespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.studio.port }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "ontaix.selectorLabels" (dict "root" . "component" "api") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.port }}
+---
+# The gateway is not exposed; it only calls the API.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ontaix.gateway.name" . }}
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ontaix.selectorLabels" (dict "root" . "component" "gateway") | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "ontaix.selectorLabels" (dict "root" . "component" "api") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.port }}
+{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled .Values.ingress.clusterIssuer }}
+---
+# cert-manager's HTTP-01 solver pods live in this namespace and answer the challenge from the
+# ingress controller on port 8089.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ontaix.fullname" . }}-acme-solver
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      acme.cert-manager.io/http01-solver: "true"
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $np.ingressNamespace }}
+      ports:
+        - protocol: TCP
+          port: 8089
+{{- end }}
+{{- end }}

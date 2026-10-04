@@ -1,0 +1,5 @@
+apiVersion: v2
+name: cluster-issuers
+description: The Let's Encrypt ClusterIssuers (staging and production) cert-manager issues the Ontaix certificate from.
+type: application
+version: 0.1.0

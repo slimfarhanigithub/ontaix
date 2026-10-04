@@ -1,0 +1,135 @@
+{{- $keyVault := .Values.secrets.keyVault -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ontaix.api.name" . }}
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  # One API process at a time: the migration step runs before each new process starts.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ontaix.selectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ontaix.selectorLabels" (dict "root" . "component" "api") | nindent 8 }}
+        {{- if .Values.workloadIdentity.clientId }}
+        azure.workload.identity/use: "true"
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/api-configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.api.podSecurityContext | nindent 8 }}
+      initContainers:
+        {{- if $keyVault.enabled }}
+        - name: fetch-secrets
+          image: {{ include "ontaix.image" (dict "root" . "image" .Values.api.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "/scripts/fetch_secrets.py"]
+          env:
+            - name: KEY_VAULT_NAME
+              value: {{ $keyVault.name | quote }}
+            - name: KEY_VAULT_SECRETS
+              value: {{ toJson $keyVault.secrets | quote }}
+            - name: OUTPUT_FILE
+              value: /secrets/.env
+          securityContext:
+            {{- toYaml .Values.api.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: secrets
+              mountPath: /secrets
+            - name: tmp
+              mountPath: /tmp
+        {{- end }}
+        - name: migrate
+          image: {{ include "ontaix.image" (dict "root" . "image" .Values.api.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "/scripts/migrate.py"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "ontaix.api.name" . }}
+            {{- if .Values.secrets.existingSecret }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecret }}
+            {{- end }}
+          securityContext:
+            {{- toYaml .Values.api.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            {{- if $keyVault.enabled }}
+            - name: secrets
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+            {{- end }}
+      containers:
+        - name: api
+          image: {{ include "ontaix.image" (dict "root" . "image" .Values.api.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "ontaix.api.name" . }}
+            {{- if .Values.secrets.existingSecret }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecret }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.api.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if $keyVault.enabled }}
+            - name: secrets
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ include "ontaix.api.name" . }}-scripts
+        # The only writable path of the image: extraction and export child processes work here.
+        - name: tmp
+          emptyDir: {}
+        {{- if $keyVault.enabled }}
+        # In memory only, pod-scoped: holds the .env file the fetch-secrets step writes.
+        - name: secrets
+          emptyDir:
+            medium: Memory
+        {{- end }}

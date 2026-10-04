@@ -1,0 +1,32 @@
+{{- include "ontaix.validateApiEnv" . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ontaix.api.name" . }}
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+data:
+  ONTAIX_ALLOWED_ORIGINS: {{ include "ontaix.allowedOrigins" . | quote }}
+  {{- if .Values.api.databaseLogin }}
+  ONTAIX_APP_DATABASE_LOGIN: {{ .Values.api.databaseLogin | quote }}
+  {{- end }}
+  {{- range $name, $value := .Values.api.env }}
+  {{- if ne (toString $value) "" }}
+  {{ $name }}: {{ toString $value | quote }}
+  {{- end }}
+  {{- end }}
+---
+# The scripts the API pod runs before the API process: fetch the secrets, migrate the database.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ontaix.api.name" . }}-scripts
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+data:
+  fetch_secrets.py: |
+    {{- .Files.Get "files/fetch_secrets.py" | nindent 4 }}
+  migrate.py: |
+    {{- .Files.Get "files/migrate.py" | nindent 4 }}

@@ -1,0 +1,185 @@
+# Ontaix chart defaults: one API, one gateway, one Studio, no ingress, secrets from a Kubernetes
+# Secret the operator created. The same chart runs on Azure (values-azure-dev.yaml: secrets read
+# from Key Vault with workload identity, a public ingress with a Let's Encrypt certificate) and on
+# a plain cluster. No value in this file or in any committed values file is a secret.
+
+image:
+  # Registry the three images are pulled from, for example crontaixdevfrc02a13.azurecr.io.
+  # Empty pulls the bare repository names (a local cluster with pre-loaded images).
+  registry: ""
+  # One tag for the three images: the deploy workflow passes the commit SHA it built. Each
+  # component's image.digest, when set, pins the exact image instead of the tag.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# The API pod's service account. On Azure its name is part of the workload identity's federated
+# credential subject (system:serviceaccount:<namespace>:<name>), so it is fixed, not derived from
+# the release name.
+serviceAccount:
+  name: ontaix-api
+
+# Azure workload identity: the client id of the user-assigned identity the API pod federates to
+# (Terraform output workload_identity_client_id). Empty disables the annotation and label.
+workloadIdentity:
+  clientId: ""
+
+secrets:
+  # Plain Kubernetes: a Secret in the release namespace whose keys are environment variables
+  # (ONTAIX_DATABASE_URL at least). Loaded into the API and its migration step with envFrom.
+  existingSecret: ""
+  # Azure: an init container reads each listed secret from Key Vault with the pod's workload
+  # identity and writes it as the API's .env file (never a Kubernetes Secret, never an argument).
+  keyVault:
+    enabled: false
+    # Key Vault name (Terraform output key_vault_name).
+    name: ""
+    # Environment variable -> Key Vault secret name.
+    secrets:
+      ONTAIX_DATABASE_URL: database-url
+
+api:
+  image:
+    repository: ontaix/api
+    # sha256:<hex> of the image to run, resolved by the deploy workflow from the registry.
+    digest: ""
+  # One replica with one worker process.
+  replicas: 1
+  port: 8000
+  # The login name inside the database URL, granted ontaix_app and ontaix_platform by
+  # `python -m app.admin grant-database-roles`. A name, not a secret.
+  databaseLogin: ""
+  # Origins allowed to sign in and to send cookie-authenticated writes, besides the ingress host
+  # (added automatically when the ingress is enabled).
+  allowedOrigins: []
+  # Non-secret ONTAIX_* settings; see apps/api/.env.example and docs/provisioning.md. The chart
+  # refuses ONTAIX_DATABASE_URL (a secret), ONTAIX_ALLOWED_ORIGINS (computed from allowedOrigins
+  # and the ingress host) and ONTAIX_DEV_IDENTITY_HEADER (never in a cluster) here.
+  env:
+    ONTAIX_ENVIRONMENT: production
+    ONTAIX_LOG_LEVEL: INFO
+    ONTAIX_TRUSTED_PROXY_HOPS: "1"
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 2Gi
+  # The image runs as uid and gid 10001; the pod requires it, init containers included.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  # The image is read-only; /tmp is the one writable path (an emptyDir).
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+
+gateway:
+  image:
+    repository: ontaix/gateway
+    digest: ""
+  replicas: 1
+  port: 8100
+  env:
+    ONTAIX_ENVIRONMENT: production
+    ONTAIX_LOG_LEVEL: INFO
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+
+studio:
+  image:
+    repository: ontaix/studio
+    digest: ""
+  replicas: 1
+  port: 8080
+  # Content Security Policy sources the Studio needs besides its own origin. The speech
+  # recogniser opens a WebSocket to the regional Speech endpoint.
+  csp:
+    connectSrc:
+      - wss://francecentral.stt.speech.microsoft.com
+    styleSrc:
+      - https://fonts.googleapis.com
+    fontSrc:
+      - https://fonts.gstatic.com
+  # Largest request body the Studio's own proxy forwards to the API (imports up to 20 MiB).
+  proxyBodySize: 64m
+  # Longest API call the Studio's own proxy waits for (concept expansion runs up to 300 s).
+  proxyReadTimeoutSeconds: 330
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+  # The unprivileged nginx image runs as uid 101 and writes only under /tmp (an emptyDir).
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+
+# Network policies of the release namespace: everything is denied, then each workload gets
+# exactly its traffic. Ingress to the Studio and the API comes from the ingress controller's
+# namespace; the Studio and the gateway reach the API; the API reaches the database and HTTPS
+# (Entra ID, Key Vault, Foundry, Speech); every pod reaches the cluster DNS. The cert-manager
+# HTTP-01 solver pods, created in this namespace, accept the challenge from the ingress controller.
+networkPolicy:
+  enabled: true
+  ingressNamespace: ingress-nginx
+  dns:
+    namespace: kube-system
+    podLabels:
+      k8s-app: kube-dns
+  database:
+    port: 5432
+    # Where the database answers; on Azure the delegated PostgreSQL subnet.
+    cidrs:
+      - 0.0.0.0/0
+  https:
+    cidrs:
+      - 0.0.0.0/0
+
+ingress:
+  enabled: false
+  className: nginx
+  # Public host, for example ontaix-dev.francecentral.cloudapp.azure.com. Required when enabled.
+  host: ""
+  tls:
+    enabled: true
+    secretName: ontaix-tls
+  # cert-manager ClusterIssuer that issues the certificate; empty uses the TLS secret as it is.
+  clusterIssuer: ""
+  # Annotations on the API's ingress: body size and timeouts of the API's long calls, and a
+  # per-client request rate (ingress-nginx answers 503 above limit-rps times the burst multiplier).
+  apiAnnotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 64m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "330"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "330"
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+  annotations: {}

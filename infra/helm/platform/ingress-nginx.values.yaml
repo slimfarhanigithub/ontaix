@@ -1,0 +1,37 @@
+# ingress-nginx on AKS: the one public entry of the cluster. Its LoadBalancer service makes the
+# cloud provider create a public IP in the cluster's node resource group; the deploy workflow
+# adds the annotation service.beta.kubernetes.io/azure-dns-label-name, which gives the IP the
+# address <label>.<region>.cloudapp.azure.com. No Azure resource is declared outside Terraform.
+controller:
+  replicaCount: 1
+  ingressClassResource:
+    default: true
+  # Snippet annotations let an Ingress inject nginx configuration; nothing here needs them.
+  allowSnippetAnnotations: false
+  service:
+    # Keep the client's address: the API throttles sign-in by the X-Forwarded-For entry this
+    # controller sets, which with Cluster policy would be a node's address for everyone.
+    externalTrafficPolicy: Local
+    annotations:
+      service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path: /healthz
+  config:
+    # Every HTTP request is redirected to HTTPS; HSTS for one year on the host itself.
+    ssl-redirect: "true"
+    force-ssl-redirect: "true"
+    hsts: "true"
+    hsts-max-age: "31536000"
+    hsts-include-subdomains: "false"
+    hsts-preload: "false"
+    # X-Forwarded-For is set by this controller, never taken from the client.
+    use-forwarded-headers: "false"
+    server-tokens: "false"
+  # Set on every response that passes the controller (replacing a backend's own value), so the
+  # API's JSON carries it too; the Studio's server sends its full header set itself.
+  addHeaders:
+    X-Content-Type-Options: nosniff
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
