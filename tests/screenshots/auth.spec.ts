@@ -133,10 +133,11 @@ for (const vp of VIEWPORTS) {
       if (onlyTheme && onlyTheme !== theme) continue;
       const name = `auth-${screen.name}-${theme}-${vp.width}x${vp.height}`;
       test(`${screen.name} · ${theme} · ${vp.width}x${vp.height}`, async ({ browser }) => {
-        const ctx = await browser.newContext({ viewport: vp });
+        // The audit log shows its fixtures' times in the browser's zone, so every platform renders them in UTC.
+        const ctx = await browser.newContext({ viewport: vp, timezoneId: 'UTC' });
         const page = await ctx.newPage();
         try {
-          // No fake clock: nothing on these screens depends on time, and the fonts come from the repository as usual.
+          // No fake clock: nothing on these screens depends on the current time, and the fonts come from the repository as usual.
           await serveFontsLocally(page);
           await page.route(/\/api\/v1\//, serve(screen.routes));
           await page.goto('/?api=real');

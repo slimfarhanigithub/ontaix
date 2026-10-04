@@ -215,6 +215,28 @@ describe('an approved move to another domain', () => {
     expect(plant.tween).toBeNull();
     expect(free.domain?.key).toBe('production');
   });
+
+  it('a cell Arrange placed glides under the arranged cells of its new domain and stays pinned there', () => {
+    vi.spyOn(api, 'listProposals').mockResolvedValue({ items: [], page: 1, pageSize: 0, total: 0 });
+    const c = reset();
+    const sales = domainOf(store.s, 'sales', c)!;
+    const price = addNode(store.s, { label: 'Price list', kind: 'concept', company: c, domain: sales, sid: 'c-price', x: 400, y: 100 });
+    const order = addNode(store.s, { label: 'Order', kind: 'concept', company: c, domain: sales, sid: 'c-order', x: 400, y: 200 });
+    const plant = addNode(store.s, { label: 'Plant', kind: 'concept', company: c, domain: domainOf(store.s, 'production', c), sid: 'c-plant', x: -300, y: 50 });
+    for (const n of [price, order, plant]) n.pinned = true;
+    const proposal = pending({ type: 'change', changeKind: 'move_concept_domain', state: 'approved', conceptId: null, artefacts: undefined });
+
+    store.handleEvent(
+      envelope('proposal.approved', { proposal, artefacts: { concepts: [moved('sales', sales.color)], domainProducts: [] }, cascaded: [], caption: null }),
+    );
+
+    expect(plant.domain).toBe(sales);
+    expect(plant.tween).toMatchObject({ fx: -300, fy: 50, tx: 400 });
+    expect(plant.tween!.ty).toBeGreaterThan(200);
+    // The tween ends pinned, as Arrange's own do.
+    expect(plant.tween!.pin).toBeUndefined();
+    expect(plant.pinned).toBe(false);
+  });
 });
 
 describe('custom domain placement', () => {
