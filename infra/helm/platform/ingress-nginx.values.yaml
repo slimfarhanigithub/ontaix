@@ -8,6 +8,12 @@ controller:
     default: true
   # Snippet annotations let an Ingress inject nginx configuration; nothing here needs them.
   allowSnippetAnnotations: false
+  # AKS Admissions Enforcer rewrites webhook configurations to keep its system namespaces out
+  # and then co-owns the field with Helm. This webhook only validates Ingress objects, so the
+  # enforcer leaves it alone.
+  admissionWebhooks:
+    annotations:
+      admissions.enforcer/disabled: "true"
   service:
     # Keep the client's address: the API throttles sign-in by the X-Forwarded-For entry this
     # controller sets, which with Cluster policy would be a node's address for everyone.
