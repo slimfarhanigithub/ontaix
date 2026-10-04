@@ -1,0 +1,16 @@
+Ontaix {{ .Chart.AppVersion }} ({{ .Release.Name }} in {{ .Release.Namespace }}, images tagged {{ .Values.image.tag }}).
+
+{{- if .Values.ingress.enabled }}
+Studio: https://{{ .Values.ingress.host }}/
+API:    https://{{ .Values.ingress.host }}/api/v1
+{{- end }}
+
+Reach the cluster directly (sign-in needs an allowed origin, so use these for health and admin):
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "ontaix.api.name" . }} 8000:{{ .Values.api.port }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "ontaix.studio.name" . }} 5173:{{ .Values.studio.port }}
+
+Migration log (the init step of the API pod):
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "ontaix.api.name" . }} -c migrate
+
+Create the super admin once (prompts twice, no echo):
+  kubectl -n {{ .Release.Namespace }} exec -it deploy/{{ include "ontaix.api.name" . }} -c api -- python -m app.admin create-super-admin <email>

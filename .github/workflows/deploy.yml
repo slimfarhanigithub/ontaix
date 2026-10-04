@@ -1,0 +1,421 @@
+name: deploy
+
+# Deploys Ontaix to aks-ontaix-dev-frc. Manual runs only, in the azure-dev environment:
+#   preflight → resolves the non-secret deployment values from Azure (read-only) and checks the
+#               rights the run needs, failing early with the missing role assignment named
+#   build     → the API, gateway and Studio images, built by ACR Tasks, tagged with the commit SHA
+#   deploy    → ingress-nginx (the public address), cert-manager and the Let's Encrypt issuers,
+#               then the Ontaix chart pinned to the images' digests; waits for the rollout,
+#               prints the migration revision, grants the database roles, checks the release in
+#               the cluster and at its address
+# Authentication is GitHub OIDC federation only; there is no client secret. Pods read their
+# secrets from Key Vault with workload identity; this workflow never reads a secret value.
+# Every action is pinned to a commit; the comment names the release it is.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag already in the registry; empty builds this commit and tags it with its SHA
+        type: string
+        required: false
+        default: ""
+      run_role_grant:
+        description: Grant the database roles to the API's login after the rollout (safe to repeat)
+        type: boolean
+        default: true
+      certificate_issuer:
+        description: Let's Encrypt issuer of the public certificate (staging first, production once staging works)
+        type: choice
+        options:
+          - letsencrypt-staging
+          - letsencrypt-production
+        default: letsencrypt-staging
+
+permissions: {}
+
+env:
+  RESOURCE_GROUP: rg-ontaix-dev-frc
+  AKS_CLUSTER: aks-ontaix-dev-frc
+  NAMESPACE: ontaix
+  RELEASE: ontaix
+  CHART: infra/helm/ontaix
+  # The public address is <DNS_LABEL>.<DNS_ZONE>, a label on the ingress controller's public IP.
+  DNS_LABEL: ontaix-dev
+  DNS_ZONE: francecentral.cloudapp.azure.com
+  INGRESS_NGINX_VERSION: "4.15.1"
+  CERT_MANAGER_VERSION: v1.21.2
+
+concurrency:
+  group: deploy-azure-dev
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: azure-dev
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      tag: ${{ steps.values.outputs.tag }}
+      host: ${{ steps.values.outputs.host }}
+      registry: ${{ steps.values.outputs.registry }}
+      login_server: ${{ steps.values.outputs.login_server }}
+      key_vault: ${{ steps.values.outputs.key_vault }}
+      workload_client_id: ${{ steps.values.outputs.workload_client_id }}
+      speech_client_id: ${{ steps.values.outputs.speech_client_id }}
+      foundry_endpoint: ${{ steps.values.outputs.foundry_endpoint }}
+      speech_endpoint: ${{ steps.values.outputs.speech_endpoint }}
+      speech_resource_id: ${{ steps.values.outputs.speech_resource_id }}
+      postgres_fqdn: ${{ steps.values.outputs.postgres_fqdn }}
+    steps:
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: resolve the deployment values (read-only)
+        id: values
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          if [ -n "$IMAGE_TAG" ] && ! [[ "$IMAGE_TAG" =~ ^[A-Za-z0-9_.-]{1,128}$ ]]; then
+            fail "image_tag must match ^[A-Za-z0-9_.-]{1,128}$"
+          fi
+          rg="$RESOURCE_GROUP"
+          registry=$(az acr list -g "$rg" --query "[0].name" -o tsv)
+          login_server=$(az acr list -g "$rg" --query "[0].loginServer" -o tsv)
+          key_vault=$(az keyvault list -g "$rg" --query "[0].name" -o tsv)
+          workload_client_id=$(az identity show -g "$rg" -n id-ontaix-dev-frc --query clientId -o tsv)
+          speech_client_id=$(az identity show -g "$rg" -n id-ontaix-speech-dev-frc --query clientId -o tsv)
+          foundry_account=$(az cognitiveservices account list -g "$rg" \
+            --query "[?kind=='AIServices' && location=='francecentral'] | [0].name" -o tsv)
+          foundry_endpoint=$(az cognitiveservices account show -g "$rg" -n "$foundry_account" \
+            --query properties.endpoint -o tsv)
+          foundry_deployment=$(az cognitiveservices account deployment show -g "$rg" -n "$foundry_account" \
+            --deployment-name gpt-6-sol --query name -o tsv)
+          speech=$(az cognitiveservices account list -g "$rg" \
+            --query "[?kind=='SpeechServices'] | [0].[id, properties.endpoint]" -o tsv)
+          IFS=$'\t' read -r speech_resource_id speech_endpoint <<<"$speech"
+          postgres_fqdn=$(az postgres flexible-server list -g "$rg" --query "[0].fullyQualifiedDomainName" -o tsv)
+          database_url_secret=$(az keyvault secret list --vault-name "$key_vault" \
+            --query "[?name=='database-url'].name" -o tsv)
+          for name in registry login_server key_vault workload_client_id speech_client_id foundry_endpoint \
+                      foundry_deployment speech_resource_id speech_endpoint postgres_fqdn database_url_secret; do
+            [ -n "${!name}" ] || fail "$name was not found in $rg: Terraform (infra.yml) has not created it yet"
+          done
+          tag="${IMAGE_TAG:-$COMMIT_SHA}"
+          host="$DNS_LABEL.$DNS_ZONE"
+          {
+            echo "tag=$tag"
+            echo "host=$host"
+            echo "registry=$registry"
+            echo "login_server=$login_server"
+            echo "key_vault=$key_vault"
+            echo "workload_client_id=$workload_client_id"
+            echo "speech_client_id=$speech_client_id"
+            echo "foundry_endpoint=$foundry_endpoint"
+            echo "speech_endpoint=$speech_endpoint"
+            echo "speech_resource_id=$speech_resource_id"
+            echo "postgres_fqdn=$postgres_fqdn"
+          } >> "$GITHUB_OUTPUT"
+          echo "images $login_server/ontaix/{api,gateway,studio}:$tag → https://$host"
+          echo "Key Vault $key_vault (secret database-url present), Postgres $postgres_fqdn, Foundry $foundry_endpoint ($foundry_deployment)"
+      - name: check the rights this run needs (fail fast)
+        env:
+          REGISTRY: ${{ steps.values.outputs.registry }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          az acr show -n "$REGISTRY" -g "$RESOURCE_GROUP" --query id -o tsv >/dev/null \
+            || fail "The CI identity cannot read the registry $REGISTRY. Missing role assignment: Contributor on the resource group $RESOURCE_GROUP (infra/scripts/bootstrap-azure.sh grants it)."
+          az aks get-credentials -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --overwrite-existing >/dev/null \
+            || fail "The CI identity cannot list the user credentials of $AKS_CLUSTER. Missing role assignment: Azure Kubernetes Service Cluster User Role on the cluster (part of Contributor on $RESOURCE_GROUP)."
+          { kubectl auth can-i create deployments -n "$NAMESPACE" -q && kubectl auth can-i create clusterroles -q; } \
+            || fail "The credentials of $AKS_CLUSTER are not cluster-admin in Kubernetes. With local accounts the cluster user credential is; with Entra integration the CI identity needs Azure Kubernetes Service RBAC Cluster Admin on the cluster."
+          echo "Rights in place: registry readable, cluster credentials listed, cluster-admin in Kubernetes."
+          echo "Image builds need Microsoft.ContainerRegistry/registries/scheduleRun/action (in Contributor on $RESOURCE_GROUP); a refusal stops the build job with the registry's message."
+
+  build:
+    needs: preflight
+    if: inputs.image_tag == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: azure-dev
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - image: api
+            context: apps/api
+            dockerfile: apps/api/Dockerfile
+            build_args: ""
+          - image: gateway
+            context: apps/gateway
+            dockerfile: apps/gateway/Dockerfile
+            build_args: ""
+          - image: studio
+            context: .
+            dockerfile: apps/studio/Dockerfile
+            # The built Studio calls the API on its own origin; there is no development identity.
+            build_args: --build-arg VITE_ONTAIX_API_URL=/api/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: az acr build ontaix/${{ matrix.image }}
+        env:
+          REGISTRY: ${{ needs.preflight.outputs.registry }}
+          TAG: ${{ needs.preflight.outputs.tag }}
+          IMAGE: ${{ matrix.image }}
+          CONTEXT: ${{ matrix.context }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          BUILD_ARGS: ${{ matrix.build_args }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086
+          az acr build --registry "$REGISTRY" --image "ontaix/$IMAGE:$TAG" --file "$DOCKERFILE" $BUILD_ARGS "$CONTEXT"
+
+  deploy:
+    needs: [preflight, build]
+    if: ${{ !cancelled() && needs.preflight.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: azure-dev
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TAG: ${{ needs.preflight.outputs.tag }}
+      HOST: ${{ needs.preflight.outputs.host }}
+      REGISTRY: ${{ needs.preflight.outputs.registry }}
+      LOGIN_SERVER: ${{ needs.preflight.outputs.login_server }}
+      KEY_VAULT: ${{ needs.preflight.outputs.key_vault }}
+      WORKLOAD_CLIENT_ID: ${{ needs.preflight.outputs.workload_client_id }}
+      SPEECH_CLIENT_ID: ${{ needs.preflight.outputs.speech_client_id }}
+      FOUNDRY_ENDPOINT: ${{ needs.preflight.outputs.foundry_endpoint }}
+      SPEECH_ENDPOINT: ${{ needs.preflight.outputs.speech_endpoint }}
+      SPEECH_RESOURCE_ID: ${{ needs.preflight.outputs.speech_resource_id }}
+      POSTGRES_FQDN: ${{ needs.preflight.outputs.postgres_fqdn }}
+      ISSUER: ${{ inputs.certificate_issuer }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: the three images exist in the registry; pin their digests
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          for image in api gateway studio; do
+            digest=$(az acr repository show --name "$REGISTRY" --image "ontaix/$image:$TAG" --query digest -o tsv 2>/dev/null || true)
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+              || fail "$LOGIN_SERVER/ontaix/$image:$TAG is not in the registry (or has no digest); run without image_tag to build it"
+            echo "${image^^}_DIGEST=$digest" >> "$GITHUB_ENV"
+            echo "ontaix/$image:$TAG = $digest"
+          done
+      - name: az aks get-credentials
+        run: az aks get-credentials -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --overwrite-existing
+      - name: ingress-nginx (the public address)
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx >/dev/null
+          helm repo update ingress-nginx >/dev/null
+          helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx --version "$INGRESS_NGINX_VERSION" \
+            --namespace ingress-nginx --create-namespace \
+            --values infra/helm/platform/ingress-nginx.values.yaml \
+            --set-string "controller.service.annotations.service\.beta\.kubernetes\.io/azure-dns-label-name=$DNS_LABEL" \
+            --wait --timeout 10m
+          ip=""
+          for _ in $(seq 1 40); do
+            ip=$(kubectl -n ingress-nginx get svc ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            [ -n "$ip" ] && break
+            sleep 15
+          done
+          if [ -z "$ip" ]; then
+            kubectl -n ingress-nginx describe svc ingress-nginx-controller | tail -n 30
+            fail "ingress-nginx has no public IP after 10 minutes; the service events above say why (a DNS label already taken in $DNS_ZONE shows there)"
+          fi
+          resolved=""
+          for _ in $(seq 1 20); do
+            resolved=$(getent hosts "$HOST" | awk '{print $1}' | head -n 1 || true)
+            [ "$resolved" = "$ip" ] && break
+            sleep 15
+          done
+          [ "$resolved" = "$ip" ] || fail "$HOST resolves to '${resolved:-nothing}' instead of the public IP $ip"
+          echo "public IP $ip = $HOST"
+      - name: cert-manager and the Let's Encrypt issuers
+        run: |
+          set -euo pipefail
+          helm repo add jetstack https://charts.jetstack.io >/dev/null
+          helm repo update jetstack >/dev/null
+          helm upgrade --install cert-manager jetstack/cert-manager --version "$CERT_MANAGER_VERSION" \
+            --namespace cert-manager --create-namespace \
+            --values infra/helm/platform/cert-manager.values.yaml \
+            --wait --timeout 10m
+          helm upgrade --install cluster-issuers infra/helm/cluster-issuers --namespace cert-manager --wait --timeout 5m
+          kubectl wait --for=condition=Ready clusterissuer/letsencrypt-staging clusterissuer/letsencrypt-production --timeout=3m
+      - name: helm upgrade --install ${{ env.RELEASE }}
+        run: |
+          set -euo pipefail
+          if ! helm upgrade --install "$RELEASE" "$CHART" --namespace "$NAMESPACE" --create-namespace \
+            --values "$CHART/values-azure-dev.yaml" \
+            --set-string image.registry="$LOGIN_SERVER" \
+            --set-string image.tag="$TAG" \
+            --set-string api.image.digest="$API_DIGEST" \
+            --set-string gateway.image.digest="$GATEWAY_DIGEST" \
+            --set-string studio.image.digest="$STUDIO_DIGEST" \
+            --set-string workloadIdentity.clientId="$WORKLOAD_CLIENT_ID" \
+            --set-string secrets.keyVault.name="$KEY_VAULT" \
+            --set-string api.env.ONTAIX_FOUNDRY_ENDPOINT="$FOUNDRY_ENDPOINT" \
+            --set-string api.env.ONTAIX_SPEECH_RESOURCE_ID="$SPEECH_RESOURCE_ID" \
+            --set-string api.env.ONTAIX_SPEECH_ENDPOINT="$SPEECH_ENDPOINT" \
+            --set-string api.env.ONTAIX_SPEECH_CLIENT_ID="$SPEECH_CLIENT_ID" \
+            --set-string ingress.host="$HOST" \
+            --set-string ingress.clusterIssuer="$ISSUER" \
+            --wait --timeout 15m; then
+            echo "::group::pods"; kubectl -n "$NAMESPACE" get pods -o wide; echo "::endgroup::"
+            echo "::group::events"; kubectl -n "$NAMESPACE" get events --sort-by=.lastTimestamp | tail -n 40; echo "::endgroup::"
+            for container in fetch-secrets migrate api; do
+              echo "::group::logs $RELEASE-api/$container"
+              kubectl -n "$NAMESPACE" logs "deploy/$RELEASE-api" -c "$container" --tail=100 || true
+              echo "::endgroup::"
+            done
+            echo "::error::the release did not roll out; see the pods, events and logs above. 'helm rollback $RELEASE' restores the previous revision."
+            exit 1
+          fi
+          helm -n "$NAMESPACE" history "$RELEASE" --max 5
+      - name: migration revision
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          kubectl -n "$NAMESPACE" logs "deploy/$RELEASE-api" -c migrate | tee migrate.log
+          revision=$(grep -E '^[0-9a-f]+ \(head\)' migrate.log | tail -n 1 || true)
+          [ -n "$revision" ] || fail "the migration step reported no head revision; its log is above"
+          echo "DATABASE_REVISION=$revision" >> "$GITHUB_ENV"
+          echo "database at revision $revision"
+      - name: grant the database roles to the API's login
+        if: inputs.run_role_grant
+        run: |
+          set -euo pipefail
+          kubectl -n "$NAMESPACE" exec "deploy/$RELEASE-api" -c api -- \
+            env ONTAIX_APP_DATABASE_LOGIN=ontaix_admin python -m app.admin grant-database-roles
+      - name: checks in the cluster
+        # Every check runs inside a pod of the release (kubectl exec), so the network policies
+        # need no exception for a probe pod.
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          api="deploy/$RELEASE-api"
+          kubectl -n "$NAMESPACE" exec "$api" -c api -- python -c \
+            "import urllib.request; r = urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5); print('api /healthz', r.status); assert r.status == 200"
+          # A sign-in with an unknown account exercises the platform pool: the connection runs
+          # SET ROLE ontaix_platform, so 401 is the healthy answer and 500 means the role grant
+          # is missing or the database is unreachable.
+          status=$(kubectl -n "$NAMESPACE" exec -i "$api" -c api -- env "ORIGIN=https://$HOST" python - <<'PY'
+          import json, os, urllib.error, urllib.request
+          body = json.dumps({"email": "deploy-check@invalid.example", "password": "deploy-check"}).encode()
+          request = urllib.request.Request(
+              "http://127.0.0.1:8000/api/v1/auth/sign-in", data=body, method="POST",
+              headers={"Content-Type": "application/json", "Origin": os.environ["ORIGIN"]},
+          )
+          try:
+              print(urllib.request.urlopen(request, timeout=20).status)
+          except urllib.error.HTTPError as error:
+              print(error.code)
+          PY
+          )
+          echo "sign-in probe answered $status"
+          [ "$status" = "401" ] || fail "the sign-in probe answered $status instead of 401: the API cannot use its database (role grant, network or credentials)"
+          if kubectl -n "$NAMESPACE" logs "$api" -c api --since=1h | grep -q "permission denied to set role"; then
+            fail "the API log contains 'permission denied to set role': run again with run_role_grant, or see docs/provisioning.md, Database Role Grant"
+          fi
+          kubectl -n "$NAMESPACE" exec "deploy/$RELEASE-gateway" -- python -c \
+            "import urllib.request; r = urllib.request.urlopen('http://127.0.0.1:8100/healthz', timeout=5); print('gateway /healthz', r.status); assert r.status == 200"
+          kubectl -n "$NAMESPACE" exec "deploy/$RELEASE-studio" -- wget -qO- http://127.0.0.1:8080/healthz >/dev/null
+          kubectl -n "$NAMESPACE" exec "deploy/$RELEASE-studio" -- wget -qO- http://127.0.0.1:8080/api/v1/healthz >/dev/null
+          echo "studio /healthz and its /api proxy answer (the studio-to-api network policy holds)"
+          kubectl -n "$NAMESPACE" get configmap "$RELEASE-api" -o json \
+            | jq -e '.data | has("ONTAIX_DEV_IDENTITY_HEADER") | not' >/dev/null \
+            || fail "ONTAIX_DEV_IDENTITY_HEADER is set in the cluster; it never is"
+          kubectl -n "$NAMESPACE" get deploy "$RELEASE-api" -o json \
+            | jq -e '[.spec.template.spec.containers[].env // [] | .[].name] | index("ONTAIX_DEV_IDENTITY_HEADER") == null' >/dev/null \
+            || fail "ONTAIX_DEV_IDENTITY_HEADER is set on the API container; it never is"
+          echo "no development identity header in the cluster"
+      - name: the public certificate
+        run: |
+          set -euo pipefail
+          if ! kubectl -n "$NAMESPACE" wait --for=condition=Ready certificate/ontaix-tls --timeout=10m; then
+            kubectl -n "$NAMESPACE" describe certificate,certificaterequest,order,challenge || true
+            echo "::error::the certificate from $ISSUER is not ready; the cert-manager objects above say why"
+            exit 1
+          fi
+      - name: checks at the public address
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          insecure=""
+          [ "$ISSUER" = "letsencrypt-staging" ] && insecure="--insecure"
+          # shellcheck disable=SC2086
+          code=$(curl -sS $insecure -o /dev/null -w '%{http_code}' "https://$HOST/healthz")
+          [ "$code" = "200" ] || fail "https://$HOST/healthz answered $code"
+          # shellcheck disable=SC2086
+          code=$(curl -sS $insecure -o /dev/null -w '%{http_code}' "https://$HOST/api/v1/healthz")
+          [ "$code" = "200" ] || fail "https://$HOST/api/v1/healthz answered $code"
+          # shellcheck disable=SC2086
+          code=$(curl -sS $insecure -o /dev/null -w '%{http_code}' "https://$HOST/api/v1/openapi.json")
+          [ "$code" = "404" ] || fail "https://$HOST/api/v1/openapi.json answered $code instead of 404 (the API serves no documentation in production)"
+          # shellcheck disable=SC2086
+          headers=$(curl -sSI $insecure "https://$HOST/")
+          echo "$headers" | grep -qi '^strict-transport-security:' || fail "no Strict-Transport-Security header on https://$HOST/"
+          echo "$headers" | grep -qi '^content-security-policy:' || fail "no Content-Security-Policy header on https://$HOST/"
+          # shellcheck disable=SC2086
+          curl -sSI $insecure "https://$HOST/api/v1/healthz" | grep -qi '^x-content-type-options: nosniff' \
+            || fail "no X-Content-Type-Options header on the API's responses"
+          redirect=$(curl -sS -o /dev/null -w '%{http_code}' "http://$HOST/healthz")
+          case "$redirect" in 301|308) ;; *) fail "http://$HOST/healthz answered $redirect instead of a redirect to HTTPS" ;; esac
+          issuer=$(openssl s_client -connect "$HOST:443" -servername "$HOST" </dev/null 2>/dev/null | openssl x509 -noout -issuer)
+          echo "https://$HOST serves the Studio and the API; HSTS, CSP and nosniff present; HTTP redirects ($redirect); certificate $issuer"
+          echo "CERTIFICATE_ISSUER=$issuer" >> "$GITHUB_ENV"
+      - name: summary
+        run: |
+          {
+            echo "## Ontaix on $AKS_CLUSTER"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Address | https://$HOST |"
+            echo "| Images | $LOGIN_SERVER/ontaix/{api,gateway,studio}:$TAG |"
+            echo "| Digests | api $API_DIGEST, gateway $GATEWAY_DIGEST, studio $STUDIO_DIGEST |"
+            echo "| Database | $POSTGRES_FQDN at revision $DATABASE_REVISION |"
+            echo "| Certificate | $ISSUER ($CERTIFICATE_ISSUER) |"
+            echo "| Role grant | ${{ inputs.run_role_grant }} |"
+            echo
+            if [ "$ISSUER" = "letsencrypt-staging" ]; then
+              echo "The staging certificate is not trusted by browsers. Once this run is green, run again with certificate_issuer=letsencrypt-production."
+              echo
+            fi
+            echo "Create the super admin once (prompts twice, no echo):"
+            echo
+            echo '```'
+            echo "az aks get-credentials -n $AKS_CLUSTER -g $RESOURCE_GROUP"
+            echo "kubectl -n $NAMESPACE exec -it deploy/$RELEASE-api -c api -- python -m app.admin create-super-admin <email>"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

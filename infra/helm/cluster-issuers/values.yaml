@@ -1,0 +1,7 @@
+# Let's Encrypt account: the owner's address receives expiry and policy notices. Not a secret.
+email: slim.farhani@insight.com
+# Ingress class that answers the HTTP-01 challenges.
+ingressClassName: nginx
+issuers:
+  letsencrypt-staging: https://acme-staging-v02.api.letsencrypt.org/directory
+  letsencrypt-production: https://acme-v02.api.letsencrypt.org/directory

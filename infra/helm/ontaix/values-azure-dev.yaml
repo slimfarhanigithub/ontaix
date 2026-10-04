@@ -1,0 +1,70 @@
+# Ontaix on aks-ontaix-dev-frc, public and invite only. Non-secret values that are not Terraform
+# outputs; the deploy workflow (.github/workflows/deploy.yml) reads the outputs from Azure at run
+# time and passes them with --set-string: image.registry, image.tag, workloadIdentity.clientId,
+# secrets.keyVault.name, ingress.host, ingress.clusterIssuer, ONTAIX_FOUNDRY_ENDPOINT and the
+# ONTAIX_SPEECH_* identifiers.
+
+workloadIdentity:
+  clientId: ""
+
+secrets:
+  keyVault:
+    enabled: true
+    name: ""
+    secrets:
+      ONTAIX_DATABASE_URL: database-url
+
+api:
+  # The server administrator login; the database URL in Key Vault names it.
+  databaseLogin: ontaix_admin
+  allowedOrigins: []
+  env:
+    ONTAIX_ENVIRONMENT: production
+    ONTAIX_LOG_LEVEL: INFO
+    # ingress-nginx is the one proxy in front of the API; its X-Forwarded-For entry is the client.
+    ONTAIX_TRUSTED_PROXY_HOPS: "1"
+    ONTAIX_LLM_PROVIDER: azure_foundry
+    ONTAIX_FOUNDRY_ENDPOINT: ""
+    ONTAIX_FOUNDRY_DEPLOYMENT: gpt-6-sol
+    ONTAIX_FOUNDRY_REASONING_EFFORT: none
+    ONTAIX_LLM_MODEL: gpt-6-sol
+    # Euros per million tokens of gpt-6-sol DataZoneStandard in France Central; the API does not
+    # start without a price for the model it calls. Replace with the current Azure retail price.
+    ONTAIX_LLM_PRICE_TABLE: '{"gpt-6-sol": {"inputEurPerMTok": 1.00, "outputEurPerMTok": 8.00}}'
+    ONTAIX_LLM_TIMEOUT_SECONDS: "15"
+    ONTAIX_LLM_SPEECH_TIMEOUT_SECONDS: "45"
+    # Per-user hourly caps on model spend; the Azure budget (Terraform) caps the month.
+    ONTAIX_LLM_CALLS_PER_HOUR: "200"
+    ONTAIX_EXPAND_CALLS_PER_HOUR: "30"
+    ONTAIX_DOCUMENT_EXTRACTION_JOBS_PER_HOUR: "5"
+    ONTAIX_OCR_PAGES_PER_HOUR: "600"
+    ONTAIX_EXPORT_PER_HOUR: "20"
+    ONTAIX_SPEECH_TOKENS_PER_HOUR: "60"
+    ONTAIX_SPEECH_RESOURCE_ID: ""
+    ONTAIX_SPEECH_REGION: francecentral
+    ONTAIX_SPEECH_ENDPOINT: ""
+    ONTAIX_SPEECH_CLIENT_ID: ""
+    ONTAIX_SPEECH_LANGUAGE: en-GB
+
+gateway:
+  env:
+    ONTAIX_ENVIRONMENT: production
+    ONTAIX_LOG_LEVEL: INFO
+
+networkPolicy:
+  enabled: true
+  ingressNamespace: ingress-nginx
+  database:
+    port: 5432
+    # snet-postgres, the subnet delegated to the PostgreSQL flexible server (Terraform).
+    cidrs:
+      - 10.40.16.0/24
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ""
+  tls:
+    enabled: true
+    secretName: ontaix-tls
+  clusterIssuer: letsencrypt-staging

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ontaix.studio.name" . }}
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: studio
+data:
+  default.conf: |
+    {{- tpl (.Files.Get "files/nginx.conf") . | nindent 4 }}
