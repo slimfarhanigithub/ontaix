@@ -75,7 +75,12 @@ from app.utilities.example_selection import most_similar, within_budget
 from app.utilities.label_forms import label_key, singular_word
 from app.utilities.learning_structure import fold
 from app.utilities.permissions import can_read
-from app.utilities.sound_alike import company_possessive_rest, sounds_like_name
+from app.utilities.sound_alike import (
+    company_possessive_rest,
+    sound_like_word_together,
+    sounds_like_name,
+    sounds_like_word,
+)
 from app.utilities.stage_clock import StageClock
 from app.utilities.streamed_json import closed_items
 from app.utilities.teach_parser import singular, title
@@ -588,7 +593,7 @@ def _interpret(
     sent = {c.id for c in handles}
     cross_company = bool(drafter.view.settings and drafter.view.settings.cross_company)
     checked: list[_Checked] = []
-    earlier = _grounded_labels(answer, sources, text)
+    earlier = _grounded_labels(answer, sources, text, reading.speech)
     for intent, source, index in zip(answer.intents, sources, owners, strict=True):
         if intent.domain_key is not None and intent.domain_key not in drafter.view.domains:
             raise _InvalidAnswer("an intent names a domain key the tenant does not hold")
@@ -610,7 +615,10 @@ def _interpret(
         # caller's words inside the source range; the self-join checks run after that. An
         # ungrounded subject or object sinks the intent; an ungrounded member is left out alone.
         raw = [intent.subject, intent.object, *(intent.members or [])]
-        placed = [_end(ref, handles, sent, drafter, text, source, earlier, aliases) for ref in raw]
+        placed = [
+            _end(ref, handles, sent, drafter, text, source, earlier, aliases, reading.speech)
+            for ref in raw
+        ]
         # Speech recognition mishears names: a new label that sounds like the name of one of
         # the company's concepts is never drafted beside it; the phrase is listed instead. Each
         # end left out keeps its own reason.
@@ -741,6 +749,9 @@ def _interpret(
                 _note_count(planned, intent.stated_count, len(c.members))
         else:
             planned = drafter.model_spec(c.subject, c.obj, intent.rule, note, intent.domain_key)
+        for end in (c.subject, c.obj, *c.members):
+            if end is not None and end.heard is not None:
+                _note_heard(planned, end)
         planned.span = intent.span
         planned.segment = c.segment
         step.planned.append(planned)
@@ -1288,6 +1299,25 @@ def _note_count(planned: PlannedIntent, stated: int, listed: int) -> None:
     planned.note = planned.note.model_copy(update={"explanation": text})
 
 
+def _note_heard(planned: PlannedIntent, end: End) -> None:
+    """The reviewer sees the words the recogniser heard for a corrected label: in the note's
+    explanation when the model did not state them, after every statement that names the label,
+    and in the caption of every draft of that label."""
+    remark = f"heard '{end.heard}'"
+    current = planned.note.explanation or ""
+    if remark.casefold() not in current.casefold():
+        text = f"{current} {remark}" if current else remark
+        if len(text) > MAX_EXPLANATION:
+            text = f"{current[: MAX_EXPLANATION - len(remark) - 1]} {remark}"
+        planned.note = planned.note.model_copy(update={"explanation": text})
+    planned.statements = [
+        f"{line} ({remark})" if end.label in line else line for line in planned.statements
+    ]
+    for draft in planned.drafts:
+        if draft.get("label") == end.label and draft.get("caption"):
+            draft["caption"] = f"{draft['caption']} {remark[0].upper()}{remark[1:]}."
+
+
 def _end(
     ref: Any,
     handles: list[Concept],
@@ -1297,13 +1327,15 @@ def _end(
     source: tuple[int, int],
     earlier: list[str] | None = None,
     aliases: Sequence[tuple[str, str]] = (),
+    speech: bool = False,
 ) -> End | None:
     """An intent end: a cited candidate; a new label naming a candidate sent in this call,
     reused as is; or a new label grounded in the caller's words - inside this intent's range,
-    as a label another intent of the same answer grounded in its own range (`earlier`), or as
-    the meant label of a company alias whose heard form is in the range - and then resolved to
-    an existing concept of the company when one has that label. None when a new label is
-    ungrounded."""
+    as a label another intent of the same answer grounded in its own range (`earlier`), as
+    the meant label of a company alias whose heard form is in the range, or in speech as a
+    term the recogniser misheard into words of the range that sound like it - and then
+    resolved to an existing concept of the company when one has that label. None when a new
+    label is ungrounded."""
     if isinstance(ref, CandidateRef):
         index = int(ref.candidate[1:])
         if index >= len(handles):
@@ -1314,14 +1346,70 @@ def _end(
     reused = drafter.resolve(label)
     if reused is not None and reused.id in sent:
         return End(reused, reused.label, reused.label)
+    spoken = _ground(label, text, source)
+    if spoken is None and speech:
+        heard = _sound_alike_run(label, text, source)
+        if heard is not None:
+            return End(drafter.resolve(label), label, label, cited_new=True, heard=heard)
     spoken = (
-        _ground(label, text, source)
-        or _repeated(label, earlier or [])
-        or alias_grounding(label, text, source, aliases)
+        spoken or _repeated(label, earlier or []) or alias_grounding(label, text, source, aliases)
     )
     if spoken is None:
         return None
     return End(drafter.resolve(spoken), spoken, spoken, cited_new=True)
+
+
+def _sound_alike_run(label: str, text: str, source: tuple[int, int]) -> str | None:
+    """The caller's words in `text[source]` that speech recognition made of `label`, or None.
+
+    A corrected label is grounded only through words that sound like it: a run of whole words
+    inside the range, as many as the label has or one more, matched word by word in order,
+    where each label word equals a heard word (as grounding compares words) or sounds like it,
+    or sounds like two neighbouring heard words run together ("a jile" for "agile"); at
+    least one word must differ, and a run tied by joining punctuation to a neighbouring word
+    grounds nothing. The result is the heard words as the caller spoke them."""
+    start, end = source
+    words = _words(text)
+    if any(a < start < b or a < end < b for a, b in words):
+        return None
+    inside = [(a, b) for a, b in words if a >= start and b <= end]
+    phrase = unicodedata.normalize("NFC", label)
+    wanted = [phrase[a:b] for a, b in _words(phrase)]
+    if not wanted or not _valid_label(label):
+        return None
+    for i in range(len(inside)):
+        for taken in _sound_alike_match(wanted, inside[i:], text):
+            first, last = inside[i][0], inside[i + taken - 1][1]
+            if not _part_of_name(text, first, last):
+                return text[first:last]
+    return None
+
+
+def _sound_alike_match(wanted: list[str], heard: list[tuple[int, int]], text: str) -> Iterator[int]:
+    """The numbers of heard words, from the first, that `wanted` matches word by word with at
+    least one word differing; see `_sound_alike_run`."""
+    taken = 0
+    differed = joined = False
+    for word in wanted:
+        if taken >= len(heard):
+            return
+        one = text[slice(*heard[taken])]
+        if _fold(one) == _fold(word):
+            taken += 1
+            continue
+        if sounds_like_word(one, word):
+            taken += 1
+            differed = True
+            continue
+        # Two heard words run together sound like one word, once per label.
+        pair = [text[slice(*w)] for w in heard[taken : taken + 2]]
+        if not joined and len(pair) == 2 and sound_like_word_together(pair[0], pair[1], word):
+            taken += 2
+            differed = joined = True
+            continue
+        return
+    if differed:
+        yield taken
 
 
 def alias_grounding(
@@ -1364,10 +1452,11 @@ def _distinct(reasons: list[UnresolvedReason | None]) -> tuple[UnresolvedReason,
 
 
 def _grounded_labels(
-    answer: TeachExtractionAnswer, sources: list[tuple[int, int]], text: str
+    answer: TeachExtractionAnswer, sources: list[tuple[int, int]], text: str, speech: bool
 ) -> list[str]:
     """The new labels of the answer that are grounded inside their own intent's range, each as
-    the caller's words sliced from the input."""
+    the caller's words sliced from the input, or, in speech, as the term the caller's words in
+    that range were misheard from."""
     labels: list[str] = []
     for intent, source in zip(answer.intents, sources, strict=True):
         if intent.kind == "attr":
@@ -1375,7 +1464,10 @@ def _grounded_labels(
         for ref in [intent.subject, intent.object, *(intent.members or [])]:
             if ref is None or isinstance(ref, CandidateRef):
                 continue
-            spoken = _ground(title(unicodedata.normalize("NFKC", ref.new_label)), text, source)
+            label = title(unicodedata.normalize("NFKC", ref.new_label))
+            spoken = _ground(label, text, source)
+            if spoken is None and speech and _sound_alike_run(label, text, source) is not None:
+                spoken = label
             if spoken is not None and spoken not in labels:
                 labels.append(spoken)
     return labels

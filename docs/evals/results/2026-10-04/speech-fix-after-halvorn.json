@@ -1,0 +1,5352 @@
+{
+  "started_at": "2026-10-04T14:59:50+00:00",
+  "dry_run": false,
+  "budget_eur": 0.24,
+  "spent_eur": 0.159657,
+  "estimate": {
+    "cases": 8,
+    "screeningCases": 8,
+    "configurations": [
+      "gpt-6-sol@none"
+    ],
+    "stages": {
+      "screening": {
+        "configurations": 1,
+        "cases": 8,
+        "repeats": 1,
+        "calls": 12,
+        "inputTokens": 103658,
+        "outputTokens": 21600,
+        "eur": 0.28,
+        "eurByConfiguration": {
+          "gpt-6-sol@none": 0.28
+        }
+      }
+    },
+    "ocrPages": 0,
+    "ocrEur": 0.0,
+    "totalEur": 0.28,
+    "budgetEur": 0.24,
+    "unpriced": []
+  },
+  "cases": [
+    {
+      "id": "en-speech-misheard-title-in-list",
+      "kind": "speech",
+      "origin": "dataset",
+      "company": "Halvorn",
+      "description": "A recording with the recogniser's own errors; \"crowd architects\" is Cloud architects misheard in a list of job titles, \"but it is still loading\" is talk about the app and drafts nothing, and every item of the comma-less list is drafted.",
+      "tags": [
+        "en",
+        "speech",
+        "recording",
+        "misheard",
+        "kinds",
+        "is-a",
+        "list",
+        "not-a-statement"
+      ],
+      "existing": [],
+      "input": [
+        "halvorn have engineers these engineers can be test engineers network engineers platform engineers also crowd architects they can have certifications either vendor certifications or cloud certifications",
+        "but it is still loading"
+      ],
+      "document": null,
+      "expected": {
+        "concepts": [
+          {
+            "label": "Engineers",
+            "parent": [
+              "Halvorn"
+            ],
+            "action": [
+              "has",
+              "have",
+              "employs"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Test engineers",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Network engineers",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Platform engineers",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Cloud architects",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Certifications",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Vendor certifications",
+            "parent": [
+              "Certifications"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Cloud certifications",
+            "parent": [
+              "Certifications"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          }
+        ],
+        "relations": [],
+        "attributes": []
+      },
+      "optional": [
+        "Engineer",
+        "Certification"
+      ],
+      "source_report": {}
+    },
+    {
+      "id": "en-speech-misheard-article-and-fragment",
+      "kind": "speech",
+      "origin": "dataset",
+      "company": "Halvorn",
+      "description": "A recording with the recogniser's own errors; \"hall born\" is Halvorn, \"a jile delivery\" is Agile delivery misheard, and \"a Delivery\" is a fragment the recogniser left (Managed delivery most likely), never a concept of its own.",
+      "tags": [
+        "en",
+        "speech",
+        "recording",
+        "misheard",
+        "fragment",
+        "back-reference",
+        "sub-groups"
+      ],
+      "existing": [],
+      "input": [
+        "halvorn has clients hall born offers to its clients workshops these workshops can be around cloud data or security cloud can have a jile delivery or a Delivery security can have audits pen testing or training and data can have dashboards or pipelines"
+      ],
+      "document": null,
+      "expected": {
+        "concepts": [
+          {
+            "label": "Clients",
+            "parent": [
+              "Halvorn",
+              "Workshops"
+            ],
+            "action": [
+              "has",
+              "have",
+              "serves",
+              "is offered to",
+              "offered to",
+              "offers to",
+              "for",
+              "is for"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Workshops",
+            "parent": [
+              "Halvorn"
+            ],
+            "action": [
+              "offers",
+              "offer",
+              "provides",
+              "sells",
+              "offers to"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Cloud",
+            "parent": [
+              "Workshops"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Data",
+            "parent": [
+              "Workshops"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Security",
+            "parent": [
+              "Workshops"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Agile delivery",
+            "parent": [
+              "Cloud"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Audits",
+            "parent": [
+              "Security"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Pen testing",
+            "parent": [
+              "Security"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Training",
+            "parent": [
+              "Security"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Dashboards",
+            "parent": [
+              "Data"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Pipelines",
+            "parent": [
+              "Data"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          }
+        ],
+        "relations": [
+          {
+            "from": "Workshops",
+            "to": "Clients",
+            "action": [
+              "is offered to",
+              "offered to",
+              "for",
+              "is for",
+              "serves",
+              "is sold to"
+            ],
+            "inverse": []
+          }
+        ],
+        "attributes": []
+      },
+      "optional": [
+        "Client",
+        "Workshop",
+        "Managed delivery"
+      ],
+      "source_report": {}
+    },
+    {
+      "id": "en-speech-five-kinds-then-fragments",
+      "kind": "speech",
+      "origin": "dataset",
+      "company": "Halvorn",
+      "description": "A recording; five job titles spoken without commas are five kinds of Engineers, and the two short sentences that follow go on from \"these engineers can have certifications\".",
+      "tags": [
+        "en",
+        "speech",
+        "recording",
+        "kinds",
+        "is-a",
+        "list",
+        "fragment",
+        "back-reference"
+      ],
+      "existing": [],
+      "input": [
+        "halvorn has engineers these engineers can be test engineers network engineers platform engineers analysts or cloud architects these engineers can have certifications",
+        "vendor certifications",
+        "certifications can be cloud also so cloud certifications"
+      ],
+      "document": null,
+      "expected": {
+        "concepts": [
+          {
+            "label": "Engineers",
+            "parent": [
+              "Halvorn"
+            ],
+            "action": [
+              "has",
+              "have",
+              "employs"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Test engineers",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Network engineers",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Platform engineers",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Analysts",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Cloud architects",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Certifications",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Vendor certifications",
+            "parent": [
+              "Certifications"
+            ],
+            "action": [
+              "is a",
+              "includes",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Cloud certifications",
+            "parent": [
+              "Certifications"
+            ],
+            "action": [
+              "is a",
+              "includes",
+              "has",
+              "can be"
+            ],
+            "aliases": []
+          }
+        ],
+        "relations": [],
+        "attributes": []
+      },
+      "optional": [
+        "Engineer",
+        "Certification",
+        "Cloud"
+      ],
+      "source_report": {}
+    },
+    {
+      "id": "en-speech-kinds-then-badge",
+      "kind": "speech",
+      "origin": "dataset",
+      "company": "Halvorn",
+      "description": "A recording; kinds of Engineers and of Certifications, then a badge the engineers have, issued by Security.",
+      "tags": [
+        "en",
+        "speech",
+        "recording",
+        "kinds",
+        "is-a",
+        "back-reference"
+      ],
+      "existing": [],
+      "input": [
+        "halvorn have engineers these engineers can be analysts or testers they can have certifications either vendor certifications or cloud certifications these engineers have a badge and the badge is issued by security"
+      ],
+      "document": null,
+      "expected": {
+        "concepts": [
+          {
+            "label": "Engineers",
+            "parent": [
+              "Halvorn"
+            ],
+            "action": [
+              "has",
+              "have",
+              "employs"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Analysts",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Testers",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Certifications",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Vendor certifications",
+            "parent": [
+              "Certifications"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Cloud certifications",
+            "parent": [
+              "Certifications"
+            ],
+            "action": [
+              "is a"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Badge",
+            "parent": [
+              "Engineers"
+            ],
+            "action": [
+              "has",
+              "have"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Security",
+            "parent": [
+              "Badge",
+              "Halvorn"
+            ],
+            "action": [
+              "is issued by",
+              "issued by",
+              "issues",
+              "has"
+            ],
+            "aliases": []
+          }
+        ],
+        "relations": [
+          {
+            "from": "Badge",
+            "to": "Security",
+            "action": [
+              "is issued by",
+              "issued by"
+            ],
+            "inverse": [
+              "issues"
+            ]
+          }
+        ],
+        "attributes": []
+      },
+      "optional": [
+        "Engineer",
+        "Certification",
+        "Badges"
+      ],
+      "source_report": {}
+    },
+    {
+      "id": "en-speech-misheard-article-in-list",
+      "kind": "speech",
+      "origin": "dataset",
+      "company": "Halvorn",
+      "description": "A recording with the recogniser's own errors; \"a jile delivery\" beside \"managed delivery\" is Agile delivery misheard, and every item of each list is drafted.",
+      "tags": [
+        "en",
+        "speech",
+        "recording",
+        "misheard",
+        "sub-groups",
+        "list",
+        "back-reference"
+      ],
+      "existing": [],
+      "input": [
+        "halvorn offers workshops to clients these workshops can be around cloud data or security data can have dashboards or pipelines cloud can have a jile delivery or managed delivery and security can have audits pen testing and training"
+      ],
+      "document": null,
+      "expected": {
+        "concepts": [
+          {
+            "label": "Workshops",
+            "parent": [
+              "Halvorn"
+            ],
+            "action": [
+              "offers",
+              "offer",
+              "provides",
+              "sells"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Clients",
+            "parent": [
+              "Halvorn",
+              "Workshops"
+            ],
+            "action": [
+              "has",
+              "have",
+              "serves",
+              "is offered to",
+              "offered to",
+              "offers to",
+              "for",
+              "is for"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Cloud",
+            "parent": [
+              "Workshops"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Data",
+            "parent": [
+              "Workshops"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Security",
+            "parent": [
+              "Workshops"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Dashboards",
+            "parent": [
+              "Data"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Pipelines",
+            "parent": [
+              "Data"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Agile delivery",
+            "parent": [
+              "Cloud"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Managed delivery",
+            "parent": [
+              "Cloud"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Audits",
+            "parent": [
+              "Security"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Pen testing",
+            "parent": [
+              "Security"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Training",
+            "parent": [
+              "Security"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          }
+        ],
+        "relations": [
+          {
+            "from": "Workshops",
+            "to": "Clients",
+            "action": [
+              "is offered to",
+              "offered to",
+              "for",
+              "is for",
+              "serves",
+              "is sold to"
+            ],
+            "inverse": []
+          }
+        ],
+        "attributes": []
+      },
+      "optional": [
+        "Client",
+        "Workshop"
+      ],
+      "source_report": {}
+    },
+    {
+      "id": "en-speech-misheard-company-mid-sentence",
+      "kind": "speech",
+      "origin": "dataset",
+      "company": "Halvorn",
+      "description": "A recording with the recogniser's own errors; \"hall born\" in the middle of the sentence is Halvorn misheard, \"a jile delivery\" is Agile delivery, and every list item is drafted.",
+      "tags": [
+        "en",
+        "speech",
+        "recording",
+        "misheard",
+        "sub-groups",
+        "list",
+        "back-reference"
+      ],
+      "existing": [],
+      "input": [
+        "halvorn has clients hall born offers workshops to its clients these workshops can be around cloud data or security data can have dashboards or pipelines cloud can have a jile delivery or managed delivery and security can have training pen testing or audits"
+      ],
+      "document": null,
+      "expected": {
+        "concepts": [
+          {
+            "label": "Clients",
+            "parent": [
+              "Halvorn",
+              "Workshops"
+            ],
+            "action": [
+              "has",
+              "have",
+              "serves",
+              "is offered to",
+              "offered to",
+              "offers to",
+              "for",
+              "is for"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Workshops",
+            "parent": [
+              "Halvorn"
+            ],
+            "action": [
+              "offers",
+              "offer",
+              "provides",
+              "sells",
+              "offers to"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Cloud",
+            "parent": [
+              "Workshops"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Data",
+            "parent": [
+              "Workshops"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Security",
+            "parent": [
+              "Workshops"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Dashboards",
+            "parent": [
+              "Data"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Pipelines",
+            "parent": [
+              "Data"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Agile delivery",
+            "parent": [
+              "Cloud"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Managed delivery",
+            "parent": [
+              "Cloud"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Training",
+            "parent": [
+              "Security"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Pen testing",
+            "parent": [
+              "Security"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Audits",
+            "parent": [
+              "Security"
+            ],
+            "action": [
+              "has",
+              "have",
+              "can have",
+              "includes"
+            ],
+            "aliases": []
+          }
+        ],
+        "relations": [
+          {
+            "from": "Workshops",
+            "to": "Clients",
+            "action": [
+              "is offered to",
+              "offered to",
+              "for",
+              "is for",
+              "serves",
+              "is sold to"
+            ],
+            "inverse": []
+          }
+        ],
+        "attributes": []
+      },
+      "optional": [
+        "Client",
+        "Workshop"
+      ],
+      "source_report": {}
+    },
+    {
+      "id": "en-speech-serves-word-order",
+      "kind": "speech",
+      "origin": "dataset",
+      "company": "Halvorn",
+      "description": "A recording with the recogniser's own errors; \"hall born to have\" is Halvorn has, the areas after \"can be around\" are groups (includes), and \"security can be audits or pen testing\" names kinds.",
+      "tags": [
+        "en",
+        "speech",
+        "recording",
+        "misheard",
+        "sub-groups",
+        "kinds",
+        "is-a",
+        "back-reference"
+      ],
+      "existing": [],
+      "input": [
+        "hall born to have clients it serves these clients workshops these workshops can be around cloud data or security cloud can be around agile delivery or managed delivery data can be around pipelines or dashboards and security can be audits or pen testing"
+      ],
+      "document": null,
+      "expected": {
+        "concepts": [
+          {
+            "label": "Clients",
+            "parent": [
+              "Halvorn"
+            ],
+            "action": [
+              "has",
+              "have",
+              "serves"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Workshops",
+            "parent": [
+              "Halvorn",
+              "Clients"
+            ],
+            "action": [
+              "serves",
+              "has",
+              "have",
+              "offers",
+              "provides",
+              "is served",
+              "is served to",
+              "served to",
+              "for",
+              "is for"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Cloud",
+            "parent": [
+              "Workshops"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Data",
+            "parent": [
+              "Workshops"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Security",
+            "parent": [
+              "Workshops"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Agile delivery",
+            "parent": [
+              "Cloud"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Managed delivery",
+            "parent": [
+              "Cloud"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Pipelines",
+            "parent": [
+              "Data"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Dashboards",
+            "parent": [
+              "Data"
+            ],
+            "action": [
+              "includes",
+              "can be",
+              "can be around",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Audits",
+            "parent": [
+              "Security"
+            ],
+            "action": [
+              "is a",
+              "includes",
+              "can be",
+              "has"
+            ],
+            "aliases": []
+          },
+          {
+            "label": "Pen testing",
+            "parent": [
+              "Security"
+            ],
+            "action": [
+              "is a",
+              "includes",
+              "can be",
+              "has"
+            ],
+            "aliases": []
+          }
+        ],
+        "relations": [
+          {
+            "from": "Workshops",
+            "to": "Clients",
+            "action": [
+              "serves",
+              "is served to",
+              "served to",
+              "for",
+              "is for"
+            ],
+            "inverse": [
+              "is served",
+              "receives"
+            ]
+          }
+        ],
+        "attributes": []
+      },
+      "optional": [
+        "Client",
+        "Workshop"
+      ],
+      "source_report": {}
+    },
+    {
+      "id": "en-speech-demo-talk",
+      "kind": "speech",
+      "origin": "dataset",
+      "company": "Halvorn",
+      "description": "Someone talking about the app during a demo; nothing is a fact about the company, so nothing is drafted and Loading never appears under Certifications.",
+      "tags": [
+        "en",
+        "speech",
+        "recording",
+        "not-a-statement"
+      ],
+      "existing": [
+        {
+          "label": "Engineers",
+          "parent": "Halvorn",
+          "action": "has",
+          "domain": "people"
+        },
+        {
+          "label": "Certifications",
+          "parent": "Engineers",
+          "action": "has",
+          "domain": "people"
+        }
+      ],
+      "input": [
+        "the it captured loading",
+        "it starts to draw all the boxes and links them like this yeah"
+      ],
+      "document": null,
+      "expected": {
+        "concepts": [],
+        "relations": [],
+        "attributes": []
+      },
+      "optional": [],
+      "source_report": {}
+    }
+  ],
+  "notes": [],
+  "documents": [],
+  "stages": [
+    {
+      "name": "screening",
+      "runs": [
+        {
+          "config": {
+            "deployment": "gpt-6-sol",
+            "effort": "none",
+            "price": {
+              "inputEurPerMTok": "1.0",
+              "outputEurPerMTok": "8.0"
+            },
+            "provider": "azure_foundry",
+            "residency": "eu_data_zone",
+            "family": "gpt",
+            "endpoint": null
+          },
+          "repeat": 0,
+          "results": [
+            {
+              "case_id": "en-speech-misheard-title-in-list",
+              "kind": "speech",
+              "origin": "dataset",
+              "mode": "speech",
+              "run_key": "gpt-6-sol@none",
+              "repeat": 0,
+              "units": [
+                {
+                  "text": "halvorn have engineers these engineers can be test engineers network engineers platform engineers also crowd architects they can have certifications either vendor certifications or cloud certifications",
+                  "status": 200,
+                  "wall_ms": 8109,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "understood",
+                  "unresolved": [],
+                  "drafts": [
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "12880acc-3c6d-46bd-b8f3-cddd9e231bb7",
+                      "parentId": "93cf57e3-837d-4b4c-8745-06c0b053c5d0",
+                      "label": "Engineers",
+                      "domainKey": "people",
+                      "action": "has",
+                      "caption": "Engineers is kept. Halvorn has Engineers."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "12880acc-3c6d-46bd-b8f3-cddd9e231bb7",
+                      "parentLabel": "Engineers",
+                      "label": "Test engineers",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "12880acc-3c6d-46bd-b8f3-cddd9e231bb7",
+                      "parentLabel": "Engineers",
+                      "label": "Network engineers",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "12880acc-3c6d-46bd-b8f3-cddd9e231bb7",
+                      "parentLabel": "Engineers",
+                      "label": "Platform engineers",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "12880acc-3c6d-46bd-b8f3-cddd9e231bb7",
+                      "parentLabel": "Engineers",
+                      "label": "Cloud architects",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "12880acc-3c6d-46bd-b8f3-cddd9e231bb7",
+                      "parentLabel": "Engineers",
+                      "label": "Certifications",
+                      "domainKey": "people",
+                      "action": "has",
+                      "caption": "Certifications is kept. Engineers has Certifications."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "12880acc-3c6d-46bd-b8f3-cddd9e231bb7",
+                      "parentLabel": "Certifications",
+                      "label": "Vendor certifications",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "12880acc-3c6d-46bd-b8f3-cddd9e231bb7",
+                      "parentLabel": "Certifications",
+                      "label": "Cloud certifications",
+                      "rule": "",
+                      "domainKey": "people"
+                    }
+                  ],
+                  "notes": [],
+                  "statements": [
+                    "Halvorn has Engineers (new)",
+                    "Test engineers is a Engineers",
+                    "Network engineers is a Engineers",
+                    "Platform engineers is a Engineers",
+                    "Cloud architects is a Engineers (heard 'crowd architects')",
+                    "Engineers has Certifications (new)",
+                    "Vendor certifications is a Certifications",
+                    "Cloud certifications is a Certifications"
+                  ],
+                  "submitted": 8,
+                  "submit_error": null,
+                  "error": null
+                },
+                {
+                  "text": "but it is still loading",
+                  "status": 200,
+                  "wall_ms": 1282,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "not_understood",
+                  "unresolved": [
+                    {
+                      "text": "it is still loading",
+                      "reason": "not_a_statement"
+                    }
+                  ],
+                  "drafts": [],
+                  "notes": [],
+                  "statements": [],
+                  "submitted": 0,
+                  "submit_error": null,
+                  "error": null
+                }
+              ],
+              "calls": [
+                {
+                  "input_tokens": 8466,
+                  "output_tokens": 711,
+                  "cost_eur": 0.014154,
+                  "latency_ms": 7766,
+                  "error": null,
+                  "started_ms": 349551421,
+                  "first_token_ms": null
+                },
+                {
+                  "input_tokens": 8846,
+                  "output_tokens": 59,
+                  "cost_eur": 0.009318,
+                  "latency_ms": 1233,
+                  "error": null,
+                  "started_ms": 349559500,
+                  "first_token_ms": null
+                }
+              ],
+              "timings": [
+                {
+                  "name": "harness",
+                  "stages": {
+                    "gate": 0
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "extraction",
+                  "stages": {
+                    "budget": 3,
+                    "candidates": 1,
+                    "examples": 3,
+                    "learning": 0,
+                    "context": 0,
+                    "reserve": 10,
+                    "provider": 7776,
+                    "interpret": 17,
+                    "settle": 16,
+                    "total": 7825
+                  },
+                  "counts": {
+                    "input_tokens": 8466,
+                    "output_tokens": 711
+                  }
+                },
+                {
+                  "name": "parse",
+                  "stages": {
+                    "view": 48,
+                    "source": 42,
+                    "model": 7831,
+                    "drafts": 0,
+                    "turns": 22,
+                    "learning": 0,
+                    "total": 7944
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "harness",
+                  "stages": {
+                    "gate": 0
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "extraction",
+                  "stages": {
+                    "budget": 3,
+                    "candidates": 1,
+                    "examples": 1,
+                    "learning": 0,
+                    "context": 1,
+                    "reserve": 4,
+                    "provider": 1244,
+                    "interpret": 0,
+                    "settle": 5,
+                    "total": 1259
+                  },
+                  "counts": {
+                    "input_tokens": 8846,
+                    "output_tokens": 59
+                  }
+                },
+                {
+                  "name": "parse",
+                  "stages": {
+                    "view": 12,
+                    "source": 3,
+                    "model": 1266,
+                    "drafts": 0,
+                    "turns": 7,
+                    "learning": 0,
+                    "total": 1287
+                  },
+                  "counts": {}
+                }
+              ],
+              "usage": {
+                "units": 2,
+                "calls": 2,
+                "input_tokens": 17312,
+                "output_tokens": 770,
+                "cost_eur": 0.023472,
+                "latencies_ms": [
+                  7766,
+                  1233
+                ],
+                "degraded_units": 0,
+                "unresolved": 1,
+                "llm_outcomes": {
+                  "used": 2
+                },
+                "extractors": {
+                  "llm": 2
+                },
+                "error": null,
+                "first_token_ms": [],
+                "timings": [
+                  {
+                    "name": "harness",
+                    "stages": {
+                      "gate": 0
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "extraction",
+                    "stages": {
+                      "budget": 3,
+                      "candidates": 1,
+                      "examples": 3,
+                      "learning": 0,
+                      "context": 0,
+                      "reserve": 10,
+                      "provider": 7776,
+                      "interpret": 17,
+                      "settle": 16,
+                      "total": 7825
+                    },
+                    "counts": {
+                      "input_tokens": 8466,
+                      "output_tokens": 711
+                    }
+                  },
+                  {
+                    "name": "parse",
+                    "stages": {
+                      "view": 48,
+                      "source": 42,
+                      "model": 7831,
+                      "drafts": 0,
+                      "turns": 22,
+                      "learning": 0,
+                      "total": 7944
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "harness",
+                    "stages": {
+                      "gate": 0
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "extraction",
+                    "stages": {
+                      "budget": 3,
+                      "candidates": 1,
+                      "examples": 1,
+                      "learning": 0,
+                      "context": 1,
+                      "reserve": 4,
+                      "provider": 1244,
+                      "interpret": 0,
+                      "settle": 5,
+                      "total": 1259
+                    },
+                    "counts": {
+                      "input_tokens": 8846,
+                      "output_tokens": 59
+                    }
+                  },
+                  {
+                    "name": "parse",
+                    "stages": {
+                      "view": 12,
+                      "source": 3,
+                      "model": 1266,
+                      "drafts": 0,
+                      "turns": 7,
+                      "learning": 0,
+                      "total": 1287
+                    },
+                    "counts": {}
+                  }
+                ]
+              },
+              "concepts": [
+                {
+                  "label": "Engineers",
+                  "parent": "Halvorn",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Test engineers",
+                  "parent": "Engineers",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Network engineers",
+                  "parent": "Engineers",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Platform engineers",
+                  "parent": "Engineers",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Cloud architects",
+                  "parent": "Engineers",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Certifications",
+                  "parent": "Engineers",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Vendor certifications",
+                  "parent": "Certifications",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Cloud certifications",
+                  "parent": "Certifications",
+                  "action": "is a",
+                  "reverse": false
+                }
+              ],
+              "relations": [],
+              "attributes": [],
+              "other_drafts": 0,
+              "score": {
+                "case_id": "en-speech-misheard-title-in-list",
+                "kind": "speech",
+                "concepts_expected": 8,
+                "concepts_groundable": 7,
+                "concepts_predicted": 8,
+                "concepts_matched": 8,
+                "matched_groundable": 7,
+                "concept_precision": 1.0,
+                "concept_recall": 1.0,
+                "concept_f1": 1.0,
+                "grounding_ceiling": 0.875,
+                "concept_recall_groundable": 1.0,
+                "concept_f1_groundable": 1.0,
+                "parent_correct": 8,
+                "parent_at_depth": 8,
+                "action_correct": 8,
+                "path_correct": 8,
+                "invented": [],
+                "duplicates": [],
+                "missed": [],
+                "missing_branches": [],
+                "optional_drafted": [],
+                "wrong_parent": [],
+                "wrong_action": [],
+                "wrong_path": [],
+                "wrong_depth": [],
+                "relations_expected": 0,
+                "relations_predicted": 0,
+                "relations_matched": 0,
+                "relation_precision": 1.0,
+                "relation_recall": 1.0,
+                "relation_action_correct": 0,
+                "invented_relations": [],
+                "missed_relations": [],
+                "attributes_expected": 0,
+                "attributes_predicted": 0,
+                "attributes_matched": 0,
+                "invented_attributes": [],
+                "missed_attributes": [],
+                "depth_expected": 3,
+                "depth_achieved": 3,
+                "levels": {
+                  "1": {
+                    "expected": 1,
+                    "groundable": 1,
+                    "predicted": 1,
+                    "correct": 1,
+                    "correct_groundable": 1
+                  },
+                  "2": {
+                    "expected": 5,
+                    "groundable": 4,
+                    "predicted": 5,
+                    "correct": 5,
+                    "correct_groundable": 4
+                  },
+                  "3": {
+                    "expected": 2,
+                    "groundable": 2,
+                    "predicted": 2,
+                    "correct": 2,
+                    "correct_groundable": 2
+                  }
+                }
+              },
+              "drafted_depth": 3,
+              "document": null,
+              "review": null,
+              "skipped": null,
+              "error": null,
+              "wall_ms": 9985
+            },
+            {
+              "case_id": "en-speech-misheard-article-and-fragment",
+              "kind": "speech",
+              "origin": "dataset",
+              "mode": "speech",
+              "run_key": "gpt-6-sol@none",
+              "repeat": 0,
+              "units": [
+                {
+                  "text": "halvorn has clients hall born offers to its clients workshops these workshops can be around cloud data or security cloud can have a jile delivery or a Delivery security can have audits pen testing or training and data can have dashboards or pipelines",
+                  "status": 200,
+                  "wall_ms": 9061,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "partly_understood",
+                  "unresolved": [
+                    {
+                      "text": "a Delivery",
+                      "reason": "ambiguous_reference"
+                    }
+                  ],
+                  "drafts": [
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "39fc1382-366e-481f-9dcd-fbb5a6f86133",
+                      "parentId": "ed949d31-0fde-4428-b5f3-87975f704824",
+                      "label": "Clients",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Clients is kept. Halvorn has Clients."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "39fc1382-366e-481f-9dcd-fbb5a6f86133",
+                      "parentId": "ed949d31-0fde-4428-b5f3-87975f704824",
+                      "label": "Workshops",
+                      "domainKey": "production",
+                      "action": "offers",
+                      "caption": "Workshops is kept. Halvorn offers Workshops."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "relation",
+                      "companyId": "39fc1382-366e-481f-9dcd-fbb5a6f86133",
+                      "action": "for",
+                      "aLabel": "Workshops",
+                      "bLabel": "Clients"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "39fc1382-366e-481f-9dcd-fbb5a6f86133",
+                      "parentLabel": "Workshops",
+                      "label": "Cloud",
+                      "domainKey": "production",
+                      "action": "includes",
+                      "caption": "Cloud is kept. Workshops includes Cloud."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "39fc1382-366e-481f-9dcd-fbb5a6f86133",
+                      "parentLabel": "Workshops",
+                      "label": "Data",
+                      "domainKey": "production",
+                      "action": "includes",
+                      "caption": "Data is kept. Workshops includes Data."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "39fc1382-366e-481f-9dcd-fbb5a6f86133",
+                      "parentLabel": "Workshops",
+                      "label": "Security",
+                      "domainKey": "production",
+                      "action": "includes",
+                      "caption": "Security is kept. Workshops includes Security."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "39fc1382-366e-481f-9dcd-fbb5a6f86133",
+                      "parentLabel": "Cloud",
+                      "label": "Agile delivery",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Agile delivery is kept. Cloud has Agile delivery. Heard 'a jile delivery'."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "39fc1382-366e-481f-9dcd-fbb5a6f86133",
+                      "parentLabel": "Security",
+                      "label": "Audits",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Audits is kept. Security has Audits."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "39fc1382-366e-481f-9dcd-fbb5a6f86133",
+                      "parentLabel": "Security",
+                      "label": "Pen testing",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Pen testing is kept. Security has Pen testing."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "39fc1382-366e-481f-9dcd-fbb5a6f86133",
+                      "parentLabel": "Security",
+                      "label": "Training",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Training is kept. Security has Training."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "39fc1382-366e-481f-9dcd-fbb5a6f86133",
+                      "parentLabel": "Data",
+                      "label": "Dashboards",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Dashboards is kept. Data has Dashboards."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "39fc1382-366e-481f-9dcd-fbb5a6f86133",
+                      "parentLabel": "Data",
+                      "label": "Pipelines",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Pipelines is kept. Data has Pipelines."
+                    }
+                  ],
+                  "notes": [],
+                  "statements": [
+                    "Halvorn has Clients (new)",
+                    "Halvorn offers Workshops (new)",
+                    "Workshops for Clients",
+                    "Workshops includes Cloud (new)",
+                    "Workshops includes Data (new)",
+                    "Workshops includes Security (new)",
+                    "Cloud has Agile delivery (new) (heard 'a jile delivery')",
+                    "Security has Audits (new)",
+                    "Security has Pen testing (new)",
+                    "Security has Training (new)",
+                    "Data has Dashboards (new)",
+                    "Data has Pipelines (new)"
+                  ],
+                  "submitted": 12,
+                  "submit_error": null,
+                  "error": null
+                }
+              ],
+              "calls": [
+                {
+                  "input_tokens": 8484,
+                  "output_tokens": 1151,
+                  "cost_eur": 0.017692,
+                  "latency_ms": 8750,
+                  "error": null,
+                  "started_ms": 349551484,
+                  "first_token_ms": null
+                }
+              ],
+              "timings": [
+                {
+                  "name": "harness",
+                  "stages": {
+                    "gate": 0
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "extraction",
+                  "stages": {
+                    "budget": 3,
+                    "candidates": 0,
+                    "examples": 1,
+                    "learning": 0,
+                    "context": 0,
+                    "reserve": 69,
+                    "provider": 8750,
+                    "interpret": 34,
+                    "settle": 5,
+                    "total": 8863
+                  },
+                  "counts": {
+                    "input_tokens": 8484,
+                    "output_tokens": 1151
+                  }
+                },
+                {
+                  "name": "parse",
+                  "stages": {
+                    "view": 47,
+                    "source": 45,
+                    "model": 8872,
+                    "drafts": 0,
+                    "turns": 36,
+                    "learning": 0,
+                    "total": 9000
+                  },
+                  "counts": {}
+                }
+              ],
+              "usage": {
+                "units": 1,
+                "calls": 1,
+                "input_tokens": 8484,
+                "output_tokens": 1151,
+                "cost_eur": 0.017692,
+                "latencies_ms": [
+                  8750
+                ],
+                "degraded_units": 0,
+                "unresolved": 1,
+                "llm_outcomes": {
+                  "used": 1
+                },
+                "extractors": {
+                  "llm": 1
+                },
+                "error": null,
+                "first_token_ms": [],
+                "timings": [
+                  {
+                    "name": "harness",
+                    "stages": {
+                      "gate": 0
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "extraction",
+                    "stages": {
+                      "budget": 3,
+                      "candidates": 0,
+                      "examples": 1,
+                      "learning": 0,
+                      "context": 0,
+                      "reserve": 69,
+                      "provider": 8750,
+                      "interpret": 34,
+                      "settle": 5,
+                      "total": 8863
+                    },
+                    "counts": {
+                      "input_tokens": 8484,
+                      "output_tokens": 1151
+                    }
+                  },
+                  {
+                    "name": "parse",
+                    "stages": {
+                      "view": 47,
+                      "source": 45,
+                      "model": 8872,
+                      "drafts": 0,
+                      "turns": 36,
+                      "learning": 0,
+                      "total": 9000
+                    },
+                    "counts": {}
+                  }
+                ]
+              },
+              "concepts": [
+                {
+                  "label": "Clients",
+                  "parent": "Halvorn",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Workshops",
+                  "parent": "Halvorn",
+                  "action": "offers",
+                  "reverse": false
+                },
+                {
+                  "label": "Cloud",
+                  "parent": "Workshops",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Data",
+                  "parent": "Workshops",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Security",
+                  "parent": "Workshops",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Agile delivery",
+                  "parent": "Cloud",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Audits",
+                  "parent": "Security",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Pen testing",
+                  "parent": "Security",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Training",
+                  "parent": "Security",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Dashboards",
+                  "parent": "Data",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Pipelines",
+                  "parent": "Data",
+                  "action": "has",
+                  "reverse": false
+                }
+              ],
+              "relations": [
+                {
+                  "source": "Workshops",
+                  "target": "Clients",
+                  "action": "for"
+                }
+              ],
+              "attributes": [],
+              "other_drafts": 0,
+              "score": {
+                "case_id": "en-speech-misheard-article-and-fragment",
+                "kind": "speech",
+                "concepts_expected": 11,
+                "concepts_groundable": 10,
+                "concepts_predicted": 11,
+                "concepts_matched": 11,
+                "matched_groundable": 10,
+                "concept_precision": 1.0,
+                "concept_recall": 1.0,
+                "concept_f1": 1.0,
+                "grounding_ceiling": 0.9090909090909091,
+                "concept_recall_groundable": 1.0,
+                "concept_f1_groundable": 1.0,
+                "parent_correct": 11,
+                "parent_at_depth": 11,
+                "action_correct": 11,
+                "path_correct": 11,
+                "invented": [],
+                "duplicates": [],
+                "missed": [],
+                "missing_branches": [],
+                "optional_drafted": [],
+                "wrong_parent": [],
+                "wrong_action": [],
+                "wrong_path": [],
+                "wrong_depth": [],
+                "relations_expected": 1,
+                "relations_predicted": 1,
+                "relations_matched": 1,
+                "relation_precision": 1.0,
+                "relation_recall": 1.0,
+                "relation_action_correct": 1,
+                "invented_relations": [],
+                "missed_relations": [],
+                "attributes_expected": 0,
+                "attributes_predicted": 0,
+                "attributes_matched": 0,
+                "invented_attributes": [],
+                "missed_attributes": [],
+                "depth_expected": 3,
+                "depth_achieved": 3,
+                "levels": {
+                  "1": {
+                    "expected": 2,
+                    "groundable": 2,
+                    "predicted": 2,
+                    "correct": 2,
+                    "correct_groundable": 2
+                  },
+                  "2": {
+                    "expected": 3,
+                    "groundable": 3,
+                    "predicted": 3,
+                    "correct": 3,
+                    "correct_groundable": 3
+                  },
+                  "3": {
+                    "expected": 6,
+                    "groundable": 5,
+                    "predicted": 6,
+                    "correct": 6,
+                    "correct_groundable": 5
+                  }
+                }
+              },
+              "drafted_depth": 3,
+              "document": null,
+              "review": null,
+              "skipped": null,
+              "error": null,
+              "wall_ms": 9734
+            },
+            {
+              "case_id": "en-speech-five-kinds-then-fragments",
+              "kind": "speech",
+              "origin": "dataset",
+              "mode": "speech",
+              "run_key": "gpt-6-sol@none",
+              "repeat": 0,
+              "units": [
+                {
+                  "text": "halvorn has engineers these engineers can be test engineers network engineers platform engineers analysts or cloud architects these engineers can have certifications",
+                  "status": 200,
+                  "wall_ms": 3421,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "understood",
+                  "unresolved": [],
+                  "drafts": [
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "04999ef0-db80-4b6e-950e-75f4b3851238",
+                      "parentId": "2c1abcad-320c-409c-af35-51cd6f13ab16",
+                      "label": "Engineers",
+                      "domainKey": "people",
+                      "action": "has",
+                      "caption": "Engineers is kept. Halvorn has Engineers."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "04999ef0-db80-4b6e-950e-75f4b3851238",
+                      "parentLabel": "Engineers",
+                      "label": "Test engineers",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "04999ef0-db80-4b6e-950e-75f4b3851238",
+                      "parentLabel": "Engineers",
+                      "label": "Network engineers",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "04999ef0-db80-4b6e-950e-75f4b3851238",
+                      "parentLabel": "Engineers",
+                      "label": "Platform engineers",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "04999ef0-db80-4b6e-950e-75f4b3851238",
+                      "parentLabel": "Engineers",
+                      "label": "Analysts",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "04999ef0-db80-4b6e-950e-75f4b3851238",
+                      "parentLabel": "Engineers",
+                      "label": "Cloud architects",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "04999ef0-db80-4b6e-950e-75f4b3851238",
+                      "parentLabel": "Engineers",
+                      "label": "Certifications",
+                      "domainKey": "people",
+                      "action": "has",
+                      "caption": "Certifications is kept. Engineers has Certifications."
+                    }
+                  ],
+                  "notes": [],
+                  "statements": [
+                    "Halvorn has Engineers (new)",
+                    "Test engineers is a Engineers",
+                    "Network engineers is a Engineers",
+                    "Platform engineers is a Engineers",
+                    "Analysts is a Engineers",
+                    "Cloud architects is a Engineers",
+                    "Engineers has Certifications (new)"
+                  ],
+                  "submitted": 7,
+                  "submit_error": null,
+                  "error": null
+                },
+                {
+                  "text": "vendor certifications",
+                  "status": 200,
+                  "wall_ms": 1500,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "understood",
+                  "unresolved": [],
+                  "drafts": [
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "04999ef0-db80-4b6e-950e-75f4b3851238",
+                      "parentId": "10930019-5ff8-493e-97e0-a00ba3abe2a0",
+                      "label": "Vendor certifications",
+                      "rule": "",
+                      "domainKey": "people",
+                      "caption": "Certifications divides: Vendor certifications inherits everything Certifications is."
+                    }
+                  ],
+                  "notes": [],
+                  "statements": [
+                    "Vendor certifications is a Certifications"
+                  ],
+                  "submitted": 1,
+                  "submit_error": null,
+                  "error": null
+                },
+                {
+                  "text": "certifications can be cloud also so cloud certifications",
+                  "status": 200,
+                  "wall_ms": 1421,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "understood",
+                  "unresolved": [],
+                  "drafts": [
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "04999ef0-db80-4b6e-950e-75f4b3851238",
+                      "parentId": "10930019-5ff8-493e-97e0-a00ba3abe2a0",
+                      "label": "Cloud certifications",
+                      "rule": "",
+                      "domainKey": "people",
+                      "caption": "Certifications divides: Cloud certifications inherits everything Certifications is."
+                    }
+                  ],
+                  "notes": [],
+                  "statements": [
+                    "Cloud certifications is a Certifications"
+                  ],
+                  "submitted": 1,
+                  "submit_error": null,
+                  "error": null
+                }
+              ],
+              "calls": [
+                {
+                  "input_tokens": 8462,
+                  "output_tokens": 606,
+                  "cost_eur": 0.01331,
+                  "latency_ms": 3344,
+                  "error": null,
+                  "started_ms": 349560687,
+                  "first_token_ms": null
+                },
+                {
+                  "input_tokens": 8778,
+                  "output_tokens": 101,
+                  "cost_eur": 0.009586,
+                  "latency_ms": 1452,
+                  "error": null,
+                  "started_ms": 349564375,
+                  "first_token_ms": null
+                },
+                {
+                  "input_tokens": 8822,
+                  "output_tokens": 105,
+                  "cost_eur": 0.009662,
+                  "latency_ms": 1328,
+                  "error": null,
+                  "started_ms": 349565953,
+                  "first_token_ms": null
+                }
+              ],
+              "timings": [
+                {
+                  "name": "harness",
+                  "stages": {
+                    "gate": 0
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "extraction",
+                  "stages": {
+                    "budget": 5,
+                    "candidates": 0,
+                    "examples": 1,
+                    "learning": 0,
+                    "context": 0,
+                    "reserve": 4,
+                    "provider": 3348,
+                    "interpret": 14,
+                    "settle": 6,
+                    "total": 3378
+                  },
+                  "counts": {
+                    "input_tokens": 8462,
+                    "output_tokens": 606
+                  }
+                },
+                {
+                  "name": "parse",
+                  "stages": {
+                    "view": 13,
+                    "source": 3,
+                    "model": 3382,
+                    "drafts": 0,
+                    "turns": 12,
+                    "learning": 0,
+                    "total": 3410
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "harness",
+                  "stages": {
+                    "gate": 0
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "extraction",
+                  "stages": {
+                    "budget": 4,
+                    "candidates": 1,
+                    "examples": 1,
+                    "learning": 0,
+                    "context": 1,
+                    "reserve": 6,
+                    "provider": 1449,
+                    "interpret": 1,
+                    "settle": 4,
+                    "total": 1468
+                  },
+                  "counts": {
+                    "input_tokens": 8778,
+                    "output_tokens": 101
+                  }
+                },
+                {
+                  "name": "parse",
+                  "stages": {
+                    "view": 14,
+                    "source": 4,
+                    "model": 1474,
+                    "drafts": 0,
+                    "turns": 6,
+                    "learning": 0,
+                    "total": 1498
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "harness",
+                  "stages": {
+                    "gate": 0
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "extraction",
+                  "stages": {
+                    "budget": 4,
+                    "candidates": 1,
+                    "examples": 1,
+                    "learning": 0,
+                    "context": 1,
+                    "reserve": 5,
+                    "provider": 1345,
+                    "interpret": 2,
+                    "settle": 4,
+                    "total": 1363
+                  },
+                  "counts": {
+                    "input_tokens": 8822,
+                    "output_tokens": 105
+                  }
+                },
+                {
+                  "name": "parse",
+                  "stages": {
+                    "view": 21,
+                    "source": 4,
+                    "model": 1370,
+                    "drafts": 0,
+                    "turns": 6,
+                    "learning": 0,
+                    "total": 1401
+                  },
+                  "counts": {}
+                }
+              ],
+              "usage": {
+                "units": 3,
+                "calls": 3,
+                "input_tokens": 26062,
+                "output_tokens": 812,
+                "cost_eur": 0.032558,
+                "latencies_ms": [
+                  3344,
+                  1452,
+                  1328
+                ],
+                "degraded_units": 0,
+                "unresolved": 0,
+                "llm_outcomes": {
+                  "used": 3
+                },
+                "extractors": {
+                  "llm": 3
+                },
+                "error": null,
+                "first_token_ms": [],
+                "timings": [
+                  {
+                    "name": "harness",
+                    "stages": {
+                      "gate": 0
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "extraction",
+                    "stages": {
+                      "budget": 5,
+                      "candidates": 0,
+                      "examples": 1,
+                      "learning": 0,
+                      "context": 0,
+                      "reserve": 4,
+                      "provider": 3348,
+                      "interpret": 14,
+                      "settle": 6,
+                      "total": 3378
+                    },
+                    "counts": {
+                      "input_tokens": 8462,
+                      "output_tokens": 606
+                    }
+                  },
+                  {
+                    "name": "parse",
+                    "stages": {
+                      "view": 13,
+                      "source": 3,
+                      "model": 3382,
+                      "drafts": 0,
+                      "turns": 12,
+                      "learning": 0,
+                      "total": 3410
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "harness",
+                    "stages": {
+                      "gate": 0
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "extraction",
+                    "stages": {
+                      "budget": 4,
+                      "candidates": 1,
+                      "examples": 1,
+                      "learning": 0,
+                      "context": 1,
+                      "reserve": 6,
+                      "provider": 1449,
+                      "interpret": 1,
+                      "settle": 4,
+                      "total": 1468
+                    },
+                    "counts": {
+                      "input_tokens": 8778,
+                      "output_tokens": 101
+                    }
+                  },
+                  {
+                    "name": "parse",
+                    "stages": {
+                      "view": 14,
+                      "source": 4,
+                      "model": 1474,
+                      "drafts": 0,
+                      "turns": 6,
+                      "learning": 0,
+                      "total": 1498
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "harness",
+                    "stages": {
+                      "gate": 0
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "extraction",
+                    "stages": {
+                      "budget": 4,
+                      "candidates": 1,
+                      "examples": 1,
+                      "learning": 0,
+                      "context": 1,
+                      "reserve": 5,
+                      "provider": 1345,
+                      "interpret": 2,
+                      "settle": 4,
+                      "total": 1363
+                    },
+                    "counts": {
+                      "input_tokens": 8822,
+                      "output_tokens": 105
+                    }
+                  },
+                  {
+                    "name": "parse",
+                    "stages": {
+                      "view": 21,
+                      "source": 4,
+                      "model": 1370,
+                      "drafts": 0,
+                      "turns": 6,
+                      "learning": 0,
+                      "total": 1401
+                    },
+                    "counts": {}
+                  }
+                ]
+              },
+              "concepts": [
+                {
+                  "label": "Engineers",
+                  "parent": "Halvorn",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Test engineers",
+                  "parent": "Engineers",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Network engineers",
+                  "parent": "Engineers",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Platform engineers",
+                  "parent": "Engineers",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Analysts",
+                  "parent": "Engineers",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Cloud architects",
+                  "parent": "Engineers",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Certifications",
+                  "parent": "Engineers",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Vendor certifications",
+                  "parent": "Certifications",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Cloud certifications",
+                  "parent": "Certifications",
+                  "action": "is a",
+                  "reverse": false
+                }
+              ],
+              "relations": [],
+              "attributes": [],
+              "other_drafts": 0,
+              "score": {
+                "case_id": "en-speech-five-kinds-then-fragments",
+                "kind": "speech",
+                "concepts_expected": 9,
+                "concepts_groundable": 9,
+                "concepts_predicted": 9,
+                "concepts_matched": 9,
+                "matched_groundable": 9,
+                "concept_precision": 1.0,
+                "concept_recall": 1.0,
+                "concept_f1": 1.0,
+                "grounding_ceiling": 1.0,
+                "concept_recall_groundable": 1.0,
+                "concept_f1_groundable": 1.0,
+                "parent_correct": 9,
+                "parent_at_depth": 9,
+                "action_correct": 9,
+                "path_correct": 9,
+                "invented": [],
+                "duplicates": [],
+                "missed": [],
+                "missing_branches": [],
+                "optional_drafted": [],
+                "wrong_parent": [],
+                "wrong_action": [],
+                "wrong_path": [],
+                "wrong_depth": [],
+                "relations_expected": 0,
+                "relations_predicted": 0,
+                "relations_matched": 0,
+                "relation_precision": 1.0,
+                "relation_recall": 1.0,
+                "relation_action_correct": 0,
+                "invented_relations": [],
+                "missed_relations": [],
+                "attributes_expected": 0,
+                "attributes_predicted": 0,
+                "attributes_matched": 0,
+                "invented_attributes": [],
+                "missed_attributes": [],
+                "depth_expected": 3,
+                "depth_achieved": 3,
+                "levels": {
+                  "1": {
+                    "expected": 1,
+                    "groundable": 1,
+                    "predicted": 1,
+                    "correct": 1,
+                    "correct_groundable": 1
+                  },
+                  "2": {
+                    "expected": 6,
+                    "groundable": 6,
+                    "predicted": 6,
+                    "correct": 6,
+                    "correct_groundable": 6
+                  },
+                  "3": {
+                    "expected": 2,
+                    "groundable": 2,
+                    "predicted": 2,
+                    "correct": 2,
+                    "correct_groundable": 2
+                  }
+                }
+              },
+              "drafted_depth": 3,
+              "document": null,
+              "review": null,
+              "skipped": null,
+              "error": null,
+              "wall_ms": 6812
+            },
+            {
+              "case_id": "en-speech-kinds-then-badge",
+              "kind": "speech",
+              "origin": "dataset",
+              "mode": "speech",
+              "run_key": "gpt-6-sol@none",
+              "repeat": 0,
+              "units": [
+                {
+                  "text": "halvorn have engineers these engineers can be analysts or testers they can have certifications either vendor certifications or cloud certifications these engineers have a badge and the badge is issued by security",
+                  "status": 200,
+                  "wall_ms": 4391,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "understood",
+                  "unresolved": [],
+                  "drafts": [
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "51fe1b6e-9182-4e10-bd2e-6094e0a0ff4a",
+                      "parentId": "3f152f51-e544-41fd-81ad-36fe43e4403e",
+                      "label": "Engineers",
+                      "domainKey": "people",
+                      "action": "has",
+                      "caption": "Engineers is kept. Halvorn has Engineers."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "51fe1b6e-9182-4e10-bd2e-6094e0a0ff4a",
+                      "parentLabel": "Engineers",
+                      "label": "Analysts",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "51fe1b6e-9182-4e10-bd2e-6094e0a0ff4a",
+                      "parentLabel": "Engineers",
+                      "label": "Testers",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "51fe1b6e-9182-4e10-bd2e-6094e0a0ff4a",
+                      "parentLabel": "Engineers",
+                      "label": "Certifications",
+                      "domainKey": "people",
+                      "action": "has",
+                      "caption": "Certifications is kept. Engineers has Certifications."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "51fe1b6e-9182-4e10-bd2e-6094e0a0ff4a",
+                      "parentLabel": "Certifications",
+                      "label": "Vendor certifications",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "51fe1b6e-9182-4e10-bd2e-6094e0a0ff4a",
+                      "parentLabel": "Certifications",
+                      "label": "Cloud certifications",
+                      "rule": "",
+                      "domainKey": "people"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "51fe1b6e-9182-4e10-bd2e-6094e0a0ff4a",
+                      "parentLabel": "Engineers",
+                      "label": "Badge",
+                      "domainKey": "people",
+                      "action": "has",
+                      "caption": "Badge is kept. Engineers has Badge."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "51fe1b6e-9182-4e10-bd2e-6094e0a0ff4a",
+                      "parentLabel": "Badge",
+                      "label": "Security",
+                      "domainKey": "people",
+                      "action": "is issued by",
+                      "caption": "Security is kept. Badge is issued by Security."
+                    }
+                  ],
+                  "notes": [],
+                  "statements": [
+                    "Halvorn has Engineers (new)",
+                    "Analysts is a Engineers",
+                    "Testers is a Engineers",
+                    "Engineers has Certifications (new)",
+                    "Vendor certifications is a Certifications",
+                    "Cloud certifications is a Certifications",
+                    "Engineers has Badge (new)",
+                    "Badge is issued by Security (new)"
+                  ],
+                  "submitted": 8,
+                  "submit_error": null,
+                  "error": null
+                }
+              ],
+              "calls": [
+                {
+                  "input_tokens": 8472,
+                  "output_tokens": 724,
+                  "cost_eur": 0.014264,
+                  "latency_ms": 4312,
+                  "error": null,
+                  "started_ms": 349560890,
+                  "first_token_ms": null
+                }
+              ],
+              "timings": [
+                {
+                  "name": "harness",
+                  "stages": {
+                    "gate": 0
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "extraction",
+                  "stages": {
+                    "budget": 5,
+                    "candidates": 0,
+                    "examples": 2,
+                    "learning": 0,
+                    "context": 0,
+                    "reserve": 4,
+                    "provider": 4316,
+                    "interpret": 16,
+                    "settle": 5,
+                    "total": 4349
+                  },
+                  "counts": {
+                    "input_tokens": 8472,
+                    "output_tokens": 724
+                  }
+                },
+                {
+                  "name": "parse",
+                  "stages": {
+                    "view": 14,
+                    "source": 4,
+                    "model": 4354,
+                    "drafts": 0,
+                    "turns": 15,
+                    "learning": 0,
+                    "total": 4387
+                  },
+                  "counts": {}
+                }
+              ],
+              "usage": {
+                "units": 1,
+                "calls": 1,
+                "input_tokens": 8472,
+                "output_tokens": 724,
+                "cost_eur": 0.014264,
+                "latencies_ms": [
+                  4312
+                ],
+                "degraded_units": 0,
+                "unresolved": 0,
+                "llm_outcomes": {
+                  "used": 1
+                },
+                "extractors": {
+                  "llm": 1
+                },
+                "error": null,
+                "first_token_ms": [],
+                "timings": [
+                  {
+                    "name": "harness",
+                    "stages": {
+                      "gate": 0
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "extraction",
+                    "stages": {
+                      "budget": 5,
+                      "candidates": 0,
+                      "examples": 2,
+                      "learning": 0,
+                      "context": 0,
+                      "reserve": 4,
+                      "provider": 4316,
+                      "interpret": 16,
+                      "settle": 5,
+                      "total": 4349
+                    },
+                    "counts": {
+                      "input_tokens": 8472,
+                      "output_tokens": 724
+                    }
+                  },
+                  {
+                    "name": "parse",
+                    "stages": {
+                      "view": 14,
+                      "source": 4,
+                      "model": 4354,
+                      "drafts": 0,
+                      "turns": 15,
+                      "learning": 0,
+                      "total": 4387
+                    },
+                    "counts": {}
+                  }
+                ]
+              },
+              "concepts": [
+                {
+                  "label": "Engineers",
+                  "parent": "Halvorn",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Analysts",
+                  "parent": "Engineers",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Testers",
+                  "parent": "Engineers",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Certifications",
+                  "parent": "Engineers",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Vendor certifications",
+                  "parent": "Certifications",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Cloud certifications",
+                  "parent": "Certifications",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Badge",
+                  "parent": "Engineers",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Security",
+                  "parent": "Badge",
+                  "action": "is issued by",
+                  "reverse": false
+                }
+              ],
+              "relations": [],
+              "attributes": [],
+              "other_drafts": 0,
+              "score": {
+                "case_id": "en-speech-kinds-then-badge",
+                "kind": "speech",
+                "concepts_expected": 8,
+                "concepts_groundable": 8,
+                "concepts_predicted": 8,
+                "concepts_matched": 8,
+                "matched_groundable": 8,
+                "concept_precision": 1.0,
+                "concept_recall": 1.0,
+                "concept_f1": 1.0,
+                "grounding_ceiling": 1.0,
+                "concept_recall_groundable": 1.0,
+                "concept_f1_groundable": 1.0,
+                "parent_correct": 8,
+                "parent_at_depth": 8,
+                "action_correct": 8,
+                "path_correct": 8,
+                "invented": [],
+                "duplicates": [],
+                "missed": [],
+                "missing_branches": [],
+                "optional_drafted": [],
+                "wrong_parent": [],
+                "wrong_action": [],
+                "wrong_path": [],
+                "wrong_depth": [],
+                "relations_expected": 1,
+                "relations_predicted": 0,
+                "relations_matched": 1,
+                "relation_precision": 1.0,
+                "relation_recall": 1.0,
+                "relation_action_correct": 1,
+                "invented_relations": [],
+                "missed_relations": [],
+                "attributes_expected": 0,
+                "attributes_predicted": 0,
+                "attributes_matched": 0,
+                "invented_attributes": [],
+                "missed_attributes": [],
+                "depth_expected": 3,
+                "depth_achieved": 3,
+                "levels": {
+                  "1": {
+                    "expected": 2,
+                    "groundable": 2,
+                    "predicted": 1,
+                    "correct": 2,
+                    "correct_groundable": 2
+                  },
+                  "2": {
+                    "expected": 4,
+                    "groundable": 4,
+                    "predicted": 4,
+                    "correct": 4,
+                    "correct_groundable": 4
+                  },
+                  "3": {
+                    "expected": 2,
+                    "groundable": 2,
+                    "predicted": 3,
+                    "correct": 2,
+                    "correct_groundable": 2
+                  }
+                }
+              },
+              "drafted_depth": 3,
+              "document": null,
+              "review": null,
+              "skipped": null,
+              "error": null,
+              "wall_ms": 4625
+            },
+            {
+              "case_id": "en-speech-misheard-article-in-list",
+              "kind": "speech",
+              "origin": "dataset",
+              "mode": "speech",
+              "run_key": "gpt-6-sol@none",
+              "repeat": 0,
+              "units": [
+                {
+                  "text": "halvorn offers workshops to clients these workshops can be around cloud data or security data can have dashboards or pipelines cloud can have a jile delivery or managed delivery and security can have audits pen testing and training",
+                  "status": 200,
+                  "wall_ms": 5563,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "understood",
+                  "unresolved": [],
+                  "drafts": [
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "3374fbbf-61b6-4fc6-aeeb-dcbb196d285c",
+                      "parentId": "eba7fa2e-cb62-4197-8437-65a93429d1ce",
+                      "label": "Workshops",
+                      "domainKey": "production",
+                      "action": "offers",
+                      "caption": "Workshops is kept. Halvorn offers Workshops."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "3374fbbf-61b6-4fc6-aeeb-dcbb196d285c",
+                      "parentLabel": "Workshops",
+                      "label": "Clients",
+                      "domainKey": "production",
+                      "action": "for",
+                      "caption": "Clients is kept. Workshops for Clients."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "3374fbbf-61b6-4fc6-aeeb-dcbb196d285c",
+                      "parentLabel": "Workshops",
+                      "label": "Cloud",
+                      "domainKey": "production",
+                      "action": "includes",
+                      "caption": "Cloud is kept. Workshops includes Cloud."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "3374fbbf-61b6-4fc6-aeeb-dcbb196d285c",
+                      "parentLabel": "Workshops",
+                      "label": "Data",
+                      "domainKey": "production",
+                      "action": "includes",
+                      "caption": "Data is kept. Workshops includes Data."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "3374fbbf-61b6-4fc6-aeeb-dcbb196d285c",
+                      "parentLabel": "Workshops",
+                      "label": "Security",
+                      "domainKey": "production",
+                      "action": "includes",
+                      "caption": "Security is kept. Workshops includes Security."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "3374fbbf-61b6-4fc6-aeeb-dcbb196d285c",
+                      "parentLabel": "Data",
+                      "label": "Dashboards",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Dashboards is kept. Data has Dashboards."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "3374fbbf-61b6-4fc6-aeeb-dcbb196d285c",
+                      "parentLabel": "Data",
+                      "label": "Pipelines",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Pipelines is kept. Data has Pipelines."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "3374fbbf-61b6-4fc6-aeeb-dcbb196d285c",
+                      "parentLabel": "Cloud",
+                      "label": "Agile delivery",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Agile delivery is kept. Cloud has Agile delivery. Heard 'a jile delivery'."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "3374fbbf-61b6-4fc6-aeeb-dcbb196d285c",
+                      "parentLabel": "Cloud",
+                      "label": "Managed delivery",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Managed delivery is kept. Cloud has Managed delivery."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "3374fbbf-61b6-4fc6-aeeb-dcbb196d285c",
+                      "parentLabel": "Security",
+                      "label": "Audits",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Audits is kept. Security has Audits."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "3374fbbf-61b6-4fc6-aeeb-dcbb196d285c",
+                      "parentLabel": "Security",
+                      "label": "Pen testing",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Pen testing is kept. Security has Pen testing."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "3374fbbf-61b6-4fc6-aeeb-dcbb196d285c",
+                      "parentLabel": "Security",
+                      "label": "Training",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Training is kept. Security has Training."
+                    }
+                  ],
+                  "notes": [],
+                  "statements": [
+                    "Halvorn offers Workshops (new)",
+                    "Workshops for Clients (new)",
+                    "Workshops includes Cloud (new)",
+                    "Workshops includes Data (new)",
+                    "Workshops includes Security (new)",
+                    "Data has Dashboards (new)",
+                    "Data has Pipelines (new)",
+                    "Cloud has Agile delivery (new) (heard 'a jile delivery')",
+                    "Cloud has Managed delivery (new)",
+                    "Security has Audits (new)",
+                    "Security has Pen testing (new)",
+                    "Security has Training (new)"
+                  ],
+                  "submitted": 12,
+                  "submit_error": null,
+                  "error": null
+                }
+              ],
+              "calls": [
+                {
+                  "input_tokens": 8479,
+                  "output_tokens": 1112,
+                  "cost_eur": 0.017375,
+                  "latency_ms": 5484,
+                  "error": null,
+                  "started_ms": 349565468,
+                  "first_token_ms": null
+                }
+              ],
+              "timings": [
+                {
+                  "name": "harness",
+                  "stages": {
+                    "gate": 0
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "extraction",
+                  "stages": {
+                    "budget": 3,
+                    "candidates": 0,
+                    "examples": 1,
+                    "learning": 0,
+                    "context": 0,
+                    "reserve": 3,
+                    "provider": 5468,
+                    "interpret": 27,
+                    "settle": 4,
+                    "total": 5507
+                  },
+                  "counts": {
+                    "input_tokens": 8479,
+                    "output_tokens": 1112
+                  }
+                },
+                {
+                  "name": "parse",
+                  "stages": {
+                    "view": 11,
+                    "source": 3,
+                    "model": 5509,
+                    "drafts": 0,
+                    "turns": 20,
+                    "learning": 0,
+                    "total": 5544
+                  },
+                  "counts": {}
+                }
+              ],
+              "usage": {
+                "units": 1,
+                "calls": 1,
+                "input_tokens": 8479,
+                "output_tokens": 1112,
+                "cost_eur": 0.017375,
+                "latencies_ms": [
+                  5484
+                ],
+                "degraded_units": 0,
+                "unresolved": 0,
+                "llm_outcomes": {
+                  "used": 1
+                },
+                "extractors": {
+                  "llm": 1
+                },
+                "error": null,
+                "first_token_ms": [],
+                "timings": [
+                  {
+                    "name": "harness",
+                    "stages": {
+                      "gate": 0
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "extraction",
+                    "stages": {
+                      "budget": 3,
+                      "candidates": 0,
+                      "examples": 1,
+                      "learning": 0,
+                      "context": 0,
+                      "reserve": 3,
+                      "provider": 5468,
+                      "interpret": 27,
+                      "settle": 4,
+                      "total": 5507
+                    },
+                    "counts": {
+                      "input_tokens": 8479,
+                      "output_tokens": 1112
+                    }
+                  },
+                  {
+                    "name": "parse",
+                    "stages": {
+                      "view": 11,
+                      "source": 3,
+                      "model": 5509,
+                      "drafts": 0,
+                      "turns": 20,
+                      "learning": 0,
+                      "total": 5544
+                    },
+                    "counts": {}
+                  }
+                ]
+              },
+              "concepts": [
+                {
+                  "label": "Workshops",
+                  "parent": "Halvorn",
+                  "action": "offers",
+                  "reverse": false
+                },
+                {
+                  "label": "Clients",
+                  "parent": "Workshops",
+                  "action": "for",
+                  "reverse": false
+                },
+                {
+                  "label": "Cloud",
+                  "parent": "Workshops",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Data",
+                  "parent": "Workshops",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Security",
+                  "parent": "Workshops",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Dashboards",
+                  "parent": "Data",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Pipelines",
+                  "parent": "Data",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Agile delivery",
+                  "parent": "Cloud",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Managed delivery",
+                  "parent": "Cloud",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Audits",
+                  "parent": "Security",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Pen testing",
+                  "parent": "Security",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Training",
+                  "parent": "Security",
+                  "action": "has",
+                  "reverse": false
+                }
+              ],
+              "relations": [],
+              "attributes": [],
+              "other_drafts": 0,
+              "score": {
+                "case_id": "en-speech-misheard-article-in-list",
+                "kind": "speech",
+                "concepts_expected": 12,
+                "concepts_groundable": 11,
+                "concepts_predicted": 12,
+                "concepts_matched": 12,
+                "matched_groundable": 11,
+                "concept_precision": 1.0,
+                "concept_recall": 1.0,
+                "concept_f1": 1.0,
+                "grounding_ceiling": 0.9166666666666666,
+                "concept_recall_groundable": 1.0,
+                "concept_f1_groundable": 1.0,
+                "parent_correct": 12,
+                "parent_at_depth": 12,
+                "action_correct": 12,
+                "path_correct": 12,
+                "invented": [],
+                "duplicates": [],
+                "missed": [],
+                "missing_branches": [],
+                "optional_drafted": [],
+                "wrong_parent": [],
+                "wrong_action": [],
+                "wrong_path": [],
+                "wrong_depth": [],
+                "relations_expected": 1,
+                "relations_predicted": 0,
+                "relations_matched": 1,
+                "relation_precision": 1.0,
+                "relation_recall": 1.0,
+                "relation_action_correct": 1,
+                "invented_relations": [],
+                "missed_relations": [],
+                "attributes_expected": 0,
+                "attributes_predicted": 0,
+                "attributes_matched": 0,
+                "invented_attributes": [],
+                "missed_attributes": [],
+                "depth_expected": 3,
+                "depth_achieved": 3,
+                "levels": {
+                  "1": {
+                    "expected": 2,
+                    "groundable": 2,
+                    "predicted": 1,
+                    "correct": 2,
+                    "correct_groundable": 2
+                  },
+                  "2": {
+                    "expected": 3,
+                    "groundable": 3,
+                    "predicted": 4,
+                    "correct": 3,
+                    "correct_groundable": 3
+                  },
+                  "3": {
+                    "expected": 7,
+                    "groundable": 6,
+                    "predicted": 7,
+                    "correct": 7,
+                    "correct_groundable": 6
+                  }
+                }
+              },
+              "drafted_depth": 3,
+              "document": null,
+              "review": null,
+              "skipped": null,
+              "error": null,
+              "wall_ms": 5827
+            },
+            {
+              "case_id": "en-speech-misheard-company-mid-sentence",
+              "kind": "speech",
+              "origin": "dataset",
+              "mode": "speech",
+              "run_key": "gpt-6-sol@none",
+              "repeat": 0,
+              "units": [
+                {
+                  "text": "halvorn has clients hall born offers workshops to its clients these workshops can be around cloud data or security data can have dashboards or pipelines cloud can have a jile delivery or managed delivery and security can have training pen testing or audits",
+                  "status": 200,
+                  "wall_ms": 5641,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "understood",
+                  "unresolved": [],
+                  "drafts": [
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "parentId": "4d6f9109-1491-42a1-968d-b86c716e8304",
+                      "label": "Clients",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Clients is kept. Halvorn has Clients."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "parentId": "4d6f9109-1491-42a1-968d-b86c716e8304",
+                      "label": "Workshops",
+                      "domainKey": "production",
+                      "action": "offers",
+                      "caption": "Workshops is kept. Halvorn offers Workshops."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "relation",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "action": "for",
+                      "aLabel": "Workshops",
+                      "bLabel": "Clients"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "parentLabel": "Workshops",
+                      "label": "Cloud",
+                      "domainKey": "production",
+                      "action": "includes",
+                      "caption": "Cloud is kept. Workshops includes Cloud."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "parentLabel": "Workshops",
+                      "label": "Data",
+                      "domainKey": "production",
+                      "action": "includes",
+                      "caption": "Data is kept. Workshops includes Data."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "parentLabel": "Workshops",
+                      "label": "Security",
+                      "domainKey": "production",
+                      "action": "includes",
+                      "caption": "Security is kept. Workshops includes Security."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "parentLabel": "Data",
+                      "label": "Dashboards",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Dashboards is kept. Data has Dashboards."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "parentLabel": "Data",
+                      "label": "Pipelines",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Pipelines is kept. Data has Pipelines."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "parentLabel": "Cloud",
+                      "label": "Agile delivery",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Agile delivery is kept. Cloud has Agile delivery. Heard 'a jile delivery'."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "parentLabel": "Cloud",
+                      "label": "Managed delivery",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Managed delivery is kept. Cloud has Managed delivery."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "parentLabel": "Security",
+                      "label": "Training",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Training is kept. Security has Training."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "parentLabel": "Security",
+                      "label": "Pen testing",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Pen testing is kept. Security has Pen testing."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "c8b85456-651e-4a5a-b6f7-8408d302c0d4",
+                      "parentLabel": "Security",
+                      "label": "Audits",
+                      "domainKey": "production",
+                      "action": "has",
+                      "caption": "Audits is kept. Security has Audits."
+                    }
+                  ],
+                  "notes": [],
+                  "statements": [
+                    "Halvorn has Clients (new)",
+                    "Halvorn offers Workshops (new)",
+                    "Workshops for Clients",
+                    "Workshops includes Cloud (new)",
+                    "Workshops includes Data (new)",
+                    "Workshops includes Security (new)",
+                    "Data has Dashboards (new)",
+                    "Data has Pipelines (new)",
+                    "Cloud has Agile delivery (new) (heard 'a jile delivery')",
+                    "Cloud has Managed delivery (new)",
+                    "Security has Training (new)",
+                    "Security has Pen testing (new)",
+                    "Security has Audits (new)"
+                  ],
+                  "submitted": 13,
+                  "submit_error": null,
+                  "error": null
+                }
+              ],
+              "calls": [
+                {
+                  "input_tokens": 8484,
+                  "output_tokens": 1210,
+                  "cost_eur": 0.018164,
+                  "latency_ms": 5531,
+                  "error": null,
+                  "started_ms": 349567484,
+                  "first_token_ms": null
+                }
+              ],
+              "timings": [
+                {
+                  "name": "harness",
+                  "stages": {
+                    "gate": 0
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "extraction",
+                  "stages": {
+                    "budget": 4,
+                    "candidates": 1,
+                    "examples": 2,
+                    "learning": 0,
+                    "context": 0,
+                    "reserve": 4,
+                    "provider": 5534,
+                    "interpret": 33,
+                    "settle": 6,
+                    "total": 5584
+                  },
+                  "counts": {
+                    "input_tokens": 8484,
+                    "output_tokens": 1210
+                  }
+                },
+                {
+                  "name": "parse",
+                  "stages": {
+                    "view": 11,
+                    "source": 4,
+                    "model": 5587,
+                    "drafts": 0,
+                    "turns": 20,
+                    "learning": 0,
+                    "total": 5623
+                  },
+                  "counts": {}
+                }
+              ],
+              "usage": {
+                "units": 1,
+                "calls": 1,
+                "input_tokens": 8484,
+                "output_tokens": 1210,
+                "cost_eur": 0.018164,
+                "latencies_ms": [
+                  5531
+                ],
+                "degraded_units": 0,
+                "unresolved": 0,
+                "llm_outcomes": {
+                  "used": 1
+                },
+                "extractors": {
+                  "llm": 1
+                },
+                "error": null,
+                "first_token_ms": [],
+                "timings": [
+                  {
+                    "name": "harness",
+                    "stages": {
+                      "gate": 0
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "extraction",
+                    "stages": {
+                      "budget": 4,
+                      "candidates": 1,
+                      "examples": 2,
+                      "learning": 0,
+                      "context": 0,
+                      "reserve": 4,
+                      "provider": 5534,
+                      "interpret": 33,
+                      "settle": 6,
+                      "total": 5584
+                    },
+                    "counts": {
+                      "input_tokens": 8484,
+                      "output_tokens": 1210
+                    }
+                  },
+                  {
+                    "name": "parse",
+                    "stages": {
+                      "view": 11,
+                      "source": 4,
+                      "model": 5587,
+                      "drafts": 0,
+                      "turns": 20,
+                      "learning": 0,
+                      "total": 5623
+                    },
+                    "counts": {}
+                  }
+                ]
+              },
+              "concepts": [
+                {
+                  "label": "Clients",
+                  "parent": "Halvorn",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Workshops",
+                  "parent": "Halvorn",
+                  "action": "offers",
+                  "reverse": false
+                },
+                {
+                  "label": "Cloud",
+                  "parent": "Workshops",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Data",
+                  "parent": "Workshops",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Security",
+                  "parent": "Workshops",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Dashboards",
+                  "parent": "Data",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Pipelines",
+                  "parent": "Data",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Agile delivery",
+                  "parent": "Cloud",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Managed delivery",
+                  "parent": "Cloud",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Training",
+                  "parent": "Security",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Pen testing",
+                  "parent": "Security",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Audits",
+                  "parent": "Security",
+                  "action": "has",
+                  "reverse": false
+                }
+              ],
+              "relations": [
+                {
+                  "source": "Workshops",
+                  "target": "Clients",
+                  "action": "for"
+                }
+              ],
+              "attributes": [],
+              "other_drafts": 0,
+              "score": {
+                "case_id": "en-speech-misheard-company-mid-sentence",
+                "kind": "speech",
+                "concepts_expected": 12,
+                "concepts_groundable": 11,
+                "concepts_predicted": 12,
+                "concepts_matched": 12,
+                "matched_groundable": 11,
+                "concept_precision": 1.0,
+                "concept_recall": 1.0,
+                "concept_f1": 1.0,
+                "grounding_ceiling": 0.9166666666666666,
+                "concept_recall_groundable": 1.0,
+                "concept_f1_groundable": 1.0,
+                "parent_correct": 12,
+                "parent_at_depth": 12,
+                "action_correct": 12,
+                "path_correct": 12,
+                "invented": [],
+                "duplicates": [],
+                "missed": [],
+                "missing_branches": [],
+                "optional_drafted": [],
+                "wrong_parent": [],
+                "wrong_action": [],
+                "wrong_path": [],
+                "wrong_depth": [],
+                "relations_expected": 1,
+                "relations_predicted": 1,
+                "relations_matched": 1,
+                "relation_precision": 1.0,
+                "relation_recall": 1.0,
+                "relation_action_correct": 1,
+                "invented_relations": [],
+                "missed_relations": [],
+                "attributes_expected": 0,
+                "attributes_predicted": 0,
+                "attributes_matched": 0,
+                "invented_attributes": [],
+                "missed_attributes": [],
+                "depth_expected": 3,
+                "depth_achieved": 3,
+                "levels": {
+                  "1": {
+                    "expected": 2,
+                    "groundable": 2,
+                    "predicted": 2,
+                    "correct": 2,
+                    "correct_groundable": 2
+                  },
+                  "2": {
+                    "expected": 3,
+                    "groundable": 3,
+                    "predicted": 3,
+                    "correct": 3,
+                    "correct_groundable": 3
+                  },
+                  "3": {
+                    "expected": 7,
+                    "groundable": 6,
+                    "predicted": 7,
+                    "correct": 7,
+                    "correct_groundable": 6
+                  }
+                }
+              },
+              "drafted_depth": 3,
+              "document": null,
+              "review": null,
+              "skipped": null,
+              "error": null,
+              "wall_ms": 5905
+            },
+            {
+              "case_id": "en-speech-serves-word-order",
+              "kind": "speech",
+              "origin": "dataset",
+              "mode": "speech",
+              "run_key": "gpt-6-sol@none",
+              "repeat": 0,
+              "units": [
+                {
+                  "text": "hall born to have clients it serves these clients workshops these workshops can be around cloud data or security cloud can be around agile delivery or managed delivery data can be around pipelines or dashboards and security can be audits or pen testing",
+                  "status": 200,
+                  "wall_ms": 6483,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "understood",
+                  "unresolved": [],
+                  "drafts": [
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "281820c5-0e29-431e-af39-c4b34b69d258",
+                      "parentId": "0e80c8a3-3869-448e-bcd2-e2bbc4971726",
+                      "label": "Clients",
+                      "domainKey": "sales",
+                      "action": "has",
+                      "caption": "Clients is kept. Halvorn has Clients."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "relation",
+                      "companyId": "281820c5-0e29-431e-af39-c4b34b69d258",
+                      "action": "serves",
+                      "aId": "0e80c8a3-3869-448e-bcd2-e2bbc4971726",
+                      "bLabel": "Clients"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "281820c5-0e29-431e-af39-c4b34b69d258",
+                      "parentLabel": "Clients",
+                      "label": "Workshops",
+                      "domainKey": "sales",
+                      "action": "has",
+                      "caption": "Workshops is kept. Clients has Workshops."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "281820c5-0e29-431e-af39-c4b34b69d258",
+                      "parentLabel": "Workshops",
+                      "label": "Cloud",
+                      "domainKey": "sales",
+                      "action": "includes",
+                      "caption": "Cloud is kept. Workshops includes Cloud."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "281820c5-0e29-431e-af39-c4b34b69d258",
+                      "parentLabel": "Workshops",
+                      "label": "Data",
+                      "domainKey": "sales",
+                      "action": "includes",
+                      "caption": "Data is kept. Workshops includes Data."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "281820c5-0e29-431e-af39-c4b34b69d258",
+                      "parentLabel": "Workshops",
+                      "label": "Security",
+                      "domainKey": "sales",
+                      "action": "includes",
+                      "caption": "Security is kept. Workshops includes Security."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "281820c5-0e29-431e-af39-c4b34b69d258",
+                      "parentLabel": "Cloud",
+                      "label": "Agile delivery",
+                      "domainKey": "sales",
+                      "action": "includes",
+                      "caption": "Agile delivery is kept. Cloud includes Agile delivery."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "281820c5-0e29-431e-af39-c4b34b69d258",
+                      "parentLabel": "Cloud",
+                      "label": "Managed delivery",
+                      "domainKey": "sales",
+                      "action": "includes",
+                      "caption": "Managed delivery is kept. Cloud includes Managed delivery."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "281820c5-0e29-431e-af39-c4b34b69d258",
+                      "parentLabel": "Data",
+                      "label": "Pipelines",
+                      "domainKey": "sales",
+                      "action": "includes",
+                      "caption": "Pipelines is kept. Data includes Pipelines."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "concept",
+                      "companyId": "281820c5-0e29-431e-af39-c4b34b69d258",
+                      "parentLabel": "Data",
+                      "label": "Dashboards",
+                      "domainKey": "sales",
+                      "action": "includes",
+                      "caption": "Dashboards is kept. Data includes Dashboards."
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "281820c5-0e29-431e-af39-c4b34b69d258",
+                      "parentLabel": "Security",
+                      "label": "Audits",
+                      "rule": "",
+                      "domainKey": "sales"
+                    },
+                    {
+                      "origin": "speech",
+                      "type": "spec",
+                      "companyId": "281820c5-0e29-431e-af39-c4b34b69d258",
+                      "parentLabel": "Security",
+                      "label": "Pen testing",
+                      "rule": "",
+                      "domainKey": "sales"
+                    }
+                  ],
+                  "notes": [],
+                  "statements": [
+                    "Halvorn has Clients (new)",
+                    "Halvorn serves Clients",
+                    "Clients has Workshops (new)",
+                    "Workshops includes Cloud (new)",
+                    "Workshops includes Data (new)",
+                    "Workshops includes Security (new)",
+                    "Cloud includes Agile delivery (new)",
+                    "Cloud includes Managed delivery (new)",
+                    "Data includes Pipelines (new)",
+                    "Data includes Dashboards (new)",
+                    "Audits is a Security",
+                    "Pen testing is a Security"
+                  ],
+                  "submitted": 12,
+                  "submit_error": null,
+                  "error": null
+                }
+              ],
+              "calls": [
+                {
+                  "input_tokens": 8481,
+                  "output_tokens": 1176,
+                  "cost_eur": 0.017889,
+                  "latency_ms": 6406,
+                  "error": null,
+                  "started_ms": 349571312,
+                  "first_token_ms": null
+                }
+              ],
+              "timings": [
+                {
+                  "name": "harness",
+                  "stages": {
+                    "gate": 0
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "extraction",
+                  "stages": {
+                    "budget": 3,
+                    "candidates": 0,
+                    "examples": 1,
+                    "learning": 0,
+                    "context": 0,
+                    "reserve": 3,
+                    "provider": 6410,
+                    "interpret": 31,
+                    "settle": 4,
+                    "total": 6451
+                  },
+                  "counts": {
+                    "input_tokens": 8481,
+                    "output_tokens": 1176
+                  }
+                },
+                {
+                  "name": "parse",
+                  "stages": {
+                    "view": 10,
+                    "source": 4,
+                    "model": 6454,
+                    "drafts": 0,
+                    "turns": 6,
+                    "learning": 0,
+                    "total": 6473
+                  },
+                  "counts": {}
+                }
+              ],
+              "usage": {
+                "units": 1,
+                "calls": 1,
+                "input_tokens": 8481,
+                "output_tokens": 1176,
+                "cost_eur": 0.017889,
+                "latencies_ms": [
+                  6406
+                ],
+                "degraded_units": 0,
+                "unresolved": 0,
+                "llm_outcomes": {
+                  "used": 1
+                },
+                "extractors": {
+                  "llm": 1
+                },
+                "error": null,
+                "first_token_ms": [],
+                "timings": [
+                  {
+                    "name": "harness",
+                    "stages": {
+                      "gate": 0
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "extraction",
+                    "stages": {
+                      "budget": 3,
+                      "candidates": 0,
+                      "examples": 1,
+                      "learning": 0,
+                      "context": 0,
+                      "reserve": 3,
+                      "provider": 6410,
+                      "interpret": 31,
+                      "settle": 4,
+                      "total": 6451
+                    },
+                    "counts": {
+                      "input_tokens": 8481,
+                      "output_tokens": 1176
+                    }
+                  },
+                  {
+                    "name": "parse",
+                    "stages": {
+                      "view": 10,
+                      "source": 4,
+                      "model": 6454,
+                      "drafts": 0,
+                      "turns": 6,
+                      "learning": 0,
+                      "total": 6473
+                    },
+                    "counts": {}
+                  }
+                ]
+              },
+              "concepts": [
+                {
+                  "label": "Clients",
+                  "parent": "Halvorn",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Workshops",
+                  "parent": "Clients",
+                  "action": "has",
+                  "reverse": false
+                },
+                {
+                  "label": "Cloud",
+                  "parent": "Workshops",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Data",
+                  "parent": "Workshops",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Security",
+                  "parent": "Workshops",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Agile delivery",
+                  "parent": "Cloud",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Managed delivery",
+                  "parent": "Cloud",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Pipelines",
+                  "parent": "Data",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Dashboards",
+                  "parent": "Data",
+                  "action": "includes",
+                  "reverse": false
+                },
+                {
+                  "label": "Audits",
+                  "parent": "Security",
+                  "action": "is a",
+                  "reverse": false
+                },
+                {
+                  "label": "Pen testing",
+                  "parent": "Security",
+                  "action": "is a",
+                  "reverse": false
+                }
+              ],
+              "relations": [
+                {
+                  "source": "Halvorn",
+                  "target": "Clients",
+                  "action": "serves"
+                }
+              ],
+              "attributes": [],
+              "other_drafts": 0,
+              "score": {
+                "case_id": "en-speech-serves-word-order",
+                "kind": "speech",
+                "concepts_expected": 11,
+                "concepts_groundable": 11,
+                "concepts_predicted": 11,
+                "concepts_matched": 11,
+                "matched_groundable": 11,
+                "concept_precision": 1.0,
+                "concept_recall": 1.0,
+                "concept_f1": 1.0,
+                "grounding_ceiling": 1.0,
+                "concept_recall_groundable": 1.0,
+                "concept_f1_groundable": 1.0,
+                "parent_correct": 11,
+                "parent_at_depth": 11,
+                "action_correct": 11,
+                "path_correct": 11,
+                "invented": [],
+                "duplicates": [],
+                "missed": [],
+                "missing_branches": [],
+                "optional_drafted": [],
+                "wrong_parent": [],
+                "wrong_action": [],
+                "wrong_path": [],
+                "wrong_depth": [],
+                "relations_expected": 1,
+                "relations_predicted": 1,
+                "relations_matched": 1,
+                "relation_precision": 0.5,
+                "relation_recall": 1.0,
+                "relation_action_correct": 0,
+                "invented_relations": [
+                  "Halvorn serves Clients"
+                ],
+                "missed_relations": [],
+                "attributes_expected": 0,
+                "attributes_predicted": 0,
+                "attributes_matched": 0,
+                "invented_attributes": [],
+                "missed_attributes": [],
+                "depth_expected": 3,
+                "depth_achieved": 4,
+                "levels": {
+                  "1": {
+                    "expected": 2,
+                    "groundable": 2,
+                    "predicted": 1,
+                    "correct": 2,
+                    "correct_groundable": 2
+                  },
+                  "2": {
+                    "expected": 3,
+                    "groundable": 3,
+                    "predicted": 1,
+                    "correct": 3,
+                    "correct_groundable": 3
+                  },
+                  "3": {
+                    "expected": 6,
+                    "groundable": 6,
+                    "predicted": 3,
+                    "correct": 6,
+                    "correct_groundable": 6
+                  },
+                  "4": {
+                    "expected": 0,
+                    "groundable": 0,
+                    "predicted": 6,
+                    "correct": 0,
+                    "correct_groundable": 0
+                  }
+                }
+              },
+              "drafted_depth": 4,
+              "document": null,
+              "review": null,
+              "skipped": null,
+              "error": null,
+              "wall_ms": 6718
+            },
+            {
+              "case_id": "en-speech-demo-talk",
+              "kind": "speech",
+              "origin": "dataset",
+              "mode": "speech",
+              "run_key": "gpt-6-sol@none",
+              "repeat": 0,
+              "units": [
+                {
+                  "text": "the it captured loading",
+                  "status": 200,
+                  "wall_ms": 1047,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "not_understood",
+                  "unresolved": [
+                    {
+                      "text": "the it captured loading",
+                      "reason": "not_a_statement"
+                    }
+                  ],
+                  "drafts": [],
+                  "notes": [],
+                  "statements": [],
+                  "submitted": 0,
+                  "submit_error": null,
+                  "error": null
+                },
+                {
+                  "text": "it starts to draw all the boxes and links them like this yeah",
+                  "status": 200,
+                  "wall_ms": 1139,
+                  "extractor": "llm",
+                  "llm_outcome": "used",
+                  "degraded": false,
+                  "outcome": "not_understood",
+                  "unresolved": [
+                    {
+                      "text": "it starts to draw all the boxes and links them like this",
+                      "reason": "not_a_statement"
+                    }
+                  ],
+                  "drafts": [],
+                  "notes": [],
+                  "statements": [],
+                  "submitted": 0,
+                  "submit_error": null,
+                  "error": null
+                }
+              ],
+              "calls": [
+                {
+                  "input_tokens": 8565,
+                  "output_tokens": 59,
+                  "cost_eur": 0.009037,
+                  "latency_ms": 968,
+                  "error": null,
+                  "started_ms": 349573531,
+                  "first_token_ms": null
+                },
+                {
+                  "input_tokens": 8670,
+                  "output_tokens": 67,
+                  "cost_eur": 0.009206,
+                  "latency_ms": 1094,
+                  "error": null,
+                  "started_ms": 349574562,
+                  "first_token_ms": null
+                }
+              ],
+              "timings": [
+                {
+                  "name": "harness",
+                  "stages": {
+                    "gate": 0
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "extraction",
+                  "stages": {
+                    "budget": 3,
+                    "candidates": 0,
+                    "examples": 1,
+                    "learning": 0,
+                    "context": 0,
+                    "reserve": 3,
+                    "provider": 971,
+                    "interpret": 0,
+                    "settle": 6,
+                    "total": 985
+                  },
+                  "counts": {
+                    "input_tokens": 8565,
+                    "output_tokens": 59
+                  }
+                },
+                {
+                  "name": "parse",
+                  "stages": {
+                    "view": 10,
+                    "source": 4,
+                    "model": 991,
+                    "drafts": 0,
+                    "turns": 5,
+                    "learning": 0,
+                    "total": 1010
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "harness",
+                  "stages": {
+                    "gate": 0
+                  },
+                  "counts": {}
+                },
+                {
+                  "name": "extraction",
+                  "stages": {
+                    "budget": 3,
+                    "candidates": 0,
+                    "examples": 1,
+                    "learning": 0,
+                    "context": 0,
+                    "reserve": 3,
+                    "provider": 1105,
+                    "interpret": 0,
+                    "settle": 6,
+                    "total": 1119
+                  },
+                  "counts": {
+                    "input_tokens": 8670,
+                    "output_tokens": 67
+                  }
+                },
+                {
+                  "name": "parse",
+                  "stages": {
+                    "view": 10,
+                    "source": 3,
+                    "model": 1122,
+                    "drafts": 0,
+                    "turns": 7,
+                    "learning": 0,
+                    "total": 1143
+                  },
+                  "counts": {}
+                }
+              ],
+              "usage": {
+                "units": 2,
+                "calls": 2,
+                "input_tokens": 17235,
+                "output_tokens": 126,
+                "cost_eur": 0.018243,
+                "latencies_ms": [
+                  968,
+                  1094
+                ],
+                "degraded_units": 0,
+                "unresolved": 2,
+                "llm_outcomes": {
+                  "used": 2
+                },
+                "extractors": {
+                  "llm": 2
+                },
+                "error": null,
+                "first_token_ms": [],
+                "timings": [
+                  {
+                    "name": "harness",
+                    "stages": {
+                      "gate": 0
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "extraction",
+                    "stages": {
+                      "budget": 3,
+                      "candidates": 0,
+                      "examples": 1,
+                      "learning": 0,
+                      "context": 0,
+                      "reserve": 3,
+                      "provider": 971,
+                      "interpret": 0,
+                      "settle": 6,
+                      "total": 985
+                    },
+                    "counts": {
+                      "input_tokens": 8565,
+                      "output_tokens": 59
+                    }
+                  },
+                  {
+                    "name": "parse",
+                    "stages": {
+                      "view": 10,
+                      "source": 4,
+                      "model": 991,
+                      "drafts": 0,
+                      "turns": 5,
+                      "learning": 0,
+                      "total": 1010
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "harness",
+                    "stages": {
+                      "gate": 0
+                    },
+                    "counts": {}
+                  },
+                  {
+                    "name": "extraction",
+                    "stages": {
+                      "budget": 3,
+                      "candidates": 0,
+                      "examples": 1,
+                      "learning": 0,
+                      "context": 0,
+                      "reserve": 3,
+                      "provider": 1105,
+                      "interpret": 0,
+                      "settle": 6,
+                      "total": 1119
+                    },
+                    "counts": {
+                      "input_tokens": 8670,
+                      "output_tokens": 67
+                    }
+                  },
+                  {
+                    "name": "parse",
+                    "stages": {
+                      "view": 10,
+                      "source": 3,
+                      "model": 1122,
+                      "drafts": 0,
+                      "turns": 7,
+                      "learning": 0,
+                      "total": 1143
+                    },
+                    "counts": {}
+                  }
+                ]
+              },
+              "concepts": [],
+              "relations": [],
+              "attributes": [],
+              "other_drafts": 0,
+              "score": {
+                "case_id": "en-speech-demo-talk",
+                "kind": "speech",
+                "concepts_expected": 0,
+                "concepts_groundable": 0,
+                "concepts_predicted": 0,
+                "concepts_matched": 0,
+                "matched_groundable": 0,
+                "concept_precision": 1.0,
+                "concept_recall": 1.0,
+                "concept_f1": 1.0,
+                "grounding_ceiling": 1.0,
+                "concept_recall_groundable": 1.0,
+                "concept_f1_groundable": 1.0,
+                "parent_correct": 0,
+                "parent_at_depth": 0,
+                "action_correct": 0,
+                "path_correct": 0,
+                "invented": [],
+                "duplicates": [],
+                "missed": [],
+                "missing_branches": [],
+                "optional_drafted": [],
+                "wrong_parent": [],
+                "wrong_action": [],
+                "wrong_path": [],
+                "wrong_depth": [],
+                "relations_expected": 0,
+                "relations_predicted": 0,
+                "relations_matched": 0,
+                "relation_precision": 1.0,
+                "relation_recall": 1.0,
+                "relation_action_correct": 0,
+                "invented_relations": [],
+                "missed_relations": [],
+                "attributes_expected": 0,
+                "attributes_predicted": 0,
+                "attributes_matched": 0,
+                "invented_attributes": [],
+                "missed_attributes": [],
+                "depth_expected": 0,
+                "depth_achieved": 0,
+                "levels": {}
+              },
+              "drafted_depth": 0,
+              "document": null,
+              "review": null,
+              "skipped": null,
+              "error": null,
+              "wall_ms": 2391
+            }
+          ],
+          "capabilities": {
+            "outputMode": "json_schema",
+            "reasoningEffort": "none"
+          },
+          "stopped_by_budget": false,
+          "withheld": []
+        }
+      ],
+      "summaries": {
+        "gpt-6-sol@none": {
+          "all": {
+            "run_key": "gpt-6-sol@none",
+            "suite": "all",
+            "cases": 8,
+            "scored": 8,
+            "concept_precision": 1.0,
+            "concept_recall": 1.0,
+            "concept_f1": 1.0,
+            "recall_groundable": 1.0,
+            "f1_groundable": 1.0,
+            "grounding_ceiling": 0.9436619718309859,
+            "parent_accuracy": 1.0,
+            "action_accuracy": 1.0,
+            "path_accuracy": 1.0,
+            "relation_precision": 0.8333333333333334,
+            "relation_recall": 1.0,
+            "relation_f1": 0.9090909090909091,
+            "invented": 0,
+            "duplicates": 0,
+            "missed": 0,
+            "depth_ratio": 1.0,
+            "levels": {
+              "1": {
+                "expected": 12,
+                "groundable": 12,
+                "predicted": 9,
+                "correct": 12,
+                "precision": 1.3333333333333333,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 1.142857142857143
+              },
+              "2": {
+                "expected": 27,
+                "groundable": 26,
+                "predicted": 26,
+                "correct": 27,
+                "precision": 1.0384615384615385,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 1.018867924528302
+              },
+              "3": {
+                "expected": 32,
+                "groundable": 29,
+                "predicted": 30,
+                "correct": 32,
+                "precision": 1.0666666666666667,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 1.0322580645161292
+              },
+              "4": {
+                "expected": 0,
+                "groundable": 0,
+                "predicted": 6,
+                "correct": 0,
+                "precision": 0.0,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 0.0
+              }
+            },
+            "mean_level_f1": 1.0646610439671915,
+            "degraded_units": 0,
+            "unresolved": 4,
+            "errors": 0,
+            "calls": 12,
+            "input_tokens": 103009,
+            "output_tokens": 7081,
+            "cost_eur": 0.159657,
+            "cost_per_case": 0.019957125,
+            "mean_latency_s": 3.9723333333333333,
+            "p95_latency_s": 8.75,
+            "llm_outcomes": {
+              "used": 12
+            },
+            "stage_timings": {
+              "harness": {
+                "gate": {
+                  "count": 12,
+                  "p50_ms": 0,
+                  "p90_ms": 0,
+                  "max_ms": 0
+                }
+              },
+              "extraction": {
+                "budget": {
+                  "count": 12,
+                  "p50_ms": 3,
+                  "p90_ms": 5,
+                  "max_ms": 5
+                },
+                "candidates": {
+                  "count": 12,
+                  "p50_ms": 0,
+                  "p90_ms": 1,
+                  "max_ms": 1
+                },
+                "examples": {
+                  "count": 12,
+                  "p50_ms": 1,
+                  "p90_ms": 2,
+                  "max_ms": 3
+                },
+                "learning": {
+                  "count": 12,
+                  "p50_ms": 0,
+                  "p90_ms": 0,
+                  "max_ms": 0
+                },
+                "context": {
+                  "count": 12,
+                  "p50_ms": 0,
+                  "p90_ms": 1,
+                  "max_ms": 1
+                },
+                "reserve": {
+                  "count": 12,
+                  "p50_ms": 4,
+                  "p90_ms": 10,
+                  "max_ms": 69
+                },
+                "provider": {
+                  "count": 12,
+                  "p50_ms": 3348,
+                  "p90_ms": 7776,
+                  "max_ms": 8750
+                },
+                "interpret": {
+                  "count": 12,
+                  "p50_ms": 14,
+                  "p90_ms": 33,
+                  "max_ms": 34
+                },
+                "settle": {
+                  "count": 12,
+                  "p50_ms": 5,
+                  "p90_ms": 6,
+                  "max_ms": 16
+                },
+                "total": {
+                  "count": 12,
+                  "p50_ms": 3378,
+                  "p90_ms": 7825,
+                  "max_ms": 8863
+                },
+                "input_tokens": {
+                  "count": 12,
+                  "p50_ms": 8484,
+                  "p90_ms": 8822,
+                  "max_ms": 8846
+                },
+                "output_tokens": {
+                  "count": 12,
+                  "p50_ms": 606,
+                  "p90_ms": 1176,
+                  "max_ms": 1210
+                }
+              },
+              "parse": {
+                "view": {
+                  "count": 12,
+                  "p50_ms": 12,
+                  "p90_ms": 47,
+                  "max_ms": 48
+                },
+                "source": {
+                  "count": 12,
+                  "p50_ms": 4,
+                  "p90_ms": 42,
+                  "max_ms": 45
+                },
+                "model": {
+                  "count": 12,
+                  "p50_ms": 3382,
+                  "p90_ms": 7831,
+                  "max_ms": 8872
+                },
+                "drafts": {
+                  "count": 12,
+                  "p50_ms": 0,
+                  "p90_ms": 0,
+                  "max_ms": 0
+                },
+                "turns": {
+                  "count": 12,
+                  "p50_ms": 7,
+                  "p90_ms": 22,
+                  "max_ms": 36
+                },
+                "learning": {
+                  "count": 12,
+                  "p50_ms": 0,
+                  "p90_ms": 0,
+                  "max_ms": 0
+                },
+                "total": {
+                  "count": 12,
+                  "p50_ms": 3410,
+                  "p90_ms": 7944,
+                  "max_ms": 9000
+                }
+              }
+            }
+          },
+          "dataset:speech": {
+            "run_key": "gpt-6-sol@none",
+            "suite": "dataset:speech",
+            "cases": 8,
+            "scored": 8,
+            "concept_precision": 1.0,
+            "concept_recall": 1.0,
+            "concept_f1": 1.0,
+            "recall_groundable": 1.0,
+            "f1_groundable": 1.0,
+            "grounding_ceiling": 0.9436619718309859,
+            "parent_accuracy": 1.0,
+            "action_accuracy": 1.0,
+            "path_accuracy": 1.0,
+            "relation_precision": 0.8333333333333334,
+            "relation_recall": 1.0,
+            "relation_f1": 0.9090909090909091,
+            "invented": 0,
+            "duplicates": 0,
+            "missed": 0,
+            "depth_ratio": 1.0,
+            "levels": {
+              "1": {
+                "expected": 12,
+                "groundable": 12,
+                "predicted": 9,
+                "correct": 12,
+                "precision": 1.3333333333333333,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 1.142857142857143
+              },
+              "2": {
+                "expected": 27,
+                "groundable": 26,
+                "predicted": 26,
+                "correct": 27,
+                "precision": 1.0384615384615385,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 1.018867924528302
+              },
+              "3": {
+                "expected": 32,
+                "groundable": 29,
+                "predicted": 30,
+                "correct": 32,
+                "precision": 1.0666666666666667,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 1.0322580645161292
+              },
+              "4": {
+                "expected": 0,
+                "groundable": 0,
+                "predicted": 6,
+                "correct": 0,
+                "precision": 0.0,
+                "recall": 1.0,
+                "recall_groundable": 1.0,
+                "f1": 0.0
+              }
+            },
+            "mean_level_f1": 1.0646610439671915,
+            "degraded_units": 0,
+            "unresolved": 4,
+            "errors": 0,
+            "calls": 12,
+            "input_tokens": 103009,
+            "output_tokens": 7081,
+            "cost_eur": 0.159657,
+            "cost_per_case": 0.019957125,
+            "mean_latency_s": 3.9723333333333333,
+            "p95_latency_s": 8.75,
+            "llm_outcomes": {
+              "used": 12
+            },
+            "stage_timings": {
+              "harness": {
+                "gate": {
+                  "count": 12,
+                  "p50_ms": 0,
+                  "p90_ms": 0,
+                  "max_ms": 0
+                }
+              },
+              "extraction": {
+                "budget": {
+                  "count": 12,
+                  "p50_ms": 3,
+                  "p90_ms": 5,
+                  "max_ms": 5
+                },
+                "candidates": {
+                  "count": 12,
+                  "p50_ms": 0,
+                  "p90_ms": 1,
+                  "max_ms": 1
+                },
+                "examples": {
+                  "count": 12,
+                  "p50_ms": 1,
+                  "p90_ms": 2,
+                  "max_ms": 3
+                },
+                "learning": {
+                  "count": 12,
+                  "p50_ms": 0,
+                  "p90_ms": 0,
+                  "max_ms": 0
+                },
+                "context": {
+                  "count": 12,
+                  "p50_ms": 0,
+                  "p90_ms": 1,
+                  "max_ms": 1
+                },
+                "reserve": {
+                  "count": 12,
+                  "p50_ms": 4,
+                  "p90_ms": 10,
+                  "max_ms": 69
+                },
+                "provider": {
+                  "count": 12,
+                  "p50_ms": 3348,
+                  "p90_ms": 7776,
+                  "max_ms": 8750
+                },
+                "interpret": {
+                  "count": 12,
+                  "p50_ms": 14,
+                  "p90_ms": 33,
+                  "max_ms": 34
+                },
+                "settle": {
+                  "count": 12,
+                  "p50_ms": 5,
+                  "p90_ms": 6,
+                  "max_ms": 16
+                },
+                "total": {
+                  "count": 12,
+                  "p50_ms": 3378,
+                  "p90_ms": 7825,
+                  "max_ms": 8863
+                },
+                "input_tokens": {
+                  "count": 12,
+                  "p50_ms": 8484,
+                  "p90_ms": 8822,
+                  "max_ms": 8846
+                },
+                "output_tokens": {
+                  "count": 12,
+                  "p50_ms": 606,
+                  "p90_ms": 1176,
+                  "max_ms": 1210
+                }
+              },
+              "parse": {
+                "view": {
+                  "count": 12,
+                  "p50_ms": 12,
+                  "p90_ms": 47,
+                  "max_ms": 48
+                },
+                "source": {
+                  "count": 12,
+                  "p50_ms": 4,
+                  "p90_ms": 42,
+                  "max_ms": 45
+                },
+                "model": {
+                  "count": 12,
+                  "p50_ms": 3382,
+                  "p90_ms": 7831,
+                  "max_ms": 8872
+                },
+                "drafts": {
+                  "count": 12,
+                  "p50_ms": 0,
+                  "p90_ms": 0,
+                  "max_ms": 0
+                },
+                "turns": {
+                  "count": 12,
+                  "p50_ms": 7,
+                  "p90_ms": 22,
+                  "max_ms": 36
+                },
+                "learning": {
+                  "count": 12,
+                  "p50_ms": 0,
+                  "p90_ms": 0,
+                  "max_ms": 0
+                },
+                "total": {
+                  "count": 12,
+                  "p50_ms": 3410,
+                  "p90_ms": 7944,
+                  "max_ms": 9000
+                }
+              }
+            }
+          }
+        }
+      },
+      "composites": {
+        "gpt-6-sol@none": {
+          "run_key": "gpt-6-sol@none",
+          "precision": 1.0,
+          "recall": 1.0323305219835959,
+          "efficiency": 1.0,
+          "total": 1.0096991565950788
+        }
+      },
+      "repeat_totals": {
+        "gpt-6-sol@none": [
+          1.0096991565950788
+        ]
+      },
+      "spread": {
+        "gpt-6-sol@none": [
+          1.0096991565950788,
+          0.0
+        ]
+      },
+      "paired": [],
+      "stopped_by_budget": false
+    }
+  ],
+  "speechComprehension": {
+    "screening": [
+      {
+        "case": "en-speech-demo-talk",
+        "configuration": "gpt-6-sol@none",
+        "repeat": 0,
+        "sentences": 2,
+        "expected": 0,
+        "matched": 0,
+        "parentAtDepth": 0,
+        "parentAtDepthRate": null,
+        "verbCorrect": 0,
+        "verbAccuracy": null,
+        "relationsExpected": 0,
+        "relationVerbCorrect": 0,
+        "relationAccuracy": null,
+        "attributesExpected": 0,
+        "attributesMatched": 0,
+        "inventedAttributes": [],
+        "missedAttributes": [],
+        "depthReached": 0,
+        "depthGold": 0,
+        "invented": [],
+        "missed": [],
+        "wrongParent": [],
+        "wrongDepth": [],
+        "wrongVerb": [],
+        "failedSentences": 0
+      },
+      {
+        "case": "en-speech-five-kinds-then-fragments",
+        "configuration": "gpt-6-sol@none",
+        "repeat": 0,
+        "sentences": 3,
+        "expected": 9,
+        "matched": 9,
+        "parentAtDepth": 9,
+        "parentAtDepthRate": 1.0,
+        "verbCorrect": 9,
+        "verbAccuracy": 1.0,
+        "relationsExpected": 0,
+        "relationVerbCorrect": 0,
+        "relationAccuracy": null,
+        "attributesExpected": 0,
+        "attributesMatched": 0,
+        "inventedAttributes": [],
+        "missedAttributes": [],
+        "depthReached": 3,
+        "depthGold": 3,
+        "invented": [],
+        "missed": [],
+        "wrongParent": [],
+        "wrongDepth": [],
+        "wrongVerb": [],
+        "failedSentences": 0
+      },
+      {
+        "case": "en-speech-kinds-then-badge",
+        "configuration": "gpt-6-sol@none",
+        "repeat": 0,
+        "sentences": 1,
+        "expected": 8,
+        "matched": 8,
+        "parentAtDepth": 8,
+        "parentAtDepthRate": 1.0,
+        "verbCorrect": 8,
+        "verbAccuracy": 1.0,
+        "relationsExpected": 1,
+        "relationVerbCorrect": 1,
+        "relationAccuracy": 1.0,
+        "attributesExpected": 0,
+        "attributesMatched": 0,
+        "inventedAttributes": [],
+        "missedAttributes": [],
+        "depthReached": 3,
+        "depthGold": 3,
+        "invented": [],
+        "missed": [],
+        "wrongParent": [],
+        "wrongDepth": [],
+        "wrongVerb": [],
+        "failedSentences": 0
+      },
+      {
+        "case": "en-speech-misheard-article-and-fragment",
+        "configuration": "gpt-6-sol@none",
+        "repeat": 0,
+        "sentences": 1,
+        "expected": 11,
+        "matched": 11,
+        "parentAtDepth": 11,
+        "parentAtDepthRate": 1.0,
+        "verbCorrect": 11,
+        "verbAccuracy": 1.0,
+        "relationsExpected": 1,
+        "relationVerbCorrect": 1,
+        "relationAccuracy": 1.0,
+        "attributesExpected": 0,
+        "attributesMatched": 0,
+        "inventedAttributes": [],
+        "missedAttributes": [],
+        "depthReached": 3,
+        "depthGold": 3,
+        "invented": [],
+        "missed": [],
+        "wrongParent": [],
+        "wrongDepth": [],
+        "wrongVerb": [],
+        "failedSentences": 0
+      },
+      {
+        "case": "en-speech-misheard-article-in-list",
+        "configuration": "gpt-6-sol@none",
+        "repeat": 0,
+        "sentences": 1,
+        "expected": 12,
+        "matched": 12,
+        "parentAtDepth": 12,
+        "parentAtDepthRate": 1.0,
+        "verbCorrect": 12,
+        "verbAccuracy": 1.0,
+        "relationsExpected": 1,
+        "relationVerbCorrect": 1,
+        "relationAccuracy": 1.0,
+        "attributesExpected": 0,
+        "attributesMatched": 0,
+        "inventedAttributes": [],
+        "missedAttributes": [],
+        "depthReached": 3,
+        "depthGold": 3,
+        "invented": [],
+        "missed": [],
+        "wrongParent": [],
+        "wrongDepth": [],
+        "wrongVerb": [],
+        "failedSentences": 0
+      },
+      {
+        "case": "en-speech-misheard-company-mid-sentence",
+        "configuration": "gpt-6-sol@none",
+        "repeat": 0,
+        "sentences": 1,
+        "expected": 12,
+        "matched": 12,
+        "parentAtDepth": 12,
+        "parentAtDepthRate": 1.0,
+        "verbCorrect": 12,
+        "verbAccuracy": 1.0,
+        "relationsExpected": 1,
+        "relationVerbCorrect": 1,
+        "relationAccuracy": 1.0,
+        "attributesExpected": 0,
+        "attributesMatched": 0,
+        "inventedAttributes": [],
+        "missedAttributes": [],
+        "depthReached": 3,
+        "depthGold": 3,
+        "invented": [],
+        "missed": [],
+        "wrongParent": [],
+        "wrongDepth": [],
+        "wrongVerb": [],
+        "failedSentences": 0
+      },
+      {
+        "case": "en-speech-misheard-title-in-list",
+        "configuration": "gpt-6-sol@none",
+        "repeat": 0,
+        "sentences": 2,
+        "expected": 8,
+        "matched": 8,
+        "parentAtDepth": 8,
+        "parentAtDepthRate": 1.0,
+        "verbCorrect": 8,
+        "verbAccuracy": 1.0,
+        "relationsExpected": 0,
+        "relationVerbCorrect": 0,
+        "relationAccuracy": null,
+        "attributesExpected": 0,
+        "attributesMatched": 0,
+        "inventedAttributes": [],
+        "missedAttributes": [],
+        "depthReached": 3,
+        "depthGold": 3,
+        "invented": [],
+        "missed": [],
+        "wrongParent": [],
+        "wrongDepth": [],
+        "wrongVerb": [],
+        "failedSentences": 0
+      },
+      {
+        "case": "en-speech-serves-word-order",
+        "configuration": "gpt-6-sol@none",
+        "repeat": 0,
+        "sentences": 1,
+        "expected": 11,
+        "matched": 11,
+        "parentAtDepth": 11,
+        "parentAtDepthRate": 1.0,
+        "verbCorrect": 11,
+        "verbAccuracy": 1.0,
+        "relationsExpected": 1,
+        "relationVerbCorrect": 0,
+        "relationAccuracy": 0.0,
+        "attributesExpected": 0,
+        "attributesMatched": 0,
+        "inventedAttributes": [],
+        "missedAttributes": [],
+        "depthReached": 4,
+        "depthGold": 3,
+        "invented": [],
+        "missed": [],
+        "wrongParent": [],
+        "wrongDepth": [],
+        "wrongVerb": [],
+        "failedSentences": 0
+      }
+    ]
+  },
+  "reviewPass": {
+    "screening": []
+  }
+}

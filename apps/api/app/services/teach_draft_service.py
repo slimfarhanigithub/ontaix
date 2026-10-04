@@ -60,6 +60,9 @@ class End:
     text: str
     # The model named this end by a new label (it may still resolve to an existing concept).
     cited_new: bool = False
+    # The speaker's words as speech recognition heard them, when the label corrects a misheard
+    # term ("crowd architects" for Cloud architects); None when the label is the words.
+    heard: str | None = None
 
 
 @dataclass

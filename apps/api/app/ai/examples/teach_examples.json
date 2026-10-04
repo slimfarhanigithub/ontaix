@@ -2885,82 +2885,6 @@
    }
   },
   {
-   "id": "doc-includes",
-   "source": {
-    "set": "document",
-    "id": "telecom_tessaline"
-   },
-   "tags": [
-    "document",
-    "deep-chain",
-    "reuse"
-   ],
-   "input": {
-    "mode": "document",
-    "company": "Tessaline Telecom",
-    "sentence": "Service activation includes SIM activation and fibre line activation.",
-    "candidates": [
-     {
-      "handle": "c0",
-      "label": "Tessaline Telecom",
-      "parent": null
-     },
-     {
-      "handle": "c1",
-      "label": "Fulfilment",
-      "parent": "c0"
-     },
-     {
-      "handle": "c2",
-      "label": "Service configuration and activation",
-      "parent": "c1"
-     },
-     {
-      "handle": "c3",
-      "label": "Service activation",
-      "parent": "c2"
-     }
-    ]
-   },
-   "output": {
-    "intents": [
-     {
-      "kind": "rel",
-      "subject": {
-       "candidate": "c3"
-      },
-      "action": "includes",
-      "object": {
-       "newLabel": "SIM activation"
-      },
-      "confidence": 0.9,
-      "span": "Service activation includes SIM activation",
-      "source": {
-       "start": 0,
-       "end": 42
-      }
-     },
-     {
-      "kind": "rel",
-      "subject": {
-       "candidate": "c3"
-      },
-      "action": "includes",
-      "object": {
-       "newLabel": "Fibre line activation"
-      },
-      "confidence": 0.9,
-      "span": "fibre line activation",
-      "source": {
-       "start": 47,
-       "end": 68
-      }
-     }
-    ],
-    "unresolved": []
-   }
-  },
-  {
    "id": "doc-fr-is-a",
    "source": {
     "set": "document",
@@ -3156,88 +3080,6 @@
       "end": 118
      }
     ]
-   }
-  },
-  {
-   "id": "goodrelations-location-parts",
-   "source": {
-    "set": "benchmark",
-    "id": "goodrelations"
-   },
-   "tags": [
-    "document",
-    "benchmark",
-    "reuse"
-   ],
-   "input": {
-    "mode": "document",
-    "company": "GoodRelations",
-    "sentence": "Locations are characterized by an address or geographical position and a set of opening hour specifications for various days of the week.",
-    "candidates": [
-     {
-      "handle": "c0",
-      "label": "GoodRelations",
-      "parent": null
-     },
-     {
-      "handle": "c1",
-      "label": "Location",
-      "parent": "c0"
-     }
-    ]
-   },
-   "output": {
-    "intents": [
-     {
-      "kind": "rel",
-      "subject": {
-       "candidate": "c1"
-      },
-      "action": "is characterized by",
-      "object": {
-       "newLabel": "Address"
-      },
-      "confidence": 0.9,
-      "span": "Locations are characterized by an address",
-      "source": {
-       "start": 0,
-       "end": 41
-      }
-     },
-     {
-      "kind": "rel",
-      "subject": {
-       "candidate": "c1"
-      },
-      "action": "is characterized by",
-      "object": {
-       "newLabel": "Geographical position"
-      },
-      "confidence": 0.9,
-      "span": "geographical position",
-      "source": {
-       "start": 45,
-       "end": 66
-      }
-     },
-     {
-      "kind": "rel",
-      "subject": {
-       "candidate": "c1"
-      },
-      "action": "is characterized by",
-      "object": {
-       "newLabel": "Opening hour specifications"
-      },
-      "confidence": 0.9,
-      "span": "opening hour specifications",
-      "source": {
-       "start": 80,
-       "end": 107
-      }
-     }
-    ],
-    "unresolved": []
    }
   },
   {
@@ -4414,6 +4256,287 @@
       "index": 0,
       "start": 0,
       "end": 39
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-misheard-title-and-list",
+   "source": {
+    "set": "case",
+    "id": "en-speech-misheard-title-in-list"
+   },
+   "tags": [
+    "speech",
+    "misheard",
+    "kinds",
+    "list",
+    "is-a",
+    "back-reference"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Halvorn",
+    "sentence": "halvorn have engineers these engineers can be test engineers network engineers platform engineers also crowd architects they can have certifications either vendor certifications or cloud certifications",
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Halvorn",
+      "parent": null
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c0"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Engineers"
+      },
+      "confidence": 0.9,
+      "span": "halvorn have engineers",
+      "source": {
+       "start": 0,
+       "end": 22
+      },
+      "segment": 0
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Test engineers"
+      },
+      "object": {
+       "newLabel": "Engineers"
+      },
+      "confidence": 0.9,
+      "explanation": "can be: four job titles, each a kind of Engineers",
+      "span": "these engineers can be test engineers network engineers platform engineers also crowd architects",
+      "source": {
+       "start": 23,
+       "end": 119
+      },
+      "segment": 1
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Network engineers"
+      },
+      "object": {
+       "newLabel": "Engineers"
+      },
+      "confidence": 0.9,
+      "span": "these engineers can be test engineers network engineers platform engineers also crowd architects",
+      "source": {
+       "start": 23,
+       "end": 119
+      },
+      "segment": 1
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Platform engineers"
+      },
+      "object": {
+       "newLabel": "Engineers"
+      },
+      "confidence": 0.9,
+      "span": "these engineers can be test engineers network engineers platform engineers also crowd architects",
+      "source": {
+       "start": 23,
+       "end": 119
+      },
+      "segment": 1
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Cloud architects"
+      },
+      "object": {
+       "newLabel": "Engineers"
+      },
+      "confidence": 0.8,
+      "explanation": "heard 'crowd architects': a job title among job titles",
+      "span": "these engineers can be test engineers network engineers platform engineers also crowd architects",
+      "source": {
+       "start": 23,
+       "end": 119
+      },
+      "segment": 1
+     },
+     {
+      "kind": "rel",
+      "subject": {
+       "newLabel": "Engineers"
+      },
+      "action": "has",
+      "object": {
+       "newLabel": "Certifications"
+      },
+      "confidence": 0.85,
+      "explanation": "they: the engineers",
+      "span": "they can have certifications",
+      "source": {
+       "start": 120,
+       "end": 148
+      },
+      "segment": 2
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Vendor certifications"
+      },
+      "object": {
+       "newLabel": "Certifications"
+      },
+      "confidence": 0.9,
+      "span": "either vendor certifications or cloud certifications",
+      "source": {
+       "start": 149,
+       "end": 201
+      },
+      "segment": 2
+     },
+     {
+      "kind": "spec",
+      "subject": {
+       "newLabel": "Cloud certifications"
+      },
+      "object": {
+       "newLabel": "Certifications"
+      },
+      "confidence": 0.9,
+      "span": "either vendor certifications or cloud certifications",
+      "source": {
+       "start": 149,
+       "end": 201
+      },
+      "segment": 2
+     }
+    ],
+    "unresolved": [],
+    "segments": [
+     {
+      "index": 0,
+      "start": 0,
+      "end": 22
+     },
+     {
+      "index": 1,
+      "start": 23,
+      "end": 119
+     },
+     {
+      "index": 2,
+      "start": 120,
+      "end": 201
+     }
+    ]
+   }
+  },
+  {
+   "id": "en-speech-misheard-fragment-and-app-talk",
+   "source": {
+    "set": "case",
+    "id": "en-speech-misheard-article-and-fragment"
+   },
+   "tags": [
+    "speech",
+    "misheard",
+    "fragment",
+    "not-a-statement",
+    "multi-turn",
+    "fillers",
+    "reuse"
+   ],
+   "input": {
+    "mode": "speech",
+    "company": "Kelso Labs",
+    "sentence": "these services can be around a nalytics or a Lytics and um as you can see it is processing them like this",
+    "sessionTurns": [
+     {
+      "sentence": "Kelso Labs offers testing services",
+      "referenced": [
+       "c0"
+      ],
+      "introduced": [
+       "c1"
+      ]
+     }
+    ],
+    "candidates": [
+     {
+      "handle": "c0",
+      "label": "Kelso Labs",
+      "parent": null
+     },
+     {
+      "handle": "c1",
+      "label": "Testing services",
+      "parent": "c0",
+      "pending": true
+     }
+    ]
+   },
+   "output": {
+    "intents": [
+     {
+      "kind": "rel",
+      "subject": {
+       "candidate": "c1"
+      },
+      "action": "includes",
+      "object": {
+       "newLabel": "Analytics"
+      },
+      "confidence": 0.8,
+      "explanation": "these services: c1; heard 'a nalytics'",
+      "span": "these services can be around a nalytics",
+      "source": {
+       "start": 0,
+       "end": 39
+      },
+      "segment": 0
+     }
+    ],
+    "unresolved": [
+     {
+      "text": "a Lytics",
+      "reason": "ambiguous_reference",
+      "segment": 0,
+      "source": {
+       "start": 43,
+       "end": 51
+      }
+     },
+     {
+      "text": "as you can see it is processing them like this",
+      "reason": "not_a_statement",
+      "segment": 1,
+      "source": {
+       "start": 59,
+       "end": 105
+      }
+     }
+    ],
+    "segments": [
+     {
+      "index": 0,
+      "start": 0,
+      "end": 51
+     },
+     {
+      "index": 1,
+      "start": 59,
+      "end": 105
      }
     ]
    }

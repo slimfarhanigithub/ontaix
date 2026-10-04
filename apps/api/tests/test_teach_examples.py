@@ -28,6 +28,7 @@ from app.services.teach_extraction_service import (
     _ground,
     _ground_name,
     _ground_value,
+    _sound_alike_run,
     example_tokens,
     examples_for,
 )
@@ -97,6 +98,12 @@ def test_every_example_answer_is_one_the_api_accepts(example: dict) -> None:
                 assert ref.candidate in handles
                 continue
             spoken = _ground(ref.new_label, text, source)
+            # In speech a corrected term is grounded through the words it was misheard as.
+            if spoken is None and example["input"]["mode"] == "speech":
+                heard = _sound_alike_run(ref.new_label, text, source)
+                spoken = ref.new_label if heard is not None else None
+                if heard is not None:
+                    assert heard.casefold() in (intent.explanation or "").casefold()
             assert spoken is not None or ref.new_label.casefold() in grounded, ref.new_label
             if spoken:
                 grounded.add(spoken.casefold())
