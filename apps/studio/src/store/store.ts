@@ -33,7 +33,7 @@ import {
   type Source,
   type TenantDomain,
 } from '../api/types';
-import { arrange as arrangeCanvas } from '../canvas/arrange';
+import { arrange as arrangeCanvas, settleInDomain } from '../canvas/arrange';
 import { GREEN, RED, DEFAULT_BRASS, DEFAULT_COLORS, DOMAIN_TEMPLATES } from '../canvas/constants';
 import { divide, type BirthDraws } from '../canvas/division';
 import { focusOnCell, focusOnDomain } from '../canvas/focus';
@@ -886,6 +886,7 @@ class StudioStore {
         n.domain = d;
         n.finalColor = d.color;
         if (!n.split && !n.diff) n.color = d.color;
+        settleInDomain(s, n);
       }
     }
     for (const src of art.sources || []) {

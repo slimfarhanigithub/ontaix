@@ -16,7 +16,7 @@ import { DOMAIN_R } from './constants';
 import { focusOnDomain } from './focus';
 import { layoutByDomain } from './domainTree';
 import { cellFootprint, chipWidth, estimateWidth, measureWith, type Measure } from './footprint';
-import { layoutForest, type LayoutBlock, type LayoutItem, type LayoutLink } from './layered';
+import { GAP_Y, layoutForest, type LayoutBlock, type LayoutItem, type LayoutLink } from './layered';
 import { ancestorsOf, descendantsOf } from './lineage';
 import { neighbours, shown, type SceneState } from './state';
 import type { Domain, Node } from './types';
@@ -271,4 +271,22 @@ export function arrange(s: SceneState, v: View): void {
   if (s.cellFocus) return arrangeCell(s, v, s.cellFocus, measure);
   if (s.domainFocus) return arrangeDomain(s, v, s.domainFocus, measure);
   arrangeAll(s, measure, v);
+}
+
+/**
+ * A cell that changed domain joins its new domain's cluster. A free cell is left to the domain's
+ * pull. A cell Arrange placed glides under the lowest arranged cell of its new domain in its
+ * company and stays pinned there, so an arranged region stays readable; with no arranged cell
+ * in that domain it is released to the domain's pull.
+ */
+export function settleInDomain(s: SceneState, n: Node, measure: Measure = estimateWidth): void {
+  if (!n.pinned && !n.tween) return;
+  n.tween = null;
+  n.pinned = false;
+  const at = (m: Node): [number, number] => (m.tween ? [m.tween.tx, m.tween.ty] : [m.x, m.y]);
+  const bottom = (m: Node): number => at(m)[1] + cellFootprint(m, measure).down;
+  const peers = s.nodes.filter((m) => m !== n && m.domain === n.domain && m.company === n.company && !m.dying && (m.pinned || !!m.tween));
+  if (!peers.length) return;
+  const low = peers.reduce((a, b) => (bottom(b) > bottom(a) ? b : a));
+  tw(n, at(low)[0], bottom(low) + GAP_Y + cellFootprint(n, measure).up, now());
 }

@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.storage.base import RoleName, ScopeKind
+from app.models.storage.concept import Concept
 from app.models.storage.outbox import Outbox
 from tests.conftest import Persona, TenantFixture
 from tests.role_grants import persona_with_role
@@ -202,3 +203,48 @@ async def test_move_into_a_custom_domain_creates_the_product_and_stays_in_the_co
         await client.get(f"/companies/{other['id']}", headers=tenant.builder.headers)
     ).json()["domainProducts"]
     assert all(p["counts"]["members"] == 0 for p in other_products)
+
+
+@pytest.mark.parametrize("target", ["sales", "customer_care"])
+async def test_an_approved_move_stores_the_row_and_emits_the_moved_concept(
+    client: httpx.AsyncClient, tenant: TenantFixture, session: AsyncSession, target: str
+) -> None:
+    if target == "customer_care":
+        await created_domain(client, tenant, "Customer care", "#445566")
+        assert target not in await products_of(client, tenant)
+    color = next(
+        d["color"]
+        for d in (await client.get("/domains", headers=tenant.builder.headers)).json()
+        if d["key"] == target
+    )
+    plant = await approved(client, tenant, "Plant", domain_key="production")
+    proposed = await move(client, tenant.builder, plant["id"], target)
+    assert proposed.status_code == 202, proposed.text
+
+    decided = await approve(client, tenant.governor, proposed.json()["id"])
+
+    assert decided.status_code == 200, decided.text
+    product = (await products_of(client, tenant))[target]
+    row = await session.get(Concept, uuid.UUID(plant["id"]), populate_existing=True)
+    assert row is not None
+    assert row.domain_product_id == uuid.UUID(product["id"])
+    assert (row.x, row.y) != (plant["x"], plant["y"])
+    event = (
+        await session.scalars(
+            select(Outbox)
+            .where(
+                Outbox.tenant_id == tenant.tenant_id,
+                Outbox.aggregate == "concept",
+                Outbox.action == "changed",
+            )
+            .order_by(Outbox.id.desc())
+            .limit(1)
+        )
+    ).one()
+    emitted = event.payload["concept"]
+    assert emitted["id"] == plant["id"]
+    assert emitted["domainKey"] == target
+    assert emitted["domainProductId"] == product["id"]
+    assert emitted["color"] == color
+    assert (emitted["x"], emitted["y"]) == (row.x, row.y)
+    assert decided.json()["artefacts"]["concepts"][0] == emitted

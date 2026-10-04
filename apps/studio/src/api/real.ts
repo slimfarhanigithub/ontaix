@@ -4,7 +4,8 @@
  * Live events: the API does not serve the WebSocket hub yet, so each successful write replays
  * its response on the live-event bus as the envelope the hub will send (a proposal with its
  * artefacts, a decision with its cascade). Bulk runs answer with counts only, so they are
- * followed by `snapshot.required`, which reloads `GET /scene`.
+ * followed by `snapshot.required`, which reloads `GET /scene` and `GET /domains`; so is an
+ * approved new or edited domain, whose answer carries no domain.
  *
  * Settings, appearance and view-state writes already tolerate a refusal at their call sites.
  * Source state changes (enable, disable, refresh) answer with the source only, so they are
@@ -142,9 +143,14 @@ function created(p: Proposal): void {
   emit('proposal.created', p.proposer, { proposal: p, artefacts: p.artefacts || {}, cascaded: [] });
 }
 
+/** Decisions whose answer carries no artefact for what they change: the tenant domain list. */
+const DOMAIN_DECISIONS = new Set(['create_domain', 'edit_domain']);
+
 function decided(res: DecisionResult): DecisionResult {
-  const type: EventType = res.proposal.state === 'approved' ? 'proposal.approved' : 'proposal.half_approved';
+  const approved = res.proposal.state === 'approved';
+  const type: EventType = approved ? 'proposal.approved' : 'proposal.half_approved';
   emit(type, res.proposal.proposer, { ...res, audit: undefined });
+  if (approved && DOMAIN_DECISIONS.has(res.proposal.changeKind ?? '')) resync(res);
   return res;
 }
 
