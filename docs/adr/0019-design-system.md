@@ -1,6 +1,6 @@
 # ADR 0019: The Design System Replaces the Reference as the Visual Source of Truth
 
-Status: Accepted. The redesign is an owner decision, final (Slim, 2026-10-04): "I want you to follow this file docs/DESIGN-SYSTEM to redesign the app". The three answers below are the owner's; everything else here is approved under owner delegation (decision row 164).
+Status: Accepted. The redesign is an owner decision, final (Slim, 2026-10-04): "I want you to follow this file docs/DESIGN-SYSTEM to redesign the app". The three answers below are the owner's; everything else here is approved under owner delegation (decision row 167).
 
 ## Context
 
