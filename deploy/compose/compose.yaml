@@ -23,7 +23,9 @@ services:
 
   api:
     build:
-      context: ../../apps/api
+      # The repository root: the image carries contracts/schema.sql for the first migration.
+      context: ../..
+      dockerfile: apps/api/Dockerfile
     environment:
       ONTAIX_ENVIRONMENT: ${ONTAIX_ENVIRONMENT:-dev}
       # Local stack only: accept X-Ontaix-User (the API refuses this outside dev and test).

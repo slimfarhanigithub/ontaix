@@ -1,4 +1,6 @@
-# Applies to builds whose context is the repository root (the Studio image).
+# Applies to builds whose context is the repository root (the API and Studio images). Nothing
+# here reaches an image: tests, evaluations, documentation, infrastructure and every ignored
+# environment file stay out of the context.
 .git/
 .github/
 .claude/
@@ -6,12 +8,18 @@ docs/
 infra/
 reference/
 deploy/
-apps/api/
-apps/gateway/
 packages/
+scripts/
+tests/
+apps/api/tests/
+apps/api/evals/
+apps/gateway/
 **/node_modules/
 **/dist/
 **/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
 .env
 .env.*
 !.env.example

@@ -157,8 +157,9 @@ jobs:
       fail-fast: true
       matrix:
         include:
+          # The API image carries contracts/schema.sql, so its context is the repository root.
           - image: api
-            context: apps/api
+            context: .
             dockerfile: apps/api/Dockerfile
             build_args: ""
           - image: gateway
@@ -275,6 +276,25 @@ jobs:
             --wait --timeout 10m
           helm upgrade --install cluster-issuers infra/helm/cluster-issuers --namespace cert-manager --wait --timeout 5m
           kubectl wait --for=condition=Ready clusterissuer/letsencrypt-staging clusterissuer/letsencrypt-production --timeout=3m
+      - name: clear a first install that never rolled out
+        # Helm refuses to upgrade a release with no deployed revision ("has no deployed
+        # releases"), so a failed or interrupted first install is uninstalled and installed again.
+        run: |
+          set -euo pipefail
+          status=$(helm -n "$NAMESPACE" status "$RELEASE" -o json 2>/dev/null | jq -r '.info.status' || true)
+          case "$status" in
+            failed|pending-install|pending-upgrade|pending-rollback)
+              rolled_out=$(helm -n "$NAMESPACE" history "$RELEASE" -o json \
+                | jq '[.[] | select(.status == "deployed" or .status == "superseded")] | length')
+              if [ "$rolled_out" = "0" ]; then
+                echo "release $RELEASE is $status and never rolled out; uninstalling it before the install"
+                helm -n "$NAMESPACE" uninstall "$RELEASE" --wait --timeout 5m
+              else
+                echo "release $RELEASE is $status with an earlier rollout; the upgrade continues from it"
+              fi
+              ;;
+            *) echo "release $RELEASE: ${status:-not installed yet}" ;;
+          esac
       - name: helm upgrade --install ${{ env.RELEASE }}
         run: |
           set -euo pipefail

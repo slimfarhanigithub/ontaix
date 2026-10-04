@@ -8,6 +8,7 @@ Create Date: 2026-09-28
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 from alembic import op
@@ -18,7 +19,9 @@ branch_labels = None
 depends_on = None
 
 SCHEMA_SQL_ENV = "ONTAIX_SCHEMA_SQL"
-REPO_SCHEMA_SQL = Path(__file__).resolve().parents[5] / "contracts" / "schema.sql"
+# The contract's path inside the repository, looked for above this file when the variable is
+# not set (a checkout); the API image sets the variable to the copy it carries.
+SCHEMA_SQL_IN_REPOSITORY = Path("contracts") / "schema.sql"
 
 
 def upgrade() -> None:
@@ -33,11 +36,7 @@ def downgrade() -> None:
 
 def _contract_ddl() -> str:
     """Read the schema contract and drop its own BEGIN/COMMIT so Alembic owns the transaction."""
-    path = Path(os.environ.get(SCHEMA_SQL_ENV) or REPO_SCHEMA_SQL)
-    if not path.is_file():
-        raise FileNotFoundError(
-            f"schema contract not found at {path}; set {SCHEMA_SQL_ENV} to its location"
-        )
+    path = schema_sql_path(Path(__file__), os.environ)
     # Lines end at "\n" only: `str.splitlines` would also cut at U+2028 and other Unicode line
     # separators, which regex character classes of the contract hold as literal characters.
     statements = [
@@ -46,3 +45,23 @@ def _contract_ddl() -> str:
         if line.strip() not in {"BEGIN;", "COMMIT;"}
     ]
     return "\n".join(statements)
+
+
+def schema_sql_path(module_file: Path, environment: Mapping[str, str]) -> Path:
+    """The schema contract to execute: ONTAIX_SCHEMA_SQL when set, else contracts/schema.sql in
+    the nearest directory above `module_file` that holds one. Resolved when the migration runs,
+    never at import, and any depth of `module_file` is acceptable."""
+    configured = environment.get(SCHEMA_SQL_ENV)
+    if configured:
+        path = Path(configured)
+        if not path.is_file():
+            raise FileNotFoundError(f"{SCHEMA_SQL_ENV} points at {path}, which is not a file")
+        return path
+    for parent in module_file.resolve().parents:
+        candidate = parent / SCHEMA_SQL_IN_REPOSITORY
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError(
+        f"schema contract {SCHEMA_SQL_IN_REPOSITORY} not found above {module_file}; set"
+        f" {SCHEMA_SQL_ENV} to its location"
+    )
