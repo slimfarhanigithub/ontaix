@@ -43,6 +43,7 @@ class SupportInfo(ApiModel):
 class ActingInfo(ApiModel):
     organization: OrganizationRef
     since: datetime
+    until: datetime
 
 
 class Session(ApiModel):

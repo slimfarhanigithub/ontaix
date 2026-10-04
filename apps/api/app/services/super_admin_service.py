@@ -27,7 +27,12 @@ from app.repositories import (
     platform_role_repository,
     sign_in_throttle_repository,
 )
-from app.services import password_hash_service, password_policy_service, platform_audit_service
+from app.services import (
+    organization_access_audit_service,
+    password_hash_service,
+    password_policy_service,
+    platform_audit_service,
+)
 from app.services.platform_audit_service import OrganizationCopy
 from app.utilities.session_tokens import key_digest, normalize_email
 
@@ -100,8 +105,11 @@ async def set_password(session: AsyncSession, email: str, password: str) -> None
         reason,
         set_by=None,
     )
-    await auth_session_repository.end_for_account(
+    ended = await auth_session_repository.end_for_account(
         session, account.id, SessionEndReason.PASSWORD_RESET
+    )
+    await organization_access_audit_service.audit_ended(
+        session, ended, organization_access_audit_service.PASSWORD_RESET_WHAT, SYSTEM
     )
     await sign_in_throttle_repository.clear(session, ThrottleKeyKind.EMAIL, key_digest(normalized))
     copy = None

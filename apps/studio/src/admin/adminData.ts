@@ -81,6 +81,17 @@ export async function loadDirectory(): Promise<void> {
   store.bump();
 }
 
+/** A new session or organization: the directory is forgotten, and a load still in flight for the previous one lands nowhere. */
+export function resetDirectory(): void {
+  loadSeq++;
+  stale = true;
+  directory.groups = [];
+  directory.users = [];
+  directory.audit = [];
+  directory.auditTotal = 0;
+  directory.loaded = false;
+}
+
 /** Marks the directory stale; the next portal render reloads it. */
 export function invalidateDirectory(): void {
   stale = true;

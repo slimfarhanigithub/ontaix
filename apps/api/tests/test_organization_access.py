@@ -6,13 +6,18 @@ the super admin, and exit, sign-out and expiry clear the access."""
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import Callable
 from typing import Any
 
 import httpx
+from sqlalchemy import text
 
+from app.clients import db_client
 from app.main import API_PREFIX
+from app.repositories import app_user_repository
+from app.services import auth_upkeep_service, super_admin_service
 from tests.auth_helpers import (
     create_member,
     create_organization,
@@ -22,7 +27,14 @@ from tests.auth_helpers import (
     ready_member,
     signed_in,
 )
-from tests.conftest import AccountFixture, Browser, TenantFixture, make_tenant
+from tests.conftest import (
+    AccountFixture,
+    Browser,
+    TenantFixture,
+    generated_password,
+    make_tenant,
+    run_as_owner,
+)
 from tests.test_tenant_isolation import (
     OrganizationB,
     b_bodies,
@@ -32,7 +44,7 @@ from tests.test_tenant_isolation import (
     organization_routes,
 )
 
-ENTERED_WHAT = "Entered the organization as platform super admin, with every role"
+ENTERED_WHAT = "Entered the organization as platform super admin, with every role for 60 minutes"
 
 
 async def entered(browser: Browser, tenant_id: uuid.UUID) -> dict[str, Any]:
@@ -375,4 +387,180 @@ async def test_disabling_the_organization_ends_the_access(
     assert disabled.status_code == 200, disabled.text
     assert (await admin.call("GET", "/auth/session")).status_code == 401
     await signed_in(admin, super_admin)
+    assert (await admin.call("GET", "/auth/session")).json()["acting"] is None
+    # The exit was audited at once, by the admin who disabled it, and the sweep adds nothing.
+    assert await platform_actions(super_admin.account_id, tenant.tenant_id) == [
+        "organization_entered",
+        "organization_exited",
+        "organization_disabled",
+    ]
+    log = await organization_log(tenant.tenant_id)
+    exits = [e for e in log if e[0] == "platform" and "Left the organization" in e[3]]
+    assert len(exits) == 1 and "disabled" in exits[0][3] and exits[0][2] == super_admin.account_id
+    await auth_upkeep_service.run_once()
+    assert len(await exit_rows(tenant.tenant_id)) == 1
+
+
+async def exit_rows(tenant_id: uuid.UUID) -> list[Any]:
+    return await platform_rows(
+        "SELECT actor_account_id, what FROM ontaix.platform_audit_entry"
+        " WHERE action = 'organization_exited' AND target_tenant_id = :t ORDER BY id",
+        t=tenant_id,
+    )
+
+
+async def fresh_super_admin() -> AccountFixture:
+    email = f"root-{uuid.uuid4().hex[:8]}@platform.test"
+    password = generated_password()
+    account_id = await run_as_owner(
+        lambda s: super_admin_service.create_super_admin(s, email, password)
+    )
+    return AccountFixture(email=email, password=password, account_id=account_id)
+
+
+async def test_the_access_lasts_an_hour_and_its_end_is_audited(
+    browsers: Callable[[], Browser], super_admin: AccountFixture
+) -> None:
+    tenant = await make_tenant()
+    admin = await signed_in(browsers(), super_admin)
+    session = await entered(admin, tenant.tenant_id)
+    acting = session["acting"]
+    assert acting["since"] < acting["until"] <= session["absoluteExpiresAt"]
+
+    await platform_execute(
+        "UPDATE ontaix.auth_session SET acting_until = now() - interval '1 second'"
+        " WHERE token_hash = sha256(convert_to(:t, 'UTF8'))",
+        t=admin.cookie(),
+    )
+
+    assert (await admin.call("GET", "/scene")).status_code == 403
+    assert (await admin.call("GET", "/auth/session")).json()["acting"] is None
+    await auth_upkeep_service.run_once()
+    exits = await exit_rows(tenant.tenant_id)
+    assert len(exits) == 1 and exits[0][0] is None and "60 minutes" in exits[0][1]
+    log = await organization_log(tenant.tenant_id)
+    assert log[-1][0] == "platform" and log[-1][1] == "system" and "60 minutes" in log[-1][3]
+    await auth_upkeep_service.run_once()
+    assert len(await exit_rows(tenant.tenant_id)) == 1
+    # Entering again starts a new hour.
+    again = await entered(admin, tenant.tenant_id)
+    assert again["acting"]["until"] > acting["until"]
+
+
+async def test_revoking_the_super_admin_role_ends_the_access(
+    browsers: Callable[[], Browser],
+) -> None:
+    root = await fresh_super_admin()
+    tenant = await make_tenant()
+    admin = await signed_in(browsers(), root)
+    await entered(admin, tenant.tenant_id)
+    assert (await admin.call("GET", "/scene")).status_code == 200
+
+    await run_as_owner(
+        lambda s: s.execute(
+            text("DELETE FROM ontaix.platform_role_assignment WHERE account_id = :a"),
+            {"a": root.account_id},
+        )
+    )
+
+    assert (await admin.call("GET", "/scene")).status_code == 403
+    assert (await admin.call("POST", "/companies", json=company_body("No"))).status_code == 403
+    assert (await admin.call("GET", "/auth/session")).json()["acting"] is None
+    await auth_upkeep_service.run_once()
+    exits = await exit_rows(tenant.tenant_id)
+    assert len(exits) == 1 and "role" in exits[0][1]
+
+
+async def test_a_session_ended_elsewhere_has_its_exit_audited_once(
+    browsers: Callable[[], Browser], super_admin: AccountFixture
+) -> None:
+    tenant = await make_tenant()
+    admin = await signed_in(browsers(), super_admin)
+    await entered(admin, tenant.tenant_id)
+    # Idle expiry with the cookie never presented again: the sweep audits the exit.
+    await platform_execute(
+        "UPDATE ontaix.auth_session SET idle_expires_at = now() - interval '1 second'"
+        " WHERE token_hash = sha256(convert_to(:t, 'UTF8'))",
+        t=admin.cookie(),
+    )
+    await auth_upkeep_service.run_once()
+    exits = await exit_rows(tenant.tenant_id)
+    assert len(exits) == 1 and "expired" in exits[0][1]
+    # Presenting the expired cookie afterwards audits the expiry once more, not the exit.
+    assert (await admin.call("GET", "/auth/session")).status_code == 401
+    assert len(await exit_rows(tenant.tenant_id)) == 1
+
+    # A password change keeps the access on the new token and ends the other sessions.
+    other = await signed_in(browsers(), super_admin)
+    await entered(other, tenant.tenant_id)
+    await signed_in(admin, super_admin)
+    await entered(admin, tenant.tenant_id)
+    new_password = generated_password()
+    changed = await admin.call(
+        "PUT",
+        "/auth/password",
+        json={"currentPassword": super_admin.password, "newPassword": new_password},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["acting"]["organization"]["id"] == str(tenant.tenant_id)
+    assert (await admin.call("GET", "/scene")).status_code == 200
+    assert (await other.call("GET", "/auth/session")).status_code == 401
+    exits = await exit_rows(tenant.tenant_id)
+    assert len(exits) == 2 and "password" in exits[1][1]
+    await auth_upkeep_service.run_once()
+    assert len(await exit_rows(tenant.tenant_id)) == 2
+    # Back to the fixture's password, so the other tests keep signing in.
+    restored = await admin.call(
+        "PUT",
+        "/auth/password",
+        json={"currentPassword": new_password, "newPassword": super_admin.password},
+    )
+    assert restored.status_code == 200, restored.text
+
+
+async def test_two_concurrent_entries_leave_one_live_session(
+    browsers: Callable[[], Browser], super_admin: AccountFixture
+) -> None:
+    tenant = await make_tenant()
+    admin = await signed_in(browsers(), super_admin)
+    path = f"/admin/organizations/{tenant.tenant_id}/enter"
+
+    first, second = await asyncio.gather(admin.call("POST", path), admin.call("POST", path))
+
+    statuses = sorted([first.status_code, second.status_code])
+    assert statuses in ([200, 401], [200, 409]), (first.text, second.text)
+    if 409 in statuses:
+        refused = first if first.status_code == 409 else second
+        assert refused.json()["code"] == "session_changed"
+    live = await platform_rows(
+        "SELECT count(*) FROM ontaix.auth_session WHERE account_id = :a AND ended_at IS NULL"
+        " AND acting_tenant_id = :t",
+        a=super_admin.account_id,
+        t=tenant.tenant_id,
+    )
+    assert live == [(1,)]
+
+
+async def test_a_directory_user_with_the_super_admin_email_refuses_the_entry(
+    browsers: Callable[[], Browser], super_admin: AccountFixture
+) -> None:
+    tenant = await make_tenant()
+    async with db_client.platform_session() as s:
+        await app_user_repository.create(
+            s,
+            tenant_id=tenant.tenant_id,
+            issuer="dev",
+            subject=f"twin@{tenant.slug}.test",
+            email=super_admin.email.upper(),
+            name="Twin",
+            department=None,
+            company_id=None,
+        )
+        await s.commit()
+    admin = await signed_in(browsers(), super_admin)
+
+    refused = await admin.call("POST", f"/admin/organizations/{tenant.tenant_id}/enter")
+
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["code"] == "email_taken"
     assert (await admin.call("GET", "/auth/session")).json()["acting"] is None

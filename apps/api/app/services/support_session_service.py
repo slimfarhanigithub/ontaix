@@ -18,7 +18,11 @@ from app.auth import PlatformAdmin
 from app.models.api.actor import Actor
 from app.models.storage.base import SessionEndReason
 from app.repositories import auth_session_repository
-from app.services import organization_access_service, platform_audit_service, session_service
+from app.services import (
+    organization_access_audit_service,
+    platform_audit_service,
+    session_service,
+)
 from app.services.organization_service import require
 from app.services.platform_audit_service import OrganizationCopy
 from app.services.session_service import IssuedSession
@@ -55,11 +59,13 @@ async def start(
     if previous is not None:
         await _audit_end(session, admin, previous, ENDED)
     if acting is not None:
-        await organization_access_service.audit_exit(
+        await organization_access_audit_service.audit_exit(
             session,
-            admin.actor,
-            acting,
-            organization_access_service.LEFT_WHAT,
+            session_id=admin.live.row.id,
+            account_id=admin.account_id,
+            tenant_id=acting,
+            what=organization_access_audit_service.LEFT_WHAT,
+            actor=admin.actor,
             client_ip=admin.client_ip,
         )
     issued = await session_service.issue(

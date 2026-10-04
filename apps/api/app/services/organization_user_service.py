@@ -40,6 +40,7 @@ from app.repositories import (
 )
 from app.services import (
     audit_service,
+    organization_access_audit_service,
     password_hash_service,
     password_policy_service,
     platform_audit_service,
@@ -230,8 +231,15 @@ async def set_disabled(
     account, _ = await _account(session, tenant_id, user_id)
     if await account_repository.set_disabled(session, account.id, disabled):
         if disabled:
-            await auth_session_repository.end_for_account(
+            ended = await auth_session_repository.end_for_account(
                 session, account.id, SessionEndReason.ACCOUNT_DISABLED
+            )
+            await organization_access_audit_service.audit_ended(
+                session,
+                ended,
+                organization_access_audit_service.ACCOUNT_DISABLED_WHAT,
+                admin.actor,
+                client_ip=admin.client_ip,
             )
         await platform_audit_service.record(
             session,
@@ -270,8 +278,15 @@ async def reset_password(
         PasswordSetReason.RESET,
         set_by=admin.account_id,
     )
-    await auth_session_repository.end_for_account(
+    ended = await auth_session_repository.end_for_account(
         session, account.id, SessionEndReason.PASSWORD_RESET
+    )
+    await organization_access_audit_service.audit_ended(
+        session,
+        ended,
+        organization_access_audit_service.PASSWORD_RESET_WHAT,
+        admin.actor,
+        client_ip=admin.client_ip,
     )
     await sign_in_throttle_repository.clear(
         session, ThrottleKeyKind.EMAIL, key_digest(account.email)

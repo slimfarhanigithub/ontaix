@@ -29,7 +29,7 @@ from app.repositories import (
     tenant_repository,
 )
 from app.services import (
-    organization_access_service,
+    organization_access_audit_service,
     password_hash_service,
     password_policy_service,
     platform_audit_service,
@@ -108,11 +108,13 @@ async def sign_out(session: AsyncSession, live: LiveSession | None, attempt: Att
     await auth_session_repository.end(session, live.row.id, SessionEndReason.SIGN_OUT)
     await _audit_attempt(session, "sign_out", live.account, attempt, "Signed out", ok=True)
     if live.resolved.acting_tenant_id is not None:
-        await organization_access_service.audit_exit(
+        await organization_access_audit_service.audit_exit(
             session,
-            platform_audit_service.platform_actor(live.account.id, live.account.name),
-            live.resolved.acting_tenant_id,
-            organization_access_service.SIGNED_OUT_WHAT,
+            session_id=live.row.id,
+            account_id=live.account.id,
+            tenant_id=live.resolved.acting_tenant_id,
+            what=organization_access_audit_service.SIGNED_OUT_WHAT,
+            actor=platform_audit_service.platform_actor(live.account.id, live.account.name),
             client_ip=attempt.client_ip,
         )
 
@@ -134,11 +136,13 @@ async def record_expired(session: AsyncSession, token: str | None, attempt: Atte
     if account is not None:
         await _audit_attempt(session, "session_expired", account, attempt, "Session expired")
         if row.acting_tenant_id is not None:
-            await organization_access_service.audit_exit(
+            await organization_access_audit_service.audit_exit(
                 session,
-                platform_audit_service.platform_actor(account.id, account.name),
-                row.acting_tenant_id,
-                organization_access_service.EXPIRED_WHAT,
+                session_id=row.id,
+                account_id=account.id,
+                tenant_id=row.acting_tenant_id,
+                what=organization_access_audit_service.EXPIRED_WHAT,
+                actor=platform_audit_service.platform_actor(account.id, account.name),
                 client_ip=attempt.client_ip,
             )
     return True
@@ -193,8 +197,19 @@ async def change_password(
         PasswordSetReason.CHANGE,
         set_by=account.id,
     )
-    await auth_session_repository.end_for_account(
+    ended = await auth_session_repository.end_for_account(
         session, account.id, SessionEndReason.PASSWORD_CHANGED
+    )
+    acting_tenant_id = live.resolved.acting_tenant_id
+    if acting_tenant_id is not None:
+        # The access continues on the new token, so this row's end is no exit.
+        await auth_session_repository.mark_acting_exited(session, live.row.id)
+    await organization_access_audit_service.audit_ended(
+        session,
+        ended,
+        organization_access_audit_service.PASSWORD_CHANGED_WHAT,
+        platform_audit_service.platform_actor(account.id, account.name),
+        client_ip=attempt.client_ip,
     )
     issued = await session_service.issue(
         session,
@@ -203,7 +218,8 @@ async def change_password(
         user_agent=attempt.user_agent,
         rotates=live.row,
         support_tenant_id=live.resolved.support_tenant_id,
-        acting_tenant_id=live.resolved.acting_tenant_id,
+        acting_tenant_id=acting_tenant_id,
+        acting_until=live.row.acting_until if acting_tenant_id is not None else None,
     )
     await _audit_attempt(session, "password_changed", account, attempt, "Password changed", ok=True)
     return issued

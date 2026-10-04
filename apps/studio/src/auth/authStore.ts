@@ -7,6 +7,7 @@
  */
 import { useSyncExternalStore } from 'react';
 
+import { resetDirectory } from '../admin/adminData';
 import { api, hasDevIdentity } from '../api/client';
 import { authSignals, forgetSession } from '../api/session';
 import { ApiError, type Session } from '../api/types';
@@ -18,6 +19,9 @@ export const SIGNED_OUT = 'You are signed out.';
 export const SESSION_ENDED = 'Your session has ended. Sign in again.';
 export const INCORRECT = 'Email or password is incorrect.';
 export const UNAVAILABLE = 'Sign-in is unavailable. Try again in a moment.';
+/** What a session shows of: the account and the organization it acts in or looks at; a change drops the previous data. */
+const sessionKey = (s: Session | null): string => (s ? `${s.account.id}:${s.acting?.organization.id ?? ''}:${s.support?.organization.id ?? ''}` : '');
+
 /** The lock lasts 15 minutes; used when a `429` carries no `Retry-After`. */
 const LOCK_MINUTES = 15;
 
@@ -126,6 +130,15 @@ class AuthStore {
     this.enter(await api.exitOrganization());
   }
 
+  /** Reads the session again, after the hour of an entered organization ended on its own. */
+  async refresh(): Promise<void> {
+    try {
+      this.enter(await api.getSession());
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) this.ended();
+    }
+  }
+
   private enter(session: Session): void {
     if (session.mustChangePassword) this.show('password', session);
     else if (session.kind === 'platform' && !session.support && !session.acting) this.show('platform', session);
@@ -148,6 +161,10 @@ class AuthStore {
     if (mode !== 'signIn') {
       this.state.notice = '';
       this.state.error = '';
+    }
+    if (sessionKey(session) !== sessionKey(this.state.session)) {
+      store.nextSession();
+      resetDirectory();
     }
     this.state.mode = mode;
     this.state.session = session;

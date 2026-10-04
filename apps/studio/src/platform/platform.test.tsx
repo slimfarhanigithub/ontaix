@@ -1,12 +1,15 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
-import type { Organization, OrganizationUser, PlatformAuditEntry } from '../api/types';
+import type { Organization, OrganizationUser, PlatformAuditEntry, Session } from '../api/types';
 import { AccountControls } from '../auth/AccountControls';
 import { auth } from '../auth/authStore';
 import { CSRF, json, noContent, platformSession, problem, stubFetch, type FetchStub } from '../auth/fetchStub';
 import { Header } from '../shell/Header';
 import { store } from '../store/store';
-import { actingText, PlatformAccessBanner } from '../auth/PlatformAccessBanner';
+import { createEventBus } from '../api/events';
+import { createMockServer } from '../api/mock/server';
+import type { Scene } from '../api/types';
+import { actingText, minutesLeft, PlatformAccessBanner } from '../auth/PlatformAccessBanner';
 import { AuditLog } from '../admin/pages/GovernancePages';
 import { directory } from '../admin/adminData';
 import { ADD_USER_NOTE, RESET_NOTE, userStatus } from './OrganizationUsers';
@@ -59,6 +62,21 @@ const user = (over: Partial<OrganizationUser> = {}): OrganizationUser => ({
 });
 
 const paged = <T,>(items: T[]) => json(200, { items, page: 1, pageSize: 200, total: items.length });
+
+/** A platform session acting inside an organization, with 59 and a half minutes of its hour left. */
+const actingSession = (id: string, name: string, over: Partial<Session> = {}): Session =>
+  platformSession({
+    csrfToken: 'acting-csrf-'.padEnd(43, 'z'),
+    acting: { organization: { id, name, slug: id }, since: new Date(Date.now() - 30_000).toISOString(), until: new Date(Date.now() + 59.5 * 60_000).toISOString() },
+    ...over,
+  });
+
+/** The mock server's fresh scene, its home company renamed. */
+function sceneOf(company: string): Scene {
+  const scene = createMockServer(createEventBus()).handle('GET', '/scene').body as Scene;
+  scene.companies[0].name = company;
+  return scene;
+}
 
 const ORGS = [org(), org({ id: 'org-2', name: 'Beta Ltd', slug: 'beta', companyMode: 'single', status: 'disabled', companies: 1, users: 0, disabledAt: '2026-09-20T09:00:00Z' })];
 const USERS = [user(), user({ id: 'u-2', accountId: 'acc-2', email: 'bo@acme.example', name: 'Bo', status: 'disabled', groups: [] }), user({ id: 'u-3', accountId: 'acc-3', email: 'cy@acme.example', name: 'Cy', mustChangePassword: true })];
@@ -311,10 +329,7 @@ describe('the users of an organization', () => {
 describe('entering an organization', () => {
   it('asks first, then opens the Studio with the banner and Exit, which returns to the portal', async () => {
     const stub = await openPortal();
-    const acting = platformSession({
-      csrfToken: 'acting-csrf-'.padEnd(43, 'z'),
-      acting: { organization: { id: 'org-1', name: 'Acme', slug: 'acme' }, since: '2026-09-30T09:00:00Z' },
-    });
+    const acting = actingSession('org-1', 'Acme');
     stub.on('POST /admin/organizations/org-1/enter', json(200, acting));
     fireEvent.click(rowAction('Acme', 'Enter'));
     expect(dialogTitle()).toBe('Enter Acme?');
@@ -333,8 +348,8 @@ describe('entering an organization', () => {
       </>,
     );
     const banner = document.getElementById('platformAccess') as HTMLElement;
-    expect(banner.querySelector('span')?.textContent).toBe(actingText('Acme'));
-    expect(banner.textContent).toBe('Acting in Acme as platform super adminExit');
+    expect(banner.querySelector('span')?.textContent).toBe(actingText('Acme', 60));
+    expect(banner.textContent).toBe('Acting in Acme as platform super admin · 60 min leftExit');
     expect((document.getElementById('status') as HTMLElement).classList.contains('on')).toBe(false);
     stub.on('POST /admin/exit', json(200, platformSession()));
     fireEvent.click(screen.getByRole('button', { name: 'Exit' }));
@@ -352,6 +367,51 @@ describe('entering an organization', () => {
     await flush();
     expect(auth.state.mode).toBe('platform');
     expect(store.ui.toasts.map((t) => t.text)).toContain('The organization is disabled; enable it first');
+  });
+
+  it('counts the minutes left and reads the session again once the hour has ended', async () => {
+    expect(minutesLeft(new Date(1_000_000 + 61_000).toISOString(), 1_000_000)).toBe(2);
+    expect(minutesLeft(new Date(1_000_000 - 5).toISOString(), 1_000_000)).toBe(0);
+    const stub = await openPortal();
+    stub.on('GET /auth/session', json(200, platformSession()));
+    store.ui.status = 'ready';
+    stub.on('GET /scene', json(200, sceneOf('Acme Co')));
+    auth.replaceSession(actingSession('org-1', 'Acme', { acting: { organization: { id: 'org-1', name: 'Acme', slug: 'acme' }, since: new Date(Date.now() - 3_600_000).toISOString(), until: new Date(Date.now() - 1_000).toISOString() } }));
+    await flush();
+    cleanup();
+    render(<PlatformAccessBanner />);
+    await flush();
+    expect(stub.to('GET /auth/session').length).toBe(2);
+    expect(auth.state.mode).toBe('platform');
+    expect(document.getElementById('platformAccess')).toBeNull();
+    store.ui.status = 'loading';
+  });
+
+  it('drops the scene of the organization left when its answer lands after the next one', async () => {
+    const stub = await openPortal();
+    let releaseAlpha: (res: Response) => void = () => undefined;
+    const slowAlpha = new Promise<Response>((resolve) => {
+      releaseAlpha = resolve;
+    });
+    stub.on('GET /scene', () => slowAlpha);
+    stub.on('POST /admin/exit', json(200, platformSession()));
+    store.ui.status = 'ready';
+    auth.replaceSession(actingSession('org-1', 'Acme'));
+    await flush();
+    expect(auth.state.mode).toBe('studio');
+    await auth.exitOrganization();
+    expect(auth.state.mode).toBe('platform');
+    expect(store.s.companies).toEqual([]);
+    stub.on('GET /scene', json(200, sceneOf('Beta Co')));
+    auth.replaceSession(actingSession('org-2', 'Beta Ltd'));
+    await flush();
+    expect(store.s.companies.map((c) => c.name)).toEqual(['Beta Co']);
+    releaseAlpha(json(200, sceneOf('Alpha Co')));
+    await flush();
+    await flush();
+    expect(store.s.companies.map((c) => c.name)).toEqual(['Beta Co']);
+    await auth.exitOrganization();
+    store.ui.status = 'loading';
   });
 
   it('marks the audit log entries written through platform access', () => {

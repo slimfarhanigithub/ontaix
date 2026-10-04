@@ -1,13 +1,13 @@
 """Platform access: a super admin enters an organization and acts inside it with every role.
 
 Entering replaces the presented session with a new token bound to the organization through
-`auth_session.acting_tenant_id`; leaving replaces it with a token bound to none. Inside, every
-organization request runs as the super admin's directory user of that organization (issuer
-`platform`, created at the first entry) with Administrator, Builder, Governor and Auditor at
-tenant scope, on the application database role and under its row-level security, exactly as a
-member's request. Entering and leaving are written to the platform log and, as kind `platform`,
-to the organization's own log; the access also ends with the session, at sign-out or expiry,
-which is audited the same way.
+`auth_session.acting_tenant_id` for 60 minutes (`acting_until`), never past the session's
+absolute expiry; leaving replaces it with a token bound to none. Inside, every organization
+request runs as the super admin's directory user of that organization (issuer `platform`,
+created at the first entry) with Administrator, Builder, Governor and Auditor at tenant scope,
+on the application database role and under its row-level security, exactly as a member's
+request. Entering is written to the platform log and, as kind `platform`, to the organization's
+own log; every way the access ends is audited through `organization_access_audit_service`.
 """
 
 from __future__ import annotations
@@ -18,12 +18,12 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import PLATFORM_ISSUER, PlatformAdmin, platform_user_subject
-from app.models.api.actor import Actor
 from app.models.storage.account import Account
 from app.models.storage.app_user import AppUser
 from app.models.storage.base import SessionEndReason
 from app.repositories import app_user_repository, auth_session_repository
-from app.services import platform_audit_service, session_service
+from app.services import organization_access_audit_service, platform_audit_service, session_service
+from app.services.organization_access_audit_service import LEFT_WHAT
 from app.services.organization_service import require
 from app.services.platform_audit_service import OrganizationCopy
 from app.services.session_service import IssuedSession
@@ -32,12 +32,12 @@ from app.utilities.problems import conflict
 logger = logging.getLogger(__name__)
 
 ENTERED = "organization_entered"
-EXITED = "organization_exited"
-ENTERED_WHAT = "Entered the organization as platform super admin, with every role"
-LEFT_WHAT = "Left the organization"
-SIGNED_OUT_WHAT = "Left the organization: signed out"
-EXPIRED_WHAT = "Left the organization: the session expired"
+ENTERED_WHAT = "Entered the organization as platform super admin, with every role for 60 minutes"
 SUPPORT_ENDED_WHAT = "Ended the read-only support session to enter the organization"
+SESSION_CHANGED_DETAIL = "The session changed while the request ran; reload the page and try again"
+EMAIL_TAKEN_DETAIL = (
+    "A user of the organization already has the super admin's email; change that user's email first"
+)
 
 
 async def enter(
@@ -48,8 +48,8 @@ async def enter(
     if tenant.disabled_at is not None:
         raise conflict("organization_disabled", "The organization is disabled; enable it first")
     await ensure_directory_user(session, tenant_id, admin.live.account)
-    await auth_session_repository.end(session, admin.live.row.id, SessionEndReason.ACCESS_CHANGED)
-    await _audit_previous_access(session, admin, LEFT_WHAT)
+    await _end_presented(session, admin)
+    await _audit_previous_access(session, admin)
     issued = await session_service.issue(
         session,
         admin.live.account,
@@ -77,7 +77,7 @@ async def leave(
     previous = admin.live.resolved.acting_tenant_id
     if previous is None:
         return None
-    await auth_session_repository.end(session, admin.live.row.id, SessionEndReason.ACCESS_CHANGED)
+    await _end_presented(session, admin)
     issued = await session_service.issue(
         session,
         admin.live.account,
@@ -85,57 +85,62 @@ async def leave(
         user_agent=user_agent,
         rotates=admin.live.row,
     )
-    await audit_exit(session, admin.actor, previous, LEFT_WHAT, client_ip=admin.client_ip)
-    return issued
-
-
-async def audit_exit(
-    session: AsyncSession,
-    actor: Actor,
-    tenant_id: uuid.UUID,
-    what: str,
-    *,
-    client_ip: str | None,
-) -> None:
-    """The end of an entry, in the platform log and the organization's log."""
-    assert actor.id is not None
-    await platform_audit_service.record(
+    await organization_access_audit_service.audit_exit(
         session,
-        EXITED,
-        True,
-        what,
-        actor_account_id=actor.id,
-        client_ip=client_ip,
-        organization=OrganizationCopy(tenant_id=tenant_id, actor=actor, kind="platform"),
+        session_id=admin.live.row.id,
+        account_id=admin.account_id,
+        tenant_id=previous,
+        what=LEFT_WHAT,
+        actor=admin.actor,
+        client_ip=admin.client_ip,
     )
+    return issued
 
 
 async def ensure_directory_user(
     session: AsyncSession, tenant_id: uuid.UUID, account: Account
 ) -> AppUser:
-    """The super admin's directory user of the organization, created at the first entry."""
+    """The super admin's directory user of the organization, created at the first entry. The
+    organization's emails are unique, so another user with his email refuses the entry."""
     subject = platform_user_subject(account.id, tenant_id)
     user = await app_user_repository.get_by_identity(session, PLATFORM_ISSUER, subject)
-    if user is None:
-        user = await app_user_repository.create(
-            session,
-            tenant_id=tenant_id,
-            issuer=PLATFORM_ISSUER,
-            subject=subject,
-            email=account.email,
-            name=account.name,
-            department=None,
-            company_id=None,
-        )
-    return user
+    if user is not None:
+        return user
+    if await app_user_repository.email_taken(session, tenant_id, account.email):
+        raise conflict("email_taken", EMAIL_TAKEN_DETAIL)
+    return await app_user_repository.create(
+        session,
+        tenant_id=tenant_id,
+        issuer=PLATFORM_ISSUER,
+        subject=subject,
+        email=account.email,
+        name=account.name,
+        department=None,
+        company_id=None,
+    )
 
 
-async def _audit_previous_access(session: AsyncSession, admin: PlatformAdmin, what: str) -> None:
+async def _end_presented(session: AsyncSession, admin: PlatformAdmin) -> None:
+    """End the presented session; a parallel request that ended it first wins."""
+    ended = await auth_session_repository.end(
+        session, admin.live.row.id, SessionEndReason.ACCESS_CHANGED
+    )
+    if not ended:
+        raise conflict("session_changed", SESSION_CHANGED_DETAIL)
+
+
+async def _audit_previous_access(session: AsyncSession, admin: PlatformAdmin) -> None:
     """The end of whatever access the replaced session held: an entry or a support session."""
     resolved = admin.live.resolved
     if resolved.acting_tenant_id is not None:
-        await audit_exit(
-            session, admin.actor, resolved.acting_tenant_id, what, client_ip=admin.client_ip
+        await organization_access_audit_service.audit_exit(
+            session,
+            session_id=admin.live.row.id,
+            account_id=admin.account_id,
+            tenant_id=resolved.acting_tenant_id,
+            what=LEFT_WHAT,
+            actor=admin.actor,
+            client_ip=admin.client_ip,
         )
     if resolved.support_tenant_id is not None:
         await platform_audit_service.record(

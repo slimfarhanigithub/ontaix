@@ -12,7 +12,7 @@ export interface Recorded {
   body: unknown;
 }
 
-export type Answer = Response | Error | ((call: Recorded) => Response | Error);
+export type Answer = Response | Error | ((call: Recorded) => Response | Error | Promise<Response>);
 
 export interface FetchStub {
   calls: Recorded[];
@@ -68,7 +68,7 @@ export function stubFetch(routes: Record<string, Answer> = {}): FetchStub {
     const call = { method, path, headers, body };
     calls.push(call);
     const answer = table.get(`${method} ${path}`);
-    const res = typeof answer === 'function' ? answer(call) : answer;
+    const res = await (typeof answer === 'function' ? answer(call) : answer);
     if (res instanceof Error) throw res;
     if (!res) return problem(404, 'not_found', `${method} ${path} is not stubbed`);
     return res.clone();

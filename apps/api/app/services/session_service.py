@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,7 @@ from app.models.api.session import ActingInfo, SessionAccount, SupportInfo
 from app.models.api.session import Session as SessionDto
 from app.models.storage.account import Account
 from app.models.storage.auth_session import AuthSession
+from app.models.storage.base import PlatformRoleName
 from app.models.storage.tenant import Tenant
 from app.repositories import (
     account_repository,
@@ -31,6 +33,8 @@ from app.repositories import (
     tenant_repository,
 )
 from app.repositories.auth_session_repository import ResolvedSession
+from app.services import organization_access_audit_service
+from app.utilities.clock import get_clock
 from app.utilities.session_tokens import is_well_formed, new_token, token_digest
 
 logger = logging.getLogger(__name__)
@@ -82,10 +86,19 @@ async def issue(
     rotates: AuthSession | None = None,
     support_tenant_id: uuid.UUID | None = None,
     acting_tenant_id: uuid.UUID | None = None,
+    acting_until: datetime | None = None,
 ) -> IssuedSession:
     """A new session for the account. `rotates` is the session it replaces, which the caller
     has ended: the new one keeps its absolute expiry, so rotation never lengthens a session."""
-    await auth_session_repository.end_beyond_limit(session, account.id, MAX_LIVE_SESSIONS - 1)
+    ended = await auth_session_repository.end_beyond_limit(
+        session, account.id, MAX_LIVE_SESSIONS - 1
+    )
+    await organization_access_audit_service.audit_ended(
+        session,
+        ended,
+        organization_access_audit_service.SESSION_LIMIT_WHAT,
+        organization_access_audit_service.SYSTEM,
+    )
     token = new_token()
     row = await auth_session_repository.create(
         session,
@@ -97,6 +110,7 @@ async def issue(
         absolute_expires_at=rotates.absolute_expires_at if rotates is not None else None,
         support_tenant_id=support_tenant_id,
         acting_tenant_id=acting_tenant_id,
+        acting_until=acting_until,
     )
     return IssuedSession(token=token, session=await describe(session, row, account), row=row)
 
@@ -117,14 +131,22 @@ async def describe(session: AsyncSession, row: AuthSession, account: Account) ->
                 until=row.support_until,
                 reason=await _support_reason(session, account.id, support_tenant.id),
             )
-    acting = None
-    if row.acting_tenant_id is not None:
-        acting_tenant = await tenant_repository.get(session, row.acting_tenant_id)
-        if acting_tenant is not None:
-            acting = ActingInfo(organization=_ref(acting_tenant), since=row.created_at)
     roles = None
     if account.is_platform:
         roles = await platform_role_repository.roles_of(session, account.id)
+    acting = None
+    if (
+        row.acting_tenant_id is not None
+        and row.acting_until is not None
+        and row.acting_until > get_clock().now()
+        and roles is not None
+        and PlatformRoleName.SUPER_ADMIN in roles
+    ):
+        acting_tenant = await tenant_repository.get(session, row.acting_tenant_id)
+        if acting_tenant is not None:
+            acting = ActingInfo(
+                organization=_ref(acting_tenant), since=row.created_at, until=row.acting_until
+            )
     return SessionDto(
         kind="platform" if account.is_platform else "member",
         account=SessionAccount(id=account.id, email=account.email, name=account.name),

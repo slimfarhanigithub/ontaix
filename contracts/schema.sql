@@ -1077,6 +1077,8 @@ CREATE TABLE auth_session (
   support_tenant_id    uuid REFERENCES tenant(id) ON DELETE CASCADE,
   support_until        timestamptz,
   acting_tenant_id     uuid REFERENCES tenant(id) ON DELETE CASCADE,
+  acting_until         timestamptz,
+  acting_exited_at     timestamptz,
   created_at           timestamptz NOT NULL DEFAULT now(),
   last_seen_at         timestamptz NOT NULL DEFAULT now(),
   idle_expires_at      timestamptz NOT NULL,
@@ -1087,11 +1089,13 @@ CREATE TABLE auth_session (
   user_agent           text CHECK (char_length(user_agent) <= 256),
   CONSTRAINT auth_session_support_pair CHECK ((support_tenant_id IS NULL) = (support_until IS NULL)),
   CONSTRAINT auth_session_one_access CHECK (support_tenant_id IS NULL OR acting_tenant_id IS NULL),
+  CONSTRAINT auth_session_acting_pair CHECK ((acting_tenant_id IS NULL) = (acting_until IS NULL)),
+  CONSTRAINT auth_session_acting_exit CHECK (acting_exited_at IS NULL OR acting_tenant_id IS NOT NULL),
   CONSTRAINT auth_session_end_pair CHECK ((ended_at IS NULL) = (end_reason IS NULL)),
   CONSTRAINT auth_session_expiry_order CHECK (idle_expires_at <= absolute_expires_at AND created_at < absolute_expires_at)
 );
 CREATE INDEX auth_session_by_account ON auth_session (account_id) WHERE ended_at IS NULL;
-COMMENT ON TABLE auth_session IS 'A server-side browser session. The cookie carries a 256-bit random token; only its SHA-256 is stored, so a database read never yields a usable cookie. A session is valid while ended_at is null, now() is before idle_expires_at (30 minutes, slid forward on use) and absolute_expires_at (12 hours after sign-in), the account is enabled and, for a member, the organization is enabled. Sign-in, a password change, the start or end of a support session and entering or leaving an organization each issue a new token and end the old row, so a token never survives a change of privilege. support_tenant_id is set only on a super admin''s session during an audited read-only support session in that organization, until support_until. acting_tenant_id is set only on a super admin''s session after he entered that organization: until he leaves it or the session ends, every organization request of the session acts inside it with every tenant role, on the application role and under its row-level security, and is audited as platform access. A session holds a support organization or an acting organization, never both.';
+COMMENT ON TABLE auth_session IS 'A server-side browser session. The cookie carries a 256-bit random token; only its SHA-256 is stored, so a database read never yields a usable cookie. A session is valid while ended_at is null, now() is before idle_expires_at (30 minutes, slid forward on use) and absolute_expires_at (12 hours after sign-in), the account is enabled and, for a member, the organization is enabled. Sign-in, a password change, the start or end of a support session and entering or leaving an organization each issue a new token and end the old row, so a token never survives a change of privilege. support_tenant_id is set only on a super admin''s session during an audited read-only support session in that organization, until support_until. acting_tenant_id is set only on a super admin''s session after he entered that organization: until acting_until (60 minutes, never past the absolute expiry), until he leaves it or until the session ends, every organization request of the session acts inside it with every tenant role, on the application role and under its row-level security, and is audited as platform access. acting_exited_at records that the end of that access has been written to both audit logs, whichever way it ended, so it is audited exactly once; the sign-in upkeep audits the ends no request saw. A session holds a support organization or an acting organization, never both.';
 COMMENT ON COLUMN auth_session.csrf_token IS 'The synchronizer token the Studio echoes in X-CSRF-Token on every unsafe request; returned only by sign-in, GET /auth/session and the calls that issue a new session token. It is useless without the session cookie, so it is stored as issued.';
 
 CREATE TABLE sign_in_throttle (
@@ -1169,12 +1173,14 @@ BEGIN
      AND (a.tenant_id IS NULL OR t.disabled_at IS NULL)
   RETURNING s.id, a.id, a.tenant_id, a.user_id, a.is_platform,
             CASE WHEN s.support_until > now() THEN s.support_tenant_id END,
-            CASE WHEN a.is_platform AND (SELECT x.disabled_at FROM ontaix.tenant x WHERE x.id = s.acting_tenant_id) IS NULL
+            CASE WHEN a.is_platform AND s.acting_until > now()
+                      AND (SELECT x.disabled_at FROM ontaix.tenant x WHERE x.id = s.acting_tenant_id) IS NULL
+                      AND EXISTS (SELECT 1 FROM ontaix.platform_role_assignment r WHERE r.account_id = a.id AND r.role = 'super_admin')
                  THEN s.acting_tenant_id END,
             coalesce(pc.must_change, false), s.csrf_token;
 END;
 $$;
-COMMENT ON FUNCTION resolve_session(bytea) IS 'The only way the application role reads a session: given the SHA-256 of a presented cookie token, returns the live session''s account, organization, user, platform flag, active support organization, the organization a super admin entered (null unless it is enabled), forced-change flag and CSRF token, and slides the 30-minute idle expiry (never past the absolute expiry). Returns no row for an unknown, ended, expired or disabled session, account or organization. The caller then sets ontaix.tenant_id for the transaction; a session with must_change_password true may only read GET /auth/session, change its password and sign out.';
+COMMENT ON FUNCTION resolve_session(bytea) IS 'The only way the application role reads a session: given the SHA-256 of a presented cookie token, returns the live session''s account, organization, user, platform flag, active support organization, the organization a super admin entered (null once its 60 minutes passed, when it is disabled, or when the account no longer holds super_admin), forced-change flag and CSRF token, and slides the 30-minute idle expiry (never past the absolute expiry). Returns no row for an unknown, ended, expired or disabled session, account or organization. The caller then sets ontaix.tenant_id for the transaction; a session with must_change_password true may only read GET /auth/session, change its password and sign out.';
 
 CREATE TABLE outbox (
   id            bigserial PRIMARY KEY,
