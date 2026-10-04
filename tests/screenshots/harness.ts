@@ -285,6 +285,23 @@ export async function fontsReady(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Waits until every finite CSS animation and transition on the page has run to its end, then two
+ * frames so the compositor shows that end state. For pages without a fake clock, where entrance
+ * animations (`propin`, `fade`) run in real time: a capture with `animations: 'disabled'` jumps
+ * a running animation to its end on the main thread, and Chromium sometimes keeps showing the
+ * composited mid-way frame of an opacity and transform animation, the same frame in every
+ * capture. An animation that finished on its own leaves no such frame. Infinite animations
+ * (spinners) are left to the capture, which cancels them.
+ */
+export async function animationsSettled(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const finite = document.getAnimations().filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime ?? Infinity));
+    await Promise.all(finite.map((a) => a.finished.catch(() => undefined)));
+    await new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())));
+  });
+}
+
 /** Advances the fake clock in steps so timers and animation frames interleave as in real time. */
 export async function advance(page: Page, ms: number, stepMs = 250): Promise<void> {
   let left = ms;
