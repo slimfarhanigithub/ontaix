@@ -1,7 +1,8 @@
 """Reads the named Key Vault secrets with the pod's identity and writes them as the API's `.env`
 file, so every process in the container (the API, the migrations, `python -m app.admin`) reads
-them as settings. Runs in the API image, which carries azure-identity and httpx. A value is never
-printed or logged; a failure names the secret and the HTTP status only.
+them as settings. Runs in the API image, which carries azure-identity and httpx, with the pod's
+workload identity and nothing else. A value is never printed or logged; a failure names the
+secret and the HTTP status only.
 
 Environment: KEY_VAULT_NAME, KEY_VAULT_SECRETS (JSON object, environment variable to secret
 name), OUTPUT_FILE.
@@ -14,7 +15,7 @@ import os
 import sys
 
 import httpx
-from azure.identity import DefaultAzureCredential
+from azure.identity import WorkloadIdentityCredential
 
 KEY_VAULT_API_VERSION = "7.4"
 KEY_VAULT_SCOPE = "https://vault.azure.net/.default"
@@ -30,7 +31,9 @@ def main() -> int:
     vault = os.environ["KEY_VAULT_NAME"]
     secrets: dict[str, str] = json.loads(os.environ["KEY_VAULT_SECRETS"])
     output = os.environ["OUTPUT_FILE"]
-    token = DefaultAzureCredential().get_token(KEY_VAULT_SCOPE).token
+    # The pod's projected token only (AZURE_CLIENT_ID, AZURE_TENANT_ID and
+    # AZURE_FEDERATED_TOKEN_FILE, injected by the workload identity webhook); no other source.
+    token = WorkloadIdentityCredential().get_token(KEY_VAULT_SCOPE).token
     lines: list[str] = []
     with httpx.Client(
         base_url=f"https://{vault}.vault.azure.net",

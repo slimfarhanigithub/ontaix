@@ -19,8 +19,7 @@ spec:
     spec:
       automountServiceAccountToken: false
       securityContext:
-        seccompProfile:
-          type: RuntimeDefault
+        {{- toYaml .Values.studio.podSecurityContext | nindent 8 }}
       containers:
         - name: studio
           image: {{ include "ontaix.image" (dict "root" . "image" .Values.studio.image) }}
@@ -41,16 +40,18 @@ spec:
           resources:
             {{- toYaml .Values.studio.resources | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            capabilities:
-              drop: ["ALL"]
+            {{- toYaml .Values.studio.containerSecurityContext | nindent 12 }}
           volumeMounts:
             - name: nginx-config
               mountPath: /etc/nginx/conf.d/default.conf
               subPath: default.conf
               readOnly: true
+            # The unprivileged nginx image keeps its pid file and temporary files under /tmp.
+            - name: tmp
+              mountPath: /tmp
       volumes:
         - name: nginx-config
           configMap:
             name: {{ include "ontaix.studio.name" . }}
+        - name: tmp
+          emptyDir: {}

@@ -5,10 +5,12 @@ name: deploy
 #               rights the run needs, failing early with the missing role assignment named
 #   build     → the API, gateway and Studio images, built by ACR Tasks, tagged with the commit SHA
 #   deploy    → ingress-nginx (the public address), cert-manager and the Let's Encrypt issuers,
-#               then the Ontaix chart; waits for the rollout, prints the migration revision,
-#               grants the database roles, checks the release in the cluster and at its address
+#               then the Ontaix chart pinned to the images' digests; waits for the rollout,
+#               prints the migration revision, grants the database roles, checks the release in
+#               the cluster and at its address
 # Authentication is GitHub OIDC federation only; there is no client secret. Pods read their
 # secrets from Key Vault with workload identity; this workflow never reads a secret value.
+# Every action is pinned to a commit; the comment names the release it is.
 
 on:
   workflow_dispatch:
@@ -69,7 +71,7 @@ jobs:
       speech_resource_id: ${{ steps.values.outputs.speech_resource_id }}
       postgres_fqdn: ${{ steps.values.outputs.postgres_fqdn }}
     steps:
-      - uses: azure/login@v2
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -82,6 +84,9 @@ jobs:
         run: |
           set -euo pipefail
           fail() { echo "::error::$1"; exit 1; }
+          if [ -n "$IMAGE_TAG" ] && ! [[ "$IMAGE_TAG" =~ ^[A-Za-z0-9_.-]{1,128}$ ]]; then
+            fail "image_tag must match ^[A-Za-z0-9_.-]{1,128}$"
+          fi
           rg="$RESOURCE_GROUP"
           registry=$(az acr list -g "$rg" --query "[0].name" -o tsv)
           login_server=$(az acr list -g "$rg" --query "[0].loginServer" -o tsv)
@@ -163,9 +168,9 @@ jobs:
             # The built Studio calls the API on its own origin; there is no development identity.
             build_args: --build-arg VITE_ONTAIX_API_URL=/api/v1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
-      - uses: azure/login@v2
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -206,21 +211,24 @@ jobs:
       POSTGRES_FQDN: ${{ needs.preflight.outputs.postgres_fqdn }}
       ISSUER: ${{ inputs.certificate_issuer }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
-      - uses: azure/login@v2
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - uses: azure/setup-helm@v4
-      - name: the three images exist in the registry
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: the three images exist in the registry; pin their digests
         run: |
           set -euo pipefail
           fail() { echo "::error::$1"; exit 1; }
           for image in api gateway studio; do
-            az acr repository show --name "$REGISTRY" --image "ontaix/$image:$TAG" --query name -o tsv >/dev/null \
-              || fail "$LOGIN_SERVER/ontaix/$image:$TAG is not in the registry; run without image_tag to build it"
+            digest=$(az acr repository show --name "$REGISTRY" --image "ontaix/$image:$TAG" --query digest -o tsv 2>/dev/null || true)
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+              || fail "$LOGIN_SERVER/ontaix/$image:$TAG is not in the registry (or has no digest); run without image_tag to build it"
+            echo "${image^^}_DIGEST=$digest" >> "$GITHUB_ENV"
+            echo "ontaix/$image:$TAG = $digest"
           done
       - name: az aks get-credentials
         run: az aks get-credentials -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --overwrite-existing
@@ -271,6 +279,9 @@ jobs:
             --values "$CHART/values-azure-dev.yaml" \
             --set-string image.registry="$LOGIN_SERVER" \
             --set-string image.tag="$TAG" \
+            --set-string api.image.digest="$API_DIGEST" \
+            --set-string gateway.image.digest="$GATEWAY_DIGEST" \
+            --set-string studio.image.digest="$STUDIO_DIGEST" \
             --set-string workloadIdentity.clientId="$WORKLOAD_CLIENT_ID" \
             --set-string secrets.keyVault.name="$KEY_VAULT" \
             --set-string api.env.ONTAIX_FOUNDRY_ENDPOINT="$FOUNDRY_ENDPOINT" \
@@ -307,6 +318,8 @@ jobs:
           kubectl -n "$NAMESPACE" exec "deploy/$RELEASE-api" -c api -- \
             env ONTAIX_APP_DATABASE_LOGIN=ontaix_admin python -m app.admin grant-database-roles
       - name: checks in the cluster
+        # Every check runs inside a pod of the release (kubectl exec), so the network policies
+        # need no exception for a probe pod.
         run: |
           set -euo pipefail
           fail() { echo "::error::$1"; exit 1; }
@@ -338,7 +351,7 @@ jobs:
             "import urllib.request; r = urllib.request.urlopen('http://127.0.0.1:8100/healthz', timeout=5); print('gateway /healthz', r.status); assert r.status == 200"
           kubectl -n "$NAMESPACE" exec "deploy/$RELEASE-studio" -- wget -qO- http://127.0.0.1:8080/healthz >/dev/null
           kubectl -n "$NAMESPACE" exec "deploy/$RELEASE-studio" -- wget -qO- http://127.0.0.1:8080/api/v1/healthz >/dev/null
-          echo "studio /healthz and its /api proxy answer"
+          echo "studio /healthz and its /api proxy answer (the studio-to-api network policy holds)"
           kubectl -n "$NAMESPACE" get configmap "$RELEASE-api" -o json \
             | jq -e '.data | has("ONTAIX_DEV_IDENTITY_HEADER") | not' >/dev/null \
             || fail "ONTAIX_DEV_IDENTITY_HEADER is set in the cluster; it never is"
@@ -367,13 +380,19 @@ jobs:
           code=$(curl -sS $insecure -o /dev/null -w '%{http_code}' "https://$HOST/api/v1/healthz")
           [ "$code" = "200" ] || fail "https://$HOST/api/v1/healthz answered $code"
           # shellcheck disable=SC2086
+          code=$(curl -sS $insecure -o /dev/null -w '%{http_code}' "https://$HOST/api/v1/openapi.json")
+          [ "$code" = "404" ] || fail "https://$HOST/api/v1/openapi.json answered $code instead of 404 (the API serves no documentation in production)"
+          # shellcheck disable=SC2086
           headers=$(curl -sSI $insecure "https://$HOST/")
           echo "$headers" | grep -qi '^strict-transport-security:' || fail "no Strict-Transport-Security header on https://$HOST/"
           echo "$headers" | grep -qi '^content-security-policy:' || fail "no Content-Security-Policy header on https://$HOST/"
+          # shellcheck disable=SC2086
+          curl -sSI $insecure "https://$HOST/api/v1/healthz" | grep -qi '^x-content-type-options: nosniff' \
+            || fail "no X-Content-Type-Options header on the API's responses"
           redirect=$(curl -sS -o /dev/null -w '%{http_code}' "http://$HOST/healthz")
           case "$redirect" in 301|308) ;; *) fail "http://$HOST/healthz answered $redirect instead of a redirect to HTTPS" ;; esac
           issuer=$(openssl s_client -connect "$HOST:443" -servername "$HOST" </dev/null 2>/dev/null | openssl x509 -noout -issuer)
-          echo "https://$HOST serves the Studio and the API; HSTS and CSP present; HTTP redirects ($redirect); certificate $issuer"
+          echo "https://$HOST serves the Studio and the API; HSTS, CSP and nosniff present; HTTP redirects ($redirect); certificate $issuer"
           echo "CERTIFICATE_ISSUER=$issuer" >> "$GITHUB_ENV"
       - name: summary
         run: |
@@ -384,6 +403,7 @@ jobs:
             echo "|---|---|"
             echo "| Address | https://$HOST |"
             echo "| Images | $LOGIN_SERVER/ontaix/{api,gateway,studio}:$TAG |"
+            echo "| Digests | api $API_DIGEST, gateway $GATEWAY_DIGEST, studio $STUDIO_DIGEST |"
             echo "| Database | $POSTGRES_FQDN at revision $DATABASE_REVISION |"
             echo "| Certificate | $ISSUER ($CERTIFICATE_ISSUER) |"
             echo "| Role grant | ${{ inputs.run_role_grant }} |"

@@ -51,6 +51,15 @@ gateway:
     ONTAIX_ENVIRONMENT: production
     ONTAIX_LOG_LEVEL: INFO
 
+networkPolicy:
+  enabled: true
+  ingressNamespace: ingress-nginx
+  database:
+    port: 5432
+    # snet-postgres, the subnet delegated to the PostgreSQL flexible server (Terraform).
+    cidrs:
+      - 10.40.16.0/24
+
 ingress:
   enabled: true
   className: nginx

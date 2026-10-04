@@ -37,13 +37,20 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
 app.kubernetes.io/component: {{ .component }}
 {{- end -}}
 
-{{/* Image reference of one component: pass (dict "root" . "image" .Values.api.image). */}}
+{{/*
+Image reference of one component: pass (dict "root" . "image" .Values.api.image). A digest pins
+the exact image the deploy resolved; without one the shared tag is used.
+*/}}
 {{- define "ontaix.image" -}}
-{{- $tag := required "image.tag is required (the deploy workflow passes the commit SHA)" .root.Values.image.tag -}}
+{{- $name := .image.repository -}}
 {{- if .root.Values.image.registry -}}
-{{- printf "%s/%s:%s" .root.Values.image.registry .image.repository $tag -}}
+{{- $name = printf "%s/%s" .root.Values.image.registry .image.repository -}}
+{{- end -}}
+{{- if .image.digest -}}
+{{- printf "%s@%s" $name .image.digest -}}
 {{- else -}}
-{{- printf "%s:%s" .image.repository $tag -}}
+{{- $tag := required "image.tag is required when no digest is set (the deploy workflow passes both)" .root.Values.image.tag -}}
+{{- printf "%s:%s" $name $tag -}}
 {{- end -}}
 {{- end -}}
 
@@ -59,21 +66,9 @@ app.kubernetes.io/component: {{ .component }}
 {{- toJson $origins -}}
 {{- end -}}
 
-{{/* Speech custom subdomain, https and wss forms, when ONTAIX_SPEECH_ENDPOINT is set. */}}
-{{- define "ontaix.speechOrigins" -}}
-{{- $endpoint := index .Values.api.env "ONTAIX_SPEECH_ENDPOINT" | default "" | trimSuffix "/" -}}
-{{- if $endpoint -}}
-{{ $endpoint }} {{ replace "https://" "wss://" $endpoint }}
-{{- end -}}
-{{- end -}}
-
 {{/* The Studio's Content Security Policy, one line. */}}
 {{- define "ontaix.contentSecurityPolicy" -}}
 {{- $connect := concat (list "'self'") .Values.studio.csp.connectSrc -}}
-{{- $speech := include "ontaix.speechOrigins" . -}}
-{{- if $speech -}}
-{{- $connect = concat $connect (splitList " " $speech) -}}
-{{- end -}}
 {{- $style := concat (list "'self'" "'unsafe-inline'") .Values.studio.csp.styleSrc -}}
 {{- $font := concat (list "'self'" "data:") .Values.studio.csp.fontSrc -}}
 default-src 'self'; script-src 'self'; style-src {{ join " " $style }}; font-src {{ join " " $font }}; img-src 'self' data: blob:; connect-src {{ join " " $connect }}; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'

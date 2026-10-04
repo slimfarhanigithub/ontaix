@@ -127,7 +127,16 @@ def create_app() -> FastAPI:
             DEV_USER_HEADER,
         )
 
-    application = FastAPI(title=settings.app_name, version="1.0.0", lifespan=_lifespan)
+    # The interactive documentation and the OpenAPI document are served outside production only.
+    serve_docs = settings.environment != "production"
+    application = FastAPI(
+        title=settings.app_name,
+        version="1.0.0",
+        lifespan=_lifespan,
+        docs_url="/docs" if serve_docs else None,
+        redoc_url="/redoc" if serve_docs else None,
+        openapi_url="/openapi.json" if serve_docs else None,
+    )
     application.include_router(health.router)
     for module in (
         auth,

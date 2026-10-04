@@ -17,8 +17,7 @@ spec:
     spec:
       automountServiceAccountToken: false
       securityContext:
-        seccompProfile:
-          type: RuntimeDefault
+        {{- toYaml .Values.gateway.podSecurityContext | nindent 8 }}
       containers:
         - name: gateway
           image: {{ include "ontaix.image" (dict "root" . "image" .Values.gateway.image) }}
@@ -46,6 +45,10 @@ spec:
           resources:
             {{- toYaml .Values.gateway.resources | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
+            {{- toYaml .Values.gateway.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

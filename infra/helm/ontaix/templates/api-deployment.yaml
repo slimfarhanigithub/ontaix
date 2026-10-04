@@ -8,8 +8,7 @@ metadata:
     app.kubernetes.io/component: api
 spec:
   replicas: {{ .Values.api.replicas }}
-  # One API process at a time: the migration step runs before each new process, and rate budgets
-  # are counted in memory.
+  # One API process at a time: the migration step runs before each new process starts.
   strategy:
     type: Recreate
   selector:
@@ -28,8 +27,7 @@ spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
       automountServiceAccountToken: false
       securityContext:
-        seccompProfile:
-          type: RuntimeDefault
+        {{- toYaml .Values.api.podSecurityContext | nindent 8 }}
       initContainers:
         {{- if $keyVault.enabled }}
         - name: fetch-secrets
@@ -44,15 +42,15 @@ spec:
             - name: OUTPUT_FILE
               value: /secrets/.env
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
+            {{- toYaml .Values.api.containerSecurityContext | nindent 12 }}
           volumeMounts:
             - name: scripts
               mountPath: /scripts
               readOnly: true
             - name: secrets
               mountPath: /secrets
+            - name: tmp
+              mountPath: /tmp
         {{- end }}
         - name: migrate
           image: {{ include "ontaix.image" (dict "root" . "image" .Values.api.image) }}
@@ -66,13 +64,13 @@ spec:
                 name: {{ .Values.secrets.existingSecret }}
             {{- end }}
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
+            {{- toYaml .Values.api.containerSecurityContext | nindent 12 }}
           volumeMounts:
             - name: scripts
               mountPath: /scripts
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
             {{- if $keyVault.enabled }}
             - name: secrets
               mountPath: /app/.env
@@ -112,9 +110,7 @@ spec:
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
+            {{- toYaml .Values.api.containerSecurityContext | nindent 12 }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
@@ -128,6 +124,7 @@ spec:
         - name: scripts
           configMap:
             name: {{ include "ontaix.api.name" . }}-scripts
+        # The only writable path of the image: extraction and export child processes work here.
         - name: tmp
           emptyDir: {}
         {{- if $keyVault.enabled }}

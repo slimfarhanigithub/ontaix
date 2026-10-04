@@ -7,7 +7,8 @@ image:
   # Registry the three images are pulled from, for example crontaixdevfrc02a13.azurecr.io.
   # Empty pulls the bare repository names (a local cluster with pre-loaded images).
   registry: ""
-  # One tag for the three images: the deploy workflow passes the commit SHA it built.
+  # One tag for the three images: the deploy workflow passes the commit SHA it built. Each
+  # component's image.digest, when set, pins the exact image instead of the tag.
   tag: ""
   pullPolicy: IfNotPresent
 
@@ -39,7 +40,9 @@ secrets:
 api:
   image:
     repository: ontaix/api
-  # One replica with one worker process: the API counts rate budgets in memory.
+    # sha256:<hex> of the image to run, resolved by the deploy workflow from the registry.
+    digest: ""
+  # One replica with one worker process.
   replicas: 1
   port: 8000
   # The login name inside the database URL, granted ontaix_app and ontaix_platform by
@@ -61,10 +64,24 @@ api:
       memory: 512Mi
     limits:
       memory: 2Gi
+  # The image runs as uid and gid 10001; the pod requires it, init containers included.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  # The image is read-only; /tmp is the one writable path (an emptyDir).
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
 
 gateway:
   image:
     repository: ontaix/gateway
+    digest: ""
   replicas: 1
   port: 8100
   env:
@@ -76,15 +93,26 @@ gateway:
       memory: 128Mi
     limits:
       memory: 256Mi
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
 
 studio:
   image:
     repository: ontaix/studio
+    digest: ""
   replicas: 1
   port: 8080
   # Content Security Policy sources the Studio needs besides its own origin. The speech
-  # recogniser opens a WebSocket to the regional endpoint and, when ONTAIX_SPEECH_ENDPOINT is
-  # set, to the resource's custom subdomain (added automatically).
+  # recogniser opens a WebSocket to the regional Speech endpoint.
   csp:
     connectSrc:
       - wss://francecentral.stt.speech.microsoft.com
@@ -102,6 +130,39 @@ studio:
       memory: 64Mi
     limits:
       memory: 128Mi
+  # The unprivileged nginx image runs as uid 101 and writes only under /tmp (an emptyDir).
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+
+# Network policies of the release namespace: everything is denied, then each workload gets
+# exactly its traffic. Ingress to the Studio and the API comes from the ingress controller's
+# namespace; the Studio and the gateway reach the API; the API reaches the database and HTTPS
+# (Entra ID, Key Vault, Foundry, Speech); every pod reaches the cluster DNS. The cert-manager
+# HTTP-01 solver pods, created in this namespace, accept the challenge from the ingress controller.
+networkPolicy:
+  enabled: true
+  ingressNamespace: ingress-nginx
+  dns:
+    namespace: kube-system
+    podLabels:
+      k8s-app: kube-dns
+  database:
+    port: 5432
+    # Where the database answers; on Azure the delegated PostgreSQL subnet.
+    cidrs:
+      - 0.0.0.0/0
+  https:
+    cidrs:
+      - 0.0.0.0/0
 
 ingress:
   enabled: false
@@ -113,9 +174,12 @@ ingress:
     secretName: ontaix-tls
   # cert-manager ClusterIssuer that issues the certificate; empty uses the TLS secret as it is.
   clusterIssuer: ""
-  # Annotations on the API's ingress (body size and timeouts of ingress-nginx).
+  # Annotations on the API's ingress: body size and timeouts of the API's long calls, and a
+  # per-client request rate (ingress-nginx answers 503 above limit-rps times the burst multiplier).
   apiAnnotations:
     nginx.ingress.kubernetes.io/proxy-body-size: 64m
     nginx.ingress.kubernetes.io/proxy-read-timeout: "330"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "330"
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
   annotations: {}

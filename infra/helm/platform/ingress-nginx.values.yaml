@@ -25,6 +25,10 @@ controller:
     # X-Forwarded-For is set by this controller, never taken from the client.
     use-forwarded-headers: "false"
     server-tokens: "false"
+  # Set on every response that passes the controller (replacing a backend's own value), so the
+  # API's JSON carries it too; the Studio's server sends its full header set itself.
+  addHeaders:
+    X-Content-Type-Options: nosniff
   resources:
     requests:
       cpu: 100m
