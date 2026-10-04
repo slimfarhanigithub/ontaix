@@ -152,7 +152,7 @@ export function NewBox() {
         </button>
         <select id="nbDomain" aria-label="Domain product" value={domain} onChange={(e) => setDomain(e.target.value)}>
           {domains.map((d) => (
-            <option key={d.key} value={d.key}>
+            <option key={`${d.company.key}:${d.key}`} value={d.key}>
               {d.name}
             </option>
           ))}

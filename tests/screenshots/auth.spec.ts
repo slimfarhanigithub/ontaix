@@ -10,7 +10,7 @@
  * `--update-snapshots` writes the baselines of the running platform.
  */
 import { test, expect, type Page, type Route } from '../../apps/studio/test-support/playwright';
-import { fontsReady, serveFontsLocally, TOLERANCE, VIEWPORTS, type Theme } from './harness';
+import { animationsSettled, fontsReady, serveFontsLocally, TOLERANCE, VIEWPORTS, type Theme } from './harness';
 
 const CSRF = 'screenshot-csrf-'.padEnd(43, 'x');
 
@@ -147,6 +147,8 @@ for (const vp of VIEWPORTS) {
           await page.waitForSelector(screen.ready);
           await fontsReady(page);
           await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+          // The window's or dialog's entrance animation runs in real time; it ends before the capture.
+          await animationsSettled(page);
           await expect(page).toHaveScreenshot(`${name}.png`, { animations: 'disabled', caret: 'hide', maxDiffPixelRatio: TOLERANCE });
         } finally {
           await ctx.close();

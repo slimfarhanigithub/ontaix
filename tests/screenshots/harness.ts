@@ -46,7 +46,8 @@ const STORY_ONLY_CSS = '#sceneNum,#sceneName,#next,#finalise{display:none!import
 /**
  * Owner additions absent from the reference, hidden in both pages with `display: none`: the
  * drawer's Expand and Delete menu items, the changes panel's `Approve branch` button, and every
- * element marked `data-ox-new` (the drawer's More actions button, the panel's
+ * element marked `data-ox-new` (the drawer's More actions button, the only button of its action
+ * row, the panel's
  * Edit, the selection bar, the admin tables' checkbox columns, Move, New domain, Edit and Delete
  * buttons, header and cells together, the Company creation setting row and the admin portal's
  * Export button). The reference has no such elements, so the rule changes nothing there; in the
@@ -60,6 +61,13 @@ const OWNER_ADDITIONS_CSS = '#drExpand,#drDelete,#imAs,.prop .act .branch,[data-
  * Studio's does. Both pages still skip animations with the S key.
  */
 const MOVED_SKIP_CSS = '#skip{display:none!important}';
+/**
+ * The reference's drawer action buttons, Grow a concept from it and Lineage, which the Studio
+ * moves into the drawer's More actions menu: hidden with `display: none` in both pages, so the
+ * reference's action row holds what the Studio's holds once `#drMore` is hidden (nothing), and
+ * the drawer lays out the same. In the Studio the two ids name menu items, which no scene opens.
+ */
+const MOVED_DRAWER_ACTIONS_CSS = '#drGrow,#drLineage{display:none!important}';
 /**
  * The Studio's admin row layout (apps/studio/src/styles/admin-rows.css), added to both pages: the
  * Studio already loads it, and in the reference it lays out the same `.set` markup the same way.
@@ -95,6 +103,7 @@ const ACCEPTANCE_STYLES = `(() => {
       ['ontaix-story-only', STORY_ONLY_CSS],
       ['ontaix-owner-additions', OWNER_ADDITIONS_CSS],
       ['ontaix-moved-skip', MOVED_SKIP_CSS],
+      ['ontaix-moved-drawer-actions', MOVED_DRAWER_ACTIONS_CSS],
       ['ontaix-admin-rows', ADMIN_ROWS_CSS],
       ['ontaix-opening-caption', OPENING_CAPTION_CSS],
     ])}) {
@@ -273,6 +282,23 @@ export async function fontsReady(page: Page): Promise<void> {
     const weights = ['300', '400', '500', '600'];
     await Promise.all(weights.map((w) => document.fonts.load(`${w} 13px Sora`)));
     await document.fonts.ready;
+  });
+}
+
+/**
+ * Waits until every finite CSS animation and transition on the page has run to its end, then two
+ * frames so the compositor shows that end state. For pages without a fake clock, where entrance
+ * animations (`propin`, `fade`) run in real time: a capture with `animations: 'disabled'` jumps
+ * a running animation to its end on the main thread, and Chromium sometimes keeps showing the
+ * composited mid-way frame of an opacity and transform animation, the same frame in every
+ * capture. An animation that finished on its own leaves no such frame. Infinite animations
+ * (spinners) are left to the capture, which cancels them.
+ */
+export async function animationsSettled(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const finite = document.getAnimations().filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime ?? Infinity));
+    await Promise.all(finite.map((a) => a.finished.catch(() => undefined)));
+    await new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())));
   });
 }
 
