@@ -55,7 +55,7 @@ jobs:
           hit() { [ "$files" = "everything" ] || echo "$files" | grep -qE "$1"; }
           shared='^(contracts/|\.github/workflows/ci\.yml)'
           packages=""
-          hit "^apps/api/|$shared" && packages="$packages\"apps/api\","
+          hit "^apps/api/|^\.dockerignore$|$shared" && packages="$packages\"apps/api\","
           hit "^apps/gateway/|$shared" && packages="$packages\"apps/gateway\","
           hit "^packages/connectors/|$shared" && packages="$packages\"packages/connectors\","
           echo "packages=[${packages%,}]" >> "$GITHUB_OUTPUT"
@@ -105,6 +105,40 @@ jobs:
           uv run ruff format --check
       - name: pytest
         run: uv run pytest
+
+  api-image:
+    # The API image as the cluster runs it: built from the repository root, and its migrations
+    # applied to an empty database from inside the image, the way the API pod's migrate step does.
+    name: apps/api image
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.packages), 'apps/api')
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ontaix
+          POSTGRES_PASSWORD: ontaix
+          POSTGRES_DB: ontaix_image
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ontaix -d ontaix_image"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - name: docker build
+        run: docker build --file apps/api/Dockerfile --tag ontaix-api:ci .
+      - name: migrations run inside the image
+        run: |
+          docker run --rm --network host \
+            -e ONTAIX_DATABASE_URL=postgresql://ontaix:ontaix@127.0.0.1:5432/ontaix_image \
+            ontaix-api:ci alembic upgrade head
+          docker run --rm --network host \
+            -e ONTAIX_DATABASE_URL=postgresql://ontaix:ontaix@127.0.0.1:5432/ontaix_image \
+            ontaix-api:ci alembic current
 
   studio:
     name: apps/studio
