@@ -112,6 +112,9 @@ Decision row 153. Every value is a reference token, size, radius, weight or colo
 ## Porting rule
 The canvas renderer (cells, division, hulls, links, labels, arrange, focus, lineage) is ported
 from the reference into TypeScript modules. Refactoring for structure is allowed; changing a
-geometric constant, an easing or a threshold is not. Its colours and fonts come from the design
+geometric constant, an easing or a threshold is not, with one exception for readability at the
+default fit (decision row 170): cell labels, sub lines and action chips keep at least 70 percent
+of their size on screen when the camera zooms out and show from zoom 0.3, and a company title
+keeps clear of its subtitle at every zoom. Its colours and fonts come from the design
 tokens (`docs/design-system.md`, Section 10): the renderer reads them at runtime, and a colour
 changes in `tokens.css` first, with a decision row and new baselines. Exception: the Arrange layout (decision row 163) replaces the reference's placement; `fitTo`, the tween, `stageOrigin` and every drawing routine stay as ported.

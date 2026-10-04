@@ -95,12 +95,14 @@ export function drawCompanies(s: SceneState, v: View, _t: number): void {
       bound = members.filter((n) => n.bound).length,
       doms = c.domains.filter((d) => members.some((n) => n.domain === d)).length,
       src = s.nodes.filter((n) => n.kind === 'source' && n.company === c && !n.pending && !n.dying).length;
+    // The title and its subtitle grow together when the camera zooms out, and the gap between them with them.
+    const k = 1 / Math.max(s.cam.s, 0.5);
     ctx.textAlign = 'center';
     ctx.fillStyle = `rgba(${TH.INK},0.95)`;
-    ctx.font = `600 ${Math.round(Math.max(15, 15 / Math.max(s.cam.s, 0.5)))}px ${FONT_SANS}`;
-    ctx.fillText(c.name.toUpperCase(), cx, minY - pad - 26);
+    ctx.font = `600 ${Math.round(15 * k)}px ${FONT_SANS}`;
+    ctx.fillText(c.name.toUpperCase(), cx, minY - pad - 8 - Math.round(18 * k));
     ctx.fillStyle = `rgba(${TH.INK2},0.85)`;
-    ctx.font = `300 ${Math.round(Math.max(11, 11 / Math.max(s.cam.s, 0.5)))}px ${FONT_SANS}`;
+    ctx.font = `300 ${Math.round(11 * k)}px ${FONT_SANS}`;
     ctx.fillText(
       `${c.sub ? c.sub + ' · ' : ''}business as a product · ${doms} domain product${doms === 1 ? '' : 's'} · ${concepts} concept${concepts === 1 ? '' : 's'}${src ? ` · ${src} source${src === 1 ? '' : 's'}` : ''}${s.COVERAGE ? ` · ${concepts ? Math.round((bound / concepts) * 100) : 0} % bound` : ''}`,
       cx,

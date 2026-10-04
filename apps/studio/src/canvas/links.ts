@@ -9,7 +9,7 @@ import { FONT_SANS, themedColour, token } from '../design/tokens';
 import { clamp, ease, hex } from './colour';
 import { C, MOTION } from './constants';
 import { dimOf } from './focus';
-import { roundRect } from './labels';
+import { labelScale, roundRect } from './labels';
 import { shown, type SceneState } from './state';
 import type { Link } from './types';
 import type { View } from './view';
@@ -143,7 +143,7 @@ export function drawLinks(s: SceneState, v: View, t: number): void {
     if (gap < 26) continue;
     if (
       l.label &&
-      s.cam.s > 0.5 &&
+      s.cam.s > 0.3 &&
       al > 0.3 &&
       g >= 1 &&
       gap > 70 &&
@@ -156,10 +156,11 @@ export function drawLinks(s: SceneState, v: View, t: number): void {
       ctx.save();
       ctx.translate(mx, my);
       ctx.rotate(an);
-      ctx.font = `${isa ? '300' : '500'} 10.5px ${FONT_SANS}`;
-      const w = ctx.measureText(l.label).width + 16;
-      l._chip = { x: mx, y: my, r: Math.max(w / 2, 12) };
-      roundRect(ctx, -w / 2, -9, w, 18, 9);
+      const k = labelScale(s.cam.s);
+      ctx.font = `${isa ? '300' : '500'} ${Math.round(10.5 * k)}px ${FONT_SANS}`;
+      const w = ctx.measureText(l.label).width + 16 * k;
+      l._chip = { x: mx, y: my, r: Math.max(w / 2, 12 * k) };
+      roundRect(ctx, -w / 2, -9 * k, w, 18 * k, 9 * k);
       ctx.fillStyle = `rgba(${TH.CHIP},0.9)`;
       ctx.fill();
       ctx.strokeStyle = hex(col, 0.45 * al);
