@@ -99,9 +99,12 @@ jobs:
             --query properties.endpoint -o tsv)
           foundry_deployment=$(az cognitiveservices account deployment show -g "$rg" -n "$foundry_account" \
             --deployment-name gpt-6-sol --query name -o tsv)
-          speech=$(az cognitiveservices account list -g "$rg" \
-            --query "[?kind=='SpeechServices'] | [0].[id, properties.endpoint]" -o tsv)
-          IFS=$'\t' read -r speech_resource_id speech_endpoint <<<"$speech"
+          # One value per query: a multi-value tsv answer comes one value per line, not one row.
+          speech_account=$(az cognitiveservices account list -g "$rg" \
+            --query "[?kind=='SpeechServices'] | [0].name" -o tsv)
+          speech_resource_id=$(az cognitiveservices account show -g "$rg" -n "$speech_account" --query id -o tsv)
+          speech_endpoint=$(az cognitiveservices account show -g "$rg" -n "$speech_account" \
+            --query properties.endpoint -o tsv)
           postgres_fqdn=$(az postgres flexible-server list -g "$rg" --query "[0].fullyQualifiedDomainName" -o tsv)
           database_url_secret=$(az keyvault secret list --vault-name "$key_vault" \
             --query "[?name=='database-url'].name" -o tsv)
