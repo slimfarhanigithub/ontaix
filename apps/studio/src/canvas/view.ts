@@ -4,7 +4,7 @@
  * and 349 (`resize`, `panelW`, `CX`, `worldTransform`, `toWorld`, the offscreen layer).
  */
 import type { CanvasTheme } from './themes';
-import { THEMES } from './themes';
+import { themeFor } from './themes';
 import type { Cam } from './types';
 
 export interface View {
@@ -35,7 +35,7 @@ export function createView(canvas: HTMLCanvasElement): View {
     W: 0,
     H: 0,
     DPR: 1,
-    TH: THEMES.dark,
+    TH: themeFor('light'),
     panelOff: () => document.body.classList.contains('panel-off'),
     viewport: () => [innerWidth, innerHeight],
   };

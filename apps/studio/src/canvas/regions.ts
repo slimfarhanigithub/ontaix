@@ -4,7 +4,7 @@
  * (`drawCompanies`, `drawDomains`).
  */
 import { hex, mix } from './colour';
-import { FONT_SANS } from '../design/tokens';
+import { FONT_SANS, themedColour, token } from '../design/tokens';
 import { OFFS } from './constants';
 import { hull, type Pt } from './hulls';
 import { shown, type SceneState } from './state';
@@ -17,8 +17,8 @@ export function background(v: View): void {
   ctx.fillStyle = TH.bg;
   ctx.fillRect(0, 0, W, H);
   const g = ctx.createRadialGradient(CX(v), H * 0.45, 0, CX(v), H * 0.45, Math.max(W, H) * 0.7);
-  g.addColorStop(0, 'rgba(63,184,169,0.04)');
-  g.addColorStop(0.6, 'rgba(139,134,207,0.025)');
+  g.addColorStop(0, hex(token('--accent'), 0.04));
+  g.addColorStop(0.6, hex(token('--link'), 0.025));
   g.addColorStop(1, `rgba(${TH.CHIP},0)`);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
@@ -121,7 +121,8 @@ export function drawDomains(s: SceneState, v: View, _t: number): void {
     if (!members.length) continue;
     any = true;
     const pts = hull(members.map((n) => [n.x, n.y] as Pt));
-    const col = s.domainFocus === d ? d.color : s.domainFocus ? mix(d.color, '#070b16', 0.55) : d.color;
+    const dc = themedColour(d.color);
+    const col = s.domainFocus === d ? dc : s.domainFocus ? mix(dc, TH.bg, 0.55) : dc;
     fillHull(octx, pts, pad, col);
     if (s.cam.s > 0.4)
       headers.push([d, members, Math.min(...members.map((n) => n.y)), members.reduce((a, n) => a + n.x, 0) / members.length]);
@@ -131,7 +132,7 @@ export function drawDomains(s: SceneState, v: View, _t: number): void {
     const pending = members.filter((n) => n.pending).length;
     const bnd = members.filter((n) => n.bound).length;
     ctx.textAlign = 'center';
-    ctx.fillStyle = hex(d.color, 0.95);
+    ctx.fillStyle = hex(themedColour(d.color), 0.95);
     ctx.font = `500 12.5px ${FONT_SANS}`;
     ctx.fillText((s.companies.length > 1 ? d.company.name + ' · ' : '') + d.name.toUpperCase(), cx, minY - pad - 18);
     ctx.fillStyle = `rgba(${TH.INK2},0.85)`;

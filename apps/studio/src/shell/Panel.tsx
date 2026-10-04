@@ -13,6 +13,7 @@ import { confirmDialog } from '../admin/actions';
 import type { Proposal } from '../api/types';
 import { NEUTRAL } from '../canvas/constants';
 import { BusyButton } from './busy';
+import { themedColour } from '../design/tokens';
 import { refStyle, useStore } from './dom';
 import { editableFields, PendingEdit } from './PendingEdit';
 import { sanitizeHtml } from './sanitize';
@@ -91,7 +92,7 @@ export function Panel() {
         ) : (
           proposals.map((p) => {
             const ok = p.ready;
-            const color = p.color || NEUTRAL;
+            const color = themedColour(p.color || NEUTRAL);
             if (editing === p.id && editableFields(p))
               return (
                 <div key={p.id} className={'prop' + (ok ? '' : ' blocked')}>

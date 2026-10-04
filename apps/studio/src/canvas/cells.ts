@@ -4,6 +4,7 @@
  * 445-466 (`drawSource`, `drawCell`).
  */
 import { clamp, hex, mix } from './colour';
+import { MIX_BLACK, MIX_WHITE, themedColour } from '../design/tokens';
 import { C } from './constants';
 import { dimOf } from './focus';
 import { drawCellLabels, drawSourceLabels, roundRect } from './labels';
@@ -23,7 +24,7 @@ export function drawSource(s: SceneState, v: View, n: Node, t: number): void {
     r = n.r;
   const fl = n.flash ? clamp((t - n.flash.start) / 0.9, 0, 1) : 0;
   const fk = n.flash ? Math.sin(fl * Math.PI) : 0;
-  const flashColor = n.flash ? n.flash.color : null;
+  const flashColor = n.flash ? themedColour(n.flash.color) : null;
   if (fl >= 1) n.flash = null;
   ctx.save();
   ctx.translate(n.x, n.y);
@@ -34,12 +35,13 @@ export function drawSource(s: SceneState, v: View, n: Node, t: number): void {
     ctx.stroke();
   }
   const g = ctx.createLinearGradient(-r, -r, r, r);
-  g.addColorStop(0, hex(mix(s.BRASS, '#ffffff', 0.2), 0.95 * al));
-  g.addColorStop(1, hex(mix(s.BRASS, '#000000', 0.35), 0.95 * al));
+  const brass = themedColour(s.BRASS);
+  g.addColorStop(0, hex(mix(brass, MIX_WHITE, 0.2), 0.95 * al));
+  g.addColorStop(1, hex(mix(brass, MIX_BLACK, 0.35), 0.95 * al));
   roundRect(ctx, -r, -r, 2 * r, 2 * r, 7);
   ctx.fillStyle = g;
   ctx.fill();
-  ctx.strokeStyle = hex(mix(s.BRASS, '#ffffff', 0.35), (hot ? 0.9 : 0.5) * al);
+  ctx.strokeStyle = hex(mix(brass, MIX_WHITE, 0.35), (hot ? 0.9 : 0.5) * al);
   ctx.lineWidth = hot ? 1.6 : 1;
   ctx.stroke();
   for (let i = -1; i <= 1; i++) {
@@ -52,18 +54,19 @@ export function drawSource(s: SceneState, v: View, n: Node, t: number): void {
 
 export function drawCell(s: SceneState, v: View, n: Node, t: number): void {
   if (n.kind === 'source') return drawSource(s, v, n, t);
-  const { ctx } = v;
+  const { ctx, TH } = v;
   const dim = dimOf(s, n);
   const dyK = n.dying ? clamp((t - n.dying.start) / 0.7, 0, 1) : 0;
   const al =
     n.alpha * dim * (1 - dyK) * (n.pending ? 0.62 : 1) * (s.COVERAGE && n.kind === 'concept' && !n.bound ? 0.38 : 1);
   const hot = n === s.hover;
-  const col = n.conflict ? mix(n.color, C.conflict, 0.55 + 0.35 * Math.sin(t * 7)) : n.color;
+  const own = themedColour(n.color);
+  const col = n.conflict ? mix(own, themedColour(C.conflict), 0.55 + 0.35 * Math.sin(t * 7)) : own;
   const r = n.r * (1 - 0.3 * dyK);
   const fl = n.flash ? clamp((t - n.flash.start) / 0.9, 0, 1) : 0;
   const fk = n.flash ? Math.sin(fl * Math.PI) : 0;
   if (fl >= 1) n.flash = null;
-  const fcol = n.flash ? n.flash.color : n.dying ? n.dying.color : null;
+  const fcol = n.flash ? themedColour(n.flash.color) : n.dying?.color ? themedColour(n.dying.color) : null;
   const parentSplit = s.splitting.get(n);
   const fused = (n.split && !n.split.broken) || (parentSplit && !parentSplit.broken);
   let sx = 1,
@@ -77,7 +80,7 @@ export function drawCell(s: SceneState, v: View, n: Node, t: number): void {
     }
   }
   if (n === s.dropTarget && s.dragging) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeStyle = `rgba(${TH.INK},0.9)`;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(n.x, n.y, r + 1, 0, 6.283);
@@ -98,16 +101,16 @@ export function drawCell(s: SceneState, v: View, n: Node, t: number): void {
   ctx.rotate(rot);
   ctx.scale(sx, sy);
   const cg = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r * 1.04);
-  cg.addColorStop(0, hex(mix(col, '#ffffff', 0.55), 0.98 * al));
-  cg.addColorStop(0.3, hex(mix(col, '#ffffff', 0.18), 0.98 * al));
+  cg.addColorStop(0, hex(mix(col, MIX_WHITE, 0.55), 0.98 * al));
+  cg.addColorStop(0.3, hex(mix(col, MIX_WHITE, 0.18), 0.98 * al));
   cg.addColorStop(0.75, hex(col, 0.96 * al));
-  cg.addColorStop(1, hex(mix(col, '#000000', fused ? 0.38 : 0.42), 0.96 * al));
+  cg.addColorStop(1, hex(mix(col, MIX_BLACK, fused ? 0.38 : 0.42), 0.96 * al));
   ctx.fillStyle = cg;
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, 6.283);
   ctx.fill();
   if (!fused) {
-    const rc = fcol && (fk > 0 || dyK > 0) ? fcol : mix(col, '#ffffff', 0.35);
+    const rc = fcol && (fk > 0 || dyK > 0) ? fcol : mix(col, MIX_WHITE, 0.35);
     ctx.strokeStyle = hex(rc, ((fcol ? 0.9 : hot ? 0.7 : 0.35) * al) / (n.pending ? 0.62 : 1));
     ctx.lineWidth = fcol ? 1.8 : hot ? 1.6 : 1;
     ctx.beginPath();

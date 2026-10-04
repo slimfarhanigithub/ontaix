@@ -60,7 +60,7 @@ const proposal = (extra: Partial<Proposal> = {}): Proposal =>
     type: 'concept',
     state: 'pending',
     title: 'Plant',
-    color: '#3fb8a9',
+    color: '#d30c55',
     deps: [],
     ready: true,
     html: '<b>Plant</b> <em>· Northwind Industries <b>operates</b> Plant</em>',

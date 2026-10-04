@@ -3,6 +3,7 @@
  * Ported from reference/ontaix-studio-reference.html lines 405-416 (`drawNeck`).
  */
 import { clamp, hex, mix } from './colour';
+import { MIX_BLACK, MIX_WHITE, themedColour } from '../design/tokens';
 import { dimOf } from './focus';
 import type { SceneState } from './state';
 import type { Node } from './types';
@@ -48,7 +49,7 @@ export function drawNeck(s: SceneState, v: View, n: Node, t: number): void {
     h2 = [p2[0] + Math.cos(a2 + Math.PI / 2) * r1b, p2[1] + Math.sin(a2 + Math.PI / 2) * r1b],
     h3 = [p3[0] + Math.cos(a3 + Math.PI / 2) * r2b, p3[1] + Math.sin(a3 + Math.PI / 2) * r2b],
     h4 = [p4[0] + Math.cos(a4 - Math.PI / 2) * r2b, p4[1] + Math.sin(a4 - Math.PI / 2) * r2b];
-  const col = c1.color,
+  const col = themedColour(c1.color),
     al = c1.alpha * dimOf(s, c1) * neckAlpha;
   const nx = -Math.sin(a),
     ny = Math.cos(a),
@@ -56,10 +57,10 @@ export function drawNeck(s: SceneState, v: View, n: Node, t: number): void {
     my = (c1.y + c2.y) / 2,
     w = Math.max(r1, r2);
   const g = ctx.createLinearGradient(mx + nx * w, my + ny * w, mx - nx * w, my - ny * w);
-  g.addColorStop(0, hex(mix(col, '#000000', 0.38), 0.96 * al));
-  g.addColorStop(0.35, hex(mix(col, '#ffffff', 0.16), 0.97 * al));
+  g.addColorStop(0, hex(mix(col, MIX_BLACK, 0.38), 0.96 * al));
+  g.addColorStop(0.35, hex(mix(col, MIX_WHITE, 0.16), 0.97 * al));
   g.addColorStop(0.65, hex(col, 0.97 * al));
-  g.addColorStop(1, hex(mix(col, '#000000', 0.38), 0.96 * al));
+  g.addColorStop(1, hex(mix(col, MIX_BLACK, 0.38), 0.96 * al));
   ctx.beginPath();
   ctx.moveTo(p1[0], p1[1]);
   ctx.bezierCurveTo(h1[0], h1[1], h3[0], h3[1], p3[0], p3[1]);
@@ -77,9 +78,9 @@ export function drawNeck(s: SceneState, v: View, n: Node, t: number): void {
       mx + Math.cos(a) * 6,
       my + Math.sin(a) * 6,
     );
-    fg.addColorStop(0, hex('#000000', 0));
-    fg.addColorStop(0.5, hex('#000000', 0.28 * fur * al));
-    fg.addColorStop(1, hex('#000000', 0));
+    fg.addColorStop(0, hex(MIX_BLACK, 0));
+    fg.addColorStop(0.5, hex(MIX_BLACK, 0.28 * fur * al));
+    fg.addColorStop(1, hex(MIX_BLACK, 0));
     ctx.fillStyle = fg;
     ctx.beginPath();
     ctx.moveTo(mx + nx * hw * 1.2 - Math.cos(a) * 6, my + ny * hw * 1.2 - Math.sin(a) * 6);

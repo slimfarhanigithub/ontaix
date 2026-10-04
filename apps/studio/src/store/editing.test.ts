@@ -14,7 +14,7 @@ const pending = (extra: Partial<Proposal> = {}): Proposal =>
     type: 'concept',
     state: 'pending',
     title: 'Plant',
-    color: '#3fb8a9',
+    color: '#d30c55',
     deps: [],
     ready: true,
     html: '<b>Plant</b>',
@@ -159,10 +159,10 @@ describe('live events of editing and domains', () => {
     }
     expect(store.s.DOMAINS).toHaveLength(20);
 
-    const plant = addNode(store.s, { label: 'Plant', kind: 'concept', company: a, domain: domainOf(store.s, 'production', a), sid: 'c-plant', color: '#3fb8a9' });
+    const plant = addNode(store.s, { label: 'Plant', kind: 'concept', company: a, domain: domainOf(store.s, 'production', a), sid: 'c-plant', color: '#d30c55' });
     store.handleEvent(
       envelope('domain.changed', {
-        domain: { key: 'production', name: 'Manufacturing', owner: 'Works', color: '#abcdef', defaultColor: '#3fb8a9', template: true, position: 0, revision: 1 },
+        domain: { key: 'production', name: 'Manufacturing', owner: 'Works', color: '#abcdef', defaultColor: '#d30c55', template: true, position: 0, revision: 1 },
         created: false,
       }),
     );

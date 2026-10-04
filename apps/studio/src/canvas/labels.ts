@@ -3,8 +3,8 @@
  * reference/ontaix-studio-reference.html line 340 (`roundRect`) and the label blocks of
  * `drawCell` (lines 462-466) and `drawSource` (line 450).
  */
+import { FONT_SANS, themedColour } from '../design/tokens';
 import { hex } from './colour';
-import { FONT_SANS } from '../design/tokens';
 import type { SceneState } from './state';
 import type { Node } from './types';
 import type { View } from './view';
@@ -33,7 +33,7 @@ export function drawCellLabels(s: SceneState, v: View, n: Node, al: number, col:
   ctx.shadowBlur = 0;
   let yy = n.y + r + 39;
   if (n.sub) {
-    ctx.fillStyle = hex(col, 0.95 * la);
+    ctx.fillStyle = hex(themedColour(col), 0.95 * la);
     ctx.font = `300 11px ${FONT_SANS}`;
     ctx.fillText(n.sub, n.x, yy);
     yy += 14;
@@ -44,7 +44,7 @@ export function drawCellLabels(s: SceneState, v: View, n: Node, al: number, col:
     yy += 14;
   }
   if (n.bound) {
-    ctx.fillStyle = hex(s.BRASS, 0.95 * la);
+    ctx.fillStyle = `rgba(${TH.INK2},${0.95 * la})`;
     ctx.font = `400 10.5px ${FONT_SANS}`;
     ctx.fillText(
       `${n.bound.records.toLocaleString('en-GB')} records · ${n.bound.source.label} · fresh ${n.bound.fresh}`,
@@ -63,7 +63,7 @@ export function drawSourceLabels(s: SceneState, v: View, n: Node, al: number, r:
   const { ctx, TH } = v;
   if (!(s.cam.s > 0.4)) return;
   ctx.textAlign = 'center';
-  ctx.fillStyle = hex(s.BRASS, 0.95 * al);
+  ctx.fillStyle = `rgba(${TH.INK},${0.95 * al})`;
   ctx.font = `${hot ? '600' : '500'} 13px ${FONT_SANS}`;
   ctx.shadowColor = TH.shadow;
   ctx.shadowBlur = 4;
