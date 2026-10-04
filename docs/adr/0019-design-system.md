@@ -39,6 +39,6 @@ Foundations (tokens, fonts, base rules, the guards, the harness switch, the docu
 ## Consequences
 
 - `CLAUDE.md`'s "one rule" names the design system as the visual source of truth and the reference as the historical origin of the Studio's behaviour and markup. `docs/ui-contract.md` keeps every behavioural rule and describes the baseline acceptance.
-- The API's tenant appearance defaults still say dark and teal. Until an architect pull request changes the schema default, the service default and the OpenAPI text (a migration next to the DDL), a tenant on the real API starts dark with a teal accent over the crimson tokens. The Studio applies a tenant accent only when it differs from the design system's default, so the fix is the defaults alone.
+- The API's tenant appearance defaults follow (decision row 171): `tenant_settings.theme` defaults to `light`, `tenant_settings.accent` to `#d30c55`, the `domain_template` rows take the categorical palette, through migration 0010, which changes defaults and reference rows only and never a tenant's saved choices or its `tenant_domain` copies. The Studio applies a tenant accent only when it differs from the design system's default.
 - `contracts/design-tokens.json` stops being "verbatim from the reference"; `docs/contracts.md` says so.
 - The reference's Sora files under `tests/screenshots/fonts` are gone; the fonts ship with the build.
