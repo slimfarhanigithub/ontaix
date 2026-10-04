@@ -1,0 +1,70 @@
+{{- if .Values.ingress.enabled }}
+{{- $host := required "ingress.host is required when the ingress is enabled" .Values.ingress.host }}
+# One host: the Studio at / and the API at /api. The certificate is requested once, on the
+# Studio's ingress; the API's ingress carries the body size and timeouts of the API's long calls.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "ontaix.studio.name" . }}
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: studio
+  annotations:
+    {{- if and .Values.ingress.tls.enabled .Values.ingress.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ $host | quote }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ontaix.studio.name" . }}
+                port:
+                  name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "ontaix.api.name" . }}
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  annotations:
+    {{- with .Values.ingress.apiAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ $host | quote }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "ontaix.api.name" . }}
+                port:
+                  name: http
+{{- end }}

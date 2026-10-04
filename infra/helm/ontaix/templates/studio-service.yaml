@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ontaix.studio.name" . }}
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: studio
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "ontaix.selectorLabels" (dict "root" . "component" "studio") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.studio.port }}
+      targetPort: http

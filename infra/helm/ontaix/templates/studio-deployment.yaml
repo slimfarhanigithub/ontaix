@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ontaix.studio.name" . }}
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: studio
+spec:
+  replicas: {{ .Values.studio.replicas }}
+  selector:
+    matchLabels:
+      {{- include "ontaix.selectorLabels" (dict "root" . "component" "studio") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ontaix.selectorLabels" (dict "root" . "component" "studio") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/studio-configmap.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: studio
+          image: {{ include "ontaix.image" (dict "root" . "image" .Values.studio.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.studio.port }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.studio.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              readOnly: true
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: {{ include "ontaix.studio.name" . }}

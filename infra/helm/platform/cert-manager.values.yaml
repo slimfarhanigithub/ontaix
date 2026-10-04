@@ -1,0 +1,25 @@
+# cert-manager: issues and renews the public certificate from Let's Encrypt (HTTP-01 through
+# ingress-nginx). The CRDs are installed and kept by the chart.
+crds:
+  enabled: true
+  keep: true
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+webhook:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+cainjector:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 256Mi

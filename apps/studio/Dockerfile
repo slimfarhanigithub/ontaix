@@ -6,6 +6,10 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/studio/package.json apps/studio/
 RUN pnpm install --frozen-lockfile --filter studio
 COPY apps/studio apps/studio
+# Where the built Studio calls the API. Empty keeps the in-browser mock (the compose stack);
+# a deployment behind a proxy or ingress that serves the API on the same origin passes /api/v1.
+ARG VITE_ONTAIX_API_URL=""
+ENV VITE_ONTAIX_API_URL=$VITE_ONTAIX_API_URL
 RUN pnpm --filter studio build
 
 # The unprivileged nginx image runs as uid 101 and listens on 8080.
