@@ -32,6 +32,7 @@ import {
 import { List, type Column } from '../List';
 import { en } from '../listModel';
 import { Tg } from '../Toggle';
+import { RowActions } from '../RowActions';
 
 const HOST_STYLE = { height: 'calc(100% - 80px)' };
 const ACT = (w: number) => ({ width: `${w}px`, textAlign: 'center' as const });
@@ -148,28 +149,29 @@ export function Entities() {
               <td className="num">{r.rels}</td>
               <td>{r.bound}</td>
               <td className="act">
-                <button data-fn="open" style={ACT(54)} onClick={() => st.goTo(r.n)}>
-                  Open
-                </button>
-                <button
-                  data-fn="lineage"
-                  style={ACT(64)}
-                  onClick={() => {
-                    st.goTo(r.n);
-                    st.showLineage(r.n);
-                  }}
-                >
-                  Lineage
-                </button>
-                <button data-fn="rename" style={ACT(66)} onClick={() => renameDialog(r.n)}>
-                  Rename
-                </button>
-                <button data-fn="move" data-ox-new="" style={ACT(54)} disabled={r.state === 'awaiting approval'} onClick={() => moveDialog(r.n)}>
-                  Move
-                </button>
-                <button className="danger" data-fn="del" style={ACT(64)} onClick={() => deleteNodeDialog(r.n)}>
-                  Delete
-                </button>
+                <RowActions
+                  id={`ent${r.n.id}`}
+                  primary={
+                    <button data-fn="open" style={ACT(54)} onClick={() => st.goTo(r.n)}>
+                      Open
+                    </button>
+                  }
+                  items={[
+                    {
+                      label: 'Lineage',
+                      icon: 'lineage',
+                      group: 1,
+                      attrs: { 'data-fn': 'lineage' },
+                      act: () => {
+                        st.goTo(r.n);
+                        st.showLineage(r.n);
+                      },
+                    },
+                    { label: 'Rename', icon: 'rename', group: 2, attrs: { 'data-fn': 'rename' }, act: () => renameDialog(r.n) },
+                    { label: 'Move', icon: 'move', group: 2, attrs: { 'data-fn': 'move', 'data-ox-new': '' }, disabled: r.state === 'awaiting approval', act: () => moveDialog(r.n) },
+                    { label: 'Delete', icon: 'delete', group: 3, danger: true, attrs: { 'data-fn': 'del' }, act: () => deleteNodeDialog(r.n) },
+                  ]}
+                />
               </td>
             </>
           )}
@@ -259,21 +261,24 @@ export function Relationships() {
                 </span>
               </td>
               <td className="act">
-                <button
-                  data-fn="edit"
-                  style={ACT(64)}
-                  disabled={r.kind === 'conflict'}
-                  onClick={() => {
-                    st.closeAdmin();
-                    const v = st.renderer?.v;
-                    st.openLinkBox(r.l.a, r.l.b, (v ? v.W : innerWidth) * 0.4, (v ? v.H : innerHeight) * 0.4, r.l);
-                  }}
-                >
-                  Edit
-                </button>
-                <button className="danger" data-fn="del" style={ACT(64)} disabled={r.kind === 'conflict'} onClick={() => deleteRelationDialog(r.l, r.name)}>
-                  Delete
-                </button>
+                <RowActions
+                  id={`rel${r.l.a.id}-${r.l.b.id}`}
+                  primary={
+                    <button
+                      data-fn="edit"
+                      style={ACT(64)}
+                      disabled={r.kind === 'conflict'}
+                      onClick={() => {
+                        st.closeAdmin();
+                        const v = st.renderer?.v;
+                        st.openLinkBox(r.l.a, r.l.b, (v ? v.W : innerWidth) * 0.4, (v ? v.H : innerHeight) * 0.4, r.l);
+                      }}
+                    >
+                      Edit
+                    </button>
+                  }
+                  items={[{ label: 'Delete', icon: 'delete', group: 1, danger: true, disabled: r.kind === 'conflict', attrs: { 'data-fn': 'del' }, act: () => deleteRelationDialog(r.l, r.name) }]}
+                />
               </td>
             </>
           )}
@@ -362,18 +367,19 @@ export function Bindings() {
                 </span>
               </td>
               <td className="act">
-                <button data-fn="attrs" style={ACT(80)} onClick={() => st.goTo(r.n)}>
-                  Attributes
-                </button>
-                {r.state === 'bound' ? (
-                  <button className="danger" data-fn="unbind" style={ACT(70)} onClick={() => unbindDialog(r.n, r.source, r.attrs)}>
-                    Unbind
-                  </button>
-                ) : (
-                  <button data-fn="bind" style={ACT(70)} onClick={() => bindDialog(r.n)}>
-                    Bind
-                  </button>
-                )}
+                <RowActions
+                  id={`bnd${r.n.id}`}
+                  primary={
+                    <button data-fn="attrs" style={ACT(80)} onClick={() => st.goTo(r.n)}>
+                      Attributes
+                    </button>
+                  }
+                  items={
+                    r.state === 'bound'
+                      ? [{ label: 'Unbind', icon: 'link', group: 1, danger: true, attrs: { 'data-fn': 'unbind' }, act: () => unbindDialog(r.n, r.source, r.attrs) }]
+                      : [{ label: 'Bind', icon: 'link', group: 1, attrs: { 'data-fn': 'bind' }, act: () => bindDialog(r.n) }]
+                  }
+                />
               </td>
             </>
           )}
@@ -500,12 +506,15 @@ export function DomainProducts() {
                   />
                 </td>
                 <td className="act" data-ox-new="">
-                  <button data-fn="editDomain" style={ACT(54)} disabled={!td} onClick={() => td && editDomainDialog(td)}>
-                    Edit
-                  </button>
-                  <BusyButton className="danger" data-fn="delDomain" style={ACT(64)} disabled={!d.sid} onClick={() => deleteDomainDialog(d)}>
-                    Delete
-                  </BusyButton>
+                  <RowActions
+                    id={`dom-${d.key}`}
+                    primary={
+                      <button data-fn="editDomain" style={ACT(54)} disabled={!td} onClick={() => td && editDomainDialog(td)}>
+                        Edit
+                      </button>
+                    }
+                    items={[{ label: 'Delete', icon: 'delete', group: 1, danger: true, disabled: !d.sid, attrs: { 'data-fn': 'delDomain' }, act: () => deleteDomainDialog(d) }]}
+                  />
                 </td>
               </tr>
             );

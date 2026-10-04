@@ -19,6 +19,7 @@ import {
   renameOrganizationDialog,
 } from './organizationDialogs';
 import { usersDialog } from './OrganizationUsers';
+import { RowActions } from '../admin/RowActions';
 
 const ACT = (w: number) => ({ width: `${w}px`, textAlign: 'center' as const });
 
@@ -121,27 +122,22 @@ export function Organizations() {
                 </td>
                 <td style={{ color: 'var(--ink-2)' }}>{r.created}</td>
                 <td className="act">
-                  <button data-fn="users" style={ACT(38)} onClick={() => usersDialog(r.org, refresh)}>
-                    Users
-                  </button>
-                  <button data-fn="enter" style={ACT(36)} onClick={() => enterOrganizationDialog(r.org)}>
-                    Enter
-                  </button>
-                  <button data-fn="open" style={ACT(36)} onClick={() => openSupportDialog(r.org)}>
-                    Open
-                  </button>
-                  <button data-fn="rename" style={ACT(52)} onClick={() => renameOrganizationDialog(r.org, refresh)}>
-                    Rename
-                  </button>
-                  {r.org.status === 'disabled' ? (
-                    <button data-fn="enable" style={ACT(50)} onClick={() => void enableOrganization(r.org, refresh)}>
-                      Enable
-                    </button>
-                  ) : (
-                    <button className="danger" data-fn="disable" style={ACT(50)} onClick={() => disableOrganizationDialog(r.org, refresh)}>
-                      Disable
-                    </button>
-                  )}
+                  <RowActions
+                    id={`org-${r.org.id}`}
+                    primary={
+                      <button data-fn="enter" style={ACT(50)} onClick={() => enterOrganizationDialog(r.org)}>
+                        Enter
+                      </button>
+                    }
+                    items={[
+                      { label: 'Users', icon: 'people', group: 1, attrs: { 'data-fn': 'users' }, act: () => usersDialog(r.org, refresh) },
+                      { label: 'Open', icon: 'open', group: 1, attrs: { 'data-fn': 'open' }, act: () => openSupportDialog(r.org) },
+                      { label: 'Rename', icon: 'rename', group: 1, attrs: { 'data-fn': 'rename' }, act: () => renameOrganizationDialog(r.org, refresh) },
+                      r.org.status === 'disabled'
+                        ? { label: 'Enable', icon: 'power', group: 2, attrs: { 'data-fn': 'enable' }, act: () => void enableOrganization(r.org, refresh) }
+                        : { label: 'Disable', icon: 'power', group: 2, danger: true, attrs: { 'data-fn': 'disable' }, act: () => disableOrganizationDialog(r.org, refresh) },
+                    ]}
+                  />
                 </td>
               </>
             )}

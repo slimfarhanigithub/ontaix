@@ -12,6 +12,7 @@ import { removeSourceDialog, renderAdmin, toggleSource } from '../actions';
 import { en } from '../listModel';
 import { showSourceForm } from '../SourceWizard';
 import { Tg } from '../Toggle';
+import { RowActions } from '../RowActions';
 
 /** How long the Refresh all button spins before the counts are re-read, in milliseconds. */
 const REFRESH_SPIN_MS = 900;
@@ -85,14 +86,19 @@ export function DataSources() {
                       {n.pending ? 'awaiting approval' : n.disabled ? 'disabled' : 'connected · fresh'}
                     </span>
                   </td>
-                  <td className="act" style={{ width: '290px' }}>
-                    <BusyButton data-act="configure" style={{ width: '86px', textAlign: 'center' }} onClick={() => showSourceForm(n)}>
-                      Configure
-                    </BusyButton>
-                    <Tg on={!n.disabled && !n.pending} locked={n.pending} data-act="toggle" onClick={() => toggleSource(n)} />
-                    <button className="danger" data-act="remove" style={{ width: '70px', textAlign: 'center' }} onClick={() => removeSourceDialog(n)}>
-                      Delete
-                    </button>
+                  <td className="act">
+                    <RowActions
+                      id={`src${n.id}`}
+                      primary={
+                        <>
+                          <BusyButton data-act="configure" style={{ width: '86px', textAlign: 'center' }} onClick={() => showSourceForm(n)}>
+                            Configure
+                          </BusyButton>
+                          <Tg on={!n.disabled && !n.pending} locked={n.pending} data-act="toggle" onClick={() => toggleSource(n)} />
+                        </>
+                      }
+                      items={[{ label: 'Delete', icon: 'delete', group: 1, danger: true, attrs: { 'data-act': 'remove' }, act: () => removeSourceDialog(n) }]}
+                    />
                   </td>
                 </tr>
               );
