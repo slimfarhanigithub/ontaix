@@ -4,6 +4,7 @@
  */
 import { useEffect } from 'react';
 
+import { PlatformAccessBanner } from './auth/PlatformAccessBanner';
 import { AdminOverlay } from './shell/AdminOverlay';
 import { NewBox, LinkBox } from './shell/Boxes';
 import { CanvasView } from './shell/CanvasView';
@@ -30,6 +31,7 @@ export function App() {
     <>
       <CanvasView />
       <Header />
+      <PlatformAccessBanner />
       <Toasts />
       <AdminOverlay />
       <Tools />

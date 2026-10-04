@@ -25,6 +25,7 @@ from app.config import get_settings
 from app.models.storage import tenant as _tenant_mapping  # noqa: F401
 from app.routers import (
     admin_audit,
+    admin_organization_access,
     admin_organization_users,
     admin_organizations,
     admin_support_session,
@@ -143,6 +144,7 @@ def create_app() -> FastAPI:
         admin_organizations,
         admin_organization_users,
         admin_support_session,
+        admin_organization_access,
         admin_audit,
         scene,
         companies,

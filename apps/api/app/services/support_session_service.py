@@ -1,4 +1,4 @@
-"""Read-only support sessions: a super admin's only way into an organization's data.
+"""Read-only support sessions: a super admin's way to look at an organization's data.
 
 Opening one replaces the presented session with a new token bound to the organization for 60
 minutes, never past the session's absolute expiry; ending one replaces it with a token bound to
@@ -18,7 +18,11 @@ from app.auth import PlatformAdmin
 from app.models.api.actor import Actor
 from app.models.storage.base import SessionEndReason
 from app.repositories import auth_session_repository
-from app.services import platform_audit_service, session_service
+from app.services import (
+    organization_access_audit_service,
+    platform_audit_service,
+    session_service,
+)
 from app.services.organization_service import require
 from app.services.platform_audit_service import OrganizationCopy
 from app.services.session_service import IssuedSession
@@ -50,9 +54,20 @@ async def start(
             errors=[{"field": "reason", "message": "Give a reason"}],
         )
     previous = admin.live.resolved.support_tenant_id
+    acting = admin.live.resolved.acting_tenant_id
     await auth_session_repository.end(session, admin.live.row.id, SessionEndReason.SUPPORT_CHANGED)
     if previous is not None:
         await _audit_end(session, admin, previous, ENDED)
+    if acting is not None:
+        await organization_access_audit_service.audit_exit(
+            session,
+            session_id=admin.live.row.id,
+            account_id=admin.account_id,
+            tenant_id=acting,
+            what=organization_access_audit_service.LEFT_WHAT,
+            actor=admin.actor,
+            client_ip=admin.client_ip,
+        )
     issued = await session_service.issue(
         session,
         admin.live.account,

@@ -1,6 +1,6 @@
 # ADR 0017: Organizations and Sign-In
 
-Status: Accepted. Password sign-in is an owner decision — final (Slim, 2026-09-30); every other choice here is approved under owner delegation (decision row 140).
+Status: Accepted. Password sign-in is an owner decision — final (Slim, 2026-09-30); every other choice here is approved under owner delegation (decision row 140). ADR 0018 supersedes the part of section 3 that makes the read-only support session the super admin's only way into an organization: he can also enter one and act inside it with every tenant role.
 
 ## Context
 

@@ -16,7 +16,9 @@ set that header.
 
 Authorisation never looks at the credential: members get the roles of their organization's own
 groups; a super admin gets nothing inside an organization except, during a support session,
-read-only `model.read`, `directory.read` and `audit.read`.
+read-only `model.read`, `directory.read` and `audit.read`, or, after entering an organization
+(`acting_tenant_id` on the session), every tenant role through the directory user the entry
+created for him, every action then audited as platform access.
 
 The request session commits when the endpoint function returns, before the response is sent, so
 a failed commit answers 5xx and never a 2xx for a change that did not land.
@@ -67,7 +69,17 @@ SUPPORT_GRANTS = (Grant(role=RoleName.AUDITOR, scope_kind=ScopeKind.TENANT),)
 SIGN_IN_REQUIRED = "Sign in to continue"
 CSRF_DETAIL = "The request did not come from the Studio; reload the page and try again"
 PASSWORD_CHANGE_DETAIL = "Choose a new password to continue"
-SUPPORT_ONLY_DETAIL = "A super admin opens an organization through a read-only support session"
+SUPPORT_ONLY_DETAIL = (
+    "A super admin enters an organization, or opens it through a read-only support session"
+)
+ENTER_AGAIN_DETAIL = "The organization no longer knows this platform access; enter it again"
+# A super admin inside an organization holds every tenant role at tenant scope.
+ACTING_GRANTS = tuple(
+    Grant(role=role, scope_kind=ScopeKind.TENANT)
+    for role in (RoleName.ADMINISTRATOR, RoleName.BUILDER, RoleName.GOVERNOR, RoleName.AUDITOR)
+)
+# The directory user a super admin acts through inside an organization he entered.
+PLATFORM_ISSUER = "platform"
 SUPPORT_READ_ONLY_DETAIL = "A support session is read-only"
 SUPER_ADMIN_ONLY_DETAIL = "Only a super admin can do this"
 
@@ -83,10 +95,17 @@ class Caller:
     everyone_teaches: bool
     kind: Literal["user", "platform"] = "user"
     read_only: bool = False
+    # The super admin's platform account when the caller is him acting inside the organization.
+    platform_account_id: uuid.UUID | None = None
 
     @property
     def actor(self) -> Actor:
-        return Actor(kind=self.kind, id=self.user_id, name=self.name)
+        return Actor(
+            kind=self.kind,
+            id=self.user_id,
+            name=self.name,
+            platform_account_id=self.platform_account_id,
+        )
 
     @property
     def actor_kind(self) -> ActorKind:
@@ -149,6 +168,12 @@ async def get_platform_admin(request: Request, session: PlatformSessionDependenc
     return PlatformAdmin(live=live, client_ip=request_client_ip(request))
 
 
+def platform_user_subject(account_id: uuid.UUID, tenant_id: uuid.UUID) -> str:
+    """The subject of a super admin's directory user in an organization. Subjects are unique
+    across every issuer, so the organization is part of it."""
+    return f"{account_id}:{tenant_id}"
+
+
 def require_csrf(request: Request, expected: str) -> None:
     """403 `csrf_failed` unless the `Origin` is allowed and `X-CSRF-Token` matches."""
     if not origin_allowed(request) or not tokens_equal(request.headers.get(CSRF_HEADER), expected):
@@ -196,6 +221,8 @@ async def _session_caller(
     if not resolved.is_platform:
         assert resolved.tenant_id is not None and resolved.user_id is not None
         return await _member_caller(session, resolved.tenant_id, resolved.user_id)
+    if resolved.acting_tenant_id is not None:
+        return await _acting_caller(session, resolved.acting_tenant_id, resolved.account_id)
     if resolved.support_tenant_id is None:
         raise forbidden(SUPPORT_ONLY_DETAIL)
     if request.method not in SAFE_METHODS:
@@ -209,6 +236,29 @@ async def _session_caller(
         everyone_teaches=False,
         kind="platform",
         read_only=True,
+    )
+
+
+async def _acting_caller(
+    session: AsyncSession, tenant_id: uuid.UUID, account_id: uuid.UUID
+) -> Caller:
+    """The super admin inside the organization he entered: its directory user of issuer
+    `platform` (created at the entry), every tenant role, and the platform account as the
+    audit marker. The organization is bound first, so the lookup runs under its RLS."""
+    await db_client.bind_tenant(session, tenant_id)
+    user = await app_user_repository.get_by_identity(
+        session, PLATFORM_ISSUER, platform_user_subject(account_id, tenant_id)
+    )
+    if user is None or user.tenant_id != tenant_id:
+        raise forbidden(ENTER_AGAIN_DETAIL)
+    tenant_settings = await tenant_settings_repository.get(session, tenant_id)
+    return Caller(
+        tenant_id=tenant_id,
+        user_id=user.id,
+        name=user.name,
+        grants=ACTING_GRANTS,
+        everyone_teaches=bool(tenant_settings and tenant_settings.everyone_teaches),
+        platform_account_id=account_id,
     )
 
 

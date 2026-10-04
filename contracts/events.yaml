@@ -1241,6 +1241,10 @@ components:
           format: uuid
         name:
           type: string
+        platformAccountId:
+          type: [string, 'null']
+          format: uuid
+          description: On a `user` actor, the super admin's platform account when that user is him acting inside the organization he entered (ADR 0018); absent or null otherwise.
 
     ProposalEvent:
       type: object

@@ -401,6 +401,8 @@ export const api = {
   startSupportSession: (id: string, reason: string) =>
     call<Session>('POST', `/admin/organizations/${id}/support-session`, { reason }).then(rememberSession),
   endSupportSession: () => call<Session>('DELETE', '/admin/support-session').then(rememberSession),
+  enterOrganization: (id: string) => call<Session>('POST', `/admin/organizations/${id}/enter`).then(rememberSession),
+  exitOrganization: () => call<Session>('POST', '/admin/exit').then(rememberSession),
   listPlatformAudit: (p?: ListParams) => call<Paged<PlatformAuditEntry>>('GET', `/admin/audit${listQuery(p)}`),
 };
 

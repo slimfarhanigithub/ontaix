@@ -11,7 +11,7 @@ info:
     - Every change to the ontology (concept, specialisation, relation, equivalence, source, binding, attribute, and any rename, deletion, edit or unbind) is a proposal. Ontology mutation endpoints return `202 Accepted` with the proposal; nothing writes an approved ontology row directly.
     - Settings, appearance, identity (groups, members, roles), source enable/disable/reconfigure and agent access are immediate and audited.
     - Authentication is a password session (ADR 0017): `POST /auth/sign-in` sets the `__Host-ontaix_session` cookie, and there is no sign-up. Agents authenticate with their bearer token (`agentToken`); OIDC bearer tokens for users (`bearerAuth`) are specified and not enabled in this deployment. How a caller authenticates never decides what it may do: authorisation is Ontaix-native, and roles reach a user only through group membership in this API's own tables.
-    - Organizations: every tenant is an organization, its own instance; a member's session names exactly one, and every read and write is confined to it by the repositories and by PostgreSQL row-level security. Only a super admin (a platform role outside every organization) creates organizations and accounts, under `/admin`, and enters an organization only through an audited read-only support session.
+    - Organizations: every tenant is an organization, its own instance; a member's session names exactly one, and every read and write is confined to it by the repositories and by PostgreSQL row-level security. Only a super admin (a platform role outside every organization) creates organizations and accounts, under `/admin`, and reaches an organization's data only through an audited read-only support session or by entering it (`POST /admin/organizations/{organizationId}/enter`), where he acts with every tenant role and every action is audited as platform access.
     - Errors are `application/problem+json` with a stable `code`.
     - Lists that can grow large (concepts, relations, bindings, users, groups, agents, audit) share one pagination, search, filter and sort convention: `page`, `pageSize`, `q`, `filter[<field>]=<value>`, `sort`, `order`, and return `{ items, page, pageSize, total }`.
     - The tenant is resolved from the session or token; no path outside `/admin` carries a tenant id.
@@ -51,7 +51,7 @@ tags:
   - name: Authentication
     description: Sign-in with email and password, sign-out, the current session and password change. No sign-up; a forgotten password is reset by a super admin.
   - name: Platform
-    description: Super admin only - organizations, their accounts and passwords, read-only support sessions, and the platform audit log.
+    description: Super admin only - organizations, their accounts and passwords, read-only support sessions, entering an organization to act inside it, and the platform audit log.
   - name: Scene
     description: One-call snapshot for the canvas, coverage, shared view state and stored positions.
   - name: Companies
@@ -4050,7 +4050,7 @@ paths:
     post:
       tags: [Platform]
       summary: Open a read-only support session in an organization (super admin)
-      description: 'The super admin''s only way into an organization''s data. Replaces the presented session with a new token (`Set-Cookie`) bound to this organization for 60 minutes, never past the session''s absolute expiry; opening another organization''s support session ends this one. Inside it the super admin holds exactly `model.read`, `directory.read` and `audit.read` at tenant scope; every write, proposal, decision and model call answers `403 forbidden`. `reason` is required and audited: `support_session_started` in the platform log and kind `platform` in the organization''s log, where its Administrators and Auditors see it. Refused with `409 organization_disabled` on a disabled organization.'
+      description: 'The super admin''s read-only look at an organization''s data; to act inside it he enters it instead (`POST /admin/organizations/{organizationId}/enter`). Replaces the presented session with a new token (`Set-Cookie`) bound to this organization for 60 minutes, never past the session''s absolute expiry; opening another organization''s support session ends this one. Inside it the super admin holds exactly `model.read`, `directory.read` and `audit.read` at tenant scope; every write, proposal, decision and model call answers `403 forbidden`. `reason` is required and audited: `support_session_started` in the platform log and kind `platform` in the organization''s log, where its Administrators and Auditors see it. Refused with `409 organization_disabled` on a disabled organization.'
       operationId: startSupportSession
       x-ontaix-permission: platform.admin
       security:
@@ -4091,6 +4091,54 @@ paths:
       responses:
         '200':
           description: The new session, without `support`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/organizations/{organizationId}/enter:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    post:
+      tags: [Platform]
+      summary: Enter an organization to act inside it with every role (super admin)
+      description: 'Replaces the presented session with a new token (`Set-Cookie`) acting inside this organization for 60 minutes (`acting.until`, never past the session''s absolute expiry), or until `POST /admin/exit`, sign-out or the session''s expiry; entering again continues. An open support session or an earlier entry ends. The access also ends when the organization or the account is disabled, the password is reset or changed elsewhere, the session limit ends the session, or the `super_admin` role is revoked; every end is audited once as `organization_exited`, by the request that ends it or by the sign-in upkeep with the system as actor. Inside it the super admin is a directory user of the organization (issuer `platform`, created at the first entry) holding Administrator, Builder, Governor and Auditor at tenant scope: every organization endpoint answers as it does for a member with those roles, on the application database role and under its row-level security, and ontology changes stay proposals, which he may approve. The separation of approvers holds: he cannot give both approvals of one proposal. Audited as `organization_entered` in the platform log and as kind `platform` in the organization''s log; every action inside carries his platform account as `actor.platformAccountId` on the organization''s audit entries. Refused with `409 organization_disabled` on a disabled organization, `409 email_taken` when a user of the organization already has the super admin''s email, and `409 session_changed` when another request replaced the session first. No body.'
+      operationId: enterOrganization
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The new session, with `acting` set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /admin/exit:
+    post:
+      tags: [Platform]
+      summary: Leave the organization entered (super admin)
+      description: Replaces the presented session with a new token acting nowhere (`Set-Cookie`) and audits `organization_exited` in both logs. Outside an organization it changes nothing and returns the session as it is. Sign-out and expiry end the access the same way, audited with the same action.
+      operationId: exitOrganization
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The session, without `acting`.
           content:
             application/json:
               schema:
@@ -4534,6 +4582,10 @@ components:
           $ref: '#/components/schemas/Id'
         name:
           type: string
+        platformAccountId:
+          type: [string, 'null']
+          format: uuid
+          description: On a `user` actor, the super admin's platform account when that user is him acting inside the organization he entered (platform access); absent or null otherwise.
 
     Company:
       type: object
@@ -6567,7 +6619,7 @@ components:
 
     Session:
       type: object
-      description: The live session of the browser. A member session names its organization and directory user; a platform session names no organization unless a support session is open.
+      description: The live session of the browser. A member session names its organization and directory user; a platform session names no organization unless a support session is open (`support`) or the super admin entered one (`acting`), never both.
       required: [kind, account, csrfToken, mustChangePassword, idleExpiresAt, absoluteExpiresAt]
       properties:
         kind:
@@ -6613,6 +6665,22 @@ components:
                   type: string
             - type: 'null'
           description: The open read-only support session of a super admin, else null.
+        acting:
+          oneOf:
+            - type: object
+              required: [organization, since, until]
+              properties:
+                organization:
+                  $ref: '#/components/schemas/OrganizationRef'
+                since:
+                  type: string
+                  format: date-time
+                until:
+                  type: string
+                  format: date-time
+                  description: When the hour of access ends; entering again continues.
+            - type: 'null'
+          description: The organization a super admin entered and acts inside with every tenant role, else null. It lasts until `until`, `POST /admin/exit`, sign-out or the session's expiry.
         csrfToken:
           type: string
           minLength: 43
@@ -6848,7 +6916,7 @@ components:
           description: The account that acted; null for a failed sign-in with an unknown email and for the system (an expired support session).
         action:
           type: string
-          enum: [sign_in, sign_in_failed, sign_in_locked, sign_out, session_expired, password_changed, password_change_failed, password_reset, account_created, account_updated, account_disabled, account_enabled, organization_created, organization_renamed, organization_company_mode, organization_disabled, organization_enabled, support_session_started, support_session_ended, super_admin_created, super_admin_password_set]
+          enum: [sign_in, sign_in_failed, sign_in_locked, sign_out, session_expired, password_changed, password_change_failed, password_reset, account_created, account_updated, account_disabled, account_enabled, organization_created, organization_renamed, organization_company_mode, organization_disabled, organization_enabled, support_session_started, support_session_ended, organization_entered, organization_exited, super_admin_created, super_admin_password_set]
         ok:
           type: boolean
         organization:
@@ -7531,7 +7599,7 @@ components:
           $ref: '#/components/schemas/Actor'
         kind:
           type: string
-          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`, `speech` (a speech recognition token was issued, ADR 0013), `learning` (usage learning switched, a lesson deleted or a company's learning reset, ADR 0014), `auth` (a member signed in, failed to, signed out, or changed their password; ADR 0017), `platform` (a super admin created or changed an account, reset a password, renamed, disabled or re-enabled the organization, changed its company mode, or opened or ended a support session in it; actor kind `platform`), `edit` (a pending proposal edited in place, ADR 0015), `export` (an export, ADR 0016), `edit` (a pending proposal edited in place, ADR 0015), `export` (an export, ADR 0016).
+          description: A proposal type for decisions, or `setting`, `groups`, `roles`, `source`, `company`, `agents`, `list`, `appearance`, `speech` (a speech recognition token was issued, ADR 0013), `learning` (usage learning switched, a lesson deleted or a company's learning reset, ADR 0014), `auth` (a member signed in, failed to, signed out, or changed their password; ADR 0017), `platform` (a super admin created or changed an account, reset a password, renamed, disabled or re-enabled the organization, changed its company mode, opened or ended a support session in it, or entered or left it; actor kind `platform`), `edit` (a pending proposal edited in place, ADR 0015), `export` (an export, ADR 0016). An entry of any kind whose `actor` is a `user` with `platformAccountId` set was written by the super admin acting inside the organization he entered.
         what:
           type: string
         ok:

@@ -1,11 +1,13 @@
 /**
  * Which screen the Studio shows for the browser's session, and the moves between them: the
  * sign-in page, the "Choose a new password" page, the Studio (a member, or a super admin inside
- * a read-only support session) and the platform portal (a super admin at home). The gate runs
+ * an organization he entered or inside a read-only support session) and the platform portal (a
+ * super admin at home). The gate runs
  * only against a real API; the in-browser mock has no sessions.
  */
 import { useSyncExternalStore } from 'react';
 
+import { resetDirectory } from '../admin/adminData';
 import { api, hasDevIdentity } from '../api/client';
 import { authSignals, forgetSession } from '../api/session';
 import { ApiError, type Session } from '../api/types';
@@ -17,6 +19,9 @@ export const SIGNED_OUT = 'You are signed out.';
 export const SESSION_ENDED = 'Your session has ended. Sign in again.';
 export const INCORRECT = 'Email or password is incorrect.';
 export const UNAVAILABLE = 'Sign-in is unavailable. Try again in a moment.';
+/** What a session shows of: the account and the organization it acts in or looks at; a change drops the previous data. */
+const sessionKey = (s: Session | null): string => (s ? `${s.account.id}:${s.acting?.organization.id ?? ''}:${s.support?.organization.id ?? ''}` : '');
+
 /** The lock lasts 15 minutes; used when a `429` carries no `Retry-After`. */
 const LOCK_MINUTES = 15;
 
@@ -110,7 +115,7 @@ class AuthStore {
     this.show('signIn', null);
   }
 
-  /** A password change or a support session's start replaced the session with the one the API returned. */
+  /** A password change, a support session's start or an organization entered replaced the session with the one the API returned. */
   replaceSession(session: Session): void {
     this.enter(session);
   }
@@ -120,9 +125,23 @@ class AuthStore {
     this.enter(await api.endSupportSession());
   }
 
+  /** Leaves the organization the super admin entered; hands back the session at the platform portal. */
+  async exitOrganization(): Promise<void> {
+    this.enter(await api.exitOrganization());
+  }
+
+  /** Reads the session again, after the hour of an entered organization ended on its own. */
+  async refresh(): Promise<void> {
+    try {
+      this.enter(await api.getSession());
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) this.ended();
+    }
+  }
+
   private enter(session: Session): void {
     if (session.mustChangePassword) this.show('password', session);
-    else if (session.kind === 'platform' && !session.support) this.show('platform', session);
+    else if (session.kind === 'platform' && !session.support && !session.acting) this.show('platform', session);
     else this.show('studio', session);
   }
 
@@ -143,6 +162,10 @@ class AuthStore {
       this.state.notice = '';
       this.state.error = '';
     }
+    if (sessionKey(session) !== sessionKey(this.state.session)) {
+      store.nextSession();
+      resetDirectory();
+    }
     this.state.mode = mode;
     this.state.session = session;
     if (mode !== 'studio' || leaving !== 'studio') {
@@ -150,7 +173,7 @@ class AuthStore {
       store.ui.dialogs = [];
       store.bump();
     }
-    // A Studio entered again, after another session or with a support session's organization, starts from the server's scene.
+    // A Studio entered again, after another session or with an entered or support organization, starts from the server's scene.
     if (mode === 'studio' && leaving !== 'studio' && store.ui.status !== 'loading') void store.reloadScene();
     this.bump();
   }

@@ -1,6 +1,7 @@
 /**
  * The dialogs of the Organizations page: create, rename, edit (the company mode), the typed
- * confirmation before disabling, and the reason asked before a read-only support session opens.
+ * confirmation before disabling, the reason asked before a read-only support session opens, and
+ * the confirmation before the super admin enters an organization to act inside it.
  * Every text is ADR 0017's; every refusal shows the Problem's `detail` in the dialog's `.msg`.
  */
 import { useState } from 'react';
@@ -122,6 +123,19 @@ export function enableOrganization(org: Organization, done: () => void): Promise
     store.toast2('Enabled', org.name);
     done();
   });
+}
+
+/** `Enter <organization>?` in the reference's `confirmDialog`; on yes the session moves inside it. */
+export function enterOrganizationDialog(org: Organization): void {
+  confirmDialog(
+    `Enter ${org.name}?`,
+    `You act inside ${org.name} with every role, as platform super admin. Everything you do there is recorded in its audit log.`,
+    'Enter',
+    () =>
+      attempt(() => api.enterOrganization(org.id)).then((session) => {
+        if (session) auth.replaceSession(session);
+      }),
+  );
 }
 
 export function openSupportDialog(org: Organization): void {

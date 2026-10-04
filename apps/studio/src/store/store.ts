@@ -186,6 +186,8 @@ class StudioStore {
   private refreshQueued = false;
   private unsubscribeEvents: (() => void) | null = null;
   private loading: Promise<void> | null = null;
+  /** Counts the sessions and organizations the Studio has shown; an answer from an earlier one is dropped. */
+  private sessionGeneration = 0;
   /** Birth draws made when a draft was posted, keyed by company id and label, used when the proposal event arrives. */
   private births = new Map<string, BirthDraws>();
   /** Cells drawn from streamed drafts whose proposals do not exist yet, by company and label (lower case). */
@@ -265,12 +267,15 @@ class StudioStore {
 
   private async loadOnce(): Promise<void> {
     if (!this.unsubscribeEvents) this.unsubscribeEvents = liveEvents.subscribe((e) => this.handleEvent(e));
+    const generation = this.sessionGeneration;
     try {
       const [scene, domains] = await Promise.all([api.getScene(), this.fetchDomains()]);
+      if (generation !== this.sessionGeneration) return;
       this.ui.domains = domains;
       this.applyScene(scene);
       this.ui.status = 'ready';
     } catch (err) {
+      if (generation !== this.sessionGeneration) return;
       console.error('scene load failed', err);
       this.ui.status = 'error';
     }
@@ -504,13 +509,29 @@ class StudioStore {
 
   /** Brings the whole canvas back to the server snapshot, keeping the camera. */
   async reloadScene(): Promise<void> {
+    const generation = this.sessionGeneration;
     try {
       const [scene, domains] = await Promise.all([api.getScene(), this.fetchDomains()]);
+      if (generation !== this.sessionGeneration) return;
       this.ui.domains = domains;
       this.applyScene(scene);
     } catch (err) {
+      if (generation !== this.sessionGeneration) return;
       this.refused(err);
     }
+  }
+
+  /** A new session or organization: the previous one's scene goes, and so does every answer still in flight for it. */
+  nextSession(): void {
+    this.sessionGeneration++;
+    this.loading = null;
+    const s = this.s;
+    s.nodes.length = 0;
+    s.links.length = 0;
+    s.companies.length = 0;
+    s.DOMAINS = [];
+    s.activeCompany = null;
+    this.bump();
   }
 
   /** Re-reads the open proposals once per burst of events, for their server-evaluated readiness. */

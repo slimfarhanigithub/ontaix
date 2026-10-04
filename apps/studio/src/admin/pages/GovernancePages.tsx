@@ -252,7 +252,7 @@ export function AuditLog() {
             <div key={e.id}>
               <span>{new Date(e.at).toLocaleTimeString('en-GB')}</span>
               <span>{e.kind}</span>
-              <span>{e.what}</span>
+              <span>{e.actor.platformAccountId ? `${e.what} · platform super admin` : e.what}</span>
               <span className={e.ok ? 'ok' : 'no'}>{e.ok ? 'approved' : 'rejected'}</span>
             </div>
           ))

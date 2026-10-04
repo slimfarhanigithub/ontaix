@@ -32,7 +32,7 @@ from app.repositories import (
     user_group_repository,
     view_state_repository,
 )
-from app.services import outbox_service, platform_audit_service
+from app.services import organization_access_audit_service, outbox_service, platform_audit_service
 from app.services.platform_audit_service import OrganizationCopy
 from app.services.scene_service import settings_dto
 from app.utilities.db_errors import constraint_name
@@ -170,7 +170,14 @@ async def set_disabled(
     tenant = await require(session, tenant_id)
     if await tenant_repository.set_disabled(session, tenant_id, disabled):
         if disabled:
-            await auth_session_repository.end_for_tenant(session, tenant_id)
+            ended = await auth_session_repository.end_for_tenant(session, tenant_id)
+            await organization_access_audit_service.audit_ended(
+                session,
+                ended,
+                organization_access_audit_service.ORGANIZATION_DISABLED_WHAT,
+                admin.actor,
+                client_ip=admin.client_ip,
+            )
         await platform_audit_service.record(
             session,
             "organization_disabled" if disabled else "organization_enabled",

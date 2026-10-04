@@ -3,6 +3,14 @@
  * size, radius, weight or keyframe the reference already uses.
  */
 
+/* The platform portal's organization rows hold five actions, which fit the reference's list width only with narrower button padding. */
+#lstOrganizations .tbl .act button{ padding:5px 7px; }
+
+/* The platform access banner: a super admin acting inside an organization he entered, above the Studio and the admin portal. */
+.platform-access{ position:fixed; z-index:31; top:calc(18px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%); display:inline-flex; align-items:center; gap:10px; padding:4px 4px 4px 12px; border:1px solid rgba(63,184,169,.55); border-radius:999px; background:var(--panel); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); font-size:12.5px; font-weight:500; color:var(--ink); white-space:nowrap; }
+.platform-access i{ width:7px; height:7px; border-radius:50%; background:var(--accent); }
+.platform-access .btn{ height:28px; padding:0 12px; }
+
 /* The compact teach bar: one 42px pill holding the caption, the input and the controls. */
 form.bar{ gap:6px; padding:4px 4px 4px 6px; }
 form.bar button, form.bar select{ height:32px; font-size:12.5px; }
