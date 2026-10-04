@@ -5,6 +5,7 @@
  * (`drawLinks`).
  */
 import { random } from '../runtime/rng';
+import { FONT_SANS } from '../design/tokens';
 import { clamp, ease, hex } from './colour';
 import { C, EQUIVALENCE_LINE, MOTION } from './constants';
 import { dimOf } from './focus';
@@ -154,7 +155,7 @@ export function drawLinks(s: SceneState, v: View, t: number): void {
       ctx.save();
       ctx.translate(mx, my);
       ctx.rotate(an);
-      ctx.font = `${isa ? '300' : '500'} 10.5px Sora, sans-serif`;
+      ctx.font = `${isa ? '300' : '500'} 10.5px ${FONT_SANS}`;
       const w = ctx.measureText(l.label).width + 16;
       l._chip = { x: mx, y: my, r: Math.max(w / 2, 12) };
       roundRect(ctx, -w / 2, -9, w, 18, 9);

@@ -9,6 +9,7 @@
  * contracts/openapi.yaml.
  */
 import { DEFAULT_BRASS, DOMAIN_R, DOMAIN_TEMPLATES, C, MAX_DOMAINS, NEUTRAL } from '../../canvas/constants';
+import { DEFAULT_ACCENT } from '../../design/tokens';
 import { contentWords, domainPrefix, singular, title, understand } from '../../nl/parser';
 import { nowDate } from '../../runtime/clock';
 import { random } from '../../runtime/rng';
@@ -302,7 +303,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     llmMonthlyTokenCap: 2_000_000,
     ocrMonthlyPageCap: 1000,
   };
-  const appearance = { theme: 'dark' as 'dark' | 'light', colors: {} as Record<string, string>, accent: '#3fb8a9', source: DEFAULT_BRASS };
+  const appearance = { theme: 'light' as 'dark' | 'light', colors: {} as Record<string, string>, accent: DEFAULT_ACCENT, source: DEFAULT_BRASS };
   const directory = createDirectory({
     companies: () => companies.map((c) => ({ id: c.id, name: c.name })),
     addAudit: (kind, what, ok) => {
@@ -568,7 +569,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     colors: Object.fromEntries(domains.map((d) => [d.key, appearance.colors[d.key] || d.defaultColor])),
     accent: appearance.accent,
     source: appearance.source,
-    defaults: { colors: Object.fromEntries(domains.map((d) => [d.key, d.defaultColor])), accent: '#3fb8a9', source: DEFAULT_BRASS },
+    defaults: { colors: Object.fromEntries(domains.map((d) => [d.key, d.defaultColor])), accent: DEFAULT_ACCENT, source: DEFAULT_BRASS },
   });
 
   const toTenantDomain = (d: MTenantDomain): T.TenantDomain => ({
@@ -1984,9 +1985,9 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     expansions = [];
     extractions = [];
     coverage = false;
-    appearance.theme = 'dark';
+    appearance.theme = 'light';
     appearance.colors = {};
-    appearance.accent = '#3fb8a9';
+    appearance.accent = DEFAULT_ACCENT;
     appearance.source = DEFAULT_BRASS;
     domains = DOMAIN_TEMPLATES.map((t, position) => ({ key: t.key, name: t.name, owner: t.owner, defaultColor: t.color, template: true, position, revision: 0 }));
     addCompany(HOME_COMPANY.name, HOME_COMPANY.sub);
@@ -2924,7 +2925,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     }
     if (is('POST', 'appearance', 'reset')) {
       appearance.colors = {};
-      appearance.accent = '#3fb8a9';
+      appearance.accent = DEFAULT_ACCENT;
       appearance.source = DEFAULT_BRASS;
       addAudit('setting', 'colours reset', true);
       emit('appearance.changed', { appearance: toAppearance() });

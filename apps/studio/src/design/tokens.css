@@ -1,0 +1,157 @@
+/*
+ * Ontaix Studio design tokens: the single source of truth for colour, type, shape and motion.
+ *
+ * Raw light values live in `:root`, raw dark values in the dark block (`data-theme="dark"` on
+ * <html>, which the Studio's theme switch sets, or the `.dark` class). Every other name resolves
+ * through `var()` onto these, so a rebrand edits the two raw blocks only; the role names are the
+ * stable contract the stylesheets and components use.
+ *
+ * Colour carries meaning. Crimson (`--accent`) is brand chrome: selection, emphasis, primary
+ * buttons. Gold (`--human`) is human accountability: proposals awaiting approval, approve
+ * actions, decisions recorded under a person's name. Blue (`--link`, `--info`) is links, info and
+ * the focus ring. Green (`--good`) is success; red (`--danger`) is failure and destruction.
+ *
+ * contrast.test.ts reads this file from disk and checks the AA pairs in both themes.
+ */
+:root {
+  /* Surfaces: warm stone. */
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --surface-2: #f3f1ef;
+  --hover: #f6f4f2;
+  --rowhover: #faf9f8;
+  --chip: #f3f1ef;
+  --subtle: #fcfbfa;
+  --scrim: rgba(20, 22, 31, 0.38);
+
+  /* Borders: hairlines separate surfaces; shadows are for floating layers only. */
+  --border: #edeae7;
+  --border-strong: #e5e1dd;
+  --border-faint: #f0edea;
+
+  /* Text. `--text-4` is decorative or disabled only; it is below AA on every neutral. */
+  --text: #2b2724;
+  --text-2: #57534e;
+  --text-3: #6f6a64;
+  --text-4: #a8a29c;
+
+  /* Brand accent: crimson, chrome only. A tenant may set `--accent` on <html>. */
+  --accent: #d30c55;
+  --accent-strong: #b00a47;
+  --accent-soft: #fce1eb;
+  --accent-text: #a80a44;
+
+  /* Human accountability: gold. The light `--human` is deliberately darker than the dark one so
+     it holds contrast on a light surface; gold text uses `--human-text`. */
+  --human: #a07621;
+  --human-bright: #c8963a;
+  --human-soft: #f1e4c3;
+  --human-text: #7a5a19;
+
+  /* Links, info and the focus ring: blue. */
+  --link: #2563eb;
+  --link-hover: #1d4ed8;
+  --info: #1d4ed8;
+  --info-bg: #f4f8ff;
+  --info-border: #d7e4fb;
+  --info-text: #334768;
+  --info-chip: #dce7fb;
+
+  /* Status. Light `--good` as body text is below AA: icons, dots and badges, or paired with a
+     `--text` label. */
+  --good: #0e8a6a;
+  --good-soft: #dcf0e9;
+  --danger: #c0181d;
+  --danger-soft: #fbe9e9;
+
+  /* The sixth categorical colour, after accent, link, good, human and text-3. */
+  --violet: #7c3aed;
+
+  /* Type. Self-hosted through @fontsource; the Studio makes no external font request. */
+  --font-sans: 'Hanken Grotesk Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: var(--font-sans);
+  --font-serif: 'Source Serif 4 Variable', Georgia, 'Times New Roman', serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  /* Shape. Cards and panels take the house radius; inputs, buttons and inner tiles the smaller
+     steps; chips, pills, avatars and status dots are round. */
+  --radius-card: 14px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 999px;
+
+  /* Elevation: floating layers only. */
+  --shadow-float: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --shadow-pop: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+
+  /* Motion: one expressive out-curve for entrances, plain ease for everything else. */
+  --ease-expressive: cubic-bezier(0.2, 0.8, 0.3, 1);
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'],
+.dark {
+  /* Surfaces: cool slate. */
+  --bg: #1b1f2a;
+  --surface: #232936;
+  --surface-2: #2a3140;
+  --hover: #2a3140;
+  --rowhover: #272e3a;
+  --chip: #2c333f;
+  --subtle: #20252f;
+  --scrim: rgba(0, 0, 0, 0.55);
+
+  --border: #363d4c;
+  --border-strong: #434b5c;
+  --border-faint: #2c323f;
+
+  --text: #f3f5f9;
+  --text-2: #c6cbd6;
+  --text-3: #9aa2b1;
+  --text-4: #6f7788;
+
+  --accent: #ff5c8a;
+  --accent-strong: #ff85a8;
+  --accent-soft: #3a1420;
+  --accent-text: #ff9fbb;
+
+  --human: #e8b54d;
+  --human-bright: #f2c766;
+  --human-soft: #362c18;
+  --human-text: #e8b54d;
+
+  --link: #8fb2ff;
+  --link-hover: #b4ccff;
+  --info: #9cb8ff;
+  --info-bg: #1c2536;
+  --info-border: #2f3b54;
+  --info-text: #c6d4f0;
+  --info-chip: #28344c;
+
+  --good: #4db3a4;
+  --good-soft: #17322d;
+  --danger: #e5736b;
+  --danger-soft: #3a2420;
+
+  --violet: #a78bfa;
+
+  --shadow-float: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+}
+
+/*
+ * The Studio's earlier vocabulary, resolved onto the tokens so it follows the theme. New rules
+ * use the canonical names above.
+ */
+:root {
+  --panel: var(--surface);
+  --ink: var(--text);
+  --ink-2: var(--text-2);
+  --ink-3: var(--text-3);
+  --line: var(--border);
+  --conflict: var(--danger);
+}

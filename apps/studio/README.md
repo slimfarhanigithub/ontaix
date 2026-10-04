@@ -1,15 +1,16 @@
 # Ontaix Studio
 
-React 19 + TypeScript + Vite, tested with vitest and a Playwright screenshot suite. The Studio must be identical to `reference/ontaix-studio-reference.html`; read `docs/ui-contract.md` before changing anything here. The canvas renderer is ported verbatim from the reference: every module under `src/canvas` names the reference line range it comes from, and no constant, easing, colour or threshold in them may change.
+React 19 + TypeScript + Vite, tested with vitest and a Playwright screenshot suite. The Studio follows `docs/design-system.md` (source of truth `src/design/tokens.css`) and keeps every behaviour of `docs/ui-contract.md`; read both before changing anything here. The canvas renderer is ported from `reference/ontaix-studio-reference.html`: every module under `src/canvas` names the reference line range it comes from, and no easing or threshold in them may change; its colours and fonts come from the design tokens.
 
 ## Layout
 
 ```text
-index.html                 Vite entry document, Sora from Google Fonts as in the reference
+index.html                 Vite entry document; fonts are bundled through @fontsource (no external request)
 src/
   main.tsx                 seeds the random source (?seed=<n>), installs the mock API, mounts <App />
   App.tsx                  the shell, in the reference's element order
-  styles/reference.css     the reference stylesheet, copied verbatim
+  design/                  tokens.css (the design tokens), base.css (typography, focus, motion), tokens.ts, the contrast and raw-colour guards
+  styles/reference.css     the component stylesheet grown from the reference, styled through the tokens
   runtime/
     rng.ts                 the one random source (crypto, or mulberry32 in test mode)
     clock.ts               the one clock (performance.now, Date)
@@ -47,12 +48,12 @@ pnpm install
 pnpm --filter studio dev            # http://localhost:5173, mock API in the browser
 pnpm --filter studio test           # vitest
 pnpm --filter studio build
-pnpm --filter studio test:screens   # Playwright: reference vs Studio at 1440x900, dark and light
+pnpm --filter studio test:screens   # Playwright: every scene against its baseline, light and dark
 pnpm dev:stack                      # Studio on http://127.0.0.1:5173 against the real API (see the root README)
 pnpm --filter studio test:e2e       # Playwright: the Studio against the real API on the local stack
 ```
 
-`pnpm exec playwright install chromium` (inside `apps/studio`) fetches the browser the screenshot suite needs once. The suite builds the Studio with the test hooks, serves it on port 4787, renders each scene from the reference file and from the Studio under the same seed and fake clock at 1440x900 and 1920x1080 in both themes, compares pixel for pixel, and writes `reference.png`, `studio.png` and `diff.png` per scene into `tests/screenshots/output/`.
+`pnpm exec playwright install chromium` (inside `apps/studio`) fetches the browser the screenshot suite needs once. The suite builds the Studio with the test hooks, serves it on port 4787, renders each scene under the same seed and fake clock at 1440x900 and 1920x1080 in both themes and compares it with its baseline under `tests/screenshots/baselines/` (`--update-snapshots` rewrites the baselines of the running platform); failures write the actual image and the diff into `tests/screenshots/output/`.
 
 ## Test Mode
 
