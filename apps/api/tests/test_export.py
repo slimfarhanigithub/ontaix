@@ -344,14 +344,14 @@ async def test_word_document_describes_the_model_in_prose_and_tables(
     assert "Machine due for maintenance" in text and "is a Machine" in text
     assert "rated power: 75.5" in text
     assert "Pending thing" not in text + cells
-    assert "Production" in cells and "#3fb8a9" in cells
+    assert "Production" in cells and "#d30c55" in cells
     assert not UUID_TEXT.search(text + cells)
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
         names = archive.namelist()
         body = archive.read("word/document.xml").decode()
     assert not any("vba" in n.lower() for n in names)
     assert "w:fldChar" not in body and "w:instrText" not in body and "w:hyperlink" not in body
-    assert 'w:fill="3FB8A9"' in body
+    assert 'w:fill="D30C55"' in body
 
 
 @pytest.mark.parametrize("fmt", ["owl", "owx", "turtle", "jsonld"])

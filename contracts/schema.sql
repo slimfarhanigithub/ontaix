@@ -77,9 +77,9 @@ COMMENT ON TABLE tenant_identity_provider IS 'Which OIDC issuer and audience pai
 
 CREATE TABLE tenant_settings (
   tenant_id            uuid PRIMARY KEY REFERENCES tenant(id) ON DELETE CASCADE,
-  theme                theme_name NOT NULL DEFAULT 'dark',
+  theme                theme_name NOT NULL DEFAULT 'light',
   colors               jsonb NOT NULL DEFAULT '{}'::jsonb,
-  accent               text NOT NULL DEFAULT '#3fb8a9',
+  accent               text NOT NULL DEFAULT '#d30c55',
   source_colour        text NOT NULL DEFAULT '#d6bd8a',
   voice                boolean NOT NULL DEFAULT true,
   import_docs          boolean NOT NULL DEFAULT true,
@@ -1403,15 +1403,15 @@ $$;
 -- ---------------------------------------------------------------------------
 
 INSERT INTO domain_template (key, name, owner, color, position) VALUES
-  ('production',  'Production',   'Plant operations',  '#3fb8a9', 0),
-  ('supply',      'Supply chain', 'Procurement',       '#8b86cf', 1),
-  ('sales',       'Sales',        'Commercial',        '#d9a15b', 2),
-  ('logistics',   'Logistics',    'Distribution',      '#d98b6b', 3),
-  ('quality',     'Quality',      'Quality assurance', '#cf7d98', 4),
-  ('maintenance', 'Maintenance',  'Asset management',  '#7fb6d9', 5),
-  ('finance',     'Finance',      'Controlling',       '#b9b36a', 6),
-  ('people',      'People',       'Human resources',   '#8fbf7a', 7),
-  ('engineering', 'Engineering',  'R&D',               '#c58ad0', 8);
+  ('production',  'Production',   'Plant operations',  '#d30c55', 0),
+  ('supply',      'Supply chain', 'Procurement',       '#2563eb', 1),
+  ('sales',       'Sales',        'Commercial',        '#0e8a6a', 2),
+  ('logistics',   'Logistics',    'Distribution',      '#a07621', 3),
+  ('quality',     'Quality',      'Quality assurance', '#6f6a64', 4),
+  ('maintenance', 'Maintenance',  'Asset management',  '#7c3aed', 5),
+  ('finance',     'Finance',      'Controlling',       '#0e7490', 6),
+  ('people',      'People',       'Human resources',   '#c2410c', 7),
+  ('engineering', 'Engineering',  'R&D',               '#4d7c0f', 8);
 
 INSERT INTO connector_type (code, name, category, scope_text, position) VALUES
   ('SAP',  'SAP ERP (S/4HANA, ECC)',    'ERP',           'OData / RFC · tables, CDS views',              0),
