@@ -44,6 +44,8 @@ async function adminPage(page: Page, id: string) {
   await advance(page, 100);
   await page.click(`#adminNav button[data-page="${id}"]`);
   await advance(page, 600);
+  // The navigation column scrolls; a click may leave it a pixel down, so every capture reads it from the top.
+  await page.evaluate(() => document.getElementById('adminNav')?.scrollTo(0, 0));
 }
 
 const PAGES: [string, string][] = [
