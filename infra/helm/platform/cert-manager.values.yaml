@@ -10,6 +10,14 @@ resources:
   limits:
     memory: 256Mi
 webhook:
+  # AKS Admissions Enforcer rewrites the namespaceSelector of every webhook configuration to
+  # keep its system namespaces out; the chart sets that field too, and the two owners conflict
+  # on upgrade. The annotation makes the enforcer leave these configurations alone: the
+  # webhook only intercepts cert-manager.io resources.
+  mutatingWebhookConfigurationAnnotations:
+    admissions.enforcer/disabled: "true"
+  validatingWebhookConfigurationAnnotations:
+    admissions.enforcer/disabled: "true"
   resources:
     requests:
       cpu: 20m

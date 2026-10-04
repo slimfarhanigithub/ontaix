@@ -68,7 +68,9 @@ jobs:
       speech_client_id: ${{ steps.values.outputs.speech_client_id }}
       foundry_endpoint: ${{ steps.values.outputs.foundry_endpoint }}
       speech_endpoint: ${{ steps.values.outputs.speech_endpoint }}
-      speech_resource_id: ${{ steps.values.outputs.speech_resource_id }}
+      # The Speech resource id holds the subscription id, which is a secret to GitHub, and a job
+      # output holding a secret is dropped; the deploy job resolves the id from the name.
+      speech_account: ${{ steps.values.outputs.speech_account }}
       postgres_fqdn: ${{ steps.values.outputs.postgres_fqdn }}
     steps:
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
@@ -109,7 +111,8 @@ jobs:
           database_url_secret=$(az keyvault secret list --vault-name "$key_vault" \
             --query "[?name=='database-url'].name" -o tsv)
           for name in registry login_server key_vault workload_client_id speech_client_id foundry_endpoint \
-                      foundry_deployment speech_resource_id speech_endpoint postgres_fqdn database_url_secret; do
+                      foundry_deployment speech_account speech_resource_id speech_endpoint postgres_fqdn \
+                      database_url_secret; do
             [ -n "${!name}" ] || fail "$name was not found in $rg: Terraform (infra.yml) has not created it yet"
           done
           tag="${IMAGE_TAG:-$COMMIT_SHA}"
@@ -124,7 +127,7 @@ jobs:
             echo "speech_client_id=$speech_client_id"
             echo "foundry_endpoint=$foundry_endpoint"
             echo "speech_endpoint=$speech_endpoint"
-            echo "speech_resource_id=$speech_resource_id"
+            echo "speech_account=$speech_account"
             echo "postgres_fqdn=$postgres_fqdn"
           } >> "$GITHUB_OUTPUT"
           echo "images $login_server/ontaix/{api,gateway,studio}:$tag → https://$host"
@@ -211,7 +214,7 @@ jobs:
       SPEECH_CLIENT_ID: ${{ needs.preflight.outputs.speech_client_id }}
       FOUNDRY_ENDPOINT: ${{ needs.preflight.outputs.foundry_endpoint }}
       SPEECH_ENDPOINT: ${{ needs.preflight.outputs.speech_endpoint }}
-      SPEECH_RESOURCE_ID: ${{ needs.preflight.outputs.speech_resource_id }}
+      SPEECH_ACCOUNT: ${{ needs.preflight.outputs.speech_account }}
       POSTGRES_FQDN: ${{ needs.preflight.outputs.postgres_fqdn }}
       ISSUER: ${{ inputs.certificate_issuer }}
     steps:
@@ -223,6 +226,9 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          # Helm 4: server-side apply with --force-conflicts, used on the platform charts.
+          version: v4.3.0
       - name: the three images exist in the registry; pin their digests
         run: |
           set -euo pipefail
@@ -246,6 +252,7 @@ jobs:
             --namespace ingress-nginx --create-namespace \
             --values infra/helm/platform/ingress-nginx.values.yaml \
             --set-string "controller.service.annotations.service\.beta\.kubernetes\.io/azure-dns-label-name=$DNS_LABEL" \
+            --server-side=true --force-conflicts \
             --wait --timeout 10m
           ip=""
           for _ in $(seq 1 40); do
@@ -266,6 +273,8 @@ jobs:
           [ "$resolved" = "$ip" ] || fail "$HOST resolves to '${resolved:-nothing}' instead of the public IP $ip"
           echo "public IP $ip = $HOST"
       - name: cert-manager and the Let's Encrypt issuers
+        # AKS Admissions Enforcer co-owns the webhook configurations' namespaceSelector; the
+        # values annotate them so it stops, and --force-conflicts hands the field to Helm once.
         run: |
           set -euo pipefail
           helm repo add jetstack https://charts.jetstack.io >/dev/null
@@ -273,9 +282,23 @@ jobs:
           helm upgrade --install cert-manager jetstack/cert-manager --version "$CERT_MANAGER_VERSION" \
             --namespace cert-manager --create-namespace \
             --values infra/helm/platform/cert-manager.values.yaml \
+            --server-side=true --force-conflicts \
             --wait --timeout 10m
-          helm upgrade --install cluster-issuers infra/helm/cluster-issuers --namespace cert-manager --wait --timeout 5m
+          helm upgrade --install cluster-issuers infra/helm/cluster-issuers --namespace cert-manager \
+            --server-side=true --force-conflicts --wait --timeout 5m
           kubectl wait --for=condition=Ready clusterissuer/letsencrypt-staging clusterissuer/letsencrypt-production --timeout=3m
+      - name: resolve the Speech resource id; every value the release takes is set
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          speech_resource_id=$(az cognitiveservices account show -g "$RESOURCE_GROUP" -n "$SPEECH_ACCOUNT" --query id -o tsv)
+          echo "SPEECH_RESOURCE_ID=$speech_resource_id" >> "$GITHUB_ENV"
+          export SPEECH_RESOURCE_ID="$speech_resource_id"
+          for name in TAG HOST ISSUER LOGIN_SERVER KEY_VAULT WORKLOAD_CLIENT_ID SPEECH_CLIENT_ID FOUNDRY_ENDPOINT \
+                      SPEECH_ENDPOINT SPEECH_RESOURCE_ID API_DIGEST GATEWAY_DIGEST STUDIO_DIGEST; do
+            [ -n "${!name:-}" ] || fail "$name is empty: a value the release needs was lost between the jobs (a job output holding a secret is dropped by GitHub)"
+          done
+          echo "every value the release takes is set"
       - name: clear a first install that never rolled out
         # Helm refuses to upgrade a release with no deployed revision ("has no deployed
         # releases"), so a failed or interrupted first install is uninstalled and installed again.
