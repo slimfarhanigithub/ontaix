@@ -2,9 +2,9 @@
  * What the model knows about a cell, and its lineage. Markup from
  * reference/ontaix-studio-reference.html line 214; content from `openDrawer` (lines 637-646)
  * and `showLineage` (lines 653-662). Labels, subs, names and freshness are rendered as text.
- * The owner's additions to the action row (Expand, Rename, Move to domain and Delete, each a
- * dialog whose outcome is a proposal) sit behind the More actions button after Lineage, so the
- * reference's two buttons keep their width.
+ * The action row holds one button, More actions, whose menu offers every action on the cell:
+ * the reference's Grow a concept from it and Lineage, and the owner's Expand, Rename, Move to
+ * domain and Delete, each a dialog whose outcome is a proposal.
  */
 import { useEffect } from 'react';
 
@@ -51,12 +51,7 @@ export function Drawer() {
         <div className="src" id="drSrc"></div>
         <h3 id="drAttrTitle">Attributes</h3>
         <div id="drAttrs"></div>
-        <div className="actions">
-          <button id="drGrow">Grow a concept from it</button>
-          <button id="drLineage" aria-pressed="false">
-            Lineage
-          </button>
-        </div>
+        <div className="actions"></div>
         <div id="drLine" style={{ display: 'none' }}></div>
       </section>
     );
@@ -152,24 +147,6 @@ export function Drawer() {
         ))}
       </div>
       <div className="actions">
-        <button
-          id="drGrow"
-          style={{ display: n.kind === 'source' ? 'none' : undefined }}
-          onClick={() => {
-            const v = st.renderer?.v;
-            st.openNewBox(n, (v ? v.W : innerWidth) * 0.35, (v ? v.H : innerHeight) * 0.4);
-          }}
-        >
-          Grow a concept from it
-        </button>
-        <button
-          id="drLineage"
-          aria-pressed={lineageOn}
-          style={{ display: n.kind === 'concept' ? undefined : 'none' }}
-          onClick={() => st.toggleLineage()}
-        >
-          Lineage
-        </button>
         {/* Keyed by the cell, so another selection starts with the menu closed. */}
         <DrawerMoreMenu key={n.id} node={n} expanding={expanding} />
       </div>

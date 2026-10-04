@@ -65,12 +65,13 @@ describe('Expand', () => {
     store.ui.drawerNode = sales;
     const drawer = render(<Drawer />);
     act(() => drawer.container.querySelector<HTMLButtonElement>('#drMore')?.click());
-    const items = [...document.querySelectorAll('#drMoreMenu [role="menuitem"]')].map((b) => b.id);
-    expect(items).toEqual(['drExpand', 'drRename', 'drMove', 'drDelete']);
+    const items = () => [...document.querySelectorAll('#drMoreMenu [role^="menuitem"]')].map((b) => b.id);
+    expect(items()).toEqual(['drGrow', 'drLineage', 'drExpand', 'drRename', 'drMove', 'drDelete']);
     drawer.unmount();
     store.ui.drawerNode = pending;
     const waiting = render(<Drawer />);
-    expect(waiting.container.querySelector('#drMore')).toBeNull();
+    act(() => waiting.container.querySelector<HTMLButtonElement>('#drMore')?.click());
+    expect(items()).toEqual(['drGrow', 'drLineage']);
     waiting.unmount();
   });
 
