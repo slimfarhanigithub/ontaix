@@ -1,7 +1,10 @@
-# ingress-nginx on AKS: the one public entry of the cluster. Its LoadBalancer service makes the
-# cloud provider create a public IP in the cluster's node resource group; the deploy workflow
-# adds the annotation service.beta.kubernetes.io/azure-dns-label-name, which gives the IP the
-# address <label>.<region>.cloudapp.azure.com. No Azure resource is declared outside Terraform.
+# ingress-nginx on AKS: the one public entry of the cluster. The deploy workflow adds the Azure
+# annotations to its LoadBalancer service: service.beta.kubernetes.io/azure-dns-label-name, which
+# gives the IP the address <label>.<region>.cloudapp.azure.com, and, when Terraform's public IP
+# pip-ontaix-dev-frc exists, azure-pip-name and azure-load-balancer-resource-group, which bind
+# the service to that fixed address. Without the Terraform IP the cloud provider creates a
+# dynamic one in the cluster's node resource group. No Azure resource is declared outside
+# Terraform.
 controller:
   replicaCount: 1
   ingressClassResource:

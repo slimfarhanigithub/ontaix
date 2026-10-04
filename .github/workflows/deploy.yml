@@ -41,8 +41,12 @@ env:
   RELEASE: ontaix
   CHART: infra/helm/ontaix
   # The public address is <DNS_LABEL>.<DNS_ZONE>, a label on the ingress controller's public IP.
+  # When Terraform's public IP INGRESS_PUBLIC_IP exists in RESOURCE_GROUP, the controller's
+  # service is bound to it and the label must already be on it (Terraform sets it, with the same
+  # value); otherwise the cloud provider creates a dynamic IP and puts the label on that one.
   DNS_LABEL: ontaix-dev
   DNS_ZONE: francecentral.cloudapp.azure.com
+  INGRESS_PUBLIC_IP: pip-ontaix-dev-frc
   INGRESS_NGINX_VERSION: "4.15.1"
   CERT_MANAGER_VERSION: v1.21.2
 
@@ -72,6 +76,8 @@ jobs:
       # output holding a secret is dropped; the deploy job resolves the id from the name.
       speech_account: ${{ steps.values.outputs.speech_account }}
       postgres_fqdn: ${{ steps.values.outputs.postgres_fqdn }}
+      # The address of Terraform's public IP, or empty when it does not exist yet (dynamic IP).
+      ingress_ip: ${{ steps.values.outputs.ingress_ip }}
     steps:
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
@@ -115,11 +121,25 @@ jobs:
                       database_url_secret; do
             [ -n "${!name}" ] || fail "$name was not found in $rg: Terraform (infra.yml) has not created it yet"
           done
+          # Terraform's fixed ingress address, when it exists. A list answers [] for a missing IP
+          # where a show would fail, and failing here would also hide a missing read right.
+          ingress_ip=$(az network public-ip list -g "$rg" \
+            --query "[?name=='$INGRESS_PUBLIC_IP'] | [0].ipAddress" -o tsv)
+          if [ -n "$ingress_ip" ]; then
+            ingress_label=$(az network public-ip show -g "$rg" -n "$INGRESS_PUBLIC_IP" \
+              --query "dnsSettings.domainNameLabel" -o tsv)
+            [ "$ingress_label" = "$DNS_LABEL" ] \
+              || fail "the public IP $INGRESS_PUBLIC_IP carries the DNS label '${ingress_label:-none}' instead of $DNS_LABEL: ingress_dns_label in infra/terraform/azure/env/dev.tfvars and DNS_LABEL in this workflow must be the same value"
+            echo "ingress: the fixed address $ingress_ip ($INGRESS_PUBLIC_IP in $rg, label $ingress_label)"
+          else
+            echo "ingress: $INGRESS_PUBLIC_IP is not in $rg; the cloud provider's dynamic address carries the label $DNS_LABEL"
+          fi
           tag="${IMAGE_TAG:-$COMMIT_SHA}"
           host="$DNS_LABEL.$DNS_ZONE"
           {
             echo "tag=$tag"
             echo "host=$host"
+            echo "ingress_ip=$ingress_ip"
             echo "registry=$registry"
             echo "login_server=$login_server"
             echo "key_vault=$key_vault"
@@ -216,6 +236,7 @@ jobs:
       SPEECH_ENDPOINT: ${{ needs.preflight.outputs.speech_endpoint }}
       SPEECH_ACCOUNT: ${{ needs.preflight.outputs.speech_account }}
       POSTGRES_FQDN: ${{ needs.preflight.outputs.postgres_fqdn }}
+      INGRESS_IP: ${{ needs.preflight.outputs.ingress_ip }}
       ISSUER: ${{ inputs.certificate_issuer }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -243,23 +264,44 @@ jobs:
       - name: az aks get-credentials
         run: az aks get-credentials -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --overwrite-existing
       - name: ingress-nginx (the public address)
+        # With Terraform's public IP (INGRESS_IP set) the service is bound to it; the DNS label
+        # annotation then equals the label Terraform put on it, so the cloud provider leaves the
+        # label alone. Without it the cloud provider creates a dynamic IP carrying the label.
         run: |
           set -euo pipefail
           fail() { echo "::error::$1"; exit 1; }
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx >/dev/null
           helm repo update ingress-nginx >/dev/null
+          address=()
+          if [ -n "$INGRESS_IP" ]; then
+            address=(
+              --set-string "controller.service.annotations.service\.beta\.kubernetes\.io/azure-load-balancer-resource-group=$RESOURCE_GROUP"
+              --set-string "controller.service.annotations.service\.beta\.kubernetes\.io/azure-pip-name=$INGRESS_PUBLIC_IP"
+            )
+            echo "binding the service to the fixed address $INGRESS_IP ($INGRESS_PUBLIC_IP in $RESOURCE_GROUP)"
+          else
+            echo "no fixed address in $RESOURCE_GROUP; the cloud provider's dynamic address carries the label"
+          fi
           helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx --version "$INGRESS_NGINX_VERSION" \
             --namespace ingress-nginx --create-namespace \
             --values infra/helm/platform/ingress-nginx.values.yaml \
             --set-string "controller.service.annotations.service\.beta\.kubernetes\.io/azure-dns-label-name=$DNS_LABEL" \
+            "${address[@]}" \
             --server-side=true --force-conflicts \
             --wait --timeout 10m
+          # Helm's wait ends as soon as the service has an address, which on a move to the fixed
+          # address is still the old one until the cloud provider has rebuilt the load balancer
+          # frontend; wait for the address the run expects.
           ip=""
           for _ in $(seq 1 40); do
             ip=$(kubectl -n ingress-nginx get svc ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-            [ -n "$ip" ] && break
+            if [ -n "$INGRESS_IP" ]; then [ "$ip" = "$INGRESS_IP" ] && break; else [ -n "$ip" ] && break; fi
             sleep 15
           done
+          if [ -n "$INGRESS_IP" ] && [ "$ip" != "$INGRESS_IP" ]; then
+            kubectl -n ingress-nginx describe svc ingress-nginx-controller | tail -n 30
+            fail "ingress-nginx is on '${ip:-no address}' instead of the fixed address $INGRESS_IP after 10 minutes; the service events above say why (Network Contributor on $INGRESS_PUBLIC_IP not yet effective for the cluster identity, or the label $DNS_LABEL still held by another public IP in $DNS_ZONE)"
+          fi
           if [ -z "$ip" ]; then
             kubectl -n ingress-nginx describe svc ingress-nginx-controller | tail -n 30
             fail "ingress-nginx has no public IP after 10 minutes; the service events above say why (a DNS label already taken in $DNS_ZONE shows there)"

@@ -170,9 +170,20 @@ variable "foundry_deployment_sku" {
 }
 
 variable "foundry_deployment_capacity" {
-  description = "Deployment capacity in units of 1,000 tokens per minute."
+  description = "Deployment capacity in units of 1,000 tokens per minute (each unit also allows one request per minute). Bounded by the subscription's quota for the model and SKU in the region: `az cognitiveservices usage list -l <region>`."
   type        = number
   default     = 100
+}
+
+# Ingress
+variable "ingress_dns_label" {
+  description = "DNS label of the ingress public IP; the public address is <label>.<region>.cloudapp.azure.com. DNS_LABEL in .github/workflows/deploy.yml carries the same value."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{1,61}[a-z0-9]$", var.ingress_dns_label))
+    error_message = "A DNS label is 3 to 63 lowercase letters, digits and hyphens, starting with a letter and ending with a letter or digit."
+  }
 }
 
 variable "foundry_claude_location" {
