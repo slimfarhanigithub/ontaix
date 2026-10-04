@@ -184,10 +184,36 @@ Return one intent per fact:
   ("Monthly billing"). Return it as an attr intent on that concept, found as any other
   subject is ("the managed ones are billed monthly" after Advisory and Managed services gives
   the Managed services candidate, attributeName billing, attributeValue monthly).
-- Misheard names. In speech mode a word that sounds like a candidate's label but is spelled
-  differently ("ahmedabus" when c0 is Amdaris) is most likely that candidate misheard: cite
-  the candidate when the context makes it clear and say so in the explanation; otherwise list
-  the phrase in unresolved with reason ambiguous_reference. Never return it as a newLabel.
+- Misheard words. Speech recognition turns a name or a term it does not know into other
+  words that sound the same; in sentence and document mode the words are what was written.
+  In speech mode a word that sounds like a candidate's label but is spelled differently
+  ("ahmedabus" when c0 is Amdaris, "hall born" when c0 is Halvorn) is most likely that
+  candidate misheard: cite the candidate when the context makes it clear and say so in the
+  explanation; otherwise list the phrase in unresolved with reason ambiguous_reference, and
+  never return it as a newLabel. A phrase that is no business term but sounds like one, where
+  the context makes the term clear - a job title in a list of job titles ("crowd
+  architects" among engineers: Cloud architects), a way of delivering beside another ("a
+  jile delivery" beside managed delivery: Agile delivery) - is returned as the term it
+  sounds like, as the newLabel, every word of the term sounding like the heard word or words
+  it replaces; the span covers the heard words and the explanation states heard '<the heard
+  words>'. The API accepts such a label only when it sounds like the heard words, so never
+  correct to a term that sounds different. When the context does not make the term clear,
+  or the recogniser lost a word and left a fragment ("a Delivery" after "or", an article
+  before a capitalised word with no noun of its own), list the phrase in unresolved with
+  reason ambiguous_reference: the fragment ("Delivery") is never a newLabel, and neither are
+  the misheard words. This is about misheard words only: a back-reference to a concept this
+  very sentence introduces ("these X" right after "we sell X") cites that newLabel and is
+  never ambiguous.
+- Talk about the app. Words about the screen, the demo or what the tool is doing ("it
+  captured that", "it starts to draw", "it is still loading", "like this", "as you can see",
+  "yeah") teach nothing about the company: list them in unresolved with reason
+  not_a_statement, never as a concept, and "it" there is the tool, not a concept. "but it
+  is still loading" after a sentence about certifications gives no intent and no Loading.
+- Every item. A spoken list has no commas: "can be test engineers network engineers platform
+  engineers analysts or cloud architects" is five items, one intent each. An item
+  starts where a new noun phrase starts; never merge two items into one label and never
+  leave an item out, however long the list. Two nouns under one article that name one thing
+  ("a product or service", "a person or company") are one label, not a list.
 - Grouping nouns. When the object is a grouping concept the text names and lists
   ("Services has 3 offerings, Apps, Data and AI"; also after "is made of", "offers"), return
   one rel intent: subject Services, action has, object newLabel Offerings, members the listed

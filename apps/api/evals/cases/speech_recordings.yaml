@@ -7,7 +7,12 @@
 # - `en-speech-owner-financial-services` is the owner's own recording, word for word, and
 #   `en-speech-owner-live-employees`, `en-speech-owner-live-amdaris`,
 #   `en-speech-owner-live-inside-sales` and `en-speech-owner-live-skills` the owner's own
-#   sentences from live use on gpt-6-sol.
+#   sentences from live use on gpt-6-sol. The Halvorn recordings
+#   (misheard-title-in-list, misheard-article-and-fragment, five-kinds-then-fragments and
+#   kinds-then-badge as LEARN; misheard-article-in-list, misheard-company-mid-sentence,
+#   serves-word-order and demo-talk as TEST) are fictional recordings written on 2026-10-04
+#   with the recognition errors seen in live use (a misheard job title, a word heard as an
+#   article and a word, a fragment, the company name misheard, talk about the app).
 # - The `narration` cases retell sections of the public benchmarks in evals/benchmarks as natural
 #   speech with fillers, back-references and multi-level drill-down. Their labels are the
 #   benchmark's class names; the gold follows the tree the narration states, with the
@@ -139,7 +144,183 @@ cases:
         - {from: Services, to: Customers, action: [is offered to, offered to, for, is for, serves, is sold to], inverse: []}
     optional: [Customer, Service, Skill, Employee, Consultant, Engineer]
 
+  - id: en-speech-misheard-title-in-list
+    kind: speech
+    company: Halvorn
+    description: A recording with the recogniser's own errors; "crowd architects" is Cloud architects misheard in a list of job titles, "but it is still loading" is talk about the app and drafts nothing, and every item of the comma-less list is drafted.
+    tags: [en, speech, recording, misheard, kinds, is-a, list, not-a-statement]
+    input:
+      - "halvorn have engineers these engineers can be test engineers network engineers platform engineers also crowd architects they can have certifications either vendor certifications or cloud certifications"
+      - "but it is still loading"
+    expected:
+      concepts:
+        - {label: Engineers, parent: [Halvorn], action: [has, have, employs]}
+        - {label: Test engineers, parent: [Engineers], action: [is a]}
+        - {label: Network engineers, parent: [Engineers], action: [is a]}
+        - {label: Platform engineers, parent: [Engineers], action: [is a]}
+        - {label: Cloud architects, parent: [Engineers], action: [is a]}
+        - {label: Certifications, parent: [Engineers], action: [has, have, can have]}
+        - {label: Vendor certifications, parent: [Certifications], action: [is a]}
+        - {label: Cloud certifications, parent: [Certifications], action: [is a]}
+    optional: [Engineer, Certification]
+
+  - id: en-speech-misheard-article-and-fragment
+    kind: speech
+    company: Halvorn
+    description: A recording with the recogniser's own errors; "hall born" is Halvorn, "a jile delivery" is Agile delivery misheard, and "a Delivery" is a fragment the recogniser left (Managed delivery most likely), never a concept of its own.
+    tags: [en, speech, recording, misheard, fragment, back-reference, sub-groups]
+    input:
+      - "halvorn has clients hall born offers to its clients workshops these workshops can be around cloud data or security cloud can have a jile delivery or a Delivery security can have audits pen testing or training and data can have dashboards or pipelines"
+    expected:
+      concepts:
+        - {label: Clients, parent: [Halvorn, Workshops], action: [has, have, serves, is offered to, offered to, offers to, for, is for]}
+        - {label: Workshops, parent: [Halvorn], action: [offers, offer, provides, sells, offers to]}
+        - {label: Cloud, parent: [Workshops], action: [includes, can be, can be around]}
+        - {label: Data, parent: [Workshops], action: [includes, can be, can be around]}
+        - {label: Security, parent: [Workshops], action: [includes, can be, can be around]}
+        - {label: Agile delivery, parent: [Cloud], action: [has, have, can have, includes]}
+        - {label: Audits, parent: [Security], action: [has, have, can have, includes]}
+        - {label: Pen testing, parent: [Security], action: [has, have, can have, includes]}
+        - {label: Training, parent: [Security], action: [has, have, can have, includes]}
+        - {label: Dashboards, parent: [Data], action: [has, have, can have, includes]}
+        - {label: Pipelines, parent: [Data], action: [has, have, can have, includes]}
+      relations:
+        - {from: Workshops, to: Clients, action: [is offered to, offered to, for, is for, serves, is sold to], inverse: []}
+    optional: [Client, Workshop, Managed delivery]
+
+  - id: en-speech-five-kinds-then-fragments
+    kind: speech
+    company: Halvorn
+    description: A recording; five job titles spoken without commas are five kinds of Engineers, and the two short sentences that follow go on from "these engineers can have certifications".
+    tags: [en, speech, recording, kinds, is-a, list, fragment, back-reference]
+    input:
+      - "halvorn has engineers these engineers can be test engineers network engineers platform engineers analysts or cloud architects these engineers can have certifications"
+      - "vendor certifications"
+      - "certifications can be cloud also so cloud certifications"
+    expected:
+      concepts:
+        - {label: Engineers, parent: [Halvorn], action: [has, have, employs]}
+        - {label: Test engineers, parent: [Engineers], action: [is a]}
+        - {label: Network engineers, parent: [Engineers], action: [is a]}
+        - {label: Platform engineers, parent: [Engineers], action: [is a]}
+        - {label: Analysts, parent: [Engineers], action: [is a]}
+        - {label: Cloud architects, parent: [Engineers], action: [is a]}
+        - {label: Certifications, parent: [Engineers], action: [has, have, can have]}
+        - {label: Vendor certifications, parent: [Certifications], action: [is a, includes, has]}
+        - {label: Cloud certifications, parent: [Certifications], action: [is a, includes, has, can be]}
+    optional: [Engineer, Certification, Cloud]
+
+  - id: en-speech-kinds-then-badge
+    kind: speech
+    company: Halvorn
+    description: A recording; kinds of Engineers and of Certifications, then a badge the engineers have, issued by Security.
+    tags: [en, speech, recording, kinds, is-a, back-reference]
+    input:
+      - "halvorn have engineers these engineers can be analysts or testers they can have certifications either vendor certifications or cloud certifications these engineers have a badge and the badge is issued by security"
+    expected:
+      concepts:
+        - {label: Engineers, parent: [Halvorn], action: [has, have, employs]}
+        - {label: Analysts, parent: [Engineers], action: [is a]}
+        - {label: Testers, parent: [Engineers], action: [is a]}
+        - {label: Certifications, parent: [Engineers], action: [has, have, can have]}
+        - {label: Vendor certifications, parent: [Certifications], action: [is a]}
+        - {label: Cloud certifications, parent: [Certifications], action: [is a]}
+        - {label: Badge, parent: [Engineers], action: [has, have]}
+        - {label: Security, parent: [Badge, Halvorn], action: [is issued by, issued by, issues, has]}
+      relations:
+        - {from: Badge, to: Security, action: [is issued by, issued by], inverse: [issues]}
+    optional: [Engineer, Certification, Badges]
+
   # ---------------------------------------------------------------- TEST
+  - id: en-speech-misheard-article-in-list
+    kind: speech
+    company: Halvorn
+    description: A recording with the recogniser's own errors; "a jile delivery" beside "managed delivery" is Agile delivery misheard, and every item of each list is drafted.
+    tags: [en, speech, recording, misheard, sub-groups, list, back-reference]
+    input:
+      - "halvorn offers workshops to clients these workshops can be around cloud data or security data can have dashboards or pipelines cloud can have a jile delivery or managed delivery and security can have audits pen testing and training"
+    expected:
+      concepts:
+        - {label: Workshops, parent: [Halvorn], action: [offers, offer, provides, sells]}
+        - {label: Clients, parent: [Halvorn, Workshops], action: [has, have, serves, is offered to, offered to, offers to, for, is for]}
+        - {label: Cloud, parent: [Workshops], action: [includes, can be, can be around]}
+        - {label: Data, parent: [Workshops], action: [includes, can be, can be around]}
+        - {label: Security, parent: [Workshops], action: [includes, can be, can be around]}
+        - {label: Dashboards, parent: [Data], action: [has, have, can have, includes]}
+        - {label: Pipelines, parent: [Data], action: [has, have, can have, includes]}
+        - {label: Agile delivery, parent: [Cloud], action: [has, have, can have, includes]}
+        - {label: Managed delivery, parent: [Cloud], action: [has, have, can have, includes]}
+        - {label: Audits, parent: [Security], action: [has, have, can have, includes]}
+        - {label: Pen testing, parent: [Security], action: [has, have, can have, includes]}
+        - {label: Training, parent: [Security], action: [has, have, can have, includes]}
+      relations:
+        - {from: Workshops, to: Clients, action: [is offered to, offered to, for, is for, serves, is sold to], inverse: []}
+    optional: [Client, Workshop]
+
+  - id: en-speech-misheard-company-mid-sentence
+    kind: speech
+    company: Halvorn
+    description: A recording with the recogniser's own errors; "hall born" in the middle of the sentence is Halvorn misheard, "a jile delivery" is Agile delivery, and every list item is drafted.
+    tags: [en, speech, recording, misheard, sub-groups, list, back-reference]
+    input:
+      - "halvorn has clients hall born offers workshops to its clients these workshops can be around cloud data or security data can have dashboards or pipelines cloud can have a jile delivery or managed delivery and security can have training pen testing or audits"
+    expected:
+      concepts:
+        - {label: Clients, parent: [Halvorn, Workshops], action: [has, have, serves, is offered to, offered to, offers to, for, is for]}
+        - {label: Workshops, parent: [Halvorn], action: [offers, offer, provides, sells, offers to]}
+        - {label: Cloud, parent: [Workshops], action: [includes, can be, can be around]}
+        - {label: Data, parent: [Workshops], action: [includes, can be, can be around]}
+        - {label: Security, parent: [Workshops], action: [includes, can be, can be around]}
+        - {label: Dashboards, parent: [Data], action: [has, have, can have, includes]}
+        - {label: Pipelines, parent: [Data], action: [has, have, can have, includes]}
+        - {label: Agile delivery, parent: [Cloud], action: [has, have, can have, includes]}
+        - {label: Managed delivery, parent: [Cloud], action: [has, have, can have, includes]}
+        - {label: Training, parent: [Security], action: [has, have, can have, includes]}
+        - {label: Pen testing, parent: [Security], action: [has, have, can have, includes]}
+        - {label: Audits, parent: [Security], action: [has, have, can have, includes]}
+      relations:
+        - {from: Workshops, to: Clients, action: [is offered to, offered to, for, is for, serves, is sold to], inverse: []}
+    optional: [Client, Workshop]
+
+  - id: en-speech-serves-word-order
+    kind: speech
+    company: Halvorn
+    description: A recording with the recogniser's own errors; "hall born to have" is Halvorn has, the areas after "can be around" are groups (includes), and "security can be audits or pen testing" names kinds.
+    tags: [en, speech, recording, misheard, sub-groups, kinds, is-a, back-reference]
+    input:
+      - "hall born to have clients it serves these clients workshops these workshops can be around cloud data or security cloud can be around agile delivery or managed delivery data can be around pipelines or dashboards and security can be audits or pen testing"
+    expected:
+      concepts:
+        - {label: Clients, parent: [Halvorn], action: [has, have, serves]}
+        - {label: Workshops, parent: [Halvorn, Clients], action: [serves, has, have, offers, provides, is served, is served to, served to, for, is for]}
+        - {label: Cloud, parent: [Workshops], action: [includes, can be, can be around]}
+        - {label: Data, parent: [Workshops], action: [includes, can be, can be around]}
+        - {label: Security, parent: [Workshops], action: [includes, can be, can be around]}
+        - {label: Agile delivery, parent: [Cloud], action: [includes, can be, can be around, has]}
+        - {label: Managed delivery, parent: [Cloud], action: [includes, can be, can be around, has]}
+        - {label: Pipelines, parent: [Data], action: [includes, can be, can be around, has]}
+        - {label: Dashboards, parent: [Data], action: [includes, can be, can be around, has]}
+        - {label: Audits, parent: [Security], action: [is a, includes, can be, has]}
+        - {label: Pen testing, parent: [Security], action: [is a, includes, can be, has]}
+      relations:
+        - {from: Workshops, to: Clients, action: [serves, is served to, served to, for, is for], inverse: [is served, receives]}
+    optional: [Client, Workshop]
+
+  - id: en-speech-demo-talk
+    kind: speech
+    company: Halvorn
+    description: Someone talking about the app during a demo; nothing is a fact about the company, so nothing is drafted and Loading never appears under Certifications.
+    tags: [en, speech, recording, not-a-statement]
+    existing:
+      - {label: Engineers, parent: Halvorn, action: has, domain: people}
+      - {label: Certifications, parent: Engineers, action: has, domain: people}
+    input:
+      - "the it captured loading"
+      - "it starts to draw all the boxes and links them like this yeah"
+    expected:
+      concepts: []
+    optional: []
+
   - id: en-speech-narration-valueflows-processes
     kind: speech
     company: ValueFlows

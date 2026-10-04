@@ -12,6 +12,14 @@ that differs is a long word whose consonant skeleton and spelling are both close
 A heard label can also start with the company's name misheard and go on with more words
 ("Inside sales" for "Insight sales"): the speaker meant the company's own <rest>.
 The test compares spelling only; it never calls anything outside its arguments.
+
+Speech recognition also turns a term it does not know into other words that sound the same
+("crowd architects" for "cloud architects", "a jile delivery" for "agile delivery").
+`sounds_like_word` says whether one heard word sounds like the word the speaker meant, and
+`sound_like_word_together` whether two heard words run together do, by a spelled-out sound
+key: letters that spell one sound are written the same way, doubled letters and a silent
+trailing e are dropped, and the keys must share most of their letters in order. Short words
+never count: "a" tells nothing about "AI".
 """
 
 from __future__ import annotations
@@ -26,11 +34,44 @@ from app.utilities.teach_parser import singular
 MIN_WORD_LETTERS = 5
 MIN_SKELETON_RATIO = 0.75
 MIN_SPELLING_RATIO = 0.6
+# A heard word and the word meant sound alike when both have this many letters and their sound
+# keys share this share of letters in order (difflib's ratio).
+MIN_TERM_LETTERS = 4
+MIN_SOUND_RATIO = 0.7
+MIN_JOINED_SOUND_RATIO = 0.8
+# Two heard words join into one only when the first is an article-like fragment ("a", "an").
+MAX_JOINED_LEAD_LETTERS = 2
 
 _LETTERS = re.compile(r"[^\W\d_]+")
 _SOUNDS = (("ph", "f"), ("ck", "k"), ("q", "k"), ("c", "k"), ("z", "s"), ("x", "ks"))
 _SILENT = frozenset("aeiouyhw")
 _SILENT_GH = re.compile(r"(?<=[aeiouy])gh")
+# Spellings of one sound, applied in order to a word before its letters are compared.
+_SOUND_KEY = (
+    ("tion", "shen"),
+    ("sion", "shen"),
+    ("ph", "f"),
+    ("ck", "k"),
+    ("qu", "kw"),
+    ("wr", "r"),
+    ("kn", "n"),
+    ("wh", "w"),
+    ("x", "ks"),
+    ("z", "s"),
+    ("oo", "u"),
+    ("ee", "i"),
+    ("ea", "i"),
+    ("ou", "u"),
+    ("ow", "u"),
+    ("ai", "a"),
+    ("ay", "a"),
+    ("ei", "i"),
+    ("ie", "i"),
+    ("y", "i"),
+)
+_SOFT_C = re.compile(r"c(?=[eiy])")
+_SOFT_G = re.compile(r"g(?=[eiy])")
+_DOUBLED = re.compile(r"(.)\1+")
 
 
 def sounds_like_name(heard: str, known: str, *, company_names: Collection[str]) -> bool:
@@ -60,6 +101,63 @@ def company_possessive_rest(heard: str, company_name: str) -> str | None:
     if not differing or not all(_close(x, y) for x, y in differing):
         return None
     return " ".join(words[len(name) :])
+
+
+def sounds_like_word(heard: str, meant: str) -> bool:
+    """True when one heard word sounds like `meant` but is not that word: both at least four
+    letters, and their sound keys sharing at least seven tenths of their letters in order
+    ("crowd" and "cloud"; never "sales" and "services")."""
+    a, b = "".join(_word_list(heard)), "".join(_word_list(meant))
+    if len(a) < MIN_TERM_LETTERS or len(b) < MIN_TERM_LETTERS or singular(a) == singular(b):
+        return False
+    # A word that holds the other whole is a longer word, not a word misheard: a part of a
+    # word never grounds ("report" and "reporting", a suffix split off by a format character).
+    # Two spellings of one sound ("insite", "insight") have equal keys and do sound alike.
+    ka, kb = sound_key(a), sound_key(b)
+    if ka != kb and _contains(ka, kb):
+        return False
+    return _sound_ratio(a, b) >= MIN_SOUND_RATIO
+
+
+def sound_like_word_together(first: str, second: str, meant: str) -> bool:
+    """True when two heard words run together sound like the one word `meant`, as when a
+    leading unstressed syllable is heard as an article ("a jile" and "agile"): the first word
+    has at most two letters, the two together at least four, and their sound keys share at
+    least eight tenths of their letters in order, a closer match than one word needs, since
+    joining words is the larger liberty. "also crowd" never joins into "cloud"."""
+    lead = "".join(_word_list(first))
+    a, b = lead + "".join(_word_list(second)), "".join(_word_list(meant))
+    if not 0 < len(lead) <= MAX_JOINED_LEAD_LETTERS:
+        return False
+    if len(a) < MIN_TERM_LETTERS or len(b) < MIN_TERM_LETTERS:
+        return False
+    # The two words together may be the word itself ("a nalytics"); one holding the other
+    # whole is a longer word.
+    ka, kb = sound_key(a), sound_key(b)
+    if ka != kb and _contains(ka, kb):
+        return False
+    return _sound_ratio(a, b) >= MIN_JOINED_SOUND_RATIO
+
+
+def _sound_ratio(a: str, b: str) -> float:
+    return SequenceMatcher(None, sound_key(a), sound_key(b)).ratio()
+
+
+def _contains(a: str, b: str) -> bool:
+    return a in b or b in a
+
+
+def sound_key(word: str) -> str:
+    """The letters of `word` as they sound: one spelling per sound ("ou" and "ow", "ee" and
+    "ea", "ph" and "f"), a soft c as s and a soft g as j, doubled letters once, no silent
+    trailing e ("solution" as "solushen", "pharmacists" and "farmacists" both as
+    "farmasists")."""
+    key = _SILENT_GH.sub("", word.casefold())
+    for spelled, sound in _SOUND_KEY:
+        key = key.replace(spelled, sound)
+    key = _SOFT_G.sub("j", _SOFT_C.sub("s", key)).replace("c", "k")
+    key = _DOUBLED.sub(r"\1", key)
+    return key[:-1] if len(key) > 2 and key.endswith("e") else key
 
 
 def is_proper_name(label: str, company_names: Collection[str]) -> bool:

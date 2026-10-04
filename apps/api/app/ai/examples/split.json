@@ -1,5 +1,5 @@
 {
-  "rule": "LEARN: the GoodRelations, PROV-O and DCAT 3 benchmarks and a stratified half of the non-private bake-off cases (short cases and documents). TEST: the W3C Organization, SOSA/SSN, Time Ontology and ValueFlows benchmarks, the other half, and everything under tests/private. Strata are (kind, language, primary stress tag); inside a stratum ids are ordered by SHA-256 of the id and alternate between the sets, the first going to the set with fewer members of that kind. Cases whose text the extraction instructions already quote are LEARN; the adversarial documents and the multi-sentence spoken recordings of teach_cases.yaml are TEST. The spoken narrations of evals/cases/speech_recordings.yaml follow their benchmark's set; the owner's own recording (which the extraction instructions quote) and the two recordings written for tuning are LEARN. The owner's live sentences, typed and spoken, are LEARN regression cases. Worked examples come from LEARN only. Benchmarks are named by their folder under evals/benchmarks; each yields one case, benchmarks-<folder>-<document name>.",
+  "rule": "LEARN: the GoodRelations, PROV-O and DCAT 3 benchmarks and a stratified half of the non-private bake-off cases (short cases and documents). TEST: the W3C Organization, SOSA/SSN, Time Ontology and ValueFlows benchmarks, the other half, and everything under tests/private. Strata are (kind, language, primary stress tag); inside a stratum ids are ordered by SHA-256 of the id and alternate between the sets, the first going to the set with fewer members of that kind. Cases whose text the extraction instructions already quote are LEARN; the adversarial documents and the multi-sentence spoken recordings of teach_cases.yaml are TEST. The spoken narrations of evals/cases/speech_recordings.yaml follow their benchmark's set; the owner's own recording (which the extraction instructions quote) and the two recordings written for tuning are LEARN. The owner's live sentences, typed and spoken, are LEARN regression cases. The fictional Halvorn recordings written for the misheard-word, list and app-talk rules split in two: the four that supply or share a six-word run with a worked example are LEARN (en-speech-misheard-title-in-list, -misheard-article-and-fragment, -five-kinds-then-fragments, -kinds-then-badge) and the four that share none are TEST (en-speech-misheard-article-in-list, -misheard-company-mid-sentence, -serves-word-order, -demo-talk), so those rules are measured on sentences the examples never show. Worked examples come from LEARN only. Benchmarks are named by their folder under evals/benchmarks; each yields one case, benchmarks-<folder>-<document name>.",
   "learn": {
     "benchmarks": [
       "goodrelations",
@@ -21,6 +21,10 @@
       "en-speech-narration-goodrelations-offerings",
       "en-speech-narration-prov-o-starting-points",
       "en-speech-owner-adnoc-client",
+      "en-speech-five-kinds-then-fragments",
+      "en-speech-kinds-then-badge",
+      "en-speech-misheard-article-and-fragment",
+      "en-speech-misheard-title-in-list",
       "en-speech-owner-financial-services",
       "en-speech-owner-live-amdaris",
       "en-speech-owner-live-employees",
@@ -84,8 +88,12 @@
       "en-speech-it-relations",
       "en-speech-narration-org-structure",
       "en-speech-narration-ssn-observations",
+      "en-speech-demo-talk",
+      "en-speech-misheard-article-in-list",
+      "en-speech-misheard-company-mid-sentence",
       "en-speech-narration-valueflows-processes",
       "en-speech-question-aside",
+      "en-speech-serves-word-order",
       "en-speech-recording-correction",
       "en-speech-recording-depot",
       "en-speech-run-on-they",
