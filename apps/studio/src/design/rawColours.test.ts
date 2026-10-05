@@ -11,13 +11,6 @@ const SRC = resolve(__dirname, '..');
 
 /** Files allowed to hold raw colours for now, relative to src, with the pull request that drains them. */
 const RESTYLE_PENDING: Record<string, string> = {
-  'styles/reference.css': 'shell restyle',
-  'styles/studio.css': 'shell restyle',
-  'admin/pages/ModelPages.tsx': 'shell restyle',
-  'admin/pages/PortalPages.tsx': 'shell restyle',
-  'admin/SourceWizard.tsx': 'shell restyle',
-  'platform/PlatformAudit.tsx': 'shell restyle',
-  'shell/Drawer.tsx': 'shell restyle',
   'shell/Legend.tsx': 'canvas restyle',
   'canvas/cells.ts': 'canvas restyle',
   'canvas/constants.ts': 'canvas restyle',

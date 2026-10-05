@@ -14,6 +14,7 @@ import { List, type Column } from '../List';
 import { en } from '../listModel';
 import { distinctRoles, roleLabel } from '../roles';
 import { SetRow } from '../Toggle';
+import { RowActions } from '../RowActions';
 
 const ACT = (w: number) => ({ width: `${w}px`, textAlign: 'center' as const });
 
@@ -75,18 +76,19 @@ export function Groups() {
               <td className="num">{r.members}</td>
               <td>{r.roles}</td>
               <td className="act">
-                <button data-fn="members" style={ACT(78)} onClick={() => groupMembers(r.g)}>
-                  Members
-                </button>
-                <button data-fn="roles" style={ACT(64)} onClick={() => groupRoles(r.g)}>
-                  Roles
-                </button>
-                <button data-fn="edit" style={ACT(54)} onClick={() => groupEdit(r.g)}>
-                  Edit
-                </button>
-                <button className="danger" data-fn="del" style={ACT(64)} onClick={() => deleteGroupDialog(r.g)}>
-                  Delete
-                </button>
+                <RowActions
+                  id={`grp-${r.g.id}`}
+                  primary={
+                    <button data-fn="members" style={ACT(78)} onClick={() => groupMembers(r.g)}>
+                      Members
+                    </button>
+                  }
+                  items={[
+                    { label: 'Roles', icon: 'key', group: 1, attrs: { 'data-fn': 'roles' }, act: () => groupRoles(r.g) },
+                    { label: 'Edit', icon: 'edit', group: 1, attrs: { 'data-fn': 'edit' }, act: () => groupEdit(r.g) },
+                    { label: 'Delete', icon: 'delete', group: 2, danger: true, attrs: { 'data-fn': 'del' }, act: () => deleteGroupDialog(r.g) },
+                  ]}
+                />
               </td>
             </>
           )}
@@ -146,7 +148,7 @@ export function Users() {
               <td>
                 <b>{r.name}</b>
               </td>
-              <td style={{ color: 'var(--ink-2)' }}>{r.email}</td>
+              <td className="wrap" style={{ color: 'var(--ink-2)' }}>{r.email}</td>
               <td>{r.dept}</td>
               <td>{r.company}</td>
               <td>{r.groups}</td>

@@ -251,15 +251,14 @@ export async function approveAll(page: Page): Promise<void> {
 }
 
 /**
- * Puts the page in a theme the way a user does: admin portal, theme button, close. Light is the
- * default, so a light scene changes nothing.
+ * Puts the page in a theme through the store without persisting it, so the scene's data (the
+ * audit log, the tenant settings) reads the same in both themes. Light is the default, so a light
+ * scene changes nothing.
  */
 export async function useTheme(page: Page, theme: Theme): Promise<void> {
   const current = await page.evaluate(() => document.documentElement.dataset.theme);
   if (current === theme) return;
-  await page.keyboard.press('g');
-  await page.click('#themeBtn');
-  await page.keyboard.press('g');
+  await page.evaluate((name) => (window as unknown as { __ontaix: { store: { setTheme(n: 'dark' | 'light', persist: boolean): void } } }).__ontaix.store.setTheme(name, false), theme);
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 }
 

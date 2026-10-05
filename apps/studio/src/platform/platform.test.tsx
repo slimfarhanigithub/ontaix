@@ -29,7 +29,25 @@ const dialogMsg = () => topDialog().querySelector('.msg') as HTMLElement | null;
 const footerButton = (label: string) => within(topDialog().querySelector('.df') as HTMLElement).getByRole('button', { name: label });
 /** The list row holding this text; a toast may repeat it outside the table. */
 const rowOf = (name: string) => screen.getAllByText(name).map((el) => el.closest('tr')).find((tr) => tr) as HTMLElement;
-const rowAction = (name: string, label: string) => within(rowOf(name)).getByRole('button', { name: label });
+/** The row's primary button, or the item of its More actions menu, which the call opens. */
+const rowAction = (name: string, label: string) => {
+  const row = within(rowOf(name));
+  const visible = row.queryByRole('button', { name: label });
+  if (visible) return visible;
+  fireEvent.click(row.getByRole('button', { name: 'More actions' }));
+  return screen.getByRole('menuitem', { name: label });
+};
+/** The labels of a row's actions: the visible buttons, then the items of its More actions menu. */
+const rowActionLabels = (name: string) => {
+  const row = rowOf(name);
+  const visible = [...row.querySelectorAll('.act button:not(.more)')].map((b) => b.textContent);
+  const more = row.querySelector('.act button.more') as HTMLButtonElement | null;
+  if (!more) return visible;
+  fireEvent.click(more);
+  const items = [...document.querySelectorAll('.dr-menu [role^="menuitem"]')].map((b) => b.textContent);
+  fireEvent.keyDown(document.querySelector('.dr-menu') as HTMLElement, { key: 'Escape' });
+  return [...visible, ...items];
+};
 
 const fresh = (n: number) => `test-password-${n}-${'x'.repeat(8)}`;
 
@@ -146,8 +164,8 @@ describe('the platform portal', () => {
     expect(acme.slice(0, 5)).toEqual(['Acme', 'Several companies', '3', 'Active', '01 Sept 2026']);
     const beta = [...rowOf('Beta Ltd').querySelectorAll('td')].map((td) => td.textContent);
     expect(beta.slice(0, 4)).toEqual(['Beta Ltd', 'One company', '0', 'Disabled']);
-    expect([...rowOf('Acme').querySelectorAll('.act button')].map((b) => b.textContent)).toEqual(['Users', 'Enter', 'Open', 'Rename', 'Disable']);
-    expect([...rowOf('Beta Ltd').querySelectorAll('.act button')].map((b) => b.textContent)).toEqual(['Users', 'Enter', 'Open', 'Rename', 'Enable']);
+    expect(rowActionLabels('Acme')).toEqual(['Enter', 'Users', 'Open', 'Rename', 'Disable']);
+    expect(rowActionLabels('Beta Ltd')).toEqual(['Enter', 'Users', 'Open', 'Rename', 'Enable']);
   });
 
   it('creates an organization from the dialog, several companies by default, and shows a refusal in .msg', async () => {
@@ -240,8 +258,8 @@ describe('the users of an organization', () => {
     expect([...rowOf('Ana').querySelectorAll('td')].slice(0, 4).map((td) => td.textContent)).toEqual(['Ana', 'ana@acme.example', 'Administrators', 'Active']);
     expect([...rowOf('Bo').querySelectorAll('td')].slice(2, 4).map((td) => td.textContent)).toEqual(['—', 'Disabled']);
     expect([...rowOf('Cy').querySelectorAll('td')][3].textContent).toBe('Must change password');
-    expect([...rowOf('Ana').querySelectorAll('.act button')].map((b) => b.textContent)).toEqual(['Edit', 'Reset password', 'Disable']);
-    expect([...rowOf('Bo').querySelectorAll('.act button')].map((b) => b.textContent)).toEqual(['Edit', 'Reset password', 'Enable']);
+    expect(rowActionLabels('Ana')).toEqual(['Edit', 'Reset password', 'Disable']);
+    expect(rowActionLabels('Bo')).toEqual(['Edit', 'Reset password', 'Enable']);
     expect(footerButton('+ Add a user')).toBeInTheDocument();
   });
 

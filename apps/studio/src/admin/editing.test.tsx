@@ -220,7 +220,7 @@ describe('domains', () => {
     // Two products with cells, then every tenant domain without cells (eight templates and the custom one).
     expect(rows).toHaveLength(2 + 9);
     expect(rows[0].querySelector('td[data-ox-new] input[type="checkbox"]')).not.toBeNull();
-    expect(rows[0].querySelector('td.act[data-ox-new]')?.textContent).toBe('EditDelete');
+    expect(rows[0].querySelector('td.act[data-ox-new]')?.textContent).toBe('Edit⋯');
     const idle = rows.find((r) => r.textContent?.includes('Sustainability'));
     expect(idle?.getAttribute('data-ox-new')).toBe('');
     expect(idle?.querySelector('.act')?.textContent).toBe('Edit');
@@ -271,8 +271,14 @@ describe('Entities additions', () => {
     const rows = Array.from(page.container.querySelectorAll('tbody tr'));
     expect(rows).toHaveLength(3);
     expect(rows[0].querySelector('td[data-ox-new] input[type="checkbox"]')?.getAttribute('aria-label')).toBe('Select Plant');
-    expect(rows[0].querySelector('button[data-fn="move"]')?.getAttribute('data-ox-new')).toBe('');
-    expect(Array.from(rows[0].querySelectorAll('td.act button')).map((b) => b.textContent)).toEqual(['Open', 'Lineage', 'Rename', 'Move', 'Delete']);
+    // The primary action stays visible; the others sit in the row's More actions menu.
+    expect(Array.from(rows[0].querySelectorAll('td.act button')).map((b) => b.textContent)).toEqual(['Open', '⋯']);
+    fireEvent.click(rows[0].querySelector('td.act button.more') as HTMLButtonElement);
+    const menu = document.querySelector('.dr-menu') as HTMLElement;
+    expect(Array.from(menu.querySelectorAll('[role^="menuitem"]')).map((b) => b.textContent)).toEqual(['Lineage', 'Rename', 'Move', 'Delete']);
+    expect(menu.querySelector('button[data-fn="move"]')?.getAttribute('data-ox-new')).toBe('');
+    expect(menu.querySelector('button[data-fn="del"]')?.className).toBe('danger');
+    fireEvent.keyDown(menu, { key: 'Escape' });
     const button = () => page.container.querySelector<HTMLButtonElement>('#entDeleteSelected') as HTMLButtonElement;
     expect(button().closest('[data-ox-new]')).not.toBeNull();
     expect(button().disabled).toBe(true);
@@ -293,7 +299,8 @@ describe('Entities additions', () => {
     await flush();
     expect(bulk).toHaveBeenCalledWith({ companyId: 'co-1', conceptIds: ['c-plant', 'c-line'], domainProductIds: [] });
     // Move opens the drawer's move dialog (the list re-rendered after the proposal, so the rows are read again).
-    act(() => (page.container.querySelector('tbody tr button[data-fn="move"]') as HTMLButtonElement).click());
+    fireEvent.click(page.container.querySelector('tbody tr td.act button.more') as HTMLButtonElement);
+    act(() => (document.querySelector('.dr-menu button[data-fn="move"]') as HTMLButtonElement).click());
     expect(dialog.container.querySelector('.dlg .dh b')?.textContent).toBe('Move Plant');
   });
 });

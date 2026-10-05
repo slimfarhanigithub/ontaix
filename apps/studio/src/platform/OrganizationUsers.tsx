@@ -14,6 +14,7 @@ import type { Group, Organization, OrganizationUser } from '../api/types';
 import { DialogFrame } from '../shell/Dialog';
 import { store } from '../store/store';
 import { PlatformDialog } from './PlatformDialog';
+import { RowActions } from '../admin/RowActions';
 
 const ACT = (w: number) => ({ width: `${w}px`, textAlign: 'center' as const });
 
@@ -113,7 +114,7 @@ function UsersDialog({ org, close, changed }: { org: Organization; close: () => 
                 <td>
                   <b>{r.name}</b>
                 </td>
-                <td style={{ color: 'var(--ink-2)' }}>{r.email}</td>
+                <td className="wrap" style={{ color: 'var(--ink-2)' }}>{r.email}</td>
                 <td>{r.groups}</td>
                 <td>
                   <span className={`st${r.status === 'Disabled' ? ' off' : r.status === 'Active' ? '' : ' pend'}`}>
@@ -122,21 +123,20 @@ function UsersDialog({ org, close, changed }: { org: Organization; close: () => 
                   </span>
                 </td>
                 <td className="act">
-                  <button data-fn="edit" style={ACT(40)} onClick={() => editUserDialog(org, r.u, refresh)}>
-                    Edit
-                  </button>
-                  <button data-fn="reset" style={ACT(96)} onClick={() => resetPasswordDialog(org, r.u, refresh)}>
-                    Reset password
-                  </button>
-                  {r.u.status === 'disabled' ? (
-                    <button data-fn="enable" style={ACT(56)} onClick={() => void enableUser(org, r.u, refresh)}>
-                      Enable
-                    </button>
-                  ) : (
-                    <button className="danger" data-fn="disable" style={ACT(56)} onClick={() => disableUserDialog(org, r.u, refresh)}>
-                      Disable
-                    </button>
-                  )}
+                  <RowActions
+                    id={`usr-${r.u.id}`}
+                    primary={
+                      <button data-fn="edit" style={ACT(40)} onClick={() => editUserDialog(org, r.u, refresh)}>
+                        Edit
+                      </button>
+                    }
+                    items={[
+                      { label: 'Reset password', icon: 'key', group: 1, attrs: { 'data-fn': 'reset' }, act: () => resetPasswordDialog(org, r.u, refresh) },
+                      r.u.status === 'disabled'
+                        ? { label: 'Enable', icon: 'power', group: 2, attrs: { 'data-fn': 'enable' }, act: () => void enableUser(org, r.u, refresh) }
+                        : { label: 'Disable', icon: 'power', group: 2, danger: true, attrs: { 'data-fn': 'disable' }, act: () => disableUserDialog(org, r.u, refresh) },
+                    ]}
+                  />
                 </td>
               </>
             )}
