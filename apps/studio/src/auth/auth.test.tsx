@@ -60,7 +60,7 @@ describe('lock text', () => {
 describe('the sign-in page', () => {
   it('shows after a 401 session read, with the exact texts and no sign-up, recovery or remember me', async () => {
     await open(stubFetch({ 'GET /auth/session': problem(401, 'unauthorized', 'no session') }));
-    expect(document.querySelector('.signin .wordmark')?.textContent).toBe('Ontaix business as a product');
+    expect(document.querySelector('.signin .wordmark')?.textContent).toBe('Ontology Builder business as a product');
     const card = document.querySelector('form.dlg.sm') as HTMLElement;
     expect(card.querySelector('.dh b')?.textContent).toBe('Sign in');
     expect(card.querySelector('.dh span')?.textContent).toBe('Use the account your administrator gave you');

@@ -62,7 +62,7 @@ DEV_USER_HEADER = "X-Ontaix-User"
 CSRF_HEADER = "X-CSRF-Token"
 DEV_ISSUER = "dev"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
-SUPPORT_ACTOR_NAME = "Ontaix support"
+SUPPORT_ACTOR_NAME = "Ontology Builder support"
 # Auditor at tenant scope reads the model, the directory and the audit log, and nothing else.
 SUPPORT_GRANTS = (Grant(role=RoleName.AUDITOR, scope_kind=ScopeKind.TENANT),)
 

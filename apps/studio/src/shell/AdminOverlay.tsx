@@ -44,7 +44,7 @@ export function AdminOverlay() {
     >
       <div className="win" ref={win}>
         <div className="head">
-          <div id="adminTitle">Ontaix admin portal</div> <span id="adminSub">{sub}</span>
+          <div id="adminTitle">Ontology Builder admin portal</div> <span id="adminSub">{sub}</span>
           <button
             className="btn"
             id="themeBtn"

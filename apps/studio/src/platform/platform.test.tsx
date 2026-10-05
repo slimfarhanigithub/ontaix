@@ -144,7 +144,7 @@ describe('the platform portal', () => {
   it('is the reference admin window with the Platform nav, the account controls and no ×', async () => {
     await openPortal();
     const win = document.querySelector('#platform.admin.on .win') as HTMLElement;
-    expect(win.querySelector('.head #platformTitle')?.textContent).toBe('Ontaix platform');
+    expect(win.querySelector('.head #platformTitle')?.textContent).toBe('Ontology Builder platform');
     expect(win.querySelector('.head .x')).toBeNull();
     expect(win.querySelector('nav .grp')?.textContent).toBe('Platform');
     expect([...win.querySelectorAll('nav button')].map((b) => b.textContent)).toEqual(['Organizations', 'Platform audit log']);

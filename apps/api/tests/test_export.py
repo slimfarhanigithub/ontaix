@@ -335,7 +335,7 @@ async def test_word_document_describes_the_model_in_prose_and_tables(
         for p in document.paragraphs
         if p.style.name.startswith(("Heading", "Title"))
     ]
-    assert ("Title", "Ontaix export") in headings
+    assert ("Title", "Ontology Builder export") in headings
     assert ("Heading 1", tenant.company_name) in headings
     for name in ("Domains", "Entity hierarchy", "Relationships", "Equivalences"):
         assert ("Heading 2", name) in headings

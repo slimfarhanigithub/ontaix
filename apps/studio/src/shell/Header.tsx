@@ -18,7 +18,7 @@ export function Header() {
       <header>
         <div>
           <div className="wordmark">
-            <i></i>Ontaix <small>business as a product</small>
+            <i></i>Ontology Builder <small>business as a product</small>
           </div>
           <div className={`status${listening || support ? ' on' : ''}`} id="status">
             <i></i>
