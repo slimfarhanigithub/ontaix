@@ -120,6 +120,17 @@ variable "postgres_admin_login" {
   default     = "ontaix_admin"
 }
 
+variable "postgres_api_login" {
+  description = "The API's own login, created in the server by the API pod's login step from the Key Vault secret database-url-api. Holds ontaix_app and ontaix_platform only."
+  type        = string
+  default     = "ontaix_api"
+
+  validation {
+    condition     = var.postgres_api_login != var.postgres_admin_login
+    error_message = "The API login must differ from the administrator login."
+  }
+}
+
 variable "postgres_database" {
   type    = string
   default = "ontaix"

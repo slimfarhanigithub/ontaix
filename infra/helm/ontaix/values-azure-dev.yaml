@@ -11,12 +11,18 @@ secrets:
   keyVault:
     enabled: true
     name: ""
+    # The API process connects as ontaix_api (database-url-api); the schema owner's URL
+    # (database-url, the server administrator ontaix_admin) reaches the migration step, the
+    # login step and the admin terminal only.
     secrets:
+      ONTAIX_DATABASE_URL: database-url-api
+    adminSecrets:
       ONTAIX_DATABASE_URL: database-url
+      ONTAIX_API_DATABASE_URL: database-url-api
 
 api:
-  # The server administrator login; the database URL in Key Vault names it.
-  databaseLogin: ontaix_admin
+  # The API's own login (Terraform variable postgres_api_login); database-url-api names it.
+  databaseLogin: ontaix_api
   allowedOrigins: []
   env:
     ONTAIX_ENVIRONMENT: production
