@@ -1,0 +1,81 @@
+/*
+ * Base rules built on tokens.css: typography, the global focus ring, selection, scrollbars, the
+ * motion set and the reduced-motion rule. Loaded before every component stylesheet, so a
+ * component rule of equal specificity wins where it sets its own value.
+ */
+
+/* Typography: Hanken Grotesk at 15px, antialiased, optical sizing on. */
+html {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+.font-display { font-family: var(--font-display); }
+.font-serif { font-family: var(--font-serif); }
+.font-mono { font-family: var(--font-mono); }
+/* Tabular figures for any column of numbers or live counter, so digits never shift. */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/*
+ * The global focus ring: blue, 2.5px, offset 2px. A control that draws its own focus affordance
+ * opts out with the attribute `data-focus-ring="none"` and must show focus another way.
+ */
+:focus-visible {
+  outline: 2.5px solid var(--link);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+[data-focus-ring='none']:focus-visible { outline: none; }
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+/* Scrollbars: 10px, a border-strong thumb on a transparent track. */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 6px; border: 2px solid var(--bg); }
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Ledger ruling: a hairline between rows, none after the last. Table and ledger widgets only. */
+.ledger-rows > * { border-bottom: 1px solid var(--border); }
+.ledger-rows > *:last-child { border-bottom: 0; }
+
+/* Motion. */
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes fade-up { from { opacity: 0; transform: translateY(8px); } }
+@keyframes slide-l { from { opacity: 0; transform: translateX(40px); } }
+@keyframes boot { from { opacity: 0; transform: translateX(-14px); filter: brightness(2); } }
+@keyframes breathe { 0% { transform: scale(1); opacity: 0.55; } 70% { transform: scale(1.65); opacity: 0; } 100% { transform: scale(1.65); opacity: 0; } }
+@keyframes fab-float { 50% { transform: translateY(-5px); } }
+@keyframes fab-pulse { to { transform: scale(2); opacity: 0; } }
+@keyframes caret { 50% { opacity: 0; } }
+.animate-rise { animation: rise 280ms var(--ease-expressive) both; }
+.animate-fade-up { animation: fade-up 240ms ease both; }
+.animate-slide-l { animation: slide-l 240ms ease both; }
+.animate-boot { animation: boot 480ms var(--ease-expressive) both; }
+.animate-breathe { animation: breathe 2.8s ease-out infinite; }
+.animate-fab-float { animation: fab-float 3.4s ease-in-out infinite; }
+.animate-fab-pulse { animation: fab-pulse 2.6s ease-out infinite; }
+.animate-caret { animation: caret 1s steps(2, start) infinite; }
+
+/* Reduced motion: every animation and transition collapses to one instant run. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

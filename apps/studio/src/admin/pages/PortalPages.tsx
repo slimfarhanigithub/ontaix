@@ -7,6 +7,7 @@
  * Appearance.
  */
 import { DOMAIN_TEMPLATES, DEFAULT_COLORS } from '../../canvas/constants';
+import { DEFAULT_ACCENT } from '../../design/tokens';
 import { BusyButton } from '../../shell/busy';
 import { useStore } from '../../shell/dom';
 import { changeColour, changeRefresh, renderAdmin, resetColours } from '../actions';
@@ -187,7 +188,7 @@ export function Appearance() {
       <h3>Interface</h3>
       <div className="colors">
         <label className="col">
-          <input type="color" value={ap?.accent || '#3fb8a9'} data-col="__accent" onChange={(e) => changeColour('__accent', e.target.value)} />
+          <input type="color" value={ap?.accent || DEFAULT_ACCENT} data-col="__accent" onChange={(e) => changeColour('__accent', e.target.value)} />
           <span>
             <b>Accent</b>
             <small>buttons, focus, approvals</small>

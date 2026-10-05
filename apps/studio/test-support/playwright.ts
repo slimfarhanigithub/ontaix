@@ -4,5 +4,3 @@
  * same `@playwright/test` instance the runner uses without a workspace entry of its own.
  */
 export * from '@playwright/test';
-export { default as pixelmatch } from 'pixelmatch';
-export { PNG } from 'pngjs';

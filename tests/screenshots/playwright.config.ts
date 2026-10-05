@@ -21,6 +21,10 @@ export default defineConfig({
   // The longest scenes teach, add a company, relate and open the portal on both pages.
   timeout: 360_000,
   reporter: [['list'], ['html', { outputFolder: resolve(here, 'output/report'), open: 'never' }]],
+  // A pixel counts as different at a small colour distance (pixelmatch threshold 0.05 of the YIQ
+  // range), so a surface or text colour that shifts a few levels is a difference; the default 0.2
+  // lets a dark surface change colour unnoticed. Each scene allows 0.1 percent of such pixels.
+  expect: { toHaveScreenshot: { threshold: 0.05 } },
   use: {
     browserName: 'chromium',
     viewport: { width: 1440, height: 900 },

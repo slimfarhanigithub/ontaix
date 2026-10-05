@@ -4,6 +4,7 @@
  * (`drawCompanies`, `drawDomains`).
  */
 import { hex, mix } from './colour';
+import { FONT_SANS } from '../design/tokens';
 import { OFFS } from './constants';
 import { hull, type Pt } from './hulls';
 import { shown, type SceneState } from './state';
@@ -96,10 +97,10 @@ export function drawCompanies(s: SceneState, v: View, _t: number): void {
       src = s.nodes.filter((n) => n.kind === 'source' && n.company === c && !n.pending && !n.dying).length;
     ctx.textAlign = 'center';
     ctx.fillStyle = `rgba(${TH.INK},0.95)`;
-    ctx.font = `600 ${Math.round(Math.max(15, 15 / Math.max(s.cam.s, 0.5)))}px Sora, sans-serif`;
+    ctx.font = `600 ${Math.round(Math.max(15, 15 / Math.max(s.cam.s, 0.5)))}px ${FONT_SANS}`;
     ctx.fillText(c.name.toUpperCase(), cx, minY - pad - 26);
     ctx.fillStyle = `rgba(${TH.INK2},0.85)`;
-    ctx.font = `300 ${Math.round(Math.max(11, 11 / Math.max(s.cam.s, 0.5)))}px Sora, sans-serif`;
+    ctx.font = `300 ${Math.round(Math.max(11, 11 / Math.max(s.cam.s, 0.5)))}px ${FONT_SANS}`;
     ctx.fillText(
       `${c.sub ? c.sub + ' · ' : ''}business as a product · ${doms} domain product${doms === 1 ? '' : 's'} · ${concepts} concept${concepts === 1 ? '' : 's'}${src ? ` · ${src} source${src === 1 ? '' : 's'}` : ''}${s.COVERAGE ? ` · ${concepts ? Math.round((bound / concepts) * 100) : 0} % bound` : ''}`,
       cx,
@@ -131,10 +132,10 @@ export function drawDomains(s: SceneState, v: View, _t: number): void {
     const bnd = members.filter((n) => n.bound).length;
     ctx.textAlign = 'center';
     ctx.fillStyle = hex(d.color, 0.95);
-    ctx.font = '500 12.5px Sora, sans-serif';
+    ctx.font = `500 12.5px ${FONT_SANS}`;
     ctx.fillText((s.companies.length > 1 ? d.company.name + ' · ' : '') + d.name.toUpperCase(), cx, minY - pad - 18);
     ctx.fillStyle = `rgba(${TH.INK2},0.85)`;
-    ctx.font = '300 10.5px Sora, sans-serif';
+    ctx.font = `300 10.5px ${FONT_SANS}`;
     ctx.fillText(
       `domain product · ${d.owner} · v${d.version.toFixed(1)} · ${members.length - pending} concept${members.length - pending === 1 ? '' : 's'}${pending ? ` · ${pending} pending` : ''}${s.COVERAGE ? ` · ${bnd} of ${members.length} bound` : ''}`,
       cx,

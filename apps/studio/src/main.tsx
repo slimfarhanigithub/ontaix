@@ -3,6 +3,12 @@ import { createRoot } from 'react-dom/client';
 
 import { API_BASE } from './api/client';
 import { App } from './App';
+import '@fontsource-variable/hanken-grotesk';
+import '@fontsource-variable/source-serif-4';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/500.css';
+import './design/tokens.css';
+import './design/base.css';
 import './styles/reference.css';
 import './styles/studio.css';
 import './styles/admin-rows.css';

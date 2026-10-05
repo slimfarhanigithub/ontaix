@@ -1,7 +1,7 @@
 /**
- * Studio-only baselines of the compact teach bar, which has no counterpart in the reference (the
- * reference scenes hide it in both pages). Each state is captured at 1440x900 and 1920x1080 in
- * dark and light, and at 390x844, and compared with a stored baseline under
+ * Baselines of the compact teach bar in each of its states (the
+ * canvas scenes capture it at rest). Each state is captured at 1440x900 and 1920x1080 in
+ * light and dark, and at 390x844, and compared with a stored baseline under
  * tests/screenshots/baselines at 0.1 percent tolerance. Only the bottom of the page, where the
  * bar, the tools row and the open history sit, is captured.
  *
@@ -12,7 +12,7 @@
  * `--update-snapshots` writes the baselines of the running platform.
  */
 import { test, expect, type Page } from '../../apps/studio/test-support/playwright';
-import { advance, fontsReady, openStudio, switchToLight, TOLERANCE, VIEWPORTS, type Theme, type Viewport } from './harness';
+import { advance, fontsReady, openStudio, TOLERANCE, useTheme, VIEWPORTS, type Theme, type Viewport } from './harness';
 
 /** The narrow viewport of the proposal's mobile layout. */
 const PHONE: Viewport = { width: 390, height: 844 };
@@ -111,7 +111,7 @@ const STATES: State[] = [
   },
 ];
 
-const themes: Theme[] = ['dark', 'light'];
+const themes: Theme[] = ['light', 'dark'];
 const only = process.env.ONTAIX_SCENE?.split(',');
 const onlyTheme = process.env.ONTAIX_THEME;
 
@@ -126,7 +126,7 @@ for (const vp of [...VIEWPORTS, PHONE]) {
         const page = await ctx.newPage();
         try {
           await openStudio(page);
-          if (theme === 'light') await switchToLight(page);
+          await useTheme(page, theme);
           await fontsReady(page);
           await advance(page, 500);
           await state.drive(page);

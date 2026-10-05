@@ -4,6 +4,7 @@
  * `drawCell` (lines 462-466) and `drawSource` (line 450).
  */
 import { hex } from './colour';
+import { FONT_SANS } from '../design/tokens';
 import type { SceneState } from './state';
 import type { Node } from './types';
 import type { View } from './view';
@@ -25,7 +26,7 @@ export function drawCellLabels(s: SceneState, v: View, n: Node, al: number, col:
   const la = al * n.labelAlpha;
   ctx.textAlign = 'center';
   ctx.fillStyle = `rgba(${TH.INK},${0.95 * la})`;
-  ctx.font = `${hot ? '600' : '500'} ${n.kind === 'root' ? 15 : 13}px Sora, sans-serif`;
+  ctx.font = `${hot ? '600' : '500'} ${n.kind === 'root' ? 15 : 13}px ${FONT_SANS}`;
   ctx.shadowColor = TH.shadow;
   ctx.shadowBlur = 4;
   ctx.fillText(n.label, n.x, n.y + r + 24);
@@ -33,18 +34,18 @@ export function drawCellLabels(s: SceneState, v: View, n: Node, al: number, col:
   let yy = n.y + r + 39;
   if (n.sub) {
     ctx.fillStyle = hex(col, 0.95 * la);
-    ctx.font = '300 11px Sora, sans-serif';
+    ctx.font = `300 11px ${FONT_SANS}`;
     ctx.fillText(n.sub, n.x, yy);
     yy += 14;
   } else if (n.pending && !n.split) {
     ctx.fillStyle = `rgba(${TH.INK2},${0.8 * la})`;
-    ctx.font = '300 10.5px Sora, sans-serif';
+    ctx.font = `300 10.5px ${FONT_SANS}`;
     ctx.fillText('awaiting approval', n.x, yy);
     yy += 14;
   }
   if (n.bound) {
     ctx.fillStyle = hex(s.BRASS, 0.95 * la);
-    ctx.font = '400 10.5px Sora, sans-serif';
+    ctx.font = `400 10.5px ${FONT_SANS}`;
     ctx.fillText(
       `${n.bound.records.toLocaleString('en-GB')} records · ${n.bound.source.label} · fresh ${n.bound.fresh}`,
       n.x,
@@ -52,7 +53,7 @@ export function drawCellLabels(s: SceneState, v: View, n: Node, al: number, col:
     );
   } else if (s.COVERAGE && n.kind === 'concept') {
     ctx.fillStyle = `rgba(${TH.INK2},${0.7 * la})`;
-    ctx.font = '300 10.5px Sora, sans-serif';
+    ctx.font = `300 10.5px ${FONT_SANS}`;
     ctx.fillText('no data behind it', n.x, yy);
   }
 }
@@ -63,13 +64,13 @@ export function drawSourceLabels(s: SceneState, v: View, n: Node, al: number, r:
   if (!(s.cam.s > 0.4)) return;
   ctx.textAlign = 'center';
   ctx.fillStyle = hex(s.BRASS, 0.95 * al);
-  ctx.font = `${hot ? '600' : '500'} 13px Sora, sans-serif`;
+  ctx.font = `${hot ? '600' : '500'} 13px ${FONT_SANS}`;
   ctx.shadowColor = TH.shadow;
   ctx.shadowBlur = 4;
   ctx.fillText(n.label, n.x, n.y + r + 22);
   ctx.shadowBlur = 0;
   ctx.fillStyle = `rgba(${TH.INK2},${0.8 * al})`;
-  ctx.font = '300 10.5px Sora, sans-serif';
+  ctx.font = `300 10.5px ${FONT_SANS}`;
   const bound = s.links.filter((l) => l.kind === 'bind' && l.a === n && !l.pending).length;
   ctx.fillText(
     `${n.sub}${bound ? ` · ${bound} concept${bound === 1 ? '' : 's'}` : ''}${n.pending ? ' · awaiting approval' : ''}`,

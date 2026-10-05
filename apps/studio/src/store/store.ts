@@ -37,6 +37,7 @@ import { arrange as arrangeCanvas, settleInDomain } from '../canvas/arrange';
 import { GREEN, RED, DEFAULT_BRASS, DEFAULT_COLORS, DOMAIN_TEMPLATES } from '../canvas/constants';
 import { divide, type BirthDraws } from '../canvas/division';
 import { focusOnCell, focusOnDomain } from '../canvas/focus';
+import { DEFAULT_ACCENT } from '../design/tokens';
 import { hideLineageState, showLineageState } from '../canvas/lineage';
 import type { LastImport } from '../teach/importReading';
 import type { Renderer } from '../canvas/renderer';
@@ -211,7 +212,7 @@ class StudioStore {
       legendOff: false,
       domainsOff: false,
       adminOpen: false,
-      theme: 'dark',
+      theme: 'light',
       settings: null,
       appearance: null,
       domains: templateDomains(),
@@ -995,7 +996,8 @@ class StudioStore {
           if (!n.split && !n.diff) n.color = c;
         }
     }
-    document.documentElement.style.setProperty('--accent', ap.accent);
+    if (ap.accent && ap.accent.toLowerCase() !== DEFAULT_ACCENT) document.documentElement.style.setProperty('--accent', ap.accent);
+    else document.documentElement.style.removeProperty('--accent');
     s.BRASS = ap.source;
     this.bump();
   }

@@ -3,8 +3,9 @@
 A neutral control plane where a business describes itself as an ontology — owned, versioned
 domain products — above every data, AI and agent platform, and governs the agents that use it.
 
-- `reference/ontaix-studio-reference.html` — the approved Studio UI. Open it in a browser.
-- `docs/ui-contract.md` — what "identical" means and how it is tested.
+- `docs/design-system.md` — the Studio's visual language: tokens, fonts, shape, motion, focus, contrast.
+- `docs/ui-contract.md` — every behaviour the Studio keeps and how the screenshot suite tests it.
+- `reference/ontaix-studio-reference.html` — the original demo the Studio grew from. Read-only.
 - `docs/provisioning.md` — Azure environment and the one-time bootstrap.
 - `docs/team-and-timeline.md` — the agent team and the 15-day plan.
 - `CLAUDE.md` — rules for the agents building this repository.
@@ -18,7 +19,7 @@ apps/
   api/          Python 3.12 FastAPI modular monolith (uv). Module boundaries for ontology,
                 proposals, identity, bindings and audit are future work; see apps/api/README.md.
   gateway/      Python 3.12 FastAPI MCP gateway (uv): exposes the ontology to agents, read + propose, never write.
-  studio/       React 19 + TypeScript + Vite; the Studio UI, ported verbatim from reference/.
+  studio/       React 19 + TypeScript + Vite; the Studio UI, styled by docs/design-system.md.
 packages/
   connectors/   Read-only connector SDK (Python, uv): discover and read only, enforced by test.
 deploy/
@@ -27,7 +28,7 @@ infra/
   terraform/    Azure environment (France Central).
   scripts/      One-time bootstrap.
 docs/           Contracts and decisions.
-reference/      The Studio UI contract. Read-only.
+reference/      The original Studio demo, the historical origin of its behaviour. Read-only.
 .github/
   workflows/    ci.yml (apps and packages), infra.yml (Terraform).
 ```
