@@ -4,7 +4,7 @@
  * (`drawCompanies`, `drawDomains`).
  */
 import { hex, mix } from './colour';
-import { FONT_SANS } from '../design/tokens';
+import { FONT_SANS, themedColour, token } from '../design/tokens';
 import { OFFS } from './constants';
 import { hull, type Pt } from './hulls';
 import { shown, type SceneState } from './state';
@@ -17,8 +17,8 @@ export function background(v: View): void {
   ctx.fillStyle = TH.bg;
   ctx.fillRect(0, 0, W, H);
   const g = ctx.createRadialGradient(CX(v), H * 0.45, 0, CX(v), H * 0.45, Math.max(W, H) * 0.7);
-  g.addColorStop(0, 'rgba(63,184,169,0.04)');
-  g.addColorStop(0.6, 'rgba(139,134,207,0.025)');
+  g.addColorStop(0, hex(token('--accent'), 0.04));
+  g.addColorStop(0.6, hex(token('--link'), 0.025));
   g.addColorStop(1, `rgba(${TH.CHIP},0)`);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
@@ -95,12 +95,14 @@ export function drawCompanies(s: SceneState, v: View, _t: number): void {
       bound = members.filter((n) => n.bound).length,
       doms = c.domains.filter((d) => members.some((n) => n.domain === d)).length,
       src = s.nodes.filter((n) => n.kind === 'source' && n.company === c && !n.pending && !n.dying).length;
+    // The title and its subtitle grow together when the camera zooms out, and the gap between them with them.
+    const k = 1 / Math.max(s.cam.s, 0.5);
     ctx.textAlign = 'center';
     ctx.fillStyle = `rgba(${TH.INK},0.95)`;
-    ctx.font = `600 ${Math.round(Math.max(15, 15 / Math.max(s.cam.s, 0.5)))}px ${FONT_SANS}`;
-    ctx.fillText(c.name.toUpperCase(), cx, minY - pad - 26);
+    ctx.font = `600 ${Math.round(15 * k)}px ${FONT_SANS}`;
+    ctx.fillText(c.name.toUpperCase(), cx, minY - pad - 8 - Math.round(18 * k));
     ctx.fillStyle = `rgba(${TH.INK2},0.85)`;
-    ctx.font = `300 ${Math.round(Math.max(11, 11 / Math.max(s.cam.s, 0.5)))}px ${FONT_SANS}`;
+    ctx.font = `300 ${Math.round(11 * k)}px ${FONT_SANS}`;
     ctx.fillText(
       `${c.sub ? c.sub + ' · ' : ''}business as a product · ${doms} domain product${doms === 1 ? '' : 's'} · ${concepts} concept${concepts === 1 ? '' : 's'}${src ? ` · ${src} source${src === 1 ? '' : 's'}` : ''}${s.COVERAGE ? ` · ${concepts ? Math.round((bound / concepts) * 100) : 0} % bound` : ''}`,
       cx,
@@ -121,7 +123,8 @@ export function drawDomains(s: SceneState, v: View, _t: number): void {
     if (!members.length) continue;
     any = true;
     const pts = hull(members.map((n) => [n.x, n.y] as Pt));
-    const col = s.domainFocus === d ? d.color : s.domainFocus ? mix(d.color, '#070b16', 0.55) : d.color;
+    const dc = themedColour(d.color);
+    const col = s.domainFocus === d ? dc : s.domainFocus ? mix(dc, TH.bg, 0.55) : dc;
     fillHull(octx, pts, pad, col);
     if (s.cam.s > 0.4)
       headers.push([d, members, Math.min(...members.map((n) => n.y)), members.reduce((a, n) => a + n.x, 0) / members.length]);
@@ -131,7 +134,7 @@ export function drawDomains(s: SceneState, v: View, _t: number): void {
     const pending = members.filter((n) => n.pending).length;
     const bnd = members.filter((n) => n.bound).length;
     ctx.textAlign = 'center';
-    ctx.fillStyle = hex(d.color, 0.95);
+    ctx.fillStyle = hex(themedColour(d.color), 0.95);
     ctx.font = `500 12.5px ${FONT_SANS}`;
     ctx.fillText((s.companies.length > 1 ? d.company.name + ' · ' : '') + d.name.toUpperCase(), cx, minY - pad - 18);
     ctx.fillStyle = `rgba(${TH.INK2},0.85)`;

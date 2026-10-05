@@ -145,6 +145,18 @@
       },
       "violet": {
         "$value": "#7c3aed"
+      },
+      "teal": {
+        "$value": "#0e7490"
+      },
+      "orange": {
+        "$value": "#c2410c"
+      },
+      "olive": {
+        "$value": "#4d7c0f"
+      },
+      "source": {
+        "$value": "#d6bd8a"
       }
     },
     "dark": {
@@ -253,6 +265,15 @@
       },
       "violet": {
         "$value": "#a78bfa"
+      },
+      "teal": {
+        "$value": "#5fc7e0"
+      },
+      "orange": {
+        "$value": "#f59e6b"
+      },
+      "olive": {
+        "$value": "#a3c957"
       }
     },
     "font": {
@@ -285,36 +306,8 @@
   },
   "canvas": {
     "theme": {
-      "$description": "THEMES object consumed by the canvas renderer. INK, INK2 and CHIP are rgb triplets used inside rgba() strings.",
+      "$description": "THEMES object consumed by the canvas renderer, derived from the css tokens of the applied theme (apps/studio/src/canvas/themes.ts): bg = --bg, INK = --text, INK2 = --text-2, CHIP = --surface as rgb triplets, shadow = --bg at alpha .85, vignette = --bg mixed toward black (12 percent at alpha .5 in light, 35 percent at alpha .8 in dark), hull = --text. Only the alphas are fixed per theme.",
       "dark": {
-        "bg": {
-          "$type": "color",
-          "$value": "#070b16"
-        },
-        "INK": {
-          "$type": "string",
-          "$value": "238,242,251"
-        },
-        "INK2": {
-          "$type": "string",
-          "$value": "169,179,204"
-        },
-        "CHIP": {
-          "$type": "string",
-          "$value": "7,11,22"
-        },
-        "shadow": {
-          "$type": "color",
-          "$value": "rgba(0,0,0,0.7)"
-        },
-        "vignette": {
-          "$type": "color",
-          "$value": "rgba(3,5,12,0.8)"
-        },
-        "hull": {
-          "$type": "color",
-          "$value": "#dfe6ff"
-        },
         "hullA": {
           "$type": "number",
           "$value": 0.055
@@ -329,34 +322,6 @@
         }
       },
       "light": {
-        "bg": {
-          "$type": "color",
-          "$value": "#eef1f7"
-        },
-        "INK": {
-          "$type": "string",
-          "$value": "20,26,46"
-        },
-        "INK2": {
-          "$type": "string",
-          "$value": "74,84,112"
-        },
-        "CHIP": {
-          "$type": "string",
-          "$value": "255,255,255"
-        },
-        "shadow": {
-          "$type": "color",
-          "$value": "rgba(255,255,255,0.85)"
-        },
-        "vignette": {
-          "$type": "color",
-          "$value": "rgba(200,206,222,0.55)"
-        },
-        "hull": {
-          "$type": "color",
-          "$value": "#5b6690"
-        },
         "hullA": {
           "$type": "number",
           "$value": 0.05
@@ -383,17 +348,17 @@
           "$value": 0.7
         },
         "stop-0": {
-          "$type": "color",
-          "$value": "rgba(63,184,169,0.04)"
+          "$type": "string",
+          "$value": "{css.light.accent} at alpha 0.04 (the applied theme's --accent)"
         },
         "stop-0-6": {
-          "$type": "color",
-          "$value": "rgba(139,134,207,0.025)"
+          "$type": "string",
+          "$value": "{css.light.link} at alpha 0.025 (the applied theme's --link)"
         },
         "stop-1": {
           "$type": "string",
-          "$value": "rgba({canvas.theme.dark.CHIP},0)",
-          "$description": "Transparent chip colour of the active theme."
+          "$value": "rgba({canvas.theme.CHIP},0)",
+          "$description": "Transparent surface colour of the applied theme."
         }
       },
       "vignette": {
@@ -431,11 +396,7 @@
       "domain-unfocused-mix": {
         "$type": "number",
         "$value": 0.55,
-        "$description": "Non-focused domains mixed 55 percent toward #070b16 in both themes."
-      },
-      "domain-unfocused-mix-target": {
-        "$type": "color",
-        "$value": "#070b16"
+        "$description": "Non-focused domains mixed 55 percent toward the applied theme's --bg."
       }
     },
     "cell": {
@@ -591,262 +552,90 @@
   },
   "semantic": {
     "$type": "color",
+    "$description": "Stored as light values; the renderer draws each through themedColour, which follows the token into the dark theme.",
     "green": {
-      "$value": "#4fc98f",
-      "$description": "GREEN: approval rim, toggle dot, state dots, audit approved, wizard Connected."
+      "$value": "#0e8a6a",
+      "$description": "GREEN: approval rim, toggle dot, state dots, audit approved, wizard Connected (--good)."
     },
     "red": {
-      "$value": "#d95a68",
-      "$description": "RED / C.conflict / --conflict: rejection fade, conflict links, danger hover, audit rejected."
+      "$value": "#c0181d",
+      "$description": "RED / C.conflict / --conflict: rejection fade, conflict links, danger hover, audit rejected (--danger)."
     },
     "brass": {
       "$value": "#d6bd8a",
-      "$description": "BRASS / SETTINGS.source: sources, bind links, attributes, pending dot, catalogue badge."
+      "$description": "BRASS / SETTINGS.source: sources, bind links, the legend's binding row (--source)."
     },
     "root": {
-      "$value": "#d8deee",
-      "$description": "C.root: company root cell."
+      "$value": "#a8a29c",
+      "$description": "C.root: company root cell (--text-4)."
     },
     "palette": {
-      "plant": {
-        "$value": "#8b86cf"
-      },
       "line": {
-        "$value": "#3fb8a9"
+        "$value": "#d30c55"
+      },
+      "plant": {
+        "$value": "#2563eb"
       },
       "product": {
-        "$value": "#d9a15b"
+        "$value": "#0e8a6a"
       },
       "material": {
-        "$value": "#cf7d98"
+        "$value": "#a07621"
       },
       "supplier": {
-        "$value": "#7fb6d9"
+        "$value": "#6f6a64"
       },
       "customer": {
-        "$value": "#9fc27a"
-      },
-      "order": {
-        "$value": "#c9b16b"
+        "$value": "#7c3aed"
       },
       "machine": {
-        "$value": "#5fa3c9"
+        "$value": "#0e7490"
+      },
+      "order": {
+        "$value": "#c2410c"
       },
       "order-of-use": {
         "$type": "string",
-        "$value": "line, product, plant, material, supplier, customer, machine, order"
+        "$value": "line, plant, product, material, supplier, customer, machine, order, then olive: the categorical order accent, link, good, human, text-3, violet, teal, orange, olive"
       }
     },
     "neutral-proposal-dot": {
-      "$value": "#a9b3cc"
+      "$value": "#6f6a64"
     },
     "equivalence-line": {
-      "$value": "#e6ebf7"
-    },
-    "legend-chip-background": {
-      "$value": "#070b16",
-      "$description": "Hard-coded in the legend SVG in both themes."
-    },
-    "badge-text-on-brass": {
-      "$value": "#0a0e1c"
-    },
-    "primary-text-on-accent": {
-      "$value": "#06110f"
-    },
-    "linkbox-primary-text-dark": {
-      "$value": "#0a0e1c"
-    },
-    "linkbox-primary-text-light": {
-      "$value": "#fff"
-    },
-    "switch-knob-on-dark": {
-      "$value": "#06110f"
-    },
-    "switch-knob-light": {
-      "$value": "#fff"
+      "$value": "#2b2724",
+      "$description": "The applied theme's --text."
     }
   },
   "domain": {
     "$type": "color",
-    "$description": "Default colour per domain product template; tenant overrides live in SETTINGS.colors.",
+    "$description": "Default colour per domain product template, the categorical order; tenant overrides live in SETTINGS.colors.",
     "production": {
-      "$value": "#3fb8a9"
+      "$value": "#d30c55"
     },
     "supply": {
-      "$value": "#8b86cf"
+      "$value": "#2563eb"
     },
     "sales": {
-      "$value": "#d9a15b"
+      "$value": "#0e8a6a"
     },
     "logistics": {
-      "$value": "#d98b6b"
+      "$value": "#a07621"
     },
     "quality": {
-      "$value": "#cf7d98"
+      "$value": "#6f6a64"
     },
     "maintenance": {
-      "$value": "#7fb6d9"
+      "$value": "#7c3aed"
     },
     "finance": {
-      "$value": "#b9b36a"
+      "$value": "#0e7490"
     },
     "people": {
-      "$value": "#8fbf7a"
+      "$value": "#c2410c"
     },
     "engineering": {
-      "$value": "#c58ad0"
-    }
-  },
-  "surface": {
-    "$type": "color",
-    "dark": {
-      "admin-window": {
-        "$value": "#0b1022"
-      },
-      "dialog": {
-        "$value": "#0e142b",
-        "$description": ".dlg, .toast2, sticky list header"
-      },
-      "select-option": {
-        "$value": "#0f1530"
-      },
-      "changes-panel": {
-        "$value": "rgba(9,13,26,.92)"
-      },
-      "admin-backdrop": {
-        "$value": "rgba(3,5,12,.55)",
-        "$description": "blur 3px"
-      },
-      "dialog-backdrop": {
-        "$value": "rgba(3,5,12,.5)"
-      },
-      "button-secondary": {
-        "$value": "rgba(255,255,255,.06)"
-      },
-      "button-secondary-alt": {
-        "$value": "rgba(255,255,255,.05)"
-      },
-      "button-secondary-hover": {
-        "$value": "rgba(255,255,255,.12)"
-      },
-      "button-secondary-hover-alt": {
-        "$value": "rgba(255,255,255,.1)"
-      },
-      "button-secondary-hover-border": {
-        "$value": "rgba(255,255,255,.22)"
-      },
-      "input": {
-        "$value": "rgba(255,255,255,.05)"
-      },
-      "card": {
-        "$value": "rgba(255,255,255,.06)"
-      },
-      "card-faint": {
-        "$value": "rgba(255,255,255,.03)"
-      },
-      "card-strong": {
-        "$value": "rgba(255,255,255,.07)"
-      },
-      "row-hover": {
-        "$value": "rgba(255,255,255,.025)"
-      },
-      "nav-hover": {
-        "$value": "rgba(255,255,255,.05)"
-      },
-      "switch-track": {
-        "$value": "rgba(255,255,255,.12)"
-      },
-      "caption-text-shadow": {
-        "$type": "string",
-        "$value": "0 2px 16px rgba(0,0,0,.8)"
-      },
-      "switch-knob": {
-        "$value": "{css.dark.ink-2}"
-      }
-    },
-    "light": {
-      "admin-window": {
-        "$value": "#ffffff"
-      },
-      "dialog": {
-        "$value": "#ffffff"
-      },
-      "select-option": {
-        "$value": "#ffffff"
-      },
-      "changes-panel": {
-        "$value": "rgba(255,255,255,.94)"
-      },
-      "admin-backdrop": {
-        "$value": "rgba(20,26,46,.35)"
-      },
-      "dialog-backdrop": {
-        "$value": "rgba(20,26,46,.35)"
-      },
-      "button-secondary": {
-        "$value": "rgba(20,26,46,.05)"
-      },
-      "button-secondary-hover": {
-        "$value": "rgba(20,26,46,.1)"
-      },
-      "linkbox-cancel": {
-        "$value": "rgba(20,26,46,.06)"
-      },
-      "input": {
-        "$value": "rgba(20,26,46,.04)"
-      },
-      "row-hover": {
-        "$value": "rgba(20,26,46,.04)"
-      },
-      "caption-text-shadow": {
-        "$type": "string",
-        "$value": "0 1px 8px rgba(255,255,255,.9)"
-      },
-      "switch-knob-shadow": {
-        "$type": "string",
-        "$value": "0 1px 3px rgba(0,0,0,.25)"
-      }
-    },
-    "tint": {
-      "accent-pressed": {
-        "$value": "rgba(63,184,169,.18)"
-      },
-      "accent-pressed-border": {
-        "$value": "rgba(63,184,169,.55)"
-      },
-      "accent-nav-on": {
-        "$value": "rgba(63,184,169,.14)"
-      },
-      "accent-filter-on": {
-        "$value": "rgba(63,184,169,.16)"
-      },
-      "accent-filter-on-border": {
-        "$value": "rgba(63,184,169,.5)"
-      },
-      "accent-domain-focus": {
-        "$value": "rgba(63,184,169,.08)"
-      },
-      "accent-steps-done": {
-        "$value": "rgba(63,184,169,.25)"
-      },
-      "conflict-mic-on": {
-        "$value": "rgba(217,90,104,.18)"
-      },
-      "conflict-mic-on-border": {
-        "$value": "rgba(217,90,104,.5)"
-      },
-      "conflict-reject-hover": {
-        "$value": "rgba(217,90,104,.25)"
-      },
-      "brass-source-box": {
-        "$value": "rgba(214,189,138,.08)"
-      },
-      "brass-source-box-border": {
-        "$value": "rgba(214,189,138,.25)"
-      },
-      "brass-state-pill-border": {
-        "$value": "rgba(214,189,138,.5)"
-      }
+      "$value": "#4d7c0f"
     }
   },
   "typography": {
