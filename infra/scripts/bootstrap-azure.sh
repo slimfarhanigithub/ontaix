@@ -134,8 +134,13 @@ assign() { az role assignment create --assignee-object-id "$SP_OBJECT_ID" --assi
 assign --role Contributor --scope "$ENV_RG_ID"
 assign --role "Storage Blob Data Contributor" --scope "$STATE_ACCOUNT_ID/blobServices/default/containers/$STATE_CONTAINER"
 # Terraform assigns exactly these roles: AcrPull, Network Contributor, Key Vault Secrets Officer,
-# Key Vault Secrets User. The condition prevents the CI identity from granting anything else.
-ALLOWED='{7f951dda-4ed3-4680-a7ca-43fe172d538d, 4d97b98b-1d4f-4787-a291-c67834d212e7, b86a8fe4-44ce-4948-aee5-eccb2c155cd7, 4633458b-17de-408a-b874-0445c86b69e6}'
+# Key Vault Secrets User, Azure Kubernetes Service RBAC Cluster Admin. The condition would limit
+# the CI identity to them. Dead code in this tenant: the owner's Owner role is conditioned and
+# can never grant Role Based Access Control Administrator, so `assign` below is refused and the
+# refusal swallowed (`|| true`); the CI identity holds no such assignment (read-only check of
+# 2026-10-05). Every role assignment is applied by the owner's local `terraform apply`, and a CI
+# apply that has to create one applies everything before it and then fails on it.
+ALLOWED='{7f951dda-4ed3-4680-a7ca-43fe172d538d, 4d97b98b-1d4f-4787-a291-c67834d212e7, b86a8fe4-44ce-4948-aee5-eccb2c155cd7, 4633458b-17de-408a-b874-0445c86b69e6, b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b}'
 CONDITION="((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals $ALLOWED)) AND ((!(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals $ALLOWED))"
 assign --role "Role Based Access Control Administrator" --scope "$ENV_RG_ID" --condition "$CONDITION" --condition-version 2.0
 

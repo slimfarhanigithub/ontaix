@@ -45,6 +45,11 @@ env:
   DNS_ZONE: francecentral.cloudapp.azure.com
   INGRESS_NGINX_VERSION: "4.15.1"
   CERT_MANAGER_VERSION: v1.21.2
+  # The kubeconfig exec plugin that turns the CI identity's Azure CLI session into a Kubernetes
+  # token once the cluster authenticates with Entra ID: one pinned release asset of
+  # github.com/Azure/kubelogin, checked against this digest before it runs.
+  KUBELOGIN_VERSION: v0.2.20
+  KUBELOGIN_SHA256: 2e92450a929dd2aec4da818b40dd4fda97aaeae2d6cd9c1074cc1371210f4ab9
 
 concurrency:
   group: deploy-azure-dev
@@ -142,9 +147,23 @@ jobs:
             || fail "The CI identity cannot read the registry $REGISTRY. Missing role assignment: Contributor on the resource group $RESOURCE_GROUP (infra/scripts/bootstrap-azure.sh grants it)."
           az aks get-credentials -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --overwrite-existing >/dev/null \
             || fail "The CI identity cannot list the user credentials of $AKS_CLUSTER. Missing role assignment: Azure Kubernetes Service Cluster User Role on the cluster (part of Contributor on $RESOURCE_GROUP)."
+          # With Entra ID on the cluster the kubeconfig holds no credential: kubelogin exchanges
+          # the Azure CLI session (the OIDC login above) for a Kubernetes token on each call.
+          if [ "$(az aks show -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --query aadProfile.enableAzureRbac -o tsv)" = "true" ]; then
+            curl -fsSL -o "$RUNNER_TEMP/kubelogin.zip" \
+              "https://github.com/Azure/kubelogin/releases/download/$KUBELOGIN_VERSION/kubelogin-linux-amd64.zip"
+            echo "$KUBELOGIN_SHA256  $RUNNER_TEMP/kubelogin.zip" | sha256sum -c - >/dev/null \
+              || fail "kubelogin $KUBELOGIN_VERSION: the downloaded archive does not match KUBELOGIN_SHA256"
+            unzip -q -o "$RUNNER_TEMP/kubelogin.zip" bin/linux_amd64/kubelogin -d "$RUNNER_TEMP/kubelogin"
+            export PATH="$RUNNER_TEMP/kubelogin/bin/linux_amd64:$PATH"
+            kubelogin convert-kubeconfig -l azurecli
+            access="Entra ID with Azure RBAC (kubelogin $KUBELOGIN_VERSION)"
+          else
+            access="local accounts (the Entra cut-over in docs/provisioning.md, Cluster Access, is pending)"
+          fi
           { kubectl auth can-i create deployments -n "$NAMESPACE" -q && kubectl auth can-i create clusterroles -q; } \
-            || fail "The credentials of $AKS_CLUSTER are not cluster-admin in Kubernetes. With local accounts the cluster user credential is; with Entra integration the CI identity needs Azure Kubernetes Service RBAC Cluster Admin on the cluster."
-          echo "Rights in place: registry readable, cluster credentials listed, cluster-admin in Kubernetes."
+            || fail "The credentials of $AKS_CLUSTER are not cluster-admin in Kubernetes. With Entra ID the CI identity needs Azure Kubernetes Service RBAC Cluster Admin on the cluster (Terraform: azurerm_role_assignment.ci_aks_cluster_admin, applied by the owner; up to five minutes to propagate); with local accounts the cluster user credential is cluster-admin."
+          echo "Rights in place: registry readable, cluster credentials listed, cluster-admin in Kubernetes; cluster access: $access."
           echo "Image builds need Microsoft.ContainerRegistry/registries/scheduleRun/action (in Contributor on $RESOURCE_GROUP); a refusal stops the build job with the registry's message."
 
   build:
@@ -240,8 +259,26 @@ jobs:
             echo "${image^^}_DIGEST=$digest" >> "$GITHUB_ENV"
             echo "ontaix/$image:$TAG = $digest"
           done
-      - name: az aks get-credentials
-        run: az aks get-credentials -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --overwrite-existing
+      - name: az aks get-credentials (kubelogin once the cluster authenticates with Entra ID)
+        run: |
+          set -euo pipefail
+          az aks get-credentials -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --overwrite-existing
+          fail() { echo "::error::$1"; exit 1; }
+          if [ "$(az aks show -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --query aadProfile.enableAzureRbac -o tsv)" = "true" ]; then
+            # One pinned release asset, checked against its digest; nothing else is downloaded.
+            curl -fsSL -o "$RUNNER_TEMP/kubelogin.zip" \
+              "https://github.com/Azure/kubelogin/releases/download/$KUBELOGIN_VERSION/kubelogin-linux-amd64.zip"
+            echo "$KUBELOGIN_SHA256  $RUNNER_TEMP/kubelogin.zip" | sha256sum -c - >/dev/null \
+              || fail "kubelogin $KUBELOGIN_VERSION: the downloaded archive does not match KUBELOGIN_SHA256"
+            unzip -q -o "$RUNNER_TEMP/kubelogin.zip" bin/linux_amd64/kubelogin -d "$RUNNER_TEMP/kubelogin"
+            echo "$RUNNER_TEMP/kubelogin/bin/linux_amd64" >> "$GITHUB_PATH"
+            export PATH="$RUNNER_TEMP/kubelogin/bin/linux_amd64:$PATH"
+            kubelogin convert-kubeconfig -l azurecli
+            echo "cluster access: Entra ID with Azure RBAC (kubelogin $KUBELOGIN_VERSION, azurecli login mode)"
+          else
+            echo "cluster access: local accounts"
+          fi
+          kubectl auth can-i create deployments -n "$NAMESPACE" -q
       - name: ingress-nginx (the public address)
         run: |
           set -euo pipefail
@@ -461,7 +498,7 @@ jobs:
             echo "Create the super admin once (prompts twice, no echo):"
             echo
             echo '```'
-            echo "az aks get-credentials -n $AKS_CLUSTER -g $RESOURCE_GROUP"
+            echo "az aks get-credentials -n $AKS_CLUSTER -g $RESOURCE_GROUP && kubelogin convert-kubeconfig -l azurecli"
             echo "kubectl -n $NAMESPACE exec -it deploy/$RELEASE-api -c api -- python -m app.admin create-super-admin <email>"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
