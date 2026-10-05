@@ -153,6 +153,15 @@ def test_upgrade_to_0007_copies_the_templates_for_existing_tenants(
             " SELECT %s, %s, key FROM domain_template",
             (tenant_id, company_id),
         )
+    # The copies are taken at 0009 and keep the templates' colours of that time; 0011 recolours the
+    # templates only, never a tenant's copies.
+    _upgrade(migrated_url, "0010")
+    with psycopg.connect(migrated_url) as conn:
+        conn.execute("SET search_path TO ontaix, public")
+        templates = conn.execute(
+            "SELECT key, name, owner, color, key, position, 0 FROM domain_template"
+            " ORDER BY position"
+        ).fetchall()
     _upgrade(migrated_url, "head")
     with psycopg.connect(migrated_url) as conn:
         conn.execute("SET search_path TO ontaix, public")
@@ -161,9 +170,8 @@ def test_upgrade_to_0007_copies_the_templates_for_existing_tenants(
             " FROM tenant_domain d WHERE d.tenant_id = %s ORDER BY d.position",
             (tenant_id,),
         ).fetchall()
-        templates = conn.execute(
-            "SELECT key, name, owner, color, key, position, 0 FROM domain_template"
-            " ORDER BY position"
+        recoloured = conn.execute(
+            "SELECT key, color FROM domain_template ORDER BY position"
         ).fetchall()
         revisions = conn.execute(
             "SELECT key, revision, name, color, owner, proposal_id FROM tenant_domain_revision"
@@ -176,6 +184,8 @@ def test_upgrade_to_0007_copies_the_templates_for_existing_tenants(
             (company_id,),
         ).fetchone()[0]
     assert domains == templates
+    assert recoloured[0] == ("production", "#d30c55")
+    assert recoloured != [(t[0], t[3]) for t in templates]
     assert len(domains) == 9
     assert [(r[0], r[1], r[5]) for r in revisions] == sorted((d[0], 0, None) for d in domains)
     assert products == 9

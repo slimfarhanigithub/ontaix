@@ -20,10 +20,10 @@ class TenantSettings(Base):
         Uuid, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True
     )
     theme: Mapped[ThemeName] = mapped_column(
-        pg_enum(ThemeName, "theme_name"), server_default=text("'dark'")
+        pg_enum(ThemeName, "theme_name"), server_default=text("'light'")
     )
     colors: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
-    accent: Mapped[str] = mapped_column(server_default=text("'#3fb8a9'"))
+    accent: Mapped[str] = mapped_column(server_default=text("'#d30c55'"))
     source_colour: Mapped[str] = mapped_column(server_default=text("'#d6bd8a'"))
     voice: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     import_docs: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
