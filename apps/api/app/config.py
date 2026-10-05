@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     # Sign-in, the platform portal and cross-organization jobs connect here as the database role
     # `ontaix_platform`; unset, the same login as `database_url` switches to that role.
     platform_database_url: str | None = None
+    # The API's own connection, for `python -m app.admin ensure-api-login`, which runs with the
+    # schema owner's `database_url` and creates the login named here with this URL's password.
+    # Set in the API pod's login step and in the admin terminal; never in the API process.
+    api_database_url: str | None = None
     # The login name inside `database_url`, for `python -m app.admin grant-database-roles`, which
     # grants it `ontaix_app`. A login name, never a secret; unset, the command grants nothing.
     app_database_login: str | None = None
@@ -270,6 +274,7 @@ class Settings(BaseSettings):
         "ocr_endpoint",
         "ocr_model",
         "platform_database_url",
+        "api_database_url",
         "app_database_login",
         "platform_database_login",
         mode="before",

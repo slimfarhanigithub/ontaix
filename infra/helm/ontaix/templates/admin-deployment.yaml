@@ -1,0 +1,85 @@
+{{- $keyVault := .Values.secrets.keyVault -}}
+{{- if $keyVault.enabled }}
+# The admin terminal: the one pod that carries the schema owner's database URL for the owner's
+# commands (`python -m app.admin create-super-admin`, `set-password`, `grant-database-roles`,
+# `ensure-api-login`). It runs nothing by itself and is scaled to zero between uses:
+#   kubectl -n <namespace> scale deploy/<release>-admin --replicas=1
+#   kubectl -n <namespace> exec -it deploy/<release>-admin -- python -m app.admin <command>
+#   kubectl -n <namespace> scale deploy/<release>-admin --replicas=0
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ontaix.admin.name" . }}
+  labels:
+    {{- include "ontaix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+spec:
+  replicas: {{ .Values.admin.replicas }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ontaix.selectorLabels" (dict "root" . "component" "admin") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ontaix.selectorLabels" (dict "root" . "component" "admin") | nindent 8 }}
+        {{- if .Values.workloadIdentity.clientId }}
+        azure.workload.identity/use: "true"
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/api-configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.api.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: fetch-secrets
+          image: {{ include "ontaix.image" (dict "root" . "image" .Values.api.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "/scripts/fetch_secrets.py"]
+          env:
+            - name: KEY_VAULT_NAME
+              value: {{ $keyVault.name | quote }}
+            - name: KEY_VAULT_FILES
+              value: {{ include "ontaix.keyVaultFiles" . | quote }}
+          securityContext:
+            {{- toYaml .Values.api.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: secrets
+              mountPath: /secrets
+            - name: tmp
+              mountPath: /tmp
+      containers:
+        - name: admin
+          image: {{ include "ontaix.image" (dict "root" . "image" .Values.api.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["sleep", "infinity"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "ontaix.api.name" . }}
+          resources:
+            {{- toYaml .Values.admin.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.api.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: secrets
+              mountPath: /app/.env
+              subPath: admin.env
+              readOnly: true
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ include "ontaix.api.name" . }}-scripts
+        - name: tmp
+          emptyDir: {}
+        - name: secrets
+          emptyDir:
+            medium: Memory
+{{- end }}

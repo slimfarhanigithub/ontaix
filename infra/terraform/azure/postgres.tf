@@ -32,6 +32,22 @@ resource "azurerm_postgresql_flexible_server_database" "ontaix" {
   charset   = "UTF8"
 }
 
+# The API's own login. Terraform generates its password and publishes the URL to Key Vault; the
+# login itself is created in the server by the API pod's login step (`python -m app.admin
+# ensure-api-login`, run with the administrator's URL), which reads the URL from Key Vault,
+# creates the login with that password (or sets it after a rotation) and grants it the two
+# NOLOGIN roles. No PostgreSQL provider: the administrator password never enters Terraform's
+# provider configuration. Rotate with `terraform apply -replace=random_password.postgres_api`,
+# then `kubectl -n ontaix rollout restart deploy/ontaix-api`.
+resource "random_password" "postgres_api" {
+  length      = 40
+  special     = false
+  min_lower   = 4
+  min_upper   = 4
+  min_numeric = 4
+}
+
 locals {
-  database_url = "postgresql://${var.postgres_admin_login}:${random_password.postgres.result}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/${var.postgres_database}?sslmode=require"
+  database_url     = "postgresql://${var.postgres_admin_login}:${random_password.postgres.result}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/${var.postgres_database}?sslmode=require"
+  database_url_api = "postgresql://${var.postgres_api_login}:${random_password.postgres_api.result}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/${var.postgres_database}?sslmode=require"
 }

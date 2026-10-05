@@ -30,6 +30,8 @@ spec:
         {{- toYaml .Values.api.podSecurityContext | nindent 8 }}
       initContainers:
         {{- if $keyVault.enabled }}
+        # Two .env files in the in-memory volume: admin.env (the schema owner's URL and the API's)
+        # for the migration and login steps, .env (the API's URL only) for the API process.
         - name: fetch-secrets
           image: {{ include "ontaix.image" (dict "root" . "image" .Values.api.image) }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -37,10 +39,8 @@ spec:
           env:
             - name: KEY_VAULT_NAME
               value: {{ $keyVault.name | quote }}
-            - name: KEY_VAULT_SECRETS
-              value: {{ toJson $keyVault.secrets | quote }}
-            - name: OUTPUT_FILE
-              value: /secrets/.env
+            - name: KEY_VAULT_FILES
+              value: {{ include "ontaix.keyVaultFiles" . | quote }}
           securityContext:
             {{- toYaml .Values.api.containerSecurityContext | nindent 12 }}
           volumeMounts:
@@ -74,9 +74,30 @@ spec:
             {{- if $keyVault.enabled }}
             - name: secrets
               mountPath: /app/.env
-              subPath: .env
+              subPath: admin.env
               readOnly: true
             {{- end }}
+        {{- if $keyVault.enabled }}
+        # The schema owner creates the API's login from the API's URL (or sets its password after
+        # a rotation), grants it the two roles and confirms the URL connects; the API process then
+        # starts with that URL and nothing more.
+        - name: api-login
+          image: {{ include "ontaix.image" (dict "root" . "image" .Values.api.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-m", "app.admin", "ensure-api-login"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "ontaix.api.name" . }}
+          securityContext:
+            {{- toYaml .Values.api.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: secrets
+              mountPath: /app/.env
+              subPath: admin.env
+              readOnly: true
+        {{- end }}
       containers:
         - name: api
           image: {{ include "ontaix.image" (dict "root" . "image" .Values.api.image) }}
@@ -128,7 +149,8 @@ spec:
         - name: tmp
           emptyDir: {}
         {{- if $keyVault.enabled }}
-        # In memory only, pod-scoped: holds the .env file the fetch-secrets step writes.
+        # In memory only, pod-scoped: holds the .env files the fetch-secrets step writes. Each
+        # container mounts its own file by subPath and sees no other.
         - name: secrets
           emptyDir:
             medium: Memory
