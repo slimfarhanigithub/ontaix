@@ -135,7 +135,10 @@ assign --role Contributor --scope "$ENV_RG_ID"
 assign --role "Storage Blob Data Contributor" --scope "$STATE_ACCOUNT_ID/blobServices/default/containers/$STATE_CONTAINER"
 # Terraform assigns exactly these roles: AcrPull, Network Contributor, Key Vault Secrets Officer,
 # Key Vault Secrets User, Cognitive Services OpenAI User, Cognitive Services User, Cognitive
-# Services Speech User. The condition prevents the CI identity from granting anything else.
+# Services Speech User. The condition would limit the CI identity to them. Dead code in this
+# tenant: the owner's Owner role is conditioned and cannot grant Role Based Access Control
+# Administrator, so `assign` below is refused and the refusal swallowed (`|| true`). Every role
+# assignment is applied by the owner's local `terraform apply`.
 # An existing assignment keeps its condition: to change the list, delete the assignment
 # (az role assignment delete --assignee-object-id <id> --role "Role Based Access Control
 # Administrator" --scope <group id>) and run this script again.
