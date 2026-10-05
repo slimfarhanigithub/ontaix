@@ -1,6 +1,6 @@
 /**
  * The platform portal, a super admin's home when no support session is open: the reference's
- * admin window with the title `Ontaix platform`, one nav group `Platform` (Organizations,
+ * admin window with the title `Ontology Builder platform`, one nav group `Platform` (Organizations,
  * Platform audit log) and `#adminAccount`. It has no × button, because there is nothing behind it.
  */
 import { useState } from 'react';
@@ -26,7 +26,7 @@ export function PlatformPortal() {
       <div className="admin on" id="platform" aria-labelledby="platformTitle">
         <div className="win">
           <div className="head">
-            <div id="platformTitle">Ontaix platform</div>
+            <div id="platformTitle">Ontology Builder platform</div>
             <AccountControls end />
           </div>
           <nav id="platformNav">

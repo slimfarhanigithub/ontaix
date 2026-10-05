@@ -72,7 +72,7 @@ test('a member signs in and sees only their own organization', async ({ browser 
 
   const admin = await (await browser.newContext()).newPage();
   await signIn(admin, { email: SUPER_ADMIN_EMAIL, password: SUPER_ADMIN_PASSWORD });
-  await expect(admin.getByText('Ontaix platform')).toBeVisible();
+  await expect(admin.getByText('Ontology Builder platform')).toBeVisible();
 
   const organizations = await call<{ items: { id: string; slug: string }[] }>(admin, 'GET', '/admin/organizations?pageSize=200');
   const demo = organizations.items.find((o) => o.slug === 'demo');

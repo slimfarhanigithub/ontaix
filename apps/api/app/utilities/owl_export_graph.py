@@ -119,14 +119,21 @@ class _Builder:
         g, s = self.g, self.s
         ontology = ontology_iri(self.base, s.scope, s.exported_at)
         g.add((ontology, T.RDF_TYPE, T.OWL_ONTOLOGY))
-        g.add((ontology, T.RDFS_LABEL, Literal(f"Ontaix export · {s.scope_name}", lang=s.language)))
+        g.add(
+            (
+                ontology,
+                T.RDFS_LABEL,
+                Literal(f"Ontology Builder export · {s.scope_name}", lang=s.language),
+            )
+        )
         g.add((ontology, T.OWL_VERSION_INFO, Literal(s.exported_at.isoformat())))
         g.add(
             (
                 ontology,
                 T.RDFS_COMMENT,
                 Literal(
-                    f"The approved model of {s.scope_name}, exported from Ontaix.", lang=s.language
+                    f"The approved model of {s.scope_name}, exported from Ontology Builder.",
+                    lang=s.language,
                 ),
             )
         )
