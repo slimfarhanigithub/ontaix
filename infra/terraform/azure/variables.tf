@@ -98,6 +98,12 @@ variable "aks_node_count_max" {
   default = 3
 }
 
+variable "aks_local_accounts_disabled" {
+  description = "Refuse the cluster's local accounts (the static cluster-admin certificate of `az aks get-credentials --admin`). Set true only after the owner's kubelogin access and a green deploy run are verified; the cut-over is in docs/provisioning.md, Cluster Access."
+  type        = bool
+  default     = false
+}
+
 # PostgreSQL
 variable "postgres_version" {
   type    = string

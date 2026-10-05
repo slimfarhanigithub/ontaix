@@ -8,7 +8,7 @@ Terraform (`infra/terraform/azure`), applied by GitHub Actions through OIDC fede
 |---|---|---|
 | Resource group | rg-ontaix-dev-frc | tags: project, environment, owner, purpose, expires |
 | Virtual network | vnet-ontaix-dev-frc | 10.40.0.0/16; snet-aks /20, snet-postgres /24 (delegated) |
-| AKS | aks-ontaix-dev-frc | Free tier, 1–3 × Standard_D4s_v5, Azure CNI overlay + Cilium, OIDC issuer + workload identity, Container Insights |
+| AKS | aks-ontaix-dev-frc | Free tier, 1–3 × Standard_D4s_v5, Azure CNI overlay + Cilium, OIDC issuer + workload identity, Container Insights; Entra ID with Azure RBAC for the Kubernetes API (the owner and the CI identity as Azure Kubernetes Service RBAC Cluster Admin), local accounts off after the cut-over (`aks_local_accounts_disabled`) |
 | Container registry | crontaixdevfrc&lt;hash&gt; | Basic; AcrPull for the kubelet identity, no admin user |
 | PostgreSQL Flexible 16 | psql-ontaix-dev-frc-&lt;hash&gt; | B_Standard_B2s, VNet-only, private DNS; password generated → Key Vault |
 | Key Vault | kv-ontaix-dev-frc-&lt;hash&gt; | RBAC; secrets `postgres-admin-password`, `database-url`; the optional `anthropic-api-key` is set by the owner, not by Terraform, and only when the `anthropic` provider is used (see below) |
@@ -160,7 +160,7 @@ flowchart LR
     K --> T[certificate ready<br/>checks at the public address]
 ```
 
-1. `preflight` resolves the non-secret values from the resource group with read-only `az` calls (registry, Key Vault name, the two identity client ids, the Foundry endpoint and its `gpt-6-sol` deployment, the Speech resource, the Postgres FQDN) and checks that the secret `database-url` exists (names only). It then checks the rights the run needs and stops with the missing role assignment named: reading the registry and listing the cluster credentials (both in Contributor on `rg-ontaix-dev-frc`, which the CI identity holds) and cluster-admin in Kubernetes (the cluster uses local accounts, so the cluster user credential is cluster-admin). Image builds need `Microsoft.ContainerRegistry/registries/scheduleRun/action`, also in Contributor.
+1. `preflight` resolves the non-secret values from the resource group with read-only `az` calls (registry, Key Vault name, the two identity client ids, the Foundry endpoint and its `gpt-6-sol` deployment, the Speech resource, the Postgres FQDN) and checks that the secret `database-url` exists (names only). It then checks the rights the run needs and stops with the missing role assignment named: reading the registry and listing the cluster credentials (both in Contributor on `rg-ontaix-dev-frc`, which the CI identity holds) and cluster-admin in Kubernetes: with Entra ID on the cluster (`aadProfile.enableAzureRbac`, read at run time) it installs `kubelogin` and converts the kubeconfig, and the CI identity's Azure Kubernetes Service RBAC Cluster Admin assignment answers; with local accounts the cluster user credential is cluster-admin (Cluster Access below). Image builds need `Microsoft.ContainerRegistry/registries/scheduleRun/action`, also in Contributor.
 2. `build` runs `az acr build` for the three images, in parallel, tagged with the commit SHA. The Studio is built with `VITE_ONTAIX_API_URL=/api/v1`, so it calls the API on its own origin; a production build carries no development identity header. With `image_tag` set (letters, digits, `_`, `.` and `-`, at most 128 characters), this job is skipped. Either way the deploy resolves each image's digest from the registry and pins the pods to it (`<image>@sha256:…`), so a tag moved later changes nothing in the cluster.
 3. `deploy` installs ingress-nginx (its LoadBalancer service carries the DNS label, the Azure health-probe path and `externalTrafficPolicy: Local`, so the API's sign-in throttle sees the real client address), waits for the public IP and for the name to resolve, installs cert-manager and the two ClusterIssuers, then `helm upgrade --install ontaix` with the values of `values-azure-dev.yaml` plus the resolved ones (`--set-string`). The API pod runs two init steps before the API process: `fetch-secrets` reads `database-url` from Key Vault with the workload identity and writes it as the container's `.env` file, and `migrate` applies every migration and prints the revision. After the rollout the workflow prints that revision, runs `python -m app.admin grant-database-roles` with `ONTAIX_APP_DATABASE_LOGIN=ontaix_admin` (when `run_role_grant` is on, the default; a repeat is a no-op), and checks the release in the cluster: the three health routes, the Studio's `/api` proxy, a sign-in with an unknown account that must answer `401` (it opens a connection and runs `SET ROLE ontaix_platform`, so a missing grant answers `500`), no `permission denied to set role` in the API log, and no `ONTAIX_DEV_IDENTITY_HEADER` anywhere. Every check runs inside a pod of the release with `kubectl exec`, so the network policies need no exception for a probe pod. It waits for the certificate, then checks the public address: `/healthz` and `/api/v1/healthz` answer `200`, `/api/v1/openapi.json` answers `404` (the API serves no documentation in production), the Studio sends HSTS and a Content Security Policy, the API's responses carry `X-Content-Type-Options: nosniff`, HTTP redirects to HTTPS, and the certificate issuer is printed.
 
@@ -198,15 +198,54 @@ cert-manager requests the certificate from Let's Encrypt with an HTTP-01 challen
 There is no sign-up route, so nobody enters without an account the super admin created. The super admin is created once, from a terminal attached to the API container (the password travels over the owner's TTY only):
 
 ```bash
-az aks get-credentials -n aks-ontaix-dev-frc -g rg-ontaix-dev-frc
+az aks get-credentials -n aks-ontaix-dev-frc -g rg-ontaix-dev-frc && kubelogin convert-kubeconfig -l azurecli
 kubectl -n ontaix exec -it deploy/ontaix-api -c api -- python -m app.admin create-super-admin slim.farhani@outlook.com
 ```
 
 The super admin signs in at `https://ontaix-dev.francecentral.cloudapp.azure.com/` and, from the platform portal (`POST /api/v1/admin/organizations`, then `POST /api/v1/admin/organizations/{id}/users`), creates an organization and its accounts with a name, an email, the groups and an initial password handed to the person outside Ontaix. An initial or reset password must be changed at the first sign-in (`mustChangePassword`; every other request answers `403 password_change_required` until it is). Accounts and organizations are disabled and enabled from the same portal, and `PUT .../users/{id}/password` resets a password, which again forces a change. The super admin's own recovery is `python -m app.admin set-password <email>` from the same terminal.
 
+### Cluster Access
+
+The Kubernetes API authenticates with Entra ID and authorizes with Azure RBAC (`azure_active_directory_role_based_access_control { azure_rbac_enabled = true }` on `azurerm_kubernetes_cluster.main`, decision row 175). A kubeconfig from `az aks get-credentials` then holds no credential, only the `kubelogin` exec plugin, which exchanges the signed-in Azure CLI session for a Kubernetes token on each call; access is an Azure role assignment on the cluster, audited by Azure and revoked by deleting it. Two assignments exist, both `Azure Kubernetes Service RBAC Cluster Admin` at the cluster scope: the owner (`azurerm_role_assignment.owner_aks_cluster_admin`) and the CI identity (`azurerm_role_assignment.ci_aks_cluster_admin`). With `local_account_disabled = true` the cluster refuses `az aks get-credentials --admin`, the static cluster-admin certificate that any Contributor on the resource group could otherwise fetch.
+
+Why the CI identity is Cluster Admin and not RBAC Writer on three namespaces: the deploy workflow installs ingress-nginx, cert-manager and the Let's Encrypt issuers, which create namespaces (`--create-namespace`), custom resource definitions, cluster roles and cluster role bindings, webhook configurations, an ingress class and cluster issuers; the Ontaix release itself needs a Certificate custom resource read (`kubectl wait certificate`). `Azure Kubernetes Service RBAC Writer` is a namespaced role whose data actions (read with `az role definition list --name "Azure Kubernetes Service RBAC Writer"`) cover none of these kinds and no custom resource, and `Azure Kubernetes Service RBAC Admin` excludes `namespaces/write`. A custom Azure role could add `namespaces/write`, `rbac.authorization.k8s.io/*`, `apiextensions.k8s.io/*`, `admissionregistration.k8s.io/*`, `networking.k8s.io/ingressclasses/*` and `customresources/*` at the cluster scope, but an identity that writes cluster role bindings can bind itself to `cluster-admin` (Kubernetes RBAC stays in force beside Azure RBAC), so that role is Cluster Admin with extra steps. Cluster Admin is therefore the honest minimum while the workflow installs the platform charts. Writer on `ontaix`, `ingress-nginx` and `cert-manager` becomes possible the day the owner installs those charts himself; that change is a follow-up (Before Going Public).
+
+Owner access from a terminal (`az aks install-cli` installs `kubectl` and `kubelogin`):
+
+```bash
+az login
+az aks install-cli
+az aks get-credentials -n aks-ontaix-dev-frc -g rg-ontaix-dev-frc --overwrite-existing
+kubelogin convert-kubeconfig -l azurecli
+kubectl auth can-i '*' '*'                                       # yes: Azure Kubernetes Service RBAC Cluster Admin
+```
+
+Cut-over from local accounts, in an order that never locks the owner out:
+
+```mermaid
+flowchart TD
+    A[1. terraform apply, locally as the owner<br/>Entra ID + Azure RBAC on the cluster<br/>two Cluster Admin assignments<br/>local accounts still on] --> B[2. owner: get-credentials + kubelogin<br/>kubectl auth can-i '*' '*' = yes]
+    B --> C[3. deploy workflow run<br/>preflight converts the kubeconfig with kubelogin<br/>green]
+    C --> D[4. aks_local_accounts_disabled = true<br/>terraform apply]
+    D --> E[5. az aks get-credentials --admin is refused<br/>old kubeconfig contexts deleted]
+    E --> F[6. optional: az aks rotate-certs<br/>revokes certificates handed out before]
+```
+
+1. Apply the Terraform change locally as the owner (Running Terraform locally above): CI cannot create role assignments (the CI identity holds no Role Based Access Control Administrator assignment, so `infra.yml` would fail on the two assignments; after the local apply its plan is empty). The apply updates the cluster in place: Entra ID integration with Azure RBAC on, `local_account_disabled = false` (the tfvars default), and the two role assignments. The API server keeps running; no pod restarts.
+2. Verify the owner's access with the commands above; role assignments take up to five minutes to propagate. Keep the old context until step 5.
+3. Run the deploy workflow with `image_tag` set to the running tag (no rebuild): its preflight sees `aadProfile.enableAzureRbac = true`, installs `kubelogin`, converts the kubeconfig and checks `kubectl auth can-i`; the run is green.
+4. Set `aks_local_accounts_disabled = true` in `env/dev.tfvars`, apply (locally or by merging that one-line change; the apply is an in-place cluster update) and commit.
+5. `az aks get-credentials -n aks-ontaix-dev-frc -g rg-ontaix-dev-frc --admin` now answers `Getting static credential isn't allowed because this cluster is set to disable local accounts`. Delete old contexts (`kubectl config delete-context aks-ontaix-dev-frc-admin`, and the pre-Entra `aks-ontaix-dev-frc` context on any machine).
+6. Optional: `az aks rotate-certs -n aks-ontaix-dev-frc -g rg-ontaix-dev-frc` revokes every certificate handed out while local accounts were on (disabling them stops new ones but does not invalidate old ones). It restarts the nodes and the API server: a few minutes of outage, so a quiet time. The GitHub runners that held a certificate were ephemeral; the owner's own copies are the only ones to consider.
+
+Break-glass (the owner lost Entra access to the cluster, for example a role assignment removed by mistake): `az aks update -n aks-ontaix-dev-frc -g rg-ontaix-dev-frc --enable-local-accounts`, then `az aks get-credentials ... --admin`; repair the assignment, then set `aks_local_accounts_disabled = true` again (a Terraform apply also re-disables them, so the tfvars must say what the owner wants). Owner on the subscription is enough for the update.
+
+Rollback of the whole change: `aks_local_accounts_disabled = false` and the `azure_active_directory_role_based_access_control` block removed, apply; the deploy workflow's preflight reads `aadProfile.enableAzureRbac` at run time and takes the local-accounts path without a workflow change.
+
 ### Reaching the Cluster Directly
 
 ```bash
+az aks get-credentials -n aks-ontaix-dev-frc -g rg-ontaix-dev-frc && kubelogin convert-kubeconfig -l azurecli
 kubectl -n ontaix port-forward svc/ontaix-api 8000:8000        # http://localhost:8000/healthz, /api/v1/...
 kubectl -n ontaix port-forward svc/ontaix-studio 5173:8080     # http://localhost:5173/ (its /api proxy reaches the API)
 kubectl -n ontaix logs deploy/ontaix-api -c migrate            # the migration log and revision
@@ -236,10 +275,11 @@ Sign-in needs an allowed `Origin`, and the cluster allows the public host only; 
 Terraform follow-ups the owner approves separately, each a decision row:
 
 - A dedicated database login for the API. The pods connect as the server administrator `ontaix_admin` today. A login `ontaix_api` (password generated by Terraform, stored as a second Key Vault secret `database-url-api`, created in the server by the owner from a terminal since Terraform carries no PostgreSQL provider) would hold only `ontaix_app` and `ontaix_platform` through `grant-database-roles` (`ONTAIX_APP_DATABASE_LOGIN=ontaix_api`, run with the administrator's URL), and `secrets.keyVault.secrets` would point `ONTAIX_DATABASE_URL` at it; the administrator's URL then serves migrations and the admin commands only.
-- Entra-integrated AKS with local accounts off: `azure_active_directory_role_based_access_control` with Azure RBAC on `azurerm_kubernetes_cluster.main`, `local_account_disabled = true`, the CI identity assigned Azure Kubernetes Service RBAC Writer on the `ontaix`, `ingress-nginx` and `cert-manager` namespaces (and Azure Kubernetes Service RBAC Cluster Admin only if the CRDs of cert-manager stay installed by the workflow), `kubelogin` in the workflow after `az aks get-credentials`, and the owner as Azure Kubernetes Service RBAC Cluster Admin. The preflight check then expects those roles instead of the cluster user credential.
+- The CI identity's cluster role narrows from Azure Kubernetes Service RBAC Cluster Admin to RBAC Writer on the `ontaix`, `ingress-nginx` and `cert-manager` namespaces once ingress-nginx, cert-manager and the Let's Encrypt issuers are installed by the owner rather than by the deploy workflow (Cluster Access below).
 
 ## Security posture
 - No client secret anywhere: CI uses OIDC federation; pods use workload identity; images are pulled
   with the kubelet identity; the database is VNet-only.
-- The CI identity can only assign the four roles Terraform needs (RBAC Administrator with condition).
+- The CI identity holds Contributor on the environment group, blob access to the state container and Key Vault Secrets Officer, and no Role Based Access Control Administrator assignment (the bootstrap's conditioned assignment is refused by the subscription's conditioned Owner, read-only check of 2026-10-05): role assignments are applied by the owner's local Terraform runs, and a CI apply that adds one fails.
+- Kubernetes access is Entra ID with Azure RBAC: the owner and the CI identity hold Azure Kubernetes Service RBAC Cluster Admin on the cluster, kubeconfigs carry no credential, and local accounts are disabled after the cut-over (Cluster Access).
 - Terraform state storage is Entra-only (shared keys disabled), versioned, soft-deleted 30 days.
