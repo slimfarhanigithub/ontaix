@@ -101,7 +101,7 @@ export function TenantSettings() {
         desc="Allow relations and equivalences between companies. Disabling removes every existing cross-company relationship; each company keeps its own model intact."
       />
       <h3>Data</h3>
-      <SetRow k="readOnlyConnectors" title="Connectors are read-only" desc="Ontaix reads schemas and counts. It never writes into a source system." locked />
+      <SetRow k="readOnlyConnectors" title="Connectors are read-only" desc="Ontology Builder reads schemas and counts. It never writes into a source system." locked />
       <div className="set">
         <b>Refresh interval</b>
         <select

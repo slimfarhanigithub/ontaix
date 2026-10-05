@@ -789,7 +789,7 @@ function MembersDialog({ g, close }: { g: Group; close: () => void }) {
   return (
     <ListDialogFrame
       title={`Members · ${g.name}`}
-      sub="add or remove users · the directory is Ontaix’s own"
+      sub="add or remove users · the directory is Ontology Builder’s own"
       close={close}
       buttons={[{ label: 'Done', cls: 'primary', onClick: () => renderAdmin() }]}
     >
@@ -996,7 +996,7 @@ function RoleGroupsDialog({ role, close }: { role: string; close: () => void }) 
   return (
     <ListDialogFrame
       title={`${role} · groups`}
-      sub="which Ontaix groups hold this role, and on which scope"
+      sub="which Ontology Builder groups hold this role, and on which scope"
       close={close}
       buttons={[{ label: 'Done', cls: 'primary', onClick: () => renderAdmin() }]}
     >
