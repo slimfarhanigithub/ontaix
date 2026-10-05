@@ -70,8 +70,9 @@ resource "azurerm_role_assignment" "aks_subnet" {
 }
 
 # Kubernetes access through Azure RBAC. Both assignments are made by the owner's local apply:
-# the CI identity holds no Role Based Access Control Administrator assignment (the subscription's
-# conditioned Owner cannot delegate it), so a CI apply of a new role assignment is refused.
+# the CI identity can assign no role (no Role Based Access Control Administrator assignment
+# anywhere; the subscription's conditioned Owner can never grant it), so a CI apply that has to
+# create a role assignment applies everything before it and then fails on it.
 #
 # The owner: full control, the account that recovers the cluster.
 resource "azurerm_role_assignment" "owner_aks_cluster_admin" {
@@ -84,11 +85,14 @@ resource "azurerm_role_assignment" "owner_aks_cluster_admin" {
 # The CI identity: the deploy workflow installs ingress-nginx, cert-manager and the Let's Encrypt
 # issuers, which create namespaces, custom resource definitions, cluster roles and cluster role
 # bindings, webhook configurations, an ingress class and cluster issuers. Azure Kubernetes
-# Service RBAC Writer is namespaced and covers none of these, and an identity that writes
-# cluster role bindings can bind itself to cluster-admin anyway, so a narrower role would only
-# hide the same power. Cluster Admin at the cluster scope is the honest minimum while the
-# platform charts are installed by the workflow; it becomes Writer on the three namespaces the
-# day the owner installs those charts himself.
+# Service RBAC Writer is namespaced and covers none of these, and Kubernetes RBAC escalation
+# prevention makes the installer of a ClusterRole hold every permission it grants, so whoever
+# installs those charts holds cluster-admin-equivalent rights whatever its Azure role is called.
+# Cluster Admin at the cluster scope is the honest minimum while the platform charts are
+# installed by the workflow; it becomes Writer on the three namespaces the day the owner installs
+# those charts himself. Residual: Contributor on the resource group includes managedClusters/write,
+# so this identity could re-enable local accounts and fetch the admin certificate, two audited
+# control-plane writes.
 resource "azurerm_role_assignment" "ci_aks_cluster_admin" {
   scope                = azurerm_kubernetes_cluster.main.id
   role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"

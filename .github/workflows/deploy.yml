@@ -46,8 +46,10 @@ env:
   INGRESS_NGINX_VERSION: "4.15.1"
   CERT_MANAGER_VERSION: v1.21.2
   # The kubeconfig exec plugin that turns the CI identity's Azure CLI session into a Kubernetes
-  # token once the cluster authenticates with Entra ID (installed by az aks install-cli).
+  # token once the cluster authenticates with Entra ID: one pinned release asset of
+  # github.com/Azure/kubelogin, checked against this digest before it runs.
   KUBELOGIN_VERSION: v0.2.20
+  KUBELOGIN_SHA256: 2e92450a929dd2aec4da818b40dd4fda97aaeae2d6cd9c1074cc1371210f4ab9
 
 concurrency:
   group: deploy-azure-dev
@@ -148,10 +150,12 @@ jobs:
           # With Entra ID on the cluster the kubeconfig holds no credential: kubelogin exchanges
           # the Azure CLI session (the OIDC login above) for a Kubernetes token on each call.
           if [ "$(az aks show -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --query aadProfile.enableAzureRbac -o tsv)" = "true" ]; then
-            az aks install-cli --kubelogin-version "$KUBELOGIN_VERSION" \
-              --kubelogin-install-location "$RUNNER_TEMP/kubelogin/kubelogin" \
-              --install-location "$RUNNER_TEMP/azcli-kubectl/kubectl" >/dev/null
-            export PATH="$RUNNER_TEMP/kubelogin:$PATH"
+            curl -fsSL -o "$RUNNER_TEMP/kubelogin.zip" \
+              "https://github.com/Azure/kubelogin/releases/download/$KUBELOGIN_VERSION/kubelogin-linux-amd64.zip"
+            echo "$KUBELOGIN_SHA256  $RUNNER_TEMP/kubelogin.zip" | sha256sum -c - >/dev/null \
+              || fail "kubelogin $KUBELOGIN_VERSION: the downloaded archive does not match KUBELOGIN_SHA256"
+            unzip -q -o "$RUNNER_TEMP/kubelogin.zip" bin/linux_amd64/kubelogin -d "$RUNNER_TEMP/kubelogin"
+            export PATH="$RUNNER_TEMP/kubelogin/bin/linux_amd64:$PATH"
             kubelogin convert-kubeconfig -l azurecli
             access="Entra ID with Azure RBAC (kubelogin $KUBELOGIN_VERSION)"
           else
@@ -259,12 +263,16 @@ jobs:
         run: |
           set -euo pipefail
           az aks get-credentials -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --overwrite-existing
+          fail() { echo "::error::$1"; exit 1; }
           if [ "$(az aks show -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --query aadProfile.enableAzureRbac -o tsv)" = "true" ]; then
-            az aks install-cli --kubelogin-version "$KUBELOGIN_VERSION" \
-              --kubelogin-install-location "$RUNNER_TEMP/kubelogin/kubelogin" \
-              --install-location "$RUNNER_TEMP/azcli-kubectl/kubectl" >/dev/null
-            echo "$RUNNER_TEMP/kubelogin" >> "$GITHUB_PATH"
-            export PATH="$RUNNER_TEMP/kubelogin:$PATH"
+            # One pinned release asset, checked against its digest; nothing else is downloaded.
+            curl -fsSL -o "$RUNNER_TEMP/kubelogin.zip" \
+              "https://github.com/Azure/kubelogin/releases/download/$KUBELOGIN_VERSION/kubelogin-linux-amd64.zip"
+            echo "$KUBELOGIN_SHA256  $RUNNER_TEMP/kubelogin.zip" | sha256sum -c - >/dev/null \
+              || fail "kubelogin $KUBELOGIN_VERSION: the downloaded archive does not match KUBELOGIN_SHA256"
+            unzip -q -o "$RUNNER_TEMP/kubelogin.zip" bin/linux_amd64/kubelogin -d "$RUNNER_TEMP/kubelogin"
+            echo "$RUNNER_TEMP/kubelogin/bin/linux_amd64" >> "$GITHUB_PATH"
+            export PATH="$RUNNER_TEMP/kubelogin/bin/linux_amd64:$PATH"
             kubelogin convert-kubeconfig -l azurecli
             echo "cluster access: Entra ID with Azure RBAC (kubelogin $KUBELOGIN_VERSION, azurecli login mode)"
           else
