@@ -5,6 +5,7 @@
  * relation between two approved cells through the link dialog and a Governor approves it.
  */
 import { mkdirSync } from 'node:fs';
+import { GREEN } from '../../apps/studio/src/canvas/constants';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,7 +16,6 @@ const OUTPUT_DIR = resolve(here, 'output');
 
 const BUILDER = 'sam.okafor@northwind.com';
 const GOVERNOR = 'hugo.brandt@northwind.com';
-const GREEN = '#4fc98f';
 /** Names an existing Northwind concept and one new one. */
 const SENTENCE = 'Invoice has due date';
 const TAUGHT = 'Due date';

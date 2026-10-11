@@ -104,7 +104,7 @@ describe('mock API: tenant domains', () => {
     const server = createMockServer(createEventBus());
     const domains = body<TenantDomain[]>(server.handle('GET', '/domains'));
     expect(domains.map((d) => d.key)).toEqual(DOMAIN_TEMPLATES.map((t) => t.key));
-    expect(domains[0]).toMatchObject({ name: 'Production', owner: 'Plant operations', color: '#3fb8a9', defaultColor: '#3fb8a9', template: true, position: 0, revision: 0 });
+    expect(domains[0]).toMatchObject({ name: 'Production', owner: 'Plant operations', color: '#d30c55', defaultColor: '#d30c55', template: true, position: 0, revision: 0 });
   });
 
   it('creates a domain through a proposal; its product joins a company when the first concept does', () => {
@@ -178,7 +178,7 @@ describe('mock API: tenant domains', () => {
     const p = body<Proposal>(server.handle('POST', `/concepts/${plant.conceptId}/move`, { domainKey: 'sales' }), 202);
     expect(p).toMatchObject({ changeKind: 'move_concept_domain', title: 'Move Plant to Sales', conceptId: plant.conceptId });
     const res = body<DecisionResult>(server.handle('POST', `/proposals/${p.id}/approve`));
-    expect(res.artefacts.concepts?.[0]).toMatchObject({ domainKey: 'sales', color: '#d9a15b' });
+    expect(res.artefacts.concepts?.[0]).toMatchObject({ domainKey: 'sales', color: '#0e8a6a' });
     expect(res.artefacts.domainProducts?.map((d) => [d.key, d.revision]).sort()).toEqual([
       ['production', 2],
       ['sales', 1],

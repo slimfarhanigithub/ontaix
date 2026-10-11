@@ -1002,7 +1002,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         changeKind: 'resolve_conflict',
         title: 'Resolve the conflict',
         heading: KIND_HEADING.change,
-        color: '#3fb8a9',
+        color: DEFAULT_ACCENT,
         companyId: first.companyId,
         domainId: null,
         parentLabel: null,

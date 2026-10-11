@@ -5,11 +5,11 @@
  * (`drawLinks`).
  */
 import { random } from '../runtime/rng';
-import { FONT_SANS } from '../design/tokens';
+import { FONT_SANS, themedColour, token } from '../design/tokens';
 import { clamp, ease, hex } from './colour';
-import { C, EQUIVALENCE_LINE, MOTION } from './constants';
+import { C, MOTION } from './constants';
 import { dimOf } from './focus';
-import { roundRect } from './labels';
+import { labelScale, roundRect } from './labels';
 import { shown, type SceneState } from './state';
 import type { Link } from './types';
 import type { View } from './view';
@@ -53,7 +53,8 @@ export function drawLinks(s: SceneState, v: View, t: number): void {
     const lf = l.dying ? 1 - clamp((t - l.dying.start) / 0.7, 0, 1) : 1;
     const same = l.kind === 'same',
       bind = l.kind === 'bind';
-    const col = isa ? l.a.color : clash ? C.conflict : same ? EQUIVALENCE_LINE : bind ? s.BRASS : l.b.color;
+    const conflict = themedColour(C.conflict);
+    const col = isa ? themedColour(l.a.color) : clash ? conflict : same ? token('--text') : bind ? themedColour(s.BRASS) : themedColour(l.b.color);
     const al =
       Math.min(1, l.alpha * 1.6) * Math.min(dimOf(s, l.a), dimOf(s, l.b)) * dy(l.a) * dy(l.b) * (pend ? 0.55 : 1) * lf;
     const chord = Math.hypot(l.b.x - l.a.x, l.b.y - l.a.y) || 1;
@@ -87,7 +88,7 @@ export function drawLinks(s: SceneState, v: View, t: number): void {
       (l.b.parent === l.a || l.a.parent === l.b || bind);
     ctx.lineCap = 'round';
     ctx.lineWidth = inLine ? 2.2 : same || bind ? 1 : 1.3;
-    ctx.strokeStyle = clash ? hex(C.conflict, 0.85 * al) : same ? hex(col, 0.55 * al) : bind ? hex(col, 0.5 * al) : grad;
+    ctx.strokeStyle = clash ? hex(conflict, 0.85 * al) : same ? hex(col, 0.55 * al) : bind ? hex(col, 0.5 * al) : grad;
     if (isa) ctx.setLineDash([6, 5]);
     else if (same) ctx.setLineDash([2, 5]);
     ctx.stroke();
@@ -124,7 +125,7 @@ export function drawLinks(s: SceneState, v: View, t: number): void {
         ctx.translate(ax, ay);
         ctx.rotate(Math.atan2(ty2, tx2) + Math.PI);
         head();
-        ctx.fillStyle = hex(clash ? C.conflict : col, 0.95 * al);
+        ctx.fillStyle = hex(clash ? conflict : col, 0.95 * al);
         ctx.fill();
         ctx.restore();
       }
@@ -142,7 +143,7 @@ export function drawLinks(s: SceneState, v: View, t: number): void {
     if (gap < 26) continue;
     if (
       l.label &&
-      s.cam.s > 0.5 &&
+      s.cam.s > 0.3 &&
       al > 0.3 &&
       g >= 1 &&
       gap > 70 &&
@@ -155,16 +156,17 @@ export function drawLinks(s: SceneState, v: View, t: number): void {
       ctx.save();
       ctx.translate(mx, my);
       ctx.rotate(an);
-      ctx.font = `${isa ? '300' : '500'} 10.5px ${FONT_SANS}`;
-      const w = ctx.measureText(l.label).width + 16;
-      l._chip = { x: mx, y: my, r: Math.max(w / 2, 12) };
-      roundRect(ctx, -w / 2, -9, w, 18, 9);
+      const k = labelScale(s.cam.s);
+      ctx.font = `${isa ? '300' : '500'} ${Math.round(10.5 * k)}px ${FONT_SANS}`;
+      const w = ctx.measureText(l.label).width + 16 * k;
+      l._chip = { x: mx, y: my, r: Math.max(w / 2, 12 * k) };
+      roundRect(ctx, -w / 2, -9 * k, w, 18 * k, 9 * k);
       ctx.fillStyle = `rgba(${TH.CHIP},0.9)`;
       ctx.fill();
       ctx.strokeStyle = hex(col, 0.45 * al);
       ctx.lineWidth = 1;
       ctx.stroke();
-      ctx.fillStyle = clash ? hex(C.conflict, 0.95 * al) : `rgba(${TH.INK},${(same ? 0.75 : 0.92) * al})`;
+      ctx.fillStyle = clash ? hex(conflict, 0.95 * al) : `rgba(${TH.INK},${(same ? 0.75 : 0.92) * al})`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(l.label, 0, 1);

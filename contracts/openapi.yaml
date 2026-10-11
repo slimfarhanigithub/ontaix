@@ -3484,7 +3484,7 @@ paths:
     post:
       tags: [Settings]
       summary: Reset appearance to defaults
-      description: Domain colours back to the templates, accent `#3fb8a9`, source colour `#d6bd8a`. Theme is unchanged.
+      description: Domain colours back to the templates, accent `#d30c55`, source colour `#d6bd8a`. Theme is unchanged.
       operationId: resetAppearance
       x-ontaix-permission: appearance.write
       responses:

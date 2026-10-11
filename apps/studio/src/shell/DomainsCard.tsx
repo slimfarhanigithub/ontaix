@@ -5,6 +5,7 @@
  * the toggle 8 px above the card as `placeDomainsToggle` does, without measuring.
  */
 import { liveOf } from '../canvas/state';
+import { themedColour } from '../design/tokens';
 import { refStyle, useStore } from './dom';
 
 export function DomainsCard() {
@@ -77,7 +78,7 @@ function CompanyRows({
         const cnt = s.nodes.filter((n) => n.domain === d && !n.dying).length;
         const focus = s.focusDomain === d;
         return (
-          <div key={d.key} className={'row' + (d.hidden ? ' off' : '')} style={{ color: d.color }}>
+          <div key={d.key} className={'row' + (d.hidden ? ' off' : '')} style={{ color: themedColour(d.color) }}>
             <i></i>
             <button
               className={`name${focus ? ' focus' : ''}`}
