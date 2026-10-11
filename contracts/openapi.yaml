@@ -3440,7 +3440,7 @@ paths:
   /appearance:
     get:
       tags: [Settings]
-      summary: Appearance (theme, domain colours, accent, source colour)
+      summary: Appearance (domain colours, accent, source colour)
       operationId: getAppearance
       x-ontaix-permission: model.read
       responses:
@@ -3484,7 +3484,7 @@ paths:
     post:
       tags: [Settings]
       summary: Reset appearance to defaults
-      description: Domain colours back to the templates, accent `#d30c55`, source colour `#d6bd8a`. Theme is unchanged.
+      description: Domain colours back to the templates, accent `#d30c55`, source colour `#d6bd8a`.
       operationId: resetAppearance
       x-ontaix-permission: appearance.write
       responses:
@@ -7500,11 +7500,8 @@ components:
 
     Appearance:
       type: object
-      required: [theme, colors, accent, source, defaults]
+      required: [colors, accent, source, defaults]
       properties:
-        theme:
-          type: string
-          enum: [dark, light]
         colors:
           type: object
           description: Effective colour per domain key (override or template).
@@ -7531,9 +7528,6 @@ components:
       type: object
       minProperties: 1
       properties:
-        theme:
-          type: string
-          enum: [dark, light]
         colors:
           type: object
           additionalProperties:

@@ -38,7 +38,7 @@
     }
   },
   "css": {
-    "$description": "CSS custom properties on :root (light, the default) and under data-theme=\"dark\" or .dark on <html>. The alias block of tokens.css resolves --panel, --ink, --ink-2, --ink-3, --line and --conflict onto --surface, --text, --text-2, --text-3, --border and --danger.",
+    "$description": "CSS custom properties on :root, the Studio's one theme (light). The alias block of tokens.css resolves --panel, --ink, --ink-2, --ink-3, --line and --conflict onto --surface, --text, --text-2, --text-3, --border and --danger.",
     "light": {
       "$type": "color",
       "bg": {
@@ -159,123 +159,6 @@
         "$value": "#d6bd8a"
       }
     },
-    "dark": {
-      "$type": "color",
-      "bg": {
-        "$value": "#1b1f2a"
-      },
-      "surface": {
-        "$value": "#232936"
-      },
-      "surface-2": {
-        "$value": "#2a3140"
-      },
-      "hover": {
-        "$value": "#2a3140"
-      },
-      "rowhover": {
-        "$value": "#272e3a"
-      },
-      "chip": {
-        "$value": "#2c333f"
-      },
-      "subtle": {
-        "$value": "#20252f"
-      },
-      "scrim": {
-        "$value": "rgba(0, 0, 0, 0.55)"
-      },
-      "border": {
-        "$value": "#363d4c"
-      },
-      "border-strong": {
-        "$value": "#434b5c"
-      },
-      "border-faint": {
-        "$value": "#2c323f"
-      },
-      "text": {
-        "$value": "#f3f5f9"
-      },
-      "text-2": {
-        "$value": "#c6cbd6"
-      },
-      "text-3": {
-        "$value": "#9aa2b1"
-      },
-      "text-4": {
-        "$value": "#6f7788"
-      },
-      "accent": {
-        "$value": "#ff5c8a"
-      },
-      "accent-strong": {
-        "$value": "#ff85a8"
-      },
-      "accent-soft": {
-        "$value": "#3a1420"
-      },
-      "accent-text": {
-        "$value": "#ff9fbb"
-      },
-      "human": {
-        "$value": "#e8b54d"
-      },
-      "human-bright": {
-        "$value": "#f2c766"
-      },
-      "human-soft": {
-        "$value": "#362c18"
-      },
-      "human-text": {
-        "$value": "#e8b54d"
-      },
-      "link": {
-        "$value": "#8fb2ff"
-      },
-      "link-hover": {
-        "$value": "#b4ccff"
-      },
-      "info": {
-        "$value": "#9cb8ff"
-      },
-      "info-bg": {
-        "$value": "#1c2536"
-      },
-      "info-border": {
-        "$value": "#2f3b54"
-      },
-      "info-text": {
-        "$value": "#c6d4f0"
-      },
-      "info-chip": {
-        "$value": "#28344c"
-      },
-      "good": {
-        "$value": "#4db3a4"
-      },
-      "good-soft": {
-        "$value": "#17322d"
-      },
-      "danger": {
-        "$value": "#e5736b"
-      },
-      "danger-soft": {
-        "$value": "#3a2420"
-      },
-      "violet": {
-        "$value": "#a78bfa"
-      },
-      "teal": {
-        "$value": "#5fc7e0"
-      },
-      "orange": {
-        "$value": "#f59e6b"
-      },
-      "olive": {
-        "$value": "#a3c957"
-      }
-    },
     "font": {
       "$type": "fontFamily",
       "$value": "{font.sans}"
@@ -306,34 +189,18 @@
   },
   "canvas": {
     "theme": {
-      "$description": "THEMES object consumed by the canvas renderer, derived from the css tokens of the applied theme (apps/studio/src/canvas/themes.ts): bg = --bg, INK = --text, INK2 = --text-2, CHIP = --surface as rgb triplets, shadow = --bg at alpha .85, vignette = --bg mixed toward black (12 percent at alpha .5 in light, 35 percent at alpha .8 in dark), hull = --text. Only the alphas are fixed per theme.",
-      "dark": {
-        "hullA": {
-          "$type": "number",
-          "$value": 0.055
-        },
-        "domA": {
-          "$type": "number",
-          "$value": 0.075
-        },
-        "domFocusA": {
-          "$type": "number",
-          "$value": 0.12
-        }
+      "$description": "Theme object consumed by the canvas renderer, derived from the css tokens (apps/studio/src/canvas/themes.ts): bg = --bg, INK = --text, INK2 = --text-2, CHIP = --surface as rgb triplets, shadow = --bg at alpha .85, vignette = --bg mixed 12 percent toward black at alpha .5, hull = --text. Only the alphas are fixed.",
+      "hullA": {
+        "$type": "number",
+        "$value": 0.05
       },
-      "light": {
-        "hullA": {
-          "$type": "number",
-          "$value": 0.05
-        },
-        "domA": {
-          "$type": "number",
-          "$value": 0.13
-        },
-        "domFocusA": {
-          "$type": "number",
-          "$value": 0.2
-        }
+      "domA": {
+        "$type": "number",
+        "$value": 0.13
+      },
+      "domFocusA": {
+        "$type": "number",
+        "$value": 0.2
       }
     },
     "background": {
@@ -349,11 +216,11 @@
         },
         "stop-0": {
           "$type": "string",
-          "$value": "{css.light.accent} at alpha 0.04 (the applied theme's --accent)"
+          "$value": "{css.light.accent} at alpha 0.04 (--accent as the page applies it)"
         },
         "stop-0-6": {
           "$type": "string",
-          "$value": "{css.light.link} at alpha 0.025 (the applied theme's --link)"
+          "$value": "{css.light.link} at alpha 0.025 (--link as the page applies it)"
         },
         "stop-1": {
           "$type": "string",
@@ -552,7 +419,7 @@
   },
   "semantic": {
     "$type": "color",
-    "$description": "Stored as light values; the renderer draws each through themedColour, which follows the token into the dark theme.",
+    "$description": "Stored as the token values; the renderer draws each through themedColour, which follows the token.",
     "green": {
       "$value": "#0e8a6a",
       "$description": "GREEN: approval rim, toggle dot, state dots, audit approved, wizard Connected (--good)."

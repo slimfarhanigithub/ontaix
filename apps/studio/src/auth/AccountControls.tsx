@@ -10,12 +10,12 @@ import { refStyle } from '../shell/dom';
 import { auth, useAuth } from './authStore';
 import { openChangePassword } from './ChangePasswordDialog';
 
-/** `end` pushes the controls to the right of a head that has no theme button before them. */
-export function AccountControls({ end }: { end?: boolean }) {
+/** The controls take the right of the head, before its × when the head has one. */
+export function AccountControls() {
   const { session } = useAuth();
   if (!session) return null;
   return (
-    <div id="adminAccount" ref={refStyle(`display:inline-flex;align-items:center;gap:8px;margin-left:${end ? 'auto' : '8px'}`)}>
+    <div id="adminAccount" ref={refStyle('display:inline-flex;align-items:center;gap:8px;margin-left:auto')}>
       <span>{session.account.email}</span>
       <button className="btn" id="changePassword" onClick={() => openChangePassword()}>
         Change password

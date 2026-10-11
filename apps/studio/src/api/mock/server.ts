@@ -303,7 +303,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     llmMonthlyTokenCap: 2_000_000,
     ocrMonthlyPageCap: 1000,
   };
-  const appearance = { theme: 'light' as 'dark' | 'light', colors: {} as Record<string, string>, accent: DEFAULT_ACCENT, source: DEFAULT_BRASS };
+  const appearance = { colors: {} as Record<string, string>, accent: DEFAULT_ACCENT, source: DEFAULT_BRASS };
   const directory = createDirectory({
     companies: () => companies.map((c) => ({ id: c.id, name: c.name })),
     addAudit: (kind, what, ok) => {
@@ -565,7 +565,6 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   });
 
   const toAppearance = (): T.Appearance => ({
-    theme: appearance.theme,
     colors: Object.fromEntries(domains.map((d) => [d.key, appearance.colors[d.key] || d.defaultColor])),
     accent: appearance.accent,
     source: appearance.source,
@@ -1985,7 +1984,6 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     expansions = [];
     extractions = [];
     coverage = false;
-    appearance.theme = 'light';
     appearance.colors = {};
     appearance.accent = DEFAULT_ACCENT;
     appearance.source = DEFAULT_BRASS;
@@ -3098,10 +3096,6 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     if (is('GET', 'appearance')) return json(200, toAppearance());
     if (is('PATCH', 'appearance')) {
       const patch = body as T.AppearancePatch;
-      if (patch.theme) {
-        appearance.theme = patch.theme;
-        addAudit('setting', `${patch.theme} mode`, true);
-      }
       if (patch.colors) Object.assign(appearance.colors, patch.colors);
       if (patch.accent) appearance.accent = patch.accent;
       if (patch.source) appearance.source = patch.source;

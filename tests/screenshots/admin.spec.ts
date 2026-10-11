@@ -19,9 +19,7 @@ import {
   openStudio,
   relate,
   teachFirstModel,
-  useTheme,
   VIEWPORTS,
-  type Theme,
 } from './harness';
 
 interface SceneScript {
@@ -141,30 +139,24 @@ const scenes: SceneScript[] = [
   },
 ];
 
-const themes: Theme[] = ['light', 'dark'];
-/** Optional filters for a partial run: scene name fragments (comma-separated), one viewport, one theme. */
+/** Optional filters for a partial run: scene name fragments (comma-separated), one viewport. */
 const only = process.env.ONTAIX_SCENE?.split(',');
 const onlyViewport = process.env.ONTAIX_VIEWPORT;
-const onlyTheme = process.env.ONTAIX_THEME;
 
 for (const vp of VIEWPORTS) {
   if (onlyViewport && onlyViewport !== `${vp.width}x${vp.height}`) continue;
   for (const scene of scenes) {
     if (only && !only.some((o) => scene.name.includes(o))) continue;
-    for (const theme of themes) {
-      if (onlyTheme && onlyTheme !== theme) continue;
-      test(`${scene.name} · ${theme} · ${vp.width}x${vp.height}`, async ({ browser }) => {
-        const ctx = await browser.newContext({ viewport: vp });
-        const page = await ctx.newPage();
-        try {
-          await openStudio(page);
-          await useTheme(page, theme);
-          await scene.play(page);
-          await expectScene(page, scene.name, theme, vp, { animations: 'disabled', caret: 'hide' });
-        } finally {
-          await ctx.close();
-        }
-      });
-    }
+    test(`${scene.name} · ${vp.width}x${vp.height}`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: vp });
+      const page = await ctx.newPage();
+      try {
+        await openStudio(page);
+        await scene.play(page);
+        await expectScene(page, scene.name, vp, { animations: 'disabled', caret: 'hide' });
+      } finally {
+        await ctx.close();
+      }
+    });
   }
 }

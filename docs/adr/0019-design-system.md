@@ -26,6 +26,8 @@ The owner wrote a design system for the Studio (brought into the repository as [
 
 Light is what a page shows before any setting loads. The Studio's existing theme switch stays as it is (admin portal, Appearance, `Light mode`; `setTheme()` in the store), setting `data-theme` on `<html>`; the in-browser mock starts tenants light with the crimson accent. The API's tenant defaults (`theme` `dark`, `accent` `#3fb8a9` in `contracts/schema.sql` and `apps/api/app/services/appearance_service.py`) are a schema and service change outside the Studio, listed under Consequences.
 
+Superseded on 2026-10-11 (decision row 176): the owner chose one theme, light only. The theme switch, the dark tokens, the `data-theme` attribute and `tenant_settings.theme` are gone; the warm-stone light theme is the Studio's single theme.
+
 ### 3. Three Guards Replace the Reference Comparison
 
 - `contrast.test.ts` checks the AA pairs of the design system in both themes, with a two-way `KNOWN_BELOW_AA` ledger.

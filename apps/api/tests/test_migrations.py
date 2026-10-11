@@ -153,8 +153,8 @@ def test_upgrade_to_0007_copies_the_templates_for_existing_tenants(
             " SELECT %s, %s, key FROM domain_template",
             (tenant_id, company_id),
         )
-    # The copies are taken at 0009 and keep the templates' colours of that time; 0011 recolours the
-    # templates only, never a tenant's copies.
+    # The copies are taken at 0009 with the templates' colours of that time; 0011 recolours the
+    # templates and 0012 moves the copies still on their old template colour to the new one.
     _upgrade(migrated_url, "0010")
     with psycopg.connect(migrated_url) as conn:
         conn.execute("SET search_path TO ontaix, public")
@@ -183,12 +183,71 @@ def test_upgrade_to_0007_copies_the_templates_for_existing_tenants(
             " ON d.tenant_id = p.tenant_id AND d.key = p.template_key WHERE p.company_id = %s",
             (company_id,),
         ).fetchone()[0]
-    assert domains == templates
+    new_colours = dict(recoloured)
+    assert domains == [(*t[:3], new_colours[t[0]], *t[4:]) for t in templates]
     assert recoloured[0] == ("production", "#d30c55")
     assert recoloured != [(t[0], t[3]) for t in templates]
     assert len(domains) == 9
     assert [(r[0], r[1], r[5]) for r in revisions] == sorted((d[0], 0, None) for d in domains)
     assert products == 9
+
+
+def test_upgrade_to_0012_moves_tenants_on_the_old_defaults_to_the_light_design_system(
+    scratch_databases: tuple[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The theme column and its type go; an accent or domain colour still on the old default
+    follows the design system, while a colour the tenant chose stays."""
+    migrated_url, _ = scratch_databases
+    monkeypatch.setenv("ONTAIX_SCHEMA_SQL", str(OLD_SCHEMA))
+    _upgrade(migrated_url, "0001")
+    monkeypatch.delenv("ONTAIX_SCHEMA_SQL")
+    _upgrade(migrated_url, "0011")
+    with psycopg.connect(migrated_url, autocommit=True) as conn:
+        conn.execute("SET search_path TO ontaix, public")
+        untouched, custom = (
+            conn.execute(
+                "INSERT INTO tenant (slug, name) VALUES (%s, %s) RETURNING id", (slug, slug)
+            ).fetchone()[0]
+            for slug in ("untouched", "custom")
+        )
+        conn.execute(
+            "INSERT INTO tenant_settings (tenant_id, theme, accent) VALUES"
+            " (%s, 'dark', '#3fb8a9'), (%s, 'dark', '#123456')",
+            (untouched, custom),
+        )
+        for tenant_id, sales in ((untouched, "#d9a15b"), (custom, "#abcdef")):
+            conn.execute(
+                "INSERT INTO tenant_domain (tenant_id, key, name, default_color, template_key,"
+                " position) VALUES (%s, 'production', 'Production', '#3fb8a9', 'production', 0),"
+                " (%s, 'sales', 'Sales', %s, 'sales', 1)",
+                (tenant_id, tenant_id, sales),
+            )
+    _upgrade(migrated_url, "head")
+    with psycopg.connect(migrated_url) as conn:
+        conn.execute("SET search_path TO ontaix, public")
+        settings = dict(conn.execute("SELECT tenant_id, accent FROM tenant_settings").fetchall())
+        theme_column = conn.execute(
+            "SELECT count(*) FROM information_schema.columns"
+            " WHERE table_schema = 'ontaix' AND table_name = 'tenant_settings'"
+            " AND column_name = 'theme'"
+        ).fetchone()[0]
+        theme_type = conn.execute(
+            "SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace"
+            " WHERE n.nspname = 'ontaix' AND t.typname = 'theme_name'"
+        ).fetchone()[0]
+        colours = {
+            (row[0], row[1]): row[2]
+            for row in conn.execute(
+                "SELECT tenant_id, key, default_color FROM tenant_domain"
+            ).fetchall()
+        }
+    assert (theme_column, theme_type) == (0, 0)
+    assert settings[untouched] == "#d30c55"
+    assert settings[custom] == "#123456"
+    assert colours[(untouched, "production")] == "#d30c55"
+    assert colours[(untouched, "sales")] == "#0e8a6a"
+    assert colours[(custom, "production")] == "#d30c55"
+    assert colours[(custom, "sales")] == "#abcdef"
 
 
 def _upgrade(url: str, target: str) -> None:

@@ -139,7 +139,6 @@ export interface UiState {
   legendOff: boolean;
   domainsOff: boolean;
   adminOpen: boolean;
-  theme: 'dark' | 'light';
   settings: Settings | null;
   appearance: Appearance | null;
   /** The tenant's domains in ring order: the nine templates, possibly renamed, and custom domains. */
@@ -212,7 +211,6 @@ class StudioStore {
       legendOff: false,
       domainsOff: false,
       adminOpen: false,
-      theme: 'light',
       settings: null,
       appearance: null,
       domains: templateDomains(),
@@ -256,7 +254,6 @@ class StudioStore {
 
   attachRenderer(r: Renderer): void {
     this.renderer = r;
-    r.applyTheme(this.ui.theme);
   }
 
   /** Loads the scene and starts listening to live events; a second call joins the first. The
@@ -398,7 +395,6 @@ class StudioStore {
     this.ui.settings = scene.settings;
     this.ui.appearance = scene.appearance;
     this.ui.connectors = scene.connectors || [];
-    this.setTheme(scene.appearance.theme, false);
     this.applyColors();
     this.applySettings();
     if (scene.viewState.coverage !== s.COVERAGE) s.COVERAGE = scene.viewState.coverage;
@@ -1216,18 +1212,6 @@ class StudioStore {
         : s.domainFocus
           ? `Arrange ${s.domainFocus.name} and what it relates to (A)`
           : 'Lay the model out for reading (A)';
-  }
-
-  setTheme(name: 'dark' | 'light', persist = true): void {
-    this.ui.theme = name;
-    this.renderer?.applyTheme(name);
-    document.documentElement.setAttribute('data-theme', name === 'light' ? 'light' : 'dark');
-    this.bump();
-    if (persist) void api.patchAppearance({ theme: name }).catch(() => undefined);
-  }
-
-  toggleTheme(): void {
-    this.setTheme(this.ui.theme === 'light' ? 'dark' : 'light');
   }
 
   openAdmin(page?: string): void {

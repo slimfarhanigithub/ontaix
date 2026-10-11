@@ -159,19 +159,6 @@ export function Appearance() {
             </label>
           ))}
       </div>
-      <h3>Theme</h3>
-      <div className="set">
-        <b>Light mode</b>
-        <Tg
-          on={st.ui.theme === 'light'}
-          data-act="theme"
-          onClick={() => {
-            st.toggleTheme();
-            renderAdmin();
-          }}
-        />
-        <p>Light interface and canvas. Domain colours stay the same; the company and domain regions adapt.</p>
-      </div>
       <h3>{SKIP_ANIMATION_ROW.heading}</h3>
       <div className="set">
         <b>{SKIP_ANIMATION_ROW.title}</b>

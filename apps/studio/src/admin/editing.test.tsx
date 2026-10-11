@@ -49,7 +49,7 @@ function model(): { a: Company; b: Company; plant: Node; line: Node; valve: Node
   s.selected.clear();
   store.ui.domains = templates();
   store.ui.settings = { ...settings };
-  store.ui.appearance = { theme: 'dark', colors: {}, accent: '#3fb8a9', source: '#d6bd8a', defaults: { colors: {}, accent: '#3fb8a9', source: '#d6bd8a' } };
+  store.ui.appearance = { colors: {}, accent: '#3fb8a9', source: '#d6bd8a', defaults: { colors: {}, accent: '#3fb8a9', source: '#d6bd8a' } };
   const a = addCompany(s, 'Northwind Industries', '');
   a.sid = 'co-1';
   const production = domainOf(s, 'production', a);

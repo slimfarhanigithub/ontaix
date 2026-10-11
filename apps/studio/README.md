@@ -48,12 +48,12 @@ pnpm install
 pnpm --filter studio dev            # http://localhost:5173, mock API in the browser
 pnpm --filter studio test           # vitest
 pnpm --filter studio build
-pnpm --filter studio test:screens   # Playwright: every scene against its baseline, light and dark
+pnpm --filter studio test:screens   # Playwright: every scene against its baseline
 pnpm dev:stack                      # Studio on http://127.0.0.1:5173 against the real API (see the root README)
 pnpm --filter studio test:e2e       # Playwright: the Studio against the real API on the local stack
 ```
 
-`pnpm exec playwright install chromium` (inside `apps/studio`) fetches the browser the screenshot suite needs once. The suite builds the Studio with the test hooks, serves it on port 4787, renders each scene under the same seed and fake clock at 1440x900 and 1920x1080 in both themes and compares it with its baseline under `tests/screenshots/baselines/` (`--update-snapshots` rewrites the baselines of the running platform); failures write the actual image and the diff into `tests/screenshots/output/`.
+`pnpm exec playwright install chromium` (inside `apps/studio`) fetches the browser the screenshot suite needs once. The suite builds the Studio with the test hooks, serves it on port 4787, renders each scene under the same seed and fake clock at 1440x900 and 1920x1080 and compares it with its baseline under `tests/screenshots/baselines/` (`--update-snapshots` rewrites the baselines of the running platform); failures write the actual image and the diff into `tests/screenshots/output/`.
 
 ## Test Mode
 
@@ -61,7 +61,7 @@ Test hooks exist only in dev builds or when `VITE_ONTAIX_TEST_HOOKS=true` is set
 
 ## Real API
 
-With `VITE_ONTAIX_API_URL` set, the Studio talks to that API and `api/real.ts` wires it in. The API has no WebSocket hub yet, so each write's response is replayed on the live-event bus as the event the hub will send, and a bulk run (approve all, reject all) is followed by `snapshot.required`, which reloads `GET /scene`. Content enters as text typed in the teach bar, as each sentence the microphone recognises (origin `speech`; Azure AI Speech with a token from `POST /speech/token`, or the browser's recogniser when the API answers 503 or Azure Speech fails), or as a document uploaded to `POST /import/sentences`, whose stored sentences are taught one by one by `importRef`; the API parses every sentence. Theme and coverage writes are not persisted. A refusal from the API (403, 409 `channel_disabled`, or 503 for a change kind it does not serve yet) shows as the reference's toast. Dev builds send `X-Ontaix-User` only when `?user=<email>` is in the URL or `VITE_ONTAIX_DEV_USER` is set (the dev stack sets it); without either, a dev build signs in like a production build, which does not contain the header.
+With `VITE_ONTAIX_API_URL` set, the Studio talks to that API and `api/real.ts` wires it in. The API has no WebSocket hub yet, so each write's response is replayed on the live-event bus as the event the hub will send, and a bulk run (approve all, reject all) is followed by `snapshot.required`, which reloads `GET /scene`. Content enters as text typed in the teach bar, as each sentence the microphone recognises (origin `speech`; Azure AI Speech with a token from `POST /speech/token`, or the browser's recogniser when the API answers 503 or Azure Speech fails), or as a document uploaded to `POST /import/sentences`, whose stored sentences are taught one by one by `importRef`; the API parses every sentence. Coverage writes are not persisted. A refusal from the API (403, 409 `channel_disabled`, or 503 for a change kind it does not serve yet) shows as the reference's toast. Dev builds send `X-Ontaix-User` only when `?user=<email>` is in the URL or `VITE_ONTAIX_DEV_USER` is set (the dev stack sets it); without either, a dev build signs in like a production build, which does not contain the header.
 
 ### Sign-In and Sessions
 

@@ -523,14 +523,13 @@ export interface Settings {
 export type SettingsPatch = Partial<Omit<Settings, 'approvalRequired' | 'readOnlyConnectors'>>;
 
 export interface Appearance {
-  theme: 'dark' | 'light';
   colors: Record<string, string>;
   accent: string;
   source: string;
   defaults: { colors: Record<string, string>; accent: string; source: string };
 }
 
-export type AppearancePatch = Partial<Pick<Appearance, 'theme' | 'colors' | 'accent' | 'source'>>;
+export type AppearancePatch = Partial<Pick<Appearance, 'colors' | 'accent' | 'source'>>;
 
 export interface ViewState {
   coverage: boolean;
