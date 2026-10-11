@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.storage.tenant_settings import TenantSettings
@@ -25,4 +26,13 @@ async def set_color(
 ) -> None:
     """Write the tenant-wide colour override of one domain into the appearance colours."""
     settings.colors = {**(settings.colors or {}), domain_key: color}
+    await session.flush()
+
+
+async def update(session: AsyncSession, settings: TenantSettings, **values: object) -> None:
+    """Write the given columns and stamp `updated_at`; the database triggers and CHECK
+    constraints refuse a locked value."""
+    for name, value in values.items():
+        setattr(settings, name, value)
+    settings.updated_at = func.now()
     await session.flush()
