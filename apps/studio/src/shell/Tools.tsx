@@ -1,8 +1,8 @@
 /**
  * The tool row above the teach bar. Markup from reference/ontaix-studio-reference.html lines
- * 194-201 without the Finalise all and Skip animation buttons (Skip animation is a setting on the
- * admin portal's Appearance page); behaviours from lines 548-565 (arrange, coverage), 616 (add a
- * company) and 904-906 (import, drag and drop). The file is read the way its detection says;
+ * 194-201 without the Finalise all, Skip animation and Coverage buttons (Skip animation is a
+ * setting on the admin portal's Appearance page; no cell has data behind it to cover); behaviours
+ * from lines 548-565 (arrange), 616 (add a company) and 904-906 (import, drag and drop). The file is read the way its detection says;
  * `#imAs` reads it another way. Add company is hidden while the `companyCreation` setting is off,
  * as well as while `multiCompany` is off.
  */
@@ -88,19 +88,6 @@ export function Tools() {
           <path d="M8 4.6v3M8 7.6 4 10.6M8 7.6l4 3" />
         </svg>
         Arrange
-      </button>
-      <button
-        type="button"
-        id="coverage"
-        title="Colour cells by data coverage (C)"
-        aria-pressed={st.s.COVERAGE}
-        onClick={() => st.toggleCoverage()}
-      >
-        <svg viewBox="0 0 16 16">
-          <circle cx="8" cy="8" r="6" />
-          <path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" stroke="none" opacity=".6" />
-        </svg>
-        Coverage
       </button>
     </div>
   );

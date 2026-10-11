@@ -4,22 +4,22 @@
  * has a description (./rowText adds the ones the reference leaves empty), Appearance holds the
  * user's Skip animation choice under Motion, and owner additions for ontology editing, marked
  * `data-ox-new`: the `Company creation` setting row and a colour input per custom domain in
- * Appearance.
+ * Appearance. Settings that only govern data sources, connectors, coverage or agents have no row.
  */
-import { DEFAULT_BRASS, DEFAULT_COLORS, DOMAIN_TEMPLATES } from '../../canvas/constants';
+import { DEFAULT_COLORS, DOMAIN_TEMPLATES } from '../../canvas/constants';
 import { DEFAULT_ACCENT } from '../../design/tokens';
 import { BusyButton } from '../../shell/busy';
 import { useStore } from '../../shell/dom';
-import { changeColour, changeRefresh, renderAdmin, resetColours } from '../actions';
+import { changeColour, renderAdmin, resetColours } from '../actions';
 import { ADDED_DESCRIPTIONS, SKIP_ANIMATION_ROW } from '../rowText';
 import { SetRow, Tg } from '../Toggle';
 
 export function Overview() {
   const st = useStore();
-  const { nodes, companies } = st.s;
-  const src = nodes.filter((n) => n.kind === 'source'),
-    bound = nodes.filter((n) => n.bound).length,
-    concepts = nodes.filter((n) => n.kind === 'concept').length;
+  const { nodes, links, companies } = st.s;
+  const concepts = nodes.filter((n) => n.kind === 'concept' && !n.dying).length,
+    pending = nodes.filter((n) => n.kind === 'concept' && n.pending && !n.dying).length,
+    relations = links.filter((l) => l.kind !== 'bind' && !l.dying).length;
   return (
     <>
       <h2>Overview</h2>
@@ -31,11 +31,11 @@ export function Overview() {
         </div>
         <div>
           <b>{concepts}</b>
-          <span>{`concepts · ${bound} bound to data`}</span>
+          <span>{`concepts · ${pending} pending`}</span>
         </div>
         <div>
-          <b>{src.length}</b>
-          <span>{`data sources · ${src.filter((n) => n.pending).length} pending`}</span>
+          <b>{relations}</b>
+          <span>relations</span>
         </div>
         <div>
           <b>{st.ui.proposals.length}</b>
@@ -53,18 +53,11 @@ export function Overview() {
       <SetRow k="importDocs" title="Document import" desc="Text, Markdown, CSV, Word and PDF, read in the browser." />
       <SetRow k="multiCompany" title="Portfolio mode" desc="Several companies in one view." />
       <SetRow k="crossCompany" title="Companies may interact" desc="Relations and equivalences between companies." />
-      <SetRow k="agentAccess" title="Agent access through the gateway" desc="Agents read the certified model through MCP." />
     </>
   );
 }
 
-const REFRESH = ['5 min', '15 min', '1 h', 'daily'];
-const REFRESH_STYLE =
-  'font:inherit;font-size:12px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:8px;padding:6px 8px;color:var(--ink);grid-row:1/3;width:88px;justify-self:end;box-sizing:border-box';
-
 export function TenantSettings() {
-  const st = useStore();
-  const refresh = st.ui.settings?.refresh || '15 min';
   return (
     <>
       <h2>Tenant settings</h2>
@@ -86,11 +79,6 @@ export function TenantSettings() {
         title="Two approvers for changes"
         desc="Renames, deletions and conflict resolutions need an Owner and a Governor. A second click is required in the proposals panel."
       />
-      <SetRow
-        k="autoAttrs"
-        title="Auto-approve discovered attributes"
-        desc="Attributes read from a bound schema enter the model without review. Recommended off until the connectors are trusted."
-      />
       <SetRow k="notifyOwners" title="Notify domain owners" desc="Owners are notified when a proposal lands in their domain product." />
       <h3>Portfolio</h3>
       <SetRow k="multiCompany" title="Several companies in one view" desc={ADDED_DESCRIPTIONS['Several companies in one view']} />
@@ -100,27 +88,8 @@ export function TenantSettings() {
         title="Companies may interact"
         desc="Allow relations and equivalences between companies. Disabling removes every existing cross-company relationship; each company keeps its own model intact."
       />
-      <h3>Data</h3>
-      <SetRow k="readOnlyConnectors" title="Connectors are read-only" desc="Ontology Builder reads schemas and counts. It never writes into a source system." locked />
-      <div className="set">
-        <b>Refresh interval</b>
-        <select
-          id="refreshSel"
-          ref={(el) => {
-            if (el) el.setAttribute('style', REFRESH_STYLE);
-          }}
-          value={refresh}
-          onChange={(e) => changeRefresh(e.target.value)}
-        >
-          {REFRESH.map((r) => (
-            <option key={r}>{r}</option>
-          ))}
-        </select>
-        <p>How often record counts and schemas are re-read from bound sources.</p>
-      </div>
       <h3>Display</h3>
       <SetRow k="animations" title="Animations" desc="Cell division and line tracing. Off makes changes instant." />
-      <SetRow k="coverageDefault" title="Coverage view by default" desc="Open the canvas with data coverage colouring on." />
       <SetRow k="legend" title="Show the relationship legend" desc={ADDED_DESCRIPTIONS['Show the relationship legend']} />
     </>
   );
@@ -179,13 +148,6 @@ export function Appearance() {
           <span>
             <b>Accent</b>
             <small>buttons, focus, approvals</small>
-          </span>
-        </label>
-        <label className="col">
-          <input type="color" value={ap?.source || DEFAULT_BRASS} data-col="__source" onChange={(e) => changeColour('__source', e.target.value)} />
-          <span>
-            <b>Data sources</b>
-            <small>systems and bindings</small>
           </span>
         </label>
       </div>

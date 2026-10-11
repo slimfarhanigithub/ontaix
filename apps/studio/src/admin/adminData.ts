@@ -1,25 +1,23 @@
 /**
- * Directory data the admin portal reads through the API: groups, users and the audit log, which
- * the navigation counts and several pages share. Loaded when the portal renders from scratch.
- * A refused or unavailable call leaves the list empty and shows a toast; nothing throws.
+ * Data the admin portal reads through the API and several pages share: the audit log, which the
+ * navigation counts. Loaded when the portal renders from scratch. A refused or unavailable call
+ * leaves the list empty and shows a toast; nothing throws.
  */
 import { api, type ListParams } from '../api/client';
-import { ApiError, type AuditEntry, type Group, type Page, type User } from '../api/types';
+import { ApiError, type AuditEntry, type Page } from '../api/types';
 import { store } from '../store/store';
 
 /** The audit page shows the newest 120 entries. */
 export const AUDIT_SHOWN = 120;
 
 export interface DirectoryState {
-  groups: Group[];
-  users: User[];
   audit: AuditEntry[];
   auditTotal: number;
   /** True once a load has answered, refused or not. */
   loaded: boolean;
 }
 
-export const directory: DirectoryState = { groups: [], users: [], audit: [], auditTotal: 0, loaded: false };
+export const directory: DirectoryState = { audit: [], auditTotal: 0, loaded: false };
 
 let stale = true;
 let loadSeq = 0;
@@ -52,47 +50,38 @@ export async function attempt<T>(call: () => Promise<T>): Promise<T | null> {
 }
 
 /**
- * Loads groups, users and the audit log when they are stale: when the portal opens and after
- * an action changed them. Moving between pages reuses what is loaded. Only the latest load
- * lands, so an older answer never overwrites a newer one.
+ * Loads the audit log when it is stale: when the portal opens and after an action changed it.
+ * Moving between pages reuses what is loaded. Only the latest load lands, so an older answer
+ * never overwrites a newer one.
  */
 export async function loadDirectory(): Promise<void> {
   if (!stale) return;
   stale = false;
   const seq = ++loadSeq;
-  let refusal: unknown = null;
-  const soft = <T>(p: Promise<T>): Promise<T | null> =>
-    p.catch((err: unknown) => {
-      refusal = refusal || err;
-      return null;
-    });
-  const [groups, users, audit] = await Promise.all([
-    soft(fetchAll((p) => api.listGroups(p))),
-    soft(fetchAll((p) => api.listUsers(p))),
-    soft(api.listAudit({ page: 1, pageSize: AUDIT_SHOWN })),
-  ]);
+  let audit: (Page & { items: AuditEntry[] }) | null = null;
+  try {
+    audit = await api.listAudit({ page: 1, pageSize: AUDIT_SHOWN });
+  } catch (err) {
+    if (seq !== loadSeq) return;
+    failed(err, 'Unavailable');
+  }
   if (seq !== loadSeq) return;
-  if (refusal) failed(refusal, 'Unavailable');
-  directory.groups = groups || [];
-  directory.users = users || [];
   directory.audit = audit ? audit.items : [];
   directory.auditTotal = audit ? audit.total : 0;
   directory.loaded = true;
   store.bump();
 }
 
-/** A new session or organization: the directory is forgotten, and a load still in flight for the previous one lands nowhere. */
+/** A new session or organization: the audit log is forgotten, and a load still in flight for the previous one lands nowhere. */
 export function resetDirectory(): void {
   loadSeq++;
   stale = true;
-  directory.groups = [];
-  directory.users = [];
   directory.audit = [];
   directory.auditTotal = 0;
   directory.loaded = false;
 }
 
-/** Marks the directory stale; the next portal render reloads it. */
+/** Marks the audit log stale; the next portal render reloads it. */
 export function invalidateDirectory(): void {
   stale = true;
 }

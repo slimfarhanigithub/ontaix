@@ -58,18 +58,6 @@ export const LEGEND: LegendEntry[] = [
     icon: <path d="M2 7 l4 -4 l5 8 l5 -8 l5 8 l5 -8 l5 8 l3 -4" stroke="var(--danger)" strokeWidth="1.8" strokeLinejoin="round" fill="none" />,
   },
   {
-    key: 'bind',
-    label: 'Data binding',
-    detail: 'A line from a data source (the square) that feeds the concept with records',
-    icon: (
-      <>
-        <rect x="1.5" y="2.5" width="9" height="9" rx="2.2" fill="none" stroke="var(--source)" strokeWidth="1.6" />
-        <path d="M11 7 H28" stroke="var(--source)" strokeWidth="1.5" fill="none" />
-        <path d="M34 7 l-6 -3.2 v6.4 z" fill="var(--source)" />
-      </>
-    ),
-  },
-  {
     key: 'pending',
     label: 'Pending',
     detail: 'Drawn lighter until you approve it',

@@ -17,11 +17,11 @@ import { escapeHtml } from '../../shell/sanitize';
 import { mixedRelationEnd } from '../drafts';
 import { liveEvents, type EventBus, type EventType } from '../events';
 import type * as T from '../types';
-import { createDirectory, DirectoryRefusal, pageOf, parseListArgs } from './directory';
 import { detectImport as detectFile } from './detect';
 import { extractDocument, ExtractRefusal } from './extract';
 import { mapOntologyFile } from './ontology';
-import { ATTR, CATALOG, DISCOVER, generic, HOME_COMPANY, RECORDS, SEED, type AttrSpec } from './seed';
+import { pageOf, PagingRefusal, parseListArgs } from './paging';
+import { ATTR, generic, HOME_COMPANY, RECORDS, SEED, type AttrSpec } from './seed';
 
 interface MCompany {
   id: string;
@@ -278,7 +278,6 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   let expansions: MExpansion[] = [];
   let extractions: MExtraction[] = [];
   let sequence = 0;
-  let coverage = false;
   /** Provenance given to the proposals the current request creates. */
   let provenance: { origin: T.Origin; originDetail: T.OriginDetail | null; why?: string } = { origin: 'text', originDetail: null };
   const settings: T.Settings = {
@@ -304,13 +303,6 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     ocrMonthlyPageCap: 1000,
   };
   const appearance = { colors: {} as Record<string, string>, accent: DEFAULT_ACCENT, source: DEFAULT_BRASS };
-  const directory = createDirectory({
-    companies: () => companies.map((c) => ({ id: c.id, name: c.name })),
-    addAudit: (kind, what, ok) => {
-      addAudit(kind, what, ok);
-    },
-    agentAccess: () => settings.agentAccess,
-  });
 
   const tenantDomain = (key: string | null | undefined) => domains.find((d) => d.key === key) || null;
   const domainColour = (key: string) => appearance.colors[key] || tenantDomain(key)?.defaultColor || NEUTRAL;
@@ -591,8 +583,8 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     proposals: open().map(toProposal),
     settings: { ...settings },
     appearance: toAppearance(),
-    viewState: { coverage },
-    connectors: CATALOG.map(([code, name, category, scopeText]) => ({ code, name, category, scopeText })),
+    viewState: { coverage: false },
+    connectors: [],
   });
 
   // ------------------------------------------------------------ model helpers
@@ -1983,7 +1975,6 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     imports = [];
     expansions = [];
     extractions = [];
-    coverage = false;
     appearance.colors = {};
     appearance.accent = DEFAULT_ACCENT;
     appearance.source = DEFAULT_BRASS;
@@ -2756,11 +2747,6 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
   const problem = (r: Refusal): MockResponse =>
     json(r.status, { type: 'about:blank', title: r.code, status: r.status, detail: r.detail, code: r.code } satisfies T.Problem);
 
-  /** A source's state and the freshness of what it feeds, for the canvas. */
-  function emitSource(src: MSource): void {
-    emit('source.changed', { source: toSource(src), bindings: bindings.filter((b) => b.sourceId === src.id).map(toBinding) });
-  }
-
   function proposeChange(draft: T.ChangeDraft): MockResponse {
     const p = pChange(draft);
     const out = toProposal(p);
@@ -2768,80 +2754,11 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     return json(202, out);
   }
 
-  const AUTHS: T.SourceAuth[] = ['service_principal', 'oauth2_client_credentials', 'managed_identity', 'key_vault_api_key'];
-  const REFRESH: T.RefreshInterval[] = ['5 min', '15 min', '1 h', 'daily'];
-
-  /** The administration routes: sources, connectors, directory, agents, cost, audit, appearance reset, cross-company. */
+  /** The administration routes: company removal, domains, deletion impact, bulk deletion, cost, audit, appearance reset, cross-company. */
   function adminRoute(method: string, seg: string[], search: string, body: unknown): MockResponse | null {
     const is = (m: string, ...parts: (string | null)[]) =>
       method === m && seg.length === parts.length && parts.every((p, i) => p === null || p === seg[i]);
-    const sourceOf = (id: string) => {
-      const src = sourceById(id);
-      if (!src || src.dyingAt) throw new Refusal(404, 'source_not_found', 'source does not exist');
-      return src;
-    };
 
-    if (is('GET', 'connectors')) return json(200, CATALOG.map(([code, name, category, scopeText]) => ({ code, name, category, scopeText })));
-    if (is('POST', 'connectors', null, 'discover')) {
-      const code = decodeURIComponent(seg[1]);
-      const req = (body || {}) as T.DiscoveryRequest;
-      if (!AUTHS.includes(req.auth)) throw new Refusal(422, 'validation_failed', 'auth is required');
-      if ((req.host || '').length > 300 || (req.scope || '').length > 500) throw new Refusal(422, 'validation_failed', 'host or scope is too long');
-      const names = DISCOVER[code] || ['schema discovered'];
-      const objects = names.map((name) => ({ name, rows: 200 + Math.floor(random() * 90000) }));
-      return json(200, { connected: true, statusText: `Connected · read-only · ${names.length} objects discovered`, objects } satisfies T.Discovery);
-    }
-    if (is('GET', 'sources')) return json(200, sources.filter((n) => !n.dyingAt).map(toSource));
-    if (is('POST', 'sources', 'refresh-all')) {
-      let touched = 0;
-      for (const c of concepts) {
-        if (!c.bound) continue;
-        const src = sourceById(c.bound.sourceId);
-        if (src && !src.disabled) {
-          c.bound.fresh = 'just now';
-          touched++;
-        }
-      }
-      addAudit('source', 'all sources refreshed', true);
-      const live = sources.filter((n) => !n.dyingAt);
-      for (const src of live) emitSource(src);
-      return json(200, { sources: live.filter((n) => !n.disabled && !n.pending).length, bindings: touched } satisfies T.RefreshAllResult);
-    }
-    if (is('POST', 'sources')) {
-      const p = createFromDraft({ ...(body as T.SourceDraft), type: 'source' }, []);
-      const out = toProposal(p);
-      emit('proposal.created', { proposal: out, artefacts: out.artefacts, cascaded: [] });
-      return json(202, out);
-    }
-    if (is('GET', 'sources', null)) return json(200, toSource(sourceOf(seg[1])));
-    if (is('PATCH', 'sources', null)) {
-      const src = sourceOf(seg[1]);
-      const patch = (body || {}) as T.SourceUpdate;
-      if (patch.auth !== undefined && !AUTHS.includes(patch.auth)) throw new Refusal(422, 'validation_failed', 'unknown authentication method');
-      if (patch.refresh !== undefined && !REFRESH.includes(patch.refresh)) throw new Refusal(422, 'validation_failed', 'unknown refresh interval');
-      if ((patch.host || '').length > 300 || (patch.scope || '').length > 500) throw new Refusal(422, 'validation_failed', 'host or scope is too long');
-      if (patch.host !== undefined) src.host = patch.host;
-      if (patch.scope !== undefined) src.scope = patch.scope;
-      if (patch.auth !== undefined) src.auth = patch.auth;
-      if (patch.refresh !== undefined) src.refresh = patch.refresh;
-      addAudit('source', `${src.label} reconfigured`, true);
-      emitSource(src);
-      return json(200, toSource(src));
-    }
-    if (is('POST', 'sources', null, 'enable') || is('POST', 'sources', null, 'disable')) {
-      const src = sourceOf(seg[1]);
-      if (src.pending) throw new Refusal(409, 'source_pending', 'the source is awaiting approval');
-      const off = seg[2] === 'disable';
-      if (src.disabled !== off) {
-        src.disabled = off;
-        for (const b of bindings) if (b.sourceId === src.id && conceptById(b.conceptId)?.bound === b) b.fresh = off ? 'paused' : '2 min';
-        addAudit('source', `${src.label} ${off ? 'disabled' : 'enabled'}`, true);
-      }
-      emitSource(src);
-      return json(200, toSource(src));
-    }
-    if (is('DELETE', 'sources', null)) return proposeChange({ type: 'change', changeKind: 'remove_source', payload: { sourceId: seg[1] } });
-    if (is('DELETE', 'bindings', null)) return proposeChange({ type: 'change', changeKind: 'unbind', payload: { bindingId: seg[1] } });
     if (is('DELETE', 'companies', null)) return proposeChange({ type: 'change', changeKind: 'remove_company', payload: { companyId: seg[1] } });
     if (is('GET', 'domains')) return json(200, [...domains].sort((a, b) => a.position - b.position).map(toTenantDomain));
     if (is('POST', 'domains')) {
@@ -2938,36 +2855,41 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
           sorts: {},
         }),
       );
-    if (is('GET', 'users')) return json(200, directory.listUsers(search));
-    if (is('GET', 'users', null)) return json(200, directory.getUser(seg[1]));
-    if (is('GET', 'groups')) return json(200, directory.listGroups(search));
-    if (is('POST', 'groups')) return json(201, directory.createGroup(body as T.GroupInput));
-    if (is('GET', 'groups', null)) return json(200, directory.getGroup(seg[1]));
-    if (is('PATCH', 'groups', null)) return json(200, directory.updateGroup(seg[1], body as T.GroupInput));
-    if (is('DELETE', 'groups', null)) {
-      directory.deleteGroup(seg[1]);
-      return json(204, undefined);
-    }
-    if (is('PUT', 'groups', null, 'members', null) || is('DELETE', 'groups', null, 'members', null)) {
-      directory.setMember(seg[1], seg[3], method === 'PUT');
-      return json(204, undefined);
-    }
-    if (is('POST', 'groups', null, 'roles')) return json(201, directory.addRole(seg[1], body as { role: T.RoleName; scope: T.Scope }));
-    if (is('DELETE', 'groups', null, 'roles', null)) {
-      directory.removeRole(seg[1], seg[3]);
-      return json(204, undefined);
-    }
-    if (is('GET', 'roles')) return json(200, directory.listRoles());
-    if (is('GET', 'roles', null, 'groups')) return json(200, directory.listRoleGroups(seg[1]));
-    if (is('GET', 'scopes')) return json(200, directory.listScopes());
-    if (is('GET', 'agents')) return json(200, directory.listAgents(search));
-    if (is('PATCH', 'agents', null)) return json(200, directory.updateAgent(seg[1], body as { access?: unknown }));
-    if (is('GET', 'cost'))
-      return json(200, {
-        ...directory.cost(`${iso().slice(0, 7)}-01`),
-        llm: { calls: 0, inputTokens: 0, outputTokens: 0, tokensUsed: 0, tokenCap: settings.llmMonthlyTokenCap, ocrPagesUsed: 0, ocrPageCap: settings.ocrMonthlyPageCap, costEur: 0, byPurpose: [] },
-      });
+    if (is('GET', 'cost')) return json(200, costSummary());
     return null;
+  }
+
+  /**
+   * `GET /cost` for the month: no agent reads this model through the gateway, so the agent
+   * figures are zero; the `llm` block holds a month of the tenant's own model and OCR usage,
+   * fixed figures against the caps the settings hold.
+   */
+  function costSummary(): T.CostSummary {
+    return {
+      month: `${iso().slice(0, 7)}-01`,
+      measuredEur: 0,
+      allocatedEur: 0,
+      agentsRegistered: 0,
+      agentsWithAccess: 0,
+      reads: 0,
+      byPlatform: [],
+      llm: {
+        calls: 148,
+        inputTokens: 412_300,
+        outputTokens: 61_750,
+        tokensUsed: 474_050,
+        tokenCap: settings.llmMonthlyTokenCap,
+        ocrPagesUsed: 36,
+        ocrPageCap: settings.ocrMonthlyPageCap,
+        costEur: 1.87,
+        byPurpose: [
+          { purpose: 'teach_extraction', calls: 121, costEur: 0.62 },
+          { purpose: 'concept_expansion', calls: 14, costEur: 0.41 },
+          { purpose: 'document_extraction', calls: 9, costEur: 0.58 },
+          { purpose: 'document_ocr', calls: 4, pages: 36, costEur: 0.26 },
+        ],
+      },
+    };
   }
 
   function route(method: string, rawPath: string, body: unknown): MockResponse {
@@ -3102,11 +3024,6 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
       emit('appearance.changed', { appearance: toAppearance() });
       return json(200, toAppearance());
     }
-    if (is('PUT', 'view-state')) {
-      const vs = body as Partial<T.ViewState>;
-      if (typeof vs.coverage === 'boolean') coverage = vs.coverage;
-      return json(200, { coverage } satisfies T.ViewState);
-    }
     if (is('POST', 'teach', 'parse')) return json(200, teachParse(body as T.TeachRequest));
     if (is('POST', 'teach', 'parse', 'stream')) return { status: 200, body: null, lines: streamedParse(teachParse(body as T.TeachRequest)) };
     if (is('POST', 'ontology-imports'))
@@ -3133,7 +3050,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         return route(method.toUpperCase(), path, body);
       } catch (e) {
         if (e instanceof Refusal) return problem(e);
-        if (e instanceof DirectoryRefusal) return problem(new Refusal(e.status, e.code, e.detail));
+        if (e instanceof PagingRefusal) return problem(new Refusal(e.status, e.code, e.detail));
         throw e;
       }
     },

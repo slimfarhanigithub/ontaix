@@ -1,10 +1,10 @@
 import { act, fireEvent, render } from '@testing-library/react';
 
 import { api } from '../api/client';
-import { ApiError, type Group, type Proposal, type TeachResult } from '../api/types';
-import { groupEdit, toggleSource } from '../admin/actions';
+import { ApiError, type Proposal, type TeachResult } from '../api/types';
+import { renameDialog } from '../admin/actions';
 import { Tg } from '../admin/Toggle';
-import { addCompany, addNode, addSource, domainOf } from '../canvas/state';
+import { addCompany, addNode, domainOf } from '../canvas/state';
 import type { Company, Node } from '../canvas/types';
 import { store } from '../store/store';
 import { speechStream, teach } from '../teach/teach';
@@ -268,14 +268,9 @@ describe('drawer', () => {
 });
 
 describe('admin', () => {
-  it('the source toggle shows the spinner in the dot’s place while enabling', async () => {
-    const { c } = model();
-    const src = addSource(store.s, c, 'SAP ERP', 'ERP');
-    src.sid = 'src-1';
-    src.disabled = true;
-    const enabled = deferred<unknown>();
-    vi.spyOn(api, 'enableSource').mockReturnValue(enabled.promise as never);
-    const { container } = render(<Tg on={false} onClick={() => toggleSource(src)} />);
+  it('a setting toggle shows the spinner in the dot’s place while its click waits', async () => {
+    const flipped = deferred<unknown>();
+    const { container } = render(<Tg on={false} onClick={() => flipped.promise} />);
     const tg = container.querySelector('.tg') as HTMLButtonElement;
     fireEvent.click(tg);
     await advance(BUSY_DELAY_MS);
@@ -283,25 +278,26 @@ describe('admin', () => {
     expect(tg.querySelector('i')).toBeNull();
     expect(tg.textContent).toBe('Enable');
     expect(tg.disabled).toBe(true);
-    enabled.resolve({ disabled: false });
+    flipped.resolve(undefined);
     await settle();
     expect(spinOf(tg)).toBeNull();
     expect(tg.querySelector('i')).not.toBeNull();
   });
 
-  it('Save on a group waits for the API, then closes; a refusal clears the spinner too', async () => {
-    const g = { id: 'g-1', name: 'Quality', description: '', memberCount: 0, roles: [] } as unknown as Group;
-    const saved = deferred<unknown>();
-    vi.spyOn(api, 'updateGroup').mockReturnValue(saved.promise as never);
+  it('Propose on a rename waits for the API, then closes; a refusal clears the spinner too', async () => {
+    const { sales } = model();
+    const proposed = deferred<Proposal | null>();
+    vi.spyOn(store, 'propose').mockReturnValue(proposed.promise);
     const { container } = render(<Dialog />);
-    act(() => groupEdit(g));
-    const save = container.querySelector('.dlg .df .btn.primary') as HTMLButtonElement;
-    expect(save.textContent).toBe('Save');
-    fireEvent.click(save);
+    act(() => renameDialog(sales));
+    fireEvent.change(container.querySelector('#rnName') as HTMLInputElement, { target: { value: 'After-sales' } });
+    const propose = container.querySelector('.dlg .df .btn.primary') as HTMLButtonElement;
+    expect(propose.textContent).toBe('Propose');
+    fireEvent.click(propose);
     await advance(BUSY_DELAY_MS);
-    expect(save.firstElementChild?.className).toBe('spin');
-    expect(save.getAttribute('aria-busy')).toBe('true');
-    saved.reject(new ApiError(403, { title: 'forbidden', status: 403, code: 'forbidden', detail: 'Not allowed' }));
+    expect(propose.firstElementChild?.className).toBe('spin');
+    expect(propose.getAttribute('aria-busy')).toBe('true');
+    proposed.reject(new ApiError(403, { title: 'forbidden', status: 403, code: 'forbidden', detail: 'Not allowed' }));
     await settle();
     expect(container.querySelector('.dlg')).toBeNull();
     expect(store.ui.toasts.map((t) => t.strong)).toContain('Refused');

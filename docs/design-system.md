@@ -119,7 +119,7 @@ The surfaces are **warm stone**.
 | `--teal` | `#0e7490` | Categorical colour 7 |
 | `--orange` | `#c2410c` | Categorical colour 8 |
 | `--olive` | `#4d7c0f` | Categorical colour 9 |
-| `--source` | `#d6bd8a` | Data sources on the canvas (squares, binding lines, the legend's binding row); tenant-settable; shapes only, never text |
+| `--source` | `#d6bd8a` | Data sources on the canvas (squares, binding lines), drawn only when a scene carries a source; tenant-settable; shapes only, never text |
 
 > `--good` as body text is below AA (A11Y-C2). Prefer it for icons, dots and badges, or pair it with a label in `--text`.
 
