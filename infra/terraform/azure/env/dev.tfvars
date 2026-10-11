@@ -38,3 +38,7 @@ foundry_claude_deployments = {
   "claude-sonnet-5-5" = { model_version = "2", capacity = 50 }
   "claude-sonnet-5"   = { model_version = "2", capacity = 50 }
 }
+
+# Kubernetes access: Entra ID with Azure RBAC. Local accounts stay on until the owner has verified
+# kubelogin access and a green deploy run (docs/provisioning.md, Cluster Access); then true.
+aks_local_accounts_disabled = false
