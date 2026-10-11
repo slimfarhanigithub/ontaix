@@ -152,11 +152,6 @@ class RefreshInterval(enum.StrEnum):
     DAILY = "daily"
 
 
-class ThemeName(enum.StrEnum):
-    DARK = "dark"
-    LIGHT = "light"
-
-
 class BindingFreshness(enum.StrEnum):
     TWO_MIN = "2 min"
     FOUR_MIN = "4 min"

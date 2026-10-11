@@ -1,22 +1,23 @@
 /**
- * The administration portal frame: backdrop, window and header with the theme switch. Markup
- * from reference/ontaix-studio-reference.html line 192; open, close and theme behaviour from
- * lines 948-952. The navigation and the pages come from the admin module. While it is open, Tab
- * stays inside the window unless a dialog above it holds the focus, and closing it gives focus
- * back to the element that had it before. With a live session the head also holds `#adminAccount`
- * (the account controls) before its ×.
+ * The administration portal frame: backdrop, window and header. Markup from
+ * reference/ontaix-studio-reference.html line 192; open and close behaviour from lines 948-952.
+ * The navigation and the pages come from the admin module. While it is open, Tab stays inside
+ * the window unless a dialog above it holds the focus, and closing it gives focus back to the
+ * element that had it before. With a live session the head also holds `#adminAccount` (the
+ * account controls) before its ×; without one the × alone sits at the right.
  */
 import { useEffect, useRef } from 'react';
 
-import { invalidateDirectory } from '../admin/adminData';
 import { AdminMain, AdminNav } from '../admin/AdminPortal';
 import { AccountControls } from '../auth/AccountControls';
+import { useAuth } from '../auth/authStore';
 import { trapTab, useFocusReturn } from './Dialog';
 import { refStyle, useStore } from './dom';
 
 export function AdminOverlay() {
   const st = useStore();
-  const { adminOpen, theme, proposals } = st.ui;
+  const { session } = useAuth();
+  const { adminOpen, proposals } = st.ui;
   const sub =
     st.s.companies.map((c) => c.name).join(' · ') +
     (proposals.length ? ` · ${proposals.length} proposal${proposals.length === 1 ? '' : 's'} waiting on the canvas` : '');
@@ -45,27 +46,8 @@ export function AdminOverlay() {
       <div className="win" ref={win}>
         <div className="head">
           <div id="adminTitle">Ontology Builder admin portal</div> <span id="adminSub">{sub}</span>
-          <button
-            className="btn"
-            id="themeBtn"
-            ref={refStyle('margin-left:auto;display:inline-flex;align-items:center;gap:6px')}
-            title="Switch between dark and light mode"
-            onClick={() => {
-              st.toggleTheme();
-              if (st.ui.adminOpen) {
-                invalidateDirectory();
-                st.renderAdmin();
-              }
-            }}
-          >
-            <svg viewBox="0 0 16 16" ref={refStyle('width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round')}>
-              <circle cx="8" cy="8" r="3" />
-              <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1" />
-            </svg>
-            <span id="themeLbl">{theme === 'light' ? 'Dark mode' : 'Light mode'}</span>
-          </button>
           <AccountControls />
-          <button className="x" id="adminClose" aria-label="Close" ref={refStyle('margin-left:8px')} onClick={() => st.closeAdmin()}>
+          <button className="x" id="adminClose" aria-label="Close" ref={refStyle(`margin-left:${session ? '8px' : 'auto'}`)} onClick={() => st.closeAdmin()}>
             ×
           </button>
         </div>

@@ -9,9 +9,9 @@ import { Dialog } from './Dialog';
 import { Panel } from './Panel';
 import { useKeyboard } from './useKeyboard';
 
-// The portal's pages load directory data; one button each stands in for them here.
+// The portal's pages load the audit log; one button each stands in for them here.
 vi.mock('../admin/AdminPortal', () => ({
-  AdminNav: () => <button data-page="sources">Data sources</button>,
+  AdminNav: () => <button data-page="overview">Overview</button>,
   AdminMain: () => <button>Add</button>,
 }));
 

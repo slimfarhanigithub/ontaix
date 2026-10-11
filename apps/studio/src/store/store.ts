@@ -19,8 +19,6 @@ import {
   type Appearance,
   type Artefacts,
   type Attribute,
-  type Binding,
-  type ConnectorType,
   type Company as ApiCompany,
   type DomainProduct,
   type Proposal,
@@ -30,7 +28,6 @@ import {
   type ProposalEdit,
   type Scene,
   type Settings,
-  type Source,
   type TenantDomain,
 } from '../api/types';
 import { arrange as arrangeCanvas, settleInDomain } from '../canvas/arrange';
@@ -45,7 +42,6 @@ import {
   addCompany,
   addLink,
   addNode,
-  addSource,
   bySid,
   createScene,
   domainOf,
@@ -139,7 +135,6 @@ export interface UiState {
   legendOff: boolean;
   domainsOff: boolean;
   adminOpen: boolean;
-  theme: 'dark' | 'light';
   settings: Settings | null;
   appearance: Appearance | null;
   /** The tenant's domains in ring order: the nine templates, possibly renamed, and custom domains. */
@@ -166,7 +161,6 @@ export interface UiState {
   adminPage: string;
   /** Bumped whenever the portal re-renders from scratch, which resets its lists. */
   adminRev: number;
-  connectors: ConnectorType[];
 }
 
 type Listener = () => void;
@@ -212,7 +206,6 @@ class StudioStore {
       legendOff: false,
       domainsOff: false,
       adminOpen: false,
-      theme: 'light',
       settings: null,
       appearance: null,
       domains: templateDomains(),
@@ -229,9 +222,8 @@ class StudioStore {
       listening: false,
       skipAnimation: readSkipAnimation(),
       dialogs: [],
-      adminPage: 'sources',
+      adminPage: 'overview',
       adminRev: 0,
-      connectors: [],
     };
     this.syncSkip();
   }
@@ -256,7 +248,6 @@ class StudioStore {
 
   attachRenderer(r: Renderer): void {
     this.renderer = r;
-    r.applyTheme(this.ui.theme);
   }
 
   /** Loads the scene and starts listening to live events; a second call joins the first. The
@@ -304,7 +295,8 @@ class StudioStore {
     for (const d of this.ui.domains) ensureDomain(this.s, c, { key: d.key, name: d.name, owner: d.owner, color: this.domainColour(d), position: d.position });
   }
 
-  /** Fills the canvas arrays from a snapshot, the way the reference's `restore` does. */
+  /** Fills the canvas arrays from a snapshot, the way the reference's `restore` does. The
+   * snapshot's data sources and bindings, if any, are not drawn: no cell has data behind it. */
   applyScene(scene: Scene): void {
     const s = this.s;
     s.nodes.length = 0;
@@ -321,17 +313,7 @@ class StudioStore {
       this.bindCompany(c, co);
     }
     for (const n of scene.nodes) {
-      if (isSource(n)) {
-        const c = this.companyBySid(n.companyId);
-        if (!c) continue;
-        const src = addSource(s, c, n.label, n.kindText);
-        src.sid = n.id;
-        src.ai = n.anchorIndex;
-        src.pending = n.pending;
-        src.disabled = n.disabled;
-        src.alpha = 1;
-        continue;
-      }
+      if (isSource(n)) continue;
       if (n.kind === 'root') {
         const c = this.companyBySid(n.companyId);
         if (c?.root) c.root.sid = n.id;
@@ -360,17 +342,7 @@ class StudioStore {
       node.labelAlpha = 1;
     }
     for (const l of scene.links) {
-      if (isBinding(l)) {
-        const a = bySid(s, l.sourceId),
-          b = bySid(s, l.conceptId);
-        if (!a || !b) continue;
-        const link = addLink(s, a, b, 'bind', 300, 'bound to');
-        link.sid = l.id;
-        link.pending = l.pending;
-        link.alpha = 1;
-        if (!l.pending) b.bound = { source: a, records: l.records, fresh: l.fresh };
-        continue;
-      }
+      if (isBinding(l)) continue;
       const a = bySid(s, l.aId),
         b = bySid(s, l.bId);
       if (!a || !b) continue;
@@ -397,11 +369,8 @@ class StudioStore {
     this.ui.proposals = scene.proposals;
     this.ui.settings = scene.settings;
     this.ui.appearance = scene.appearance;
-    this.ui.connectors = scene.connectors || [];
-    this.setTheme(scene.appearance.theme, false);
     this.applyColors();
     this.applySettings();
-    if (scene.viewState.coverage !== s.COVERAGE) s.COVERAGE = scene.viewState.coverage;
     s.userZoomed = false;
     this.renderCompanies();
     this.bump();
@@ -492,9 +461,6 @@ class StudioStore {
       case 'appearance.changed':
         this.ui.appearance = e.payload.appearance as Appearance;
         this.applyColors();
-        break;
-      case 'source.changed':
-        this.applySourceChanged(e.payload.source as Source, (e.payload.bindings as Binding[] | undefined) || []);
         break;
       case 'relation.removed':
         for (const id of (e.payload.relationIds as string[] | undefined) || []) this.fadeLink(linkBySid(this.s, id));
@@ -628,7 +594,8 @@ class StudioStore {
     return d;
   }
 
-  /** A proposal's pending artefacts appear at once: a cell divides off its parent, a line grows lighter. */
+  /** A proposal's pending artefacts appear at once: a cell divides off its parent, a line grows
+   * lighter. A data source or a binding draws nothing: no cell has data behind it. */
   applyCreated(p: Proposal): void {
     const s = this.s;
     const art = p.artefacts || {};
@@ -686,28 +653,9 @@ class StudioStore {
         l.pending = true;
         break;
       }
-      case 'source': {
-        const src = art.sources?.[0];
-        if (!src || bySid(s, src.id)) return;
-        const c = this.companyBySid(src.companyId);
-        if (!c) return;
-        const n = addSource(s, c, src.label, src.kindText);
-        n.sid = src.id;
-        n.pending = true;
+      case 'source':
+      case 'bind':
         break;
-      }
-      case 'bind': {
-        for (const b of art.bindings || []) {
-          if (linkBySid(s, b.id)) continue;
-          const src = bySid(s, b.sourceId),
-            c = bySid(s, b.conceptId);
-          if (!src || !c) continue;
-          const l = addLink(s, src, c, 'bind', 300, 'bound to');
-          l.sid = b.id;
-          l.pending = true;
-        }
-        break;
-      }
       case 'attr': {
         for (const a of art.attributes || []) {
           const n = bySid(s, a.conceptId);
@@ -767,31 +715,6 @@ class StudioStore {
       const l = linkBySid(s, id);
       if (l) l.pending = false;
     }
-    for (const b of payload.artefacts.bindings || []) {
-      const l = linkBySid(s, b.id);
-      if (l) {
-        l.pending = false;
-        l.grow = { start: now() };
-      }
-      const source = bySid(s, b.sourceId),
-        target = bySid(s, b.conceptId);
-      if (!b.pending && source && target) target.bound = { source, records: b.records, fresh: b.fresh };
-    }
-    const src = bySid(s, p.sourceId);
-    if (src && p.type === 'source') {
-      src.pending = false;
-      src.flash = { color: GREEN, start: now(), soft: !!bulk };
-    }
-    if (p.changeKind === 'unbind' && node) {
-      this.fadeLink(s.links.find((l) => l.kind === 'bind' && l.b === node && !l.pending));
-      node.bound = null;
-    }
-    if (p.changeKind === 'remove_source' && src)
-      for (const l of s.links)
-        if (l.kind === 'bind' && l.a === src) {
-          if (l.b.bound && l.b.bound.source === src) l.b.bound = null;
-          this.fadeLink(l);
-        }
     if (p.changeKind === 'remove_company') this.removeCompanyLater(this.companyBySid(p.companyId));
     if (p.changeKind === 'resolve_conflict') this.resolveConflictLinks(payload.artefacts);
     this.reconcile(payload.artefacts, p.changeKind === 'edit_relation');
@@ -821,8 +744,6 @@ class StudioStore {
       if (p.type !== 'change') dropLink(p.relationId);
       for (const id of p.relationIds) dropLink(id);
       for (const id of p.bindingIds) dropLink(id);
-      const src = bySid(s, p.sourceId);
-      if (src && p.type === 'source') src.dying = { start: now(), color: RED };
       // A taught attribute's proposal names no concept; its attribute is found on its holder.
       const holder = p.type === 'attr' ? node || s.nodes.find((n) => n.attrs.some((a) => a.sid === p.attributeId)) : null;
       if (holder) {
@@ -849,10 +770,6 @@ class StudioStore {
       n.conflict = c.conflict;
       n.pending = c.pending;
       if (c.dyingAt && !n.dying) n.dying = { start: now(), color: RED };
-      if (c.bound && !c.bound.pending) {
-        const source = bySid(s, c.bound.sourceId);
-        if (source) n.bound = { source, records: c.bound.records, fresh: c.bound.fresh };
-      } else if (!c.bound) n.bound = null;
       n.attrs = c.attributes.map((a) => toAttr(a));
       if (this.ui.drawerNode === n) this.ui.drawerSeq++;
     }
@@ -911,14 +828,6 @@ class StudioStore {
         settleInDomain(s, n);
       }
     }
-    for (const src of art.sources || []) {
-      const n = bySid(s, src.id);
-      if (!n) continue;
-      n.label = src.label;
-      n.pending = src.pending;
-      n.disabled = src.disabled;
-      if (src.dyingAt && !n.dying) n.dying = { start: now(), color: RED };
-    }
   }
 
   /**
@@ -959,22 +868,6 @@ class StudioStore {
       layoutCompanies(s);
       this.renderCompanies();
     }, 800);
-  }
-
-  /** A source was enabled, disabled, reconfigured or refreshed: its state and the freshness it feeds. */
-  private applySourceChanged(src: Source, feeds: Binding[]): void {
-    const s = this.s;
-    const n = bySid(s, src.id);
-    if (n) {
-      n.disabled = src.disabled;
-      n.pending = src.pending;
-      n.label = src.label;
-    }
-    for (const b of feeds) {
-      const c = bySid(s, b.conceptId);
-      if (c && c.bound) c.bound.fresh = b.fresh;
-    }
-    this.bump();
   }
 
   /**
@@ -1055,7 +948,7 @@ class StudioStore {
 
   // ------------------------------------------------------------ proposals
 
-  /** Sends a draft; refusals surface as the reference's toast or caption. */
+  /** Sends a draft; a refusal, a 404 for a concept that left the model included, is the reference's toast or caption. */
   async propose(draft: ProposalDraft): Promise<Proposal | null> {
     try {
       return await api.createProposal(draft);
@@ -1065,7 +958,7 @@ class StudioStore {
           this.toast2('Not allowed', 'companies may not interact · enable it in the admin portal');
         else if (err.problem.code === 'duplicate_relation' || err.problem.code === 'duplicate_label')
           this.caption('Already there', err.problem.detail || err.problem.title);
-        else if (err.status !== 404) this.toast2('Refused', err.problem.detail || err.problem.title);
+        else this.refused(err);
         return null;
       }
       throw err;
@@ -1194,12 +1087,6 @@ class StudioStore {
     this.s.SKIP = this.ui.skipAnimation || (!!st && !st.animations);
   }
 
-  toggleCoverage(): void {
-    this.s.COVERAGE = !this.s.COVERAGE;
-    this.bump();
-    void api.putViewState({ coverage: this.s.COVERAGE }).catch(() => undefined);
-  }
-
   arrange(): void {
     if (!this.renderer) return;
     arrangeCanvas(this.s, this.renderer.v);
@@ -1216,18 +1103,6 @@ class StudioStore {
         : s.domainFocus
           ? `Arrange ${s.domainFocus.name} and what it relates to (A)`
           : 'Lay the model out for reading (A)';
-  }
-
-  setTheme(name: 'dark' | 'light', persist = true): void {
-    this.ui.theme = name;
-    this.renderer?.applyTheme(name);
-    document.documentElement.setAttribute('data-theme', name === 'light' ? 'light' : 'dark');
-    this.bump();
-    if (persist) void api.patchAppearance({ theme: name }).catch(() => undefined);
-  }
-
-  toggleTheme(): void {
-    this.setTheme(this.ui.theme === 'light' ? 'dark' : 'light');
   }
 
   openAdmin(page?: string): void {
@@ -1386,15 +1261,6 @@ class StudioStore {
     const st = this.ui.settings;
     if (!link && a.company !== b.company && st && !st.crossCompany) {
       this.toast2('Not allowed', 'companies may not interact · enable it in the admin portal');
-      return;
-    }
-    if (!link && (a.kind === 'source' || b.kind === 'source')) {
-      const src = a.kind === 'source' ? a : b,
-        tgt = a.kind === 'source' ? b : a;
-      if (tgt.kind === 'concept' && src.sid && tgt.sid) {
-        void this.propose({ type: 'bind', sourceId: src.sid, conceptIds: [tgt.sid] });
-        this.caption('One proposal', `Binding ${tgt.label} to ${src.label} is waiting for your approval.`);
-      }
       return;
     }
     this.closeNewBox();

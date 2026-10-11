@@ -41,7 +41,7 @@ function reset(): Company {
   s.stickyFocus = null;
   s.focusSet = null;
   store.ui.domains = DOMAIN_TEMPLATES.map((t, position) => ({ key: t.key, name: t.name, owner: t.owner, color: t.color, defaultColor: t.color, template: true, position, revision: 0 }));
-  store.ui.appearance = { theme: 'dark', colors: {}, accent: '#3fb8a9', source: '#d6bd8a', defaults: { colors: {}, accent: '#3fb8a9', source: '#d6bd8a' } };
+  store.ui.appearance = { colors: {}, accent: '#3fb8a9', source: '#d6bd8a', defaults: { colors: {}, accent: '#3fb8a9', source: '#d6bd8a' } };
   const c = addCompany(s, 'Northwind Industries', '');
   c.sid = 'co-1';
   return c;

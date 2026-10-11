@@ -1,10 +1,11 @@
 /**
- * The drawing surface: canvas, context, size, device pixel ratio, theme and the half-resolution
+ * The drawing surface: canvas, context, size, device pixel ratio, the canvas theme and the
+ * half-resolution
  * region layer. Ported from reference/ontaix-studio-reference.html lines 238-242, 253, 345-347
  * and 349 (`resize`, `panelW`, `CX`, `worldTransform`, `toWorld`, the offscreen layer).
  */
 import type { CanvasTheme } from './themes';
-import { themeFor } from './themes';
+import { canvasTheme } from './themes';
 import type { Cam } from './types';
 
 export interface View {
@@ -35,7 +36,7 @@ export function createView(canvas: HTMLCanvasElement): View {
     W: 0,
     H: 0,
     DPR: 1,
-    TH: themeFor('light'),
+    TH: canvasTheme(),
     panelOff: () => document.body.classList.contains('panel-off'),
     viewport: () => [innerWidth, innerHeight],
   };

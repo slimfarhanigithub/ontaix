@@ -1,7 +1,7 @@
 /**
  * Fixture data of the in-browser mock API, verbatim from reference/ontaix-studio-reference.html:
- * `SEED` (line 612), `ATTR` (280-297), `generic` (298-299), `RECORDS` (300), `CATALOG`
- * (911-913), `DISCOVER` (1054) and the home company of `reset()` (736).
+ * `SEED` (line 612), `ATTR` (280-297), `generic` (298-299), `RECORDS` (300) and the home company
+ * of `reset()` (736).
  */
 import type { DomainKey } from '../types';
 
@@ -179,38 +179,4 @@ export const RECORDS: Record<string, number> = {
   Client: 1840,
   'Client order': 22600,
   Vendor: 410,
-};
-
-/** code, name, category, scope text. */
-export const CATALOG: [string, string, string, string][] = [
-  ['SAP', 'SAP ERP (S/4HANA, ECC)', 'ERP', 'OData / RFC · tables, CDS views'],
-  ['SF', 'Salesforce', 'CRM', 'REST · objects and fields'],
-  ['D365', 'Microsoft Dynamics 365', 'ERP / CRM', 'Dataverse · tables'],
-  ['FAB', 'Microsoft Fabric · OneLake', 'data platform', 'Lakehouse, warehouse, Fabric IQ ontology'],
-  ['DBX', 'Databricks', 'data platform', 'Unity Catalog · tables, Genie ontology'],
-  ['SNW', 'Snowflake', 'data platform', 'information schema · semantic views'],
-  ['SQL', 'SQL Server · Azure SQL', 'database', 'schema and row counts'],
-  ['PG', 'PostgreSQL', 'database', 'schema and row counts'],
-  ['ORA', 'Oracle', 'database', 'schema and row counts'],
-  ['MES', 'Siemens Opcenter · MES', 'MES', 'plants, lines, assets, orders'],
-  ['X3', 'Sage X3', 'ERP', 'facilities, items, business partners'],
-  ['SN', 'ServiceNow', 'ITSM / CMMS', 'tables and CMDB'],
-  ['WD', 'Workday', 'HRIS', 'workers, positions, organisations'],
-  ['PI', 'AVEVA PI · OT', 'operations', 'tags and assets'],
-  ['SP', 'SharePoint · files', 'documents', 'glossaries, procedures, specifications'],
-];
-
-/** Objects a connector discovers on verification, by catalogue code (reference line 1054). */
-export const DISCOVER: Record<string, string[]> = {
-  SAP: ['MARA (materials)', 'MAKT (descriptions)', 'KNA1 (customers)', 'LFA1 (vendors)', 'VBAK (sales orders)', 'EKKO (purchase orders)', 'MARC (plant data)', 'CSKS (cost centres)'],
-  SF: ['Account', 'Contact', 'Opportunity', 'Quote', 'Pricebook2', 'Territory2'],
-  MES: ['Plant', 'Line', 'Asset', 'Shift', 'WorkOrder', 'Downtime'],
-  FAB: ['lakehouse.bronze.*', 'lakehouse.silver.customer', 'warehouse.dim_product', 'Fabric IQ · Northwind ontology'],
-  DBX: ['main.sales.orders', 'main.supply.materials', 'Genie ontology · production'],
-  SNW: ['SALES.ORDERS', 'SUPPLY.MATERIALS', 'semantic view · CUSTOMER_360'],
-  X3: ['FACILITY', 'ITMMASTER', 'BPCUSTOMER', 'BPSUPPLIER', 'SORDER'],
-  WD: ['Worker', 'Position', 'Organization', 'Certification'],
-  SN: ['cmdb_ci', 'incident', 'change_request'],
-  PI: ['AF elements', 'tags · 12,600'],
-  SP: ['Glossary.docx', 'Procedures/', 'Specifications/'],
 };

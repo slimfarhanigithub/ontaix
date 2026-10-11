@@ -523,14 +523,13 @@ export interface Settings {
 export type SettingsPatch = Partial<Omit<Settings, 'approvalRequired' | 'readOnlyConnectors'>>;
 
 export interface Appearance {
-  theme: 'dark' | 'light';
   colors: Record<string, string>;
   accent: string;
   source: string;
   defaults: { colors: Record<string, string>; accent: string; source: string };
 }
 
-export type AppearancePatch = Partial<Pick<Appearance, 'theme' | 'colors' | 'accent' | 'source'>>;
+export type AppearancePatch = Partial<Pick<Appearance, 'colors' | 'accent' | 'source'>>;
 
 export interface ViewState {
   coverage: boolean;
@@ -840,26 +839,6 @@ export class ApiError extends Error {
 
 // ------------------------------------------------------------ administration
 
-export interface SourceUpdate {
-  host?: string;
-  scope?: string;
-  auth?: SourceAuth;
-  refresh?: RefreshInterval;
-}
-
-export interface DiscoveryRequest {
-  host?: string;
-  scope?: string;
-  auth: SourceAuth;
-  displayName?: string;
-}
-
-export interface Discovery {
-  connected: boolean;
-  statusText: string;
-  objects: { name: string; rows: number }[];
-}
-
 export type RoleName = 'owner' | 'builder' | 'governor' | 'member' | 'administrator' | 'auditor' | 'agent';
 
 export interface Scope {
@@ -898,36 +877,6 @@ export interface Group {
   roles: RoleAssignment[];
 }
 
-export interface GroupInput {
-  name: string;
-  description?: string;
-}
-
-export interface RoleInfo {
-  role: RoleName;
-  label: string;
-  description: string;
-  assigned: number;
-}
-
-export interface RoleGroup {
-  group: Group;
-  scopes: Scope[];
-}
-
-export interface Agent {
-  id: string;
-  name: string;
-  platform: string;
-  companyId?: string | null;
-  domainKey?: DomainKey | null;
-  domainName?: string | null;
-  owner: string;
-  access: boolean;
-  reads: number;
-  costEur: number;
-}
-
 export interface CostSummary {
   month: string;
   measuredEur: number;
@@ -936,26 +885,31 @@ export interface CostSummary {
   agentsWithAccess: number;
   reads: number;
   byPlatform: { platform: string; agentsWithAccess: number; costEur: number; sharePercent: number }[];
-  /** Ontaix's own language model calls this month; separate from the agent figures. */
-  llm?: LlmUsage;
+  /** Ontaix's own language model and OCR calls this month; separate from the agent figures. */
+  llm: LlmUsage;
+}
+
+export type LlmPurpose = 'teach_extraction' | 'concept_expansion' | 'document_extraction' | 'document_ocr';
+
+export interface LlmPurposeUsage {
+  purpose: LlmPurpose;
+  calls: number;
+  /** `document_ocr` only: the pages recognised in the month. */
+  pages?: number | null;
+  costEur: number;
 }
 
 export interface LlmUsage {
   calls: number;
   inputTokens: number;
   outputTokens: number;
+  /** Tokens counted against the monthly cap, reservations included. */
   tokensUsed: number;
   tokenCap: number;
-  ocrPagesUsed?: number;
-  ocrPageCap?: number;
+  ocrPagesUsed: number;
+  ocrPageCap: number;
   costEur: number;
-  byPurpose: {
-    purpose: 'teach_extraction' | 'concept_expansion' | 'document_extraction' | 'document_ocr';
-    calls: number;
-    /** `document_ocr` only. */
-    pages?: number;
-    costEur: number;
-  }[];
+  byPurpose: LlmPurposeUsage[];
 }
 
 // ------------------------------------------------------------ domains, deletion impact, bulk deletion
@@ -1022,11 +976,6 @@ export interface CrossCompanyDisabled {
   proposal: Proposal;
   audit: AuditEntry;
   settings: Settings;
-}
-
-export interface RefreshAllResult {
-  sources: number;
-  bindings: number;
 }
 
 // ------------------------------------------------------------ sign-in, sessions and the platform

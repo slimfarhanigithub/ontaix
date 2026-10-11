@@ -8,9 +8,8 @@
  *
  * Scenes: empty canvas (the home company's root only), a first model taught through text and
  * approved, pending proposals, a company added with its starter vocabulary pending, legend
- * hidden, each in light and dark at 1440x900 and 1920x1080; the full fixture model (text,
- * document import, a second company, equivalences, everything approved) in light and dark at
- * 1440x900.
+ * hidden, each at 1440x900 and 1920x1080; the full fixture model (text, document import, a
+ * second company, equivalences, everything approved) at 1440x900.
  *
  * `--update-snapshots` writes the baselines of the running platform.
  */
@@ -25,9 +24,7 @@ import {
   openStudio,
   relate,
   teachFirstModel,
-  useTheme,
   VIEWPORTS,
-  type Theme,
   type Viewport,
 } from './harness';
 
@@ -117,31 +114,25 @@ const scenes: SceneScript[] = [
   },
 ];
 
-const themes: Theme[] = ['light', 'dark'];
-/** Optional filters for a partial run: scene name fragments (comma-separated), one viewport, one theme. */
+/** Optional filters for a partial run: scene name fragments (comma-separated), one viewport. */
 const only = process.env.ONTAIX_SCENE?.split(',');
 const onlyViewport = process.env.ONTAIX_VIEWPORT;
-const onlyTheme = process.env.ONTAIX_THEME;
 
 for (const vp of VIEWPORTS) {
   if (onlyViewport && onlyViewport !== `${vp.width}x${vp.height}`) continue;
   for (const scene of scenes) {
     if (scene.viewports && !scene.viewports.includes(vp)) continue;
     if (only && !only.some((o) => scene.name.includes(o))) continue;
-    for (const theme of themes) {
-      if (onlyTheme && onlyTheme !== theme) continue;
-      test(`${scene.name} · ${theme} · ${vp.width}x${vp.height}`, async ({ browser }) => {
-        const ctx = await browser.newContext({ viewport: vp });
-        const page = await ctx.newPage();
-        try {
-          await openStudio(page);
-          await useTheme(page, theme);
-          await scene.play(page);
-          await expectScene(page, scene.name, theme, vp);
-        } finally {
-          await ctx.close();
-        }
-      });
-    }
+    test(`${scene.name} · ${vp.width}x${vp.height}`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: vp });
+      const page = await ctx.newPage();
+      try {
+        await openStudio(page);
+        await scene.play(page);
+        await expectScene(page, scene.name, vp);
+      } finally {
+        await ctx.close();
+      }
+    });
   }
 }

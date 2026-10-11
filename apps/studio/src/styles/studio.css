@@ -81,7 +81,7 @@ form.bar .hist p{ margin:2px 0 0; font-size:13px; line-height:1.5; color:var(--i
 .sr{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 
 /* The shortcuts: one unit per shortcut, wrapping right-aligned under the legend, in --ink-2 for
-   AA contrast on both themes. */
+   AA contrast on the canvas. */
 .dock-r .hint{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:2px 10px; margin:0; padding:0; list-style:none; color:var(--ink-2); line-height:1.7; pointer-events:none; }
 .dock-r .hint li{ white-space:nowrap; }
 
