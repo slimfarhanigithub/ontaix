@@ -1,6 +1,6 @@
 /**
  * Only src/design holds raw colours. Every other stylesheet, module and component styles through
- * the tokens, so one theme switch and one rebrand reach everything. Files still carrying raw
+ * the tokens, so one rebrand reaches everything. Files still carrying raw
  * colours from before the design system are listed in RESTYLE_PENDING until their restyle lands;
  * a listed file that no longer holds any fails the build until its row is removed.
  */

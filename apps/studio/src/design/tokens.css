@@ -1,17 +1,16 @@
 /*
  * Ontaix Studio design tokens: the single source of truth for colour, type, shape and motion.
  *
- * Raw light values live in `:root`, raw dark values in the dark block (`data-theme="dark"` on
- * <html>, which the Studio's theme switch sets, or the `.dark` class). Every other name resolves
- * through `var()` onto these, so a rebrand edits the two raw blocks only; the role names are the
- * stable contract the stylesheets and components use.
+ * The Studio has one theme, warm-stone light. Raw values live in `:root`; every other name
+ * resolves through `var()` onto these, so a rebrand edits the raw block only; the role names are
+ * the stable contract the stylesheets and components use.
  *
  * Colour carries meaning. Crimson (`--accent`) is brand chrome: selection, emphasis, primary
  * buttons. Gold (`--human`) is human accountability: proposals awaiting approval, approve
  * actions, decisions recorded under a person's name. Blue (`--link`, `--info`) is links, info and
  * the focus ring. Green (`--good`) is success; red (`--danger`) is failure and destruction.
  *
- * contrast.test.ts reads this file from disk and checks the AA pairs in both themes.
+ * contrast.test.ts reads this file from disk and checks the AA pairs.
  */
 :root {
   /* Surfaces: warm stone. */
@@ -41,8 +40,8 @@
   --accent-soft: #fce1eb;
   --accent-text: #a80a44;
 
-  /* Human accountability: gold. The light `--human` is deliberately darker than the dark one so
-     it holds contrast on a light surface; gold text uses `--human-text`. */
+  /* Human accountability: gold. `--human` is deliberately deep so it holds contrast on a light
+     surface; gold text uses `--human-text`. */
   --human: #a07621;
   --human-bright: #c8963a;
   --human-soft: #f1e4c3;
@@ -57,7 +56,7 @@
   --info-text: #334768;
   --info-chip: #dce7fb;
 
-  /* Status. Light `--good` as body text is below AA: icons, dots and badges, or paired with a
+  /* Status. `--good` as body text is below AA: icons, dots and badges, or paired with a
      `--text` label. */
   --good: #0e8a6a;
   --good-soft: #dcf0e9;
@@ -99,63 +98,8 @@
   color-scheme: light;
 }
 
-:root[data-theme='dark'],
-.dark {
-  /* Surfaces: cool slate. */
-  --bg: #1b1f2a;
-  --surface: #232936;
-  --surface-2: #2a3140;
-  --hover: #2a3140;
-  --rowhover: #272e3a;
-  --chip: #2c333f;
-  --subtle: #20252f;
-  --scrim: rgba(0, 0, 0, 0.55);
-
-  --border: #363d4c;
-  --border-strong: #434b5c;
-  --border-faint: #2c323f;
-
-  --text: #f3f5f9;
-  --text-2: #c6cbd6;
-  --text-3: #9aa2b1;
-  --text-4: #6f7788;
-
-  --accent: #ff5c8a;
-  --accent-strong: #ff85a8;
-  --accent-soft: #3a1420;
-  --accent-text: #ff9fbb;
-
-  --human: #e8b54d;
-  --human-bright: #f2c766;
-  --human-soft: #362c18;
-  --human-text: #e8b54d;
-
-  --link: #8fb2ff;
-  --link-hover: #b4ccff;
-  --info: #9cb8ff;
-  --info-bg: #1c2536;
-  --info-border: #2f3b54;
-  --info-text: #c6d4f0;
-  --info-chip: #28344c;
-
-  --good: #4db3a4;
-  --good-soft: #17322d;
-  --danger: #e5736b;
-  --danger-soft: #3a2420;
-
-  --violet: #a78bfa;
-  --teal: #5fc7e0;
-  --orange: #f59e6b;
-  --olive: #a3c957;
-
-  --shadow-float: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
-  --shadow-pop: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
-
-  color-scheme: dark;
-}
-
 /*
- * The Studio's earlier vocabulary, resolved onto the tokens so it follows the theme. New rules
+ * The Studio's earlier vocabulary, resolved onto the tokens so it follows a rebrand. New rules
  * use the canonical names above.
  */
 :root {

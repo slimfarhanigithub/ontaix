@@ -9,7 +9,8 @@ orchestrator; the owner (Slim) reviews and approves at checkpoints.
 `docs/design-system.md` and its source of truth `apps/studio/src/design/tokens.css` define the look of
 the Ontaix Studio: colour meanings, fonts, shape, motion, focus and the AA contrast contract.
 The Studio must follow it everywhere - canvas, teach bar, drawer, dialogs, toasts, menus, admin
-portal - in light (the default) and dark. Read `docs/ui-contract.md` before touching anything
+portal - in its one theme, the warm-stone light theme (there is no dark mode and no theme
+switch). Read `docs/ui-contract.md` before touching anything
 under `apps/studio`: it holds every behaviour, label, id, keyboard shortcut and ARIA rule the
 Studio keeps. The screenshot suite under `tests/screenshots` compares every scene with its
 stored baseline; a visible difference is a bug, not a design choice. Nobody "improves" the UI

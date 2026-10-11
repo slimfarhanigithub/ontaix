@@ -35,7 +35,6 @@ CREATE TYPE scope_kind AS ENUM ('tenant', 'company', 'domain');
 CREATE TYPE actor_kind AS ENUM ('user', 'agent', 'system', 'platform');
 CREATE TYPE source_auth AS ENUM ('service_principal', 'oauth2_client_credentials', 'managed_identity', 'key_vault_api_key');
 CREATE TYPE refresh_interval AS ENUM ('5 min', '15 min', '1 h', 'daily');
-CREATE TYPE theme_name AS ENUM ('dark', 'light');
 CREATE TYPE binding_freshness AS ENUM ('2 min', '4 min', '11 min', '1 h', 'paused', 'just now');
 CREATE TYPE company_mode AS ENUM ('single', 'multiple');
 CREATE TYPE platform_role_name AS ENUM ('super_admin');
@@ -77,7 +76,6 @@ COMMENT ON TABLE tenant_identity_provider IS 'Which OIDC issuer and audience pai
 
 CREATE TABLE tenant_settings (
   tenant_id            uuid PRIMARY KEY REFERENCES tenant(id) ON DELETE CASCADE,
-  theme                theme_name NOT NULL DEFAULT 'light',
   colors               jsonb NOT NULL DEFAULT '{}'::jsonb,
   accent               text NOT NULL DEFAULT '#d30c55',
   source_colour        text NOT NULL DEFAULT '#d6bd8a',

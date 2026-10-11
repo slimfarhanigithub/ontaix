@@ -1,37 +1,33 @@
 /**
  * What the admin portal's buttons do, and the dialogs they open: settings, the typed `disable`
- * confirmation, rename, bind and unbind, source enable, disable and removal, company removal,
- * group edit, members and roles, the role-to-groups list, the scope choice and the agent
- * registry. Behaviour and copy from reference/ontaix-studio-reference.html lines 947-1053.
- * Ontology changes are proposals; settings, directory and source-state changes are immediate.
- * The ontology-editing dialogs (move to domain, company removal named from the deletion impact,
- * domain creation, edit and deletion, bulk deletion) are owner additions in the same markup.
+ * confirmation, rename, concept deletion, relation deletion and company removal. Behaviour and
+ * copy from reference/ontaix-studio-reference.html lines 947-1053. Ontology changes are
+ * proposals; settings changes are immediate. The ontology-editing dialogs (move to domain,
+ * company removal named from the deletion impact, domain creation, edit and deletion, bulk
+ * deletion) are owner additions in the same markup.
  */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { api } from '../api/client';
-import type { DeletionImpact, DomainInput, DomainPatch, Group, ProposalDraft, Scope, TenantDomain, User } from '../api/types';
-import { DOMAIN_TEMPLATES, NEUTRAL, PALETTE } from '../canvas/constants';
+import { ApiError, type DeletionImpact, type DomainInput, type DomainPatch, type ProposalDraft, type TenantDomain } from '../api/types';
+import { NEUTRAL, PALETTE } from '../canvas/constants';
 import type { Company, Domain, Link, Node } from '../canvas/types';
 import { title } from '../nl/parser';
-import { BusyButton, useBusyAction } from '../shell/busy';
+import { useBusyAction } from '../shell/busy';
 import { DialogFrame } from '../shell/Dialog';
 import { store } from '../store/store';
-import { attempt, directory, failed, fetchAll, invalidateDirectory } from './adminData';
+import { attempt, failed, invalidateDirectory } from './adminData';
 import { conceptDeletion, deletionText, impactText } from './conceptDeletion';
 
 /** Most concepts and domain products one bulk deletion may name. */
 export const BULK_CONCEPTS = 200;
 export const BULK_PRODUCTS = 20;
 import { isDisableConfirmed } from './confirmText';
-import { List, type Column } from './List';
-import { en } from './listModel';
-import { roleLabel, roleName, ROLE_NAMES } from './roles';
-import { Tg, type SettingKey } from './Toggle';
+import type { SettingKey } from './Toggle';
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-/** Re-reads the directory and redraws the portal from scratch. */
+/** Re-reads the audit log and redraws the portal from scratch. */
 export function renderAdmin(): void {
   invalidateDirectory();
   store.renderAdmin();
@@ -89,28 +85,29 @@ export function changeSetting(k: SettingKey): Promise<void> {
   });
 }
 
-export function changeRefresh(value: string): void {
-  void attempt(() => api.patchSettings({ refresh: value as '5 min' | '15 min' | '1 h' | 'daily' })).then((next) => {
-    if (next) store.ui.settings = next;
-  });
-}
-
 const crossLinks = (): Link[] => store.s.links.filter((l) => l.a.company !== l.b.company && !l.dying);
 
-/** With no cross-company relationship the switch turns off at once; otherwise the typed confirmation opens. */
-function disableCrossCompany(): Promise<void> {
+/** With no cross-company relationship the switch turns off at once; otherwise the typed
+ * confirmation opens, as it does when the server still holds one the canvas does not show. */
+async function disableCrossCompany(): Promise<void> {
   const xl = crossLinks();
-  const done = (removed: number) => {
-    store.toast2('Disabled', `${plural(removed, 'cross-company relationship')} removed`);
-    store.applySettings();
-    renderAdmin();
-  };
-  if (!xl.length)
-    return attempt(() => api.patchSettings({ crossCompany: false })).then((next) => {
-      if (!next) return;
-      store.ui.settings = next;
-      done(0);
-    });
+  if (xl.length) return confirmCrossCompany(xl);
+  try {
+    store.ui.settings = await api.patchSettings({ crossCompany: false });
+    crossCompanyDisabled(0);
+  } catch (err) {
+    if (err instanceof ApiError && err.problem.code === 'confirmation_required') return confirmCrossCompany(xl);
+    failed(err);
+  }
+}
+
+function crossCompanyDisabled(removed: number): void {
+  store.toast2('Disabled', `${plural(removed, 'cross-company relationship')} removed`);
+  store.applySettings();
+  renderAdmin();
+}
+
+function confirmCrossCompany(xl: Link[]): Promise<void> {
   store.openDialog({
     render: (close) => (
       <CrossCompanyDialog
@@ -120,7 +117,7 @@ function disableCrossCompany(): Promise<void> {
           attempt(() => api.disableCrossCompany(typed)).then((res) => {
             if (!res) return;
             store.ui.settings = res.settings;
-            done(res.removedRelations);
+            crossCompanyDisabled(res.removedRelations);
           })
         }
       />
@@ -174,7 +171,7 @@ function CrossCompanyDialog({ links, close, onConfirm }: { links: Link[]; close:
     >
       <p style={{ margin: '0 0 10px' }}>
         The companies below are already interacting. Disabling removes <b>{plural(links.length, 'relationship')}</b> between them, immediately and
-        without a proposal. Each company keeps its own concepts, relations and bindings.
+        without a proposal. Each company keeps its own concepts and relations.
       </p>
       <p style={{ margin: '0 0 6px' }}>
         <b>{pairs.join(' · ')}</b>
@@ -222,16 +219,16 @@ function CrossCompanyDialog({ links, close, onConfirm }: { links: Link[]; close:
 
 let colourTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Applies a colour at once and saves it after the picker settles. */
-export function changeColour(key: string, value: string): void {
+/** Applies a colour at once and saves it after the picker settles; the API takes lower-case hex only. */
+export function changeColour(key: string, picked: string): void {
   const ap = store.ui.appearance;
   if (!ap) return;
-  const patch = key === '__accent' ? { accent: value } : key === '__source' ? { source: value } : { colors: { [key]: value } };
+  const value = picked.toLowerCase();
+  const patch = key === '__accent' ? { accent: value } : { colors: { [key]: value } };
   store.ui.appearance = {
     ...ap,
     accent: key === '__accent' ? value : ap.accent,
-    source: key === '__source' ? value : ap.source,
-    colors: key.startsWith('__') ? ap.colors : { ...ap.colors, [key]: value },
+    colors: key === '__accent' ? ap.colors : { ...ap.colors, [key]: value },
   };
   store.applyColors();
   if (colourTimer) clearTimeout(colourTimer);
@@ -251,7 +248,7 @@ export function resetColours(): Promise<void> {
   });
 }
 
-// ------------------------------------------------------------ entities, relations, bindings
+// ------------------------------------------------------------ entities, relations
 
 export function renameDialog(n: Node): void {
   store.openDialog({
@@ -318,128 +315,12 @@ export function deleteRelationDialog(l: Link, name: string): void {
   );
 }
 
-export function bindDialog(n: Node): void {
-  const srcs = store.s.nodes.filter((x) => x.kind === 'source' && x.company === n.company && !x.pending && !x.dying);
-  if (!srcs.length) {
-    store.toast2('No source', `add a data source for ${n.company?.name} first`);
-    return;
-  }
-  store.openDialog({
-    title: `Bind ${n.label}`,
-    small: true,
-    body: (
-      <div className="form" style={{ gridTemplateColumns: '90px 1fr' }}>
-        <label>Source</label>
-        <select id="bdSrc">
-          {srcs.map((x) => (
-            <option key={x.id} value={x.id}>{`${x.label} · ${x.sub}`}</option>
-          ))}
-        </select>
-        <label></label>
-        <small style={{ color: 'var(--ink-3)' }}>The binding is proposed; attributes found in the schema follow as their own proposals.</small>
-      </div>
-    ),
-    buttons: [
-      { label: 'Cancel' },
-      {
-        label: 'Propose binding',
-        cls: 'primary',
-        onClick: (bk) => {
-          const id = bk.querySelector<HTMLSelectElement>('#bdSrc')?.value;
-          const src = srcs.find((x) => String(x.id) === id);
-          if (!src || !src.sid || !n.sid) return;
-          return proposeThen({ type: 'bind', sourceId: src.sid, conceptIds: [n.sid] }, () => {
-            store.toast2('Proposed', `${n.label} bound to ${src.label}`);
-            renderAdmin();
-          });
-        },
-      },
-    ],
-  });
-}
-
-export function unbindDialog(n: Node, source: string, attrs: number): void {
-  confirmDialog(
-    `Unbind ${n.label} from ${source}?`,
-    `This proposes a change for approval. ${n.label} keeps its ${attrs} approved attributes as declared; record count and freshness disappear.`,
-    'Propose unbinding',
-    () => {
-      const link = store.s.links.find((l) => l.kind === 'bind' && l.b === n && !l.pending);
-      const sid = link?.sid;
-      if (sid)
-        return attemptThen(
-          () => api.proposeUnbind(sid),
-          () => {
-            store.toast2('Proposed', `unbinding of ${n.label}`);
-            renderAdmin();
-          },
-        );
-    },
-    true,
-  );
-}
-
-// ------------------------------------------------------------ sources and companies
-
-export function toggleSource(n: Node): Promise<void> {
-  const sid = n.sid;
-  if (!sid) return Promise.resolve();
-  const doIt = () => {
-    const off = !n.disabled;
-    return attempt(() => (off ? api.disableSource(sid) : api.enableSource(sid))).then((src) => {
-      if (!src) return;
-      n.disabled = src.disabled;
-      store.toast2(src.disabled ? 'Disabled' : 'Enabled', n.label);
-      renderAdmin();
-    });
-  };
-  if (n.disabled) return doIt();
-  const fed = store.s.links.filter((l) => l.kind === 'bind' && l.a === n).length;
-  confirmDialog(
-    `Disable ${n.label}?`,
-    <>
-      {`Syncing stops. The ${plural(fed, 'concept')} it feeds keep their attributes; counts and freshness are marked `}
-      <b>paused</b> until you enable it again.
-    </>,
-    'Disable',
-    doIt,
-  );
-  return Promise.resolve();
-}
-
-export function removeSourceDialog(n: Node): void {
-  const fed = store.s.links.filter((l) => l.kind === 'bind' && l.a === n).map((l) => l.b.label);
-  confirmDialog(
-    `Delete ${n.label}?`,
-    fed.length ? (
-      <>
-        This proposes a change for approval. The following concepts would lose their binding: <b>{fed.join(', ')}</b>. They keep their attributes as
-        declared.
-      </>
-    ) : (
-      'This proposes a change for approval. Nothing is bound to it.'
-    ),
-    'Propose deletion',
-    () => {
-      const sid = n.sid;
-      if (sid)
-        return attemptThen(
-          () => api.proposeRemoveSource(sid),
-          () => {
-            store.caption('One proposal', `Removing ${n.label} is waiting for approval.`);
-            store.toast2('Proposed', `deletion of ${n.label} · approve it on the canvas`);
-            renderAdmin();
-          },
-        );
-    },
-    true,
-  );
-}
+// ------------------------------------------------------------ companies
 
 /**
  * Confirms removing a company, naming what goes from `POST /deletion-impact` (concepts, relations
- * with cross-company ones counted, sources, bindings, attributes) in the style of concept
- * deletion; the confirmation proposes the removal. The home company is never offered.
+ * with cross-company ones counted, attributes) in the style of concept deletion; the confirmation
+ * proposes the removal. The home company is never offered.
  */
 export function removeCompanyDialog(c: Company): Promise<void> {
   const sid = c.sid;
@@ -486,7 +367,7 @@ export function moveDialog(n: Node): void {
           ))}
         </select>
         <label></label>
-        <small style={{ color: 'var(--ink-3)' }}>Its children, relations and bindings stay as they are. This proposes a change for approval.</small>
+        <small style={{ color: 'var(--ink-3)' }}>Its children and relations stay as they are. This proposes a change for approval.</small>
       </div>
     ),
     buttons: [
@@ -685,471 +566,3 @@ export function bulkDeleteSelection(): Promise<void> {
   }
   return bulkDeleteDialog(companies[0], cells, []);
 }
-
-// ------------------------------------------------------------ groups, roles, agents
-
-/** Tenant, each company, each domain product family: the reference's `SCOPES()`. */
-export function localScopes(): Scope[] {
-  return [
-    { kind: 'tenant', companyId: null, domainKey: null, label: 'Tenant' },
-    ...store.s.companies.map((c) => ({ kind: 'company' as const, companyId: c.sid, domainKey: null, label: c.name })),
-    ...DOMAIN_TEMPLATES.map((t) => ({ kind: 'domain' as const, companyId: null, domainKey: t.key, label: t.name })),
-  ];
-}
-
-export function groupEdit(g: Group | null): void {
-  store.openDialog({
-    title: g ? `Edit ${g.name}` : 'Create a group',
-    small: true,
-    body: (
-      <div className="form" style={{ gridTemplateColumns: '100px 1fr' }}>
-        <label>Name</label>
-        <input id="gName" defaultValue={g ? g.name : ''} placeholder="e.g. Quality · owners" />
-        <label>Description</label>
-        <input id="gDesc" defaultValue={g ? g.description : ''} placeholder="what this group is for" />
-      </div>
-    ),
-    buttons: [
-      { label: 'Cancel' },
-      {
-        label: g ? 'Save' : 'Create',
-        cls: 'primary',
-        onClick: (bk) => {
-          const nameInput = bk.querySelector<HTMLInputElement>('#gName');
-          const name = (nameInput?.value || '').trim();
-          if (!name) {
-            nameInput?.focus();
-            return false;
-          }
-          const description = (bk.querySelector<HTMLInputElement>('#gDesc')?.value || '').trim();
-          if (g)
-            return attempt(() => api.updateGroup(g.id, { name, description })).then((r) => {
-              if (!r) return;
-              store.toast2('Saved', name);
-              renderAdmin();
-            });
-          return attempt(() => api.createGroup({ name, description })).then((ng) => {
-            if (!ng) return;
-            store.toast2('Created', name);
-            renderAdmin();
-            setTimeout(() => groupMembers(ng), 150);
-          });
-        },
-      },
-    ],
-  });
-}
-
-interface MemberRow extends Record<string, unknown> {
-  id: string;
-  name: string;
-  email: string;
-  dept: string;
-  company: string;
-  on: boolean;
-}
-
-export function groupMembers(g: Group): void {
-  store.openDialog({ render: (close) => <MembersDialog g={g} close={close} /> });
-}
-
-function memberRows(users: User[], g: Group): MemberRow[] {
-  return users.map((u) => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    dept: u.department || '',
-    company: u.companyName || '',
-    on: u.groups.some((x) => x.id === g.id),
-  }));
-}
-
-function MembersDialog({ g, close }: { g: Group; close: () => void }) {
-  const [rows, setRows] = useState<MemberRow[]>(() => memberRows(directory.users, g));
-  useEffect(() => {
-    if (directory.users.length) return;
-    void fetchAll((p) => api.listUsers(p))
-      .then((users) => setRows(memberRows(users, g)))
-      .catch((err: unknown) => failed(err, 'Unavailable'));
-  }, [g]);
-  const toggle = (r: MemberRow) => {
-    const on = !r.on;
-    return attempt(() => (on ? api.addGroupMember(g.id, r.id) : api.removeGroupMember(g.id, r.id))).then((res) => {
-      if (res === null) return;
-      setRows((cur) => cur.map((x) => (x.id === r.id ? { ...x, on } : x)));
-    });
-  };
-  const columns: Column[] = [
-    { label: 'User', key: 'name' },
-    { label: 'Email', key: 'email' },
-    { label: 'Department', key: 'dept' },
-    { label: 'Company', key: 'company' },
-    { label: 'Member', w: '100px' },
-  ];
-  return (
-    <ListDialogFrame
-      title={`Members · ${g.name}`}
-      sub="add or remove users · the directory is Ontology Builder’s own"
-      close={close}
-      buttons={[{ label: 'Done', cls: 'primary', onClick: () => renderAdmin() }]}
-    >
-      <List
-        columns={columns}
-        rows={rows}
-        rowKey={(r) => r.id}
-        searchKeys={['name', 'email', 'dept', 'company']}
-        filterKey="dept"
-        pageSize={40}
-        renderRow={(r) => (
-          <>
-            <td>
-              <b>{r.name}</b>
-            </td>
-            <td className="wrap" style={{ color: 'var(--ink-2)' }}>{r.email}</td>
-            <td>{r.dept}</td>
-            <td>{r.company}</td>
-            <td>
-              <Tg on={r.on} data-fn="member" onClick={() => toggle(r)} />
-            </td>
-          </>
-        )}
-        footer={() => `${rows.filter((x) => x.on).length} members in the group`}
-      />
-    </ListDialogFrame>
-  );
-}
-
-export function groupRoles(g: Group): void {
-  store.openDialog({ render: (close) => <RolesDialog g={g} close={close} /> });
-}
-
-function RolesDialog({ g, close }: { g: Group; close: () => void }) {
-  const [roles, setRoles] = useState(g.roles);
-  const roleSel = useRef<HTMLSelectElement>(null);
-  const scopeSel = useRef<HTMLSelectElement>(null);
-  const scopes = localScopes();
-  const add = () => {
-    const role = roleSel.current?.value || ROLE_NAMES[0],
-      label = scopeSel.current?.value || 'Tenant';
-    const scope = scopes.find((x) => x.label === label);
-    if (!scope || roles.some((r) => roleLabel(r.role) === role && r.scope.label === label)) return;
-    return attempt(() => api.addGroupRole(g.id, { role: roleName(role), scope })).then((a) => {
-      if (a) setRoles((cur) => [...cur, a]);
-    });
-  };
-  const remove = (id: string) => {
-    void attempt(() => api.removeGroupRole(g.id, id)).then((res) => {
-      if (res !== null) setRoles((cur) => cur.filter((r) => r.id !== id));
-    });
-  };
-  return (
-    <DialogFrame
-      title={`Roles · ${g.name}`}
-      sub="a role plus the scope it applies to"
-      onClose={close}
-      footer={
-        <button
-          className="btn primary"
-          data-i={0}
-          onClick={() => {
-            close();
-            store.toast2('Saved', `roles of ${g.name}`);
-            renderAdmin();
-          }}
-        >
-          Done
-        </button>
-      }
-    >
-      <div className="chips2" id="grRoles">
-        {roles.length ? (
-          roles.map((r, i) => (
-            <span key={r.id}>
-              {`${roleLabel(r.role)} · ${r.scope.label}`}
-              <b data-i={i} title="Remove" onClick={() => remove(r.id)}>
-                ×
-              </b>
-            </span>
-          ))
-        ) : (
-          <small style={{ color: 'var(--ink-3)' }}>No role yet.</small>
-        )}
-      </div>
-      <div className="form" style={{ marginTop: '14px', gridTemplateColumns: '80px 1fr 1fr auto' }}>
-        <label>Add</label>
-        <select id="grRole" ref={roleSel}>
-          {ROLE_NAMES.map((r) => (
-            <option key={r}>{r}</option>
-          ))}
-        </select>
-        <select id="grScope" ref={scopeSel}>
-          {scopes.map((x) => (
-            <option key={`${x.kind}:${x.label}`}>{x.label}</option>
-          ))}
-        </select>
-        <BusyButton className="btn" id="grAdd" onClick={add}>
-          Add
-        </BusyButton>
-      </div>
-      <p style={{ margin: '12px 0 0', color: 'var(--ink-3)', fontSize: '12px' }}>
-        Owner and Governor on the same scope is what certification needs. Administrator only applies at Tenant scope.
-      </p>
-    </DialogFrame>
-  );
-}
-
-export function deleteGroupDialog(g: Group): void {
-  const nroles = g.roles.length;
-  confirmDialog(
-    `Delete “${g.name}”?`,
-    `Its ${plural(g.memberCount, 'member')} lose the ${plural(nroles, 'role assignment')} it carries. Users themselves are not deleted.`,
-    'Delete group',
-    () =>
-      attempt(() => api.deleteGroup(g.id)).then((res) => {
-        if (res === null) return;
-        store.toast2('Deleted', g.name);
-        renderAdmin();
-      }),
-    true,
-  );
-}
-
-interface HoldRow extends Record<string, unknown> {
-  id: string;
-  g: Group;
-  name: string;
-  desc: string;
-  members: number;
-  scopes: string;
-  on: boolean;
-}
-
-/** Which groups hold a role, and on which scope. */
-export function roleGroups(role: string): void {
-  store.openDialog({ render: (close) => <RoleGroupsDialog role={role} close={close} /> });
-}
-
-const holdRow = (g: Group, role: string): HoldRow => {
-  const mine = g.roles.filter((r) => roleLabel(r.role) === role);
-  return {
-    id: g.id,
-    g,
-    name: g.name,
-    desc: g.description,
-    members: g.memberCount,
-    scopes: mine.map((r) => r.scope.label).join(', ') || '—',
-    on: mine.length > 0,
-  };
-};
-
-function RoleGroupsDialog({ role, close }: { role: string; close: () => void }) {
-  const [rows, setRows] = useState<HoldRow[]>(() => directory.groups.map((g) => holdRow(g, role)));
-  const replace = (g: Group) => setRows((cur) => cur.map((x) => (x.id === g.id ? holdRow(g, role) : x)));
-  const hold = (r: HoldRow) => {
-    if (r.on) {
-      const drop = r.g.roles.filter((a) => roleLabel(a.role) === role);
-      return Promise.allSettled(drop.map((a) => api.removeGroupRole(r.g.id, a.id))).then((results) => {
-        const removed = drop.filter((_, i) => results[i].status === 'fulfilled');
-        replace({ ...r.g, roles: r.g.roles.filter((a) => !removed.includes(a)) });
-        const refusal = results.find((x): x is PromiseRejectedResult => x.status === 'rejected');
-        if (refusal) failed(refusal.reason);
-      });
-    }
-    const scopes = localScopes();
-    store.openDialog({
-      title: `${role} on which scope?`,
-      small: true,
-      body: (
-        <div className="form" style={{ gridTemplateColumns: '80px 1fr' }}>
-          <label>Scope</label>
-          <select id="rsScope">
-            {scopes.map((x) => (
-              <option key={`${x.kind}:${x.label}`}>{x.label}</option>
-            ))}
-          </select>
-        </div>
-      ),
-      buttons: [
-        { label: 'Cancel' },
-        {
-          label: 'Give role',
-          cls: 'primary',
-          onClick: (bk) => {
-            const label = bk.querySelector<HTMLSelectElement>('#rsScope')?.value;
-            const scope = scopes.find((x) => x.label === label);
-            if (!scope) return;
-            return attempt(() => api.addGroupRole(r.g.id, { role: roleName(role), scope })).then((a) => {
-              if (a) replace({ ...r.g, roles: [...r.g.roles, a] });
-            });
-          },
-        },
-      ],
-    });
-  };
-  const columns: Column[] = [
-    { label: 'Group', key: 'name' },
-    { label: 'Description', key: 'desc' },
-    { label: 'Members', key: 'members', num: true },
-    { label: 'Scope', key: 'scopes' },
-    { label: 'Holds role', w: '100px' },
-  ];
-  return (
-    <ListDialogFrame
-      title={`${role} · groups`}
-      sub="which Ontology Builder groups hold this role, and on which scope"
-      close={close}
-      buttons={[{ label: 'Done', cls: 'primary', onClick: () => renderAdmin() }]}
-    >
-      <List
-        columns={columns}
-        rows={rows}
-        rowKey={(r) => r.id}
-        searchKeys={['name', 'desc', 'scopes']}
-        pageSize={40}
-        renderRow={(r) => (
-          <>
-            <td>
-              <b>{r.name}</b>
-            </td>
-            <td style={{ color: 'var(--ink-2)' }}>{r.desc}</td>
-            <td className="num">{r.members}</td>
-            <td>{r.scopes}</td>
-            <td>
-              <Tg on={r.on} data-fn="hold" onClick={() => hold(r)} />
-            </td>
-          </>
-        )}
-        footer={(l) => `${l.filter((x) => x.on).length} groups hold ${role}`}
-      />
-    </ListDialogFrame>
-  );
-}
-
-interface AgentRow extends Record<string, unknown> {
-  id: string;
-  name: string;
-  platform: string;
-  domain: string;
-  owner: string;
-  reads: number;
-  cost: number;
-  on: boolean;
-}
-
-export function agentRegistry(): void {
-  store.openDialog({ render: (close) => <RegistryDialog close={close} /> });
-}
-
-function RegistryDialog({ close }: { close: () => void }) {
-  const [rows, setRows] = useState<AgentRow[]>([]);
-  useEffect(() => {
-    void fetchAll((p) => api.listAgents(p))
-      .then((agents) =>
-        setRows(
-          agents.map((a) => ({
-            id: a.id,
-            name: a.name,
-            platform: a.platform,
-            domain: a.domainName || '—',
-            owner: a.owner,
-            reads: a.reads,
-            cost: a.costEur,
-            on: a.access,
-          })),
-        ),
-      )
-      .catch((err: unknown) => failed(err, 'Unavailable'));
-  }, []);
-  const toggle = (r: AgentRow) =>
-    attempt(() => api.updateAgent(r.id, !r.on)).then((a) => {
-      if (a) setRows((cur) => cur.map((x) => (x.id === r.id ? { ...x, on: a.access } : x)));
-    });
-  const columns: Column[] = [
-    { label: 'Agent', key: 'name' },
-    { label: 'Platform', key: 'platform' },
-    { label: 'Domain product', key: 'domain' },
-    { label: 'Owner', key: 'owner' },
-    { label: 'Reads · month', key: 'reads', num: true },
-    { label: 'Cost · month', key: 'cost', num: true },
-    { label: 'Access', w: '100px' },
-  ];
-  return (
-    <ListDialogFrame
-      title="Agent registry"
-      sub="every agent, from every platform, that can read this model through the gateway"
-      close={close}
-      buttons={[{ label: 'Close' }]}
-    >
-      <List
-        columns={columns}
-        rows={rows}
-        rowKey={(r) => r.id}
-        searchKeys={['name', 'platform', 'domain', 'owner']}
-        filterKey="platform"
-        pageSize={50}
-        renderRow={(r) => (
-          <>
-            <td>
-              <b>{r.name}</b>
-            </td>
-            <td>{r.platform}</td>
-            <td>{r.domain}</td>
-            <td>{r.owner}</td>
-            <td className="num">{en(r.reads)}</td>
-            <td className="num">{`€ ${en(r.cost)}`}</td>
-            <td>
-              <Tg on={r.on} data-fn="toggle" onClick={() => toggle(r)} />
-            </td>
-          </>
-        )}
-        footer={(l) => `${en(l.filter((x) => x.on).length)} with access · € ${en(l.reduce((a, x) => a + x.cost, 0))}`}
-      />
-    </ListDialogFrame>
-  );
-}
-
-/** The large list dialog (`listDialog`): a list host in the body; the search box takes focus. */
-function ListDialogFrame({
-  title: heading,
-  sub,
-  close,
-  buttons,
-  children,
-}: {
-  title: string;
-  sub: string;
-  close: () => void;
-  buttons: { label: string; cls?: string; onClick?: () => void }[];
-  children: ReactNode;
-}) {
-  const back = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const t = setTimeout(() => back.current?.querySelector<HTMLInputElement>('.search')?.focus(), 40);
-    return () => clearTimeout(t);
-  }, []);
-  return (
-    <DialogFrame
-      title={heading}
-      sub={sub}
-      large
-      onClose={close}
-      backRef={back}
-      footer={buttons.map((b, i) => (
-        <button
-          key={i}
-          className={`btn ${b.cls || ''}`}
-          data-i={i}
-          onClick={() => {
-            b.onClick?.();
-            close();
-          }}
-        >
-          {b.label}
-        </button>
-      ))}
-    >
-      <div className="lst-host">{children}</div>
-    </DialogFrame>
-  );
-}
-

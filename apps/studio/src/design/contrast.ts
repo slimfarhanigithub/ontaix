@@ -1,35 +1,26 @@
 /**
- * Reads tokens.css from disk, resolves each theme's custom properties through their `var()`
- * chains, and measures WCAG contrast between them. Used by the tests only; the browser reads the
- * same file through the stylesheet.
+ * Reads tokens.css from disk, resolves its custom properties through their `var()` chains, and
+ * measures WCAG contrast between them. Used by the tests only; the browser reads the same file
+ * through the stylesheet.
  */
 
-export type ThemeName = 'light' | 'dark';
-
-/** Every custom property of one theme, resolved to its literal value. */
+/** Every custom property of the stylesheet, resolved to its literal value. */
 export type Tokens = Record<string, string>;
 
-const LIGHT_SELECTOR = ':root';
-const DARK_SELECTOR = ":root[data-theme='dark']";
+const ROOT_SELECTOR = ':root';
 
-/** Parses the stylesheet: the raw blocks of each theme, then the alias blocks, in file order. */
-export function parseTokens(css: string): Record<ThemeName, Tokens> {
+/** Parses the stylesheet: every `:root` block in file order, the raw block then the alias block. */
+export function parseTokens(css: string): Tokens {
   const blocks = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
     selectors: m[1].split(',').map((s) => s.trim()),
     declarations: [...m[2].matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()] as const),
   }));
-  const raw: Record<ThemeName, Tokens> = { light: {}, dark: {} };
+  const raw: Tokens = {};
   for (const block of blocks) {
-    const forLight = block.selectors.includes(LIGHT_SELECTOR);
-    const forDark = block.selectors.includes(DARK_SELECTOR);
-    for (const [name, value] of block.declarations) {
-      if (forLight) raw.light[name] = value;
-      if (forDark) raw.dark[name] = value;
-    }
+    if (!block.selectors.includes(ROOT_SELECTOR)) continue;
+    for (const [name, value] of block.declarations) raw[name] = value;
   }
-  // Dark inherits every light declaration it does not override, as the cascade does.
-  raw.dark = { ...raw.light, ...raw.dark };
-  return { light: resolveAll(raw.light), dark: resolveAll(raw.dark) };
+  return resolveAll(raw);
 }
 
 function resolveAll(tokens: Tokens): Tokens {

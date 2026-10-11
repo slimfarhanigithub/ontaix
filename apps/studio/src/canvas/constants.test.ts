@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 import { LIGHT_FALLBACK } from '../design/tokens';
 import { C, DEFAULT_BRASS, DOMAIN_TEMPLATES, GREEN, NEUTRAL, PALETTE, RED } from './constants';
-import { themeFor, triplet } from './themes';
+import { canvasTheme, triplet } from './themes';
 
 interface Token {
   $value: unknown;
@@ -21,13 +21,10 @@ const value = (path: string): unknown => {
 };
 
 describe('canvas constants match contracts/design-tokens.json', () => {
-  it('theme alphas, and the light theme derived from the light tokens', () => {
-    for (const name of ['dark', 'light'] as const) {
-      const th = themeFor(name);
-      for (const key of ['hullA', 'domA', 'domFocusA'] as const) expect(th[key], `${name}.${key}`).toEqual(value(`canvas.theme.${name}.${key}`));
-    }
-    // jsdom has no stylesheet, so themeFor reads the light fallbacks whatever the name.
-    const light = themeFor('light');
+  it('theme alphas, and the theme derived from the tokens', () => {
+    // jsdom has no stylesheet, so canvasTheme reads the fallbacks.
+    const light = canvasTheme();
+    for (const key of ['hullA', 'domA', 'domFocusA'] as const) expect(light[key], key).toEqual(value(`canvas.theme.${key}`));
     expect(light.bg).toBe(LIGHT_FALLBACK['--bg']);
     expect(light.INK).toBe(triplet(LIGHT_FALLBACK['--text']));
     expect(light.INK2).toBe(triplet(LIGHT_FALLBACK['--text-2']));

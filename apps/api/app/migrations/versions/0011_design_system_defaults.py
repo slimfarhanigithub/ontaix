@@ -1,14 +1,14 @@
 """Appearance defaults of the design system: light theme, crimson accent, the categorical palette.
 
-Brings a database of revision 0010 to the current `contracts/schema.sql`: the column defaults of
-`tenant_settings.theme` (`light`) and `tenant_settings.accent` (`#d30c55`), and the colour of the
-nine `domain_template` rows (the design system's categorical order: accent, link, good, human,
-text-3, violet, teal, orange, olive). Only defaults and reference rows change: a tenant's saved
-theme, accent and colour overrides are its own choices and stay as they are, and so do the
-`tenant_domain` copies of the templates, since those are what a tenant's canvas already shows
-(a tenant moves to the new palette through Appearance, Reset to defaults). Every statement is
-idempotent, so on a database revision 0001 already created from the current contract this
-revision changes nothing.
+Brings a database of revision 0010 to the design system's defaults: the column defaults of
+`tenant_settings.theme` (`light`, while the column exists; revision 0012 drops it) and
+`tenant_settings.accent` (`#d30c55`), and the colour of the nine `domain_template` rows (the
+design system's categorical order: accent, link, good, human, text-3, violet, teal, orange,
+olive). Only defaults and reference rows change: a tenant's saved theme, accent and colour
+overrides are its own choices and stay as they are, and so do the `tenant_domain` copies of the
+templates, since those are what a tenant's canvas already shows (a tenant moves to the new
+palette through Appearance, Reset to defaults). Every statement is idempotent, so on a database
+revision 0001 already created from the current contract this revision changes nothing.
 
 Revision ID: 0011
 Revises: 0010
@@ -27,7 +27,12 @@ depends_on = None
 UPGRADE_DDL = """
 SET search_path TO ontaix, public;
 
-ALTER TABLE tenant_settings ALTER COLUMN theme SET DEFAULT 'light';
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'ontaix'
+             AND table_name = 'tenant_settings' AND column_name = 'theme') THEN
+    ALTER TABLE tenant_settings ALTER COLUMN theme SET DEFAULT 'light';
+  END IF;
+END $$;
 ALTER TABLE tenant_settings ALTER COLUMN accent SET DEFAULT '#d30c55';
 
 UPDATE domain_template SET color = v.color

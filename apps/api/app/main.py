@@ -29,6 +29,7 @@ from app.routers import (
     admin_organization_users,
     admin_organizations,
     admin_support_session,
+    appearance,
     audit,
     auth,
     companies,
@@ -48,6 +49,7 @@ from app.routers import (
     speech,
     teach,
 )
+from app.routers import settings as tenant_settings
 from app.services import (
     auth_upkeep_service,
     document_extraction_runner_service,
@@ -162,6 +164,8 @@ def create_app() -> FastAPI:
         export,
         audit,
         cost,
+        tenant_settings,
+        appearance,
     ):
         application.include_router(module.router, prefix=API_PREFIX)
     application.include_router(health.router, prefix=API_PREFIX)

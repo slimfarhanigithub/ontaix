@@ -1,6 +1,6 @@
 /**
- * The Model group of the admin portal: Entities, Relationships, Bindings, Companies and Domain
- * products (`pageEntities` to `pageDomains`, reference lines 991-1014). Rows come from the scene
+ * The Model group of the admin portal: Entities, Relationships, Companies and Domain products
+ * (`pageEntities` to `pageDomains`, reference lines 991-1014). Rows come from the scene
  * the canvas shows; every change they offer is a proposal. The owner additions for editing, each
  * marked `data-ox-new` and hidden from the screenshot suite: a checkbox column and `Delete
  * selected` on Entities and Domain products, `Move` per entity, `New domain`, `Edit` and `Delete`
@@ -18,7 +18,6 @@ import { useStore } from '../../shell/dom';
 import { themedColour } from '../../design/tokens';
 import { api } from '../../api/client';
 import {
-  bindDialog,
   bulkDeleteDialog,
   deleteDomainDialog,
   deleteNodeDialog,
@@ -28,10 +27,8 @@ import {
   newDomainDialog,
   removeCompanyDialog,
   renameDialog,
-  unbindDialog,
 } from '../actions';
 import { List, type Column } from '../List';
-import { en } from '../listModel';
 import { Tg } from '../Toggle';
 import { RowActions } from '../RowActions';
 
@@ -72,7 +69,6 @@ interface EntityRow extends Record<string, unknown> {
   state: string;
   rels: number;
   kind: string;
-  bound: string;
 }
 
 export function Entities() {
@@ -90,7 +86,6 @@ export function Entities() {
       state: n.pending ? 'awaiting approval' : n.sub && /certified/.test(n.sub) ? 'certified' : 'approved',
       rels: links.filter((l) => (l.a === n || l.b === n) && l.kind !== 'bind' && !l.dying).length,
       kind: links.some((l) => l.a === n && l.kind === 'isa') ? 'specialisation' : 'concept',
-      bound: n.bound ? n.bound.source.label : '—',
     }));
   const columns: Column[] = [
     { label: 'Select', w: '32px', ox: true },
@@ -100,7 +95,6 @@ export function Entities() {
     { label: 'Domain product', key: 'domain' },
     { label: 'State', key: 'state' },
     { label: 'Relations', key: 'rels', num: true },
-    { label: 'Bound to', key: 'bound' },
     { label: '', w: '300px' },
   ];
   const chosen = rows.filter((r) => picked.has(r.id)).map((r) => r.n);
@@ -116,7 +110,7 @@ export function Entities() {
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}
-          searchKeys={['name', 'company', 'domain', 'kind', 'bound']}
+          searchKeys={['name', 'company', 'domain', 'kind']}
           filterKey="company"
           pageSize={40}
           extra={
@@ -148,7 +142,6 @@ export function Entities() {
                 </span>
               </td>
               <td className="num">{r.rels}</td>
-              <td>{r.bound}</td>
               <td className="act">
                 <RowActions
                   id={`ent${r.n.id}`}
@@ -176,7 +169,7 @@ export function Entities() {
               </td>
             </>
           )}
-          footer={(l) => `${l.filter((r) => r.bound !== '—').length} bound · ${l.filter((r) => r.state === 'awaiting approval').length} pending`}
+          footer={(l) => `${l.filter((r) => r.state === 'awaiting approval').length} pending`}
         />
       </div>
     </>
@@ -290,107 +283,6 @@ export function Relationships() {
   );
 }
 
-interface BindingRow extends Record<string, unknown> {
-  id: number;
-  n: Node;
-  name: string;
-  company: string;
-  domain: string;
-  source: string;
-  records: number;
-  fresh: string;
-  attrs: number;
-  pendingAttrs: number;
-  state: string;
-}
-
-export function Bindings() {
-  const st = useStore();
-  const rows: BindingRow[] = st.s.nodes
-    .filter((n) => n.kind === 'concept' && !n.dying && !n.pending)
-    .map((n) => ({
-      id: n.id,
-      n,
-      name: n.label,
-      company: n.company?.name || '',
-      domain: n.domain ? n.domain.name : '—',
-      source: n.bound ? n.bound.source.label : '—',
-      records: n.bound ? n.bound.records : 0,
-      fresh: n.bound ? n.bound.fresh : '—',
-      attrs: (n.attrs || []).filter((a) => a.state === 'approved').length,
-      pendingAttrs: (n.attrs || []).filter((a) => a.state !== 'approved').length,
-      state: n.bound ? 'bound' : 'no data',
-    }));
-  const columns: Column[] = [
-    { label: 'Entity', key: 'name' },
-    { label: 'Company', key: 'company' },
-    { label: 'Domain product', key: 'domain' },
-    { label: 'Source', key: 'source' },
-    { label: 'Records', key: 'records', num: true },
-    { label: 'Fresh', key: 'fresh' },
-    { label: 'Attributes', key: 'attrs', num: true },
-    { label: 'State', key: 'state' },
-    { label: '', w: '240px' },
-  ];
-  return (
-    <>
-      <h2>Bindings</h2>
-      <p className="lead">
-        Which entities have data behind them, from which system, how fresh, and how many attributes. Bind and unbind here; both are proposals.
-      </p>
-      <div className="lst-host" id="lstBindings" style={HOST_STYLE}>
-        <List
-          key={st.ui.adminRev}
-          columns={columns}
-          rows={rows}
-          rowKey={(r) => r.id}
-          searchKeys={['name', 'company', 'domain', 'source']}
-          filterKey="state"
-          pageSize={40}
-          renderRow={(r) => (
-            <>
-              <td>
-                <b>{r.name}</b>
-              </td>
-              <td>{r.company}</td>
-              <td>{r.domain}</td>
-              <td>{r.source}</td>
-              <td className="num">{r.records ? en(r.records) : '—'}</td>
-              <td>{r.fresh}</td>
-              <td className="num">
-                {r.pendingAttrs ? `${r.attrs} ` : r.attrs}
-                {r.pendingAttrs ? <span style={{ color: 'var(--human-text)' }}>{`+${r.pendingAttrs}`}</span> : null}
-              </td>
-              <td>
-                <span className={`st ${r.state === 'bound' ? '' : 'off'}`}>
-                  <i></i>
-                  {r.state}
-                </span>
-              </td>
-              <td className="act">
-                <RowActions
-                  id={`bnd${r.n.id}`}
-                  primary={
-                    <button data-fn="attrs" style={ACT(80)} onClick={() => st.goTo(r.n)}>
-                      Attributes
-                    </button>
-                  }
-                  items={
-                    r.state === 'bound'
-                      ? [{ label: 'Unbind', icon: 'link', group: 1, danger: true, attrs: { 'data-fn': 'unbind' }, act: () => unbindDialog(r.n, r.source, r.attrs) }]
-                      : [{ label: 'Bind', icon: 'link', group: 1, attrs: { 'data-fn': 'bind' }, act: () => bindDialog(r.n) }]
-                  }
-                />
-              </td>
-            </>
-          )}
-          footer={(l) => `${l.filter((r) => r.state === 'bound').length} bound · ${en(l.reduce((a, r) => a + r.records, 0))} records`}
-        />
-      </div>
-    </>
-  );
-}
-
 export function Companies() {
   const st = useStore();
   const { companies, nodes, links } = st.s;
@@ -398,7 +290,7 @@ export function Companies() {
     <>
       <h2>Companies</h2>
       <p className="lead">
-        Each company is its own business-as-a-product: its domain products, owners, vocabulary and sources. Nothing is merged between companies;
+        Each company is its own business-as-a-product: its domain products, owners and vocabulary. Nothing is merged between companies;
         alignment is explicit.
       </p>
       <table className="tbl">
@@ -408,7 +300,6 @@ export function Companies() {
             <th>Context</th>
             <th>Domain products</th>
             <th>Concepts</th>
-            <th>Sources</th>
             <th>Equivalences</th>
             <th></th>
           </tr>
@@ -422,7 +313,6 @@ export function Companies() {
               <td>{c.sub || '—'}</td>
               <td>{c.domains.filter((d) => nodes.some((n) => n.domain === d)).length}</td>
               <td>{nodes.filter((n) => n.company === c && n.kind === 'concept').length}</td>
-              <td>{nodes.filter((n) => n.company === c && n.kind === 'source').length}</td>
               <td>{links.filter((l) => l.kind === 'same' && (l.a.company === c || l.b.company === c)).length}</td>
               <td className="act">
                 {i > 0 ? (
@@ -471,7 +361,6 @@ export function DomainProducts() {
             <th>Owner</th>
             <th>Version</th>
             <th>Concepts</th>
-            <th>Bound</th>
             <th>Visible</th>
             <th data-ox-new=""></th>
           </tr>
@@ -498,7 +387,6 @@ export function DomainProducts() {
                 <td>{d.owner}</td>
                 <td>{`v${d.version.toFixed(1)}`}</td>
                 <td>{ms.length}</td>
-                <td>{ms.filter((n) => n.bound).length}</td>
                 <td style={{ width: '100px' }}>
                   <Tg
                     on={!d.hidden}
@@ -529,7 +417,6 @@ export function DomainProducts() {
               </td>
               <td>{t.owner}</td>
               <td>—</td>
-              <td>0</td>
               <td>0</td>
               <td style={{ width: '100px' }}></td>
               <td className="act">

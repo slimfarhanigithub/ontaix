@@ -18,13 +18,12 @@ import { refStyle, useStore } from './dom';
 import { editableFields, PendingEdit } from './PendingEdit';
 import { sanitizeHtml } from './sanitize';
 
-const KIND: Record<Proposal['type'], string> = {
+/** The heading of a proposal whose server heading is absent, by type; a type without one reads as a change. */
+const KIND: Partial<Record<Proposal['type'], string>> = {
   concept: 'New concept',
   spec: 'Specialisation',
   relation: 'Relation',
   change: 'Change',
-  source: 'Data source',
-  bind: 'Binding',
   attr: 'Attribute',
 };
 
@@ -98,10 +97,10 @@ export function Panel() {
                 <div key={p.id} className={'prop' + (ok ? '' : ' blocked')}>
                   <div className="top">
                     <i
-                      className={p.type === 'spec' ? 'spec' : p.type === 'relation' || p.type === 'bind' ? 'rel' : ''}
+                      className={p.type === 'spec' ? 'spec' : p.type === 'relation' ? 'rel' : ''}
                       style={{ color, background: p.type === 'spec' ? 'transparent' : color }}
                     ></i>
-                    {p.heading || KIND[p.type]}
+                    {p.heading || KIND[p.type] || KIND.change}
                   </div>
                   <PendingEdit p={p} onDone={() => setEditing(null)} />
                 </div>
@@ -110,10 +109,10 @@ export function Panel() {
               <div key={p.id} className={'prop' + (ok ? '' : ' blocked')}>
                 <div className="top">
                   <i
-                    className={p.type === 'spec' ? 'spec' : p.type === 'relation' || p.type === 'bind' ? 'rel' : ''}
+                    className={p.type === 'spec' ? 'spec' : p.type === 'relation' ? 'rel' : ''}
                     style={{ color, background: p.type === 'spec' ? 'transparent' : color }}
                   ></i>
-                  {p.heading || KIND[p.type]}
+                  {p.heading || KIND[p.type] || KIND.change}
                 </div>
                 <div className="what" dangerouslySetInnerHTML={{ __html: sanitizeHtml(p.html) }} />
                 {p.why ? <div className="why">{p.why}</div> : null}

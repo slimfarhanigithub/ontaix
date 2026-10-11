@@ -52,7 +52,7 @@ describe('the relationship legend', () => {
   it('labels each line in one or two words, with the explanation as tooltip and screen-reader text', () => {
     const { container } = render(<Legend />);
     const rows = [...container.querySelectorAll('#legend li.row')];
-    expect(rows.map((r) => r.querySelector('b')?.textContent)).toEqual(['Relation', 'Is a', 'Equivalent', 'Conflict', 'Data binding', 'Pending']);
+    expect(rows.map((r) => r.querySelector('b')?.textContent)).toEqual(['Relation', 'Is a', 'Equivalent', 'Conflict', 'Pending']);
     for (const [i, row] of rows.entries()) {
       const label = row.querySelector('b')?.textContent ?? '';
       expect(label.split(' ').length).toBeLessThanOrEqual(2);
@@ -76,11 +76,11 @@ describe('the relationship legend', () => {
 });
 
 describe('the canvas docks', () => {
-  it('lists the shortcuts one per item, without skip animation', () => {
+  it('lists the shortcuts one per item, without skip animation or coverage', () => {
     const { container } = render(<Hint />);
     const items = [...container.querySelectorAll('.hint li')].map((li) => li.textContent);
-    expect(items).toEqual(['P changes', 'D domains', 'I import · drop a file', 'C coverage', 'A arrange', 'click new concept', 'drop on a cell relate', 'wheel zoom', 'F full screen']);
-    expect(container.textContent).not.toMatch(/skip/i);
+    expect(items).toEqual(['P changes', 'D domains', 'I import · drop a file', 'A arrange', 'click new concept', 'drop on a cell relate', 'wheel zoom', 'F full screen']);
+    expect(container.textContent).not.toMatch(/skip|coverage/i);
   });
 
   it('stacks the domains toggle above its card in the left dock', () => {
@@ -101,10 +101,21 @@ describe('the canvas docks', () => {
 });
 
 describe('Skip animation', () => {
-  it('is not a tool button', () => {
+  it('is not a tool button, and neither is Coverage', () => {
     const { container } = render(<Tools />);
     expect(container.querySelector('#skip')).toBeNull();
-    expect(container.textContent).not.toMatch(/skip|animations off/i);
+    expect(container.querySelector('#coverage')).toBeNull();
+    expect(container.textContent).not.toMatch(/skip|animations off|coverage/i);
+    expect([...container.querySelectorAll('button')].map((b) => b.id)).toEqual(['addCo', 'importBtn', 'arrange']);
+  });
+
+  it('the C key does nothing', () => {
+    render(<Keys />);
+    const before = store.s.COVERAGE;
+    act(() => {
+      fireEvent.keyDown(window, { key: 'c' });
+    });
+    expect(store.s.COVERAGE).toBe(before);
   });
 
   it('is a setting on the Appearance page, remembered in this browser', () => {
