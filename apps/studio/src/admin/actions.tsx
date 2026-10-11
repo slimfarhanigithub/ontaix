@@ -9,7 +9,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { api } from '../api/client';
-import type { DeletionImpact, DomainInput, DomainPatch, ProposalDraft, TenantDomain } from '../api/types';
+import { ApiError, type DeletionImpact, type DomainInput, type DomainPatch, type ProposalDraft, type TenantDomain } from '../api/types';
 import { NEUTRAL, PALETTE } from '../canvas/constants';
 import type { Company, Domain, Link, Node } from '../canvas/types';
 import { title } from '../nl/parser';
@@ -87,20 +87,27 @@ export function changeSetting(k: SettingKey): Promise<void> {
 
 const crossLinks = (): Link[] => store.s.links.filter((l) => l.a.company !== l.b.company && !l.dying);
 
-/** With no cross-company relationship the switch turns off at once; otherwise the typed confirmation opens. */
-function disableCrossCompany(): Promise<void> {
+/** With no cross-company relationship the switch turns off at once; otherwise the typed
+ * confirmation opens, as it does when the server still holds one the canvas does not show. */
+async function disableCrossCompany(): Promise<void> {
   const xl = crossLinks();
-  const done = (removed: number) => {
-    store.toast2('Disabled', `${plural(removed, 'cross-company relationship')} removed`);
-    store.applySettings();
-    renderAdmin();
-  };
-  if (!xl.length)
-    return attempt(() => api.patchSettings({ crossCompany: false })).then((next) => {
-      if (!next) return;
-      store.ui.settings = next;
-      done(0);
-    });
+  if (xl.length) return confirmCrossCompany(xl);
+  try {
+    store.ui.settings = await api.patchSettings({ crossCompany: false });
+    crossCompanyDisabled(0);
+  } catch (err) {
+    if (err instanceof ApiError && err.problem.code === 'confirmation_required') return confirmCrossCompany(xl);
+    failed(err);
+  }
+}
+
+function crossCompanyDisabled(removed: number): void {
+  store.toast2('Disabled', `${plural(removed, 'cross-company relationship')} removed`);
+  store.applySettings();
+  renderAdmin();
+}
+
+function confirmCrossCompany(xl: Link[]): Promise<void> {
   store.openDialog({
     render: (close) => (
       <CrossCompanyDialog
@@ -110,7 +117,7 @@ function disableCrossCompany(): Promise<void> {
           attempt(() => api.disableCrossCompany(typed)).then((res) => {
             if (!res) return;
             store.ui.settings = res.settings;
-            done(res.removedRelations);
+            crossCompanyDisabled(res.removedRelations);
           })
         }
       />

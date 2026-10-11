@@ -294,6 +294,27 @@ async def test_disable_needs_the_typed_word(
     assert invalid.status_code == 422
 
 
+async def test_disable_is_refused_once_companies_no_longer_interact(
+    client: httpx.AsyncClient,
+) -> None:
+    tenant = await make_tenant()
+    off = await client.patch(
+        "/settings", json={"crossCompany": False}, headers=tenant.admin.headers
+    )
+    assert off.status_code == 200, off.text
+
+    again = await client.post(
+        "/settings/cross-company/disable",
+        json={"confirmation": "disable"},
+        headers=tenant.admin.headers,
+    )
+
+    assert again.status_code == 409, again.text
+    assert again.json()["code"] == "cross_company_disabled"
+    open_changes = await client.get("/proposals?pageSize=200", headers=tenant.admin.headers)
+    assert all(p["type"] != "change" for p in open_changes.json()["items"])
+
+
 async def test_disable_removes_relations_rejects_proposals_and_is_one_approved_change(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:

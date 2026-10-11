@@ -3407,7 +3407,7 @@ paths:
     post:
       tags: [Settings]
       summary: Disable companies-may-interact and remove every cross-company relation
-      description: Requires the literal confirmation text `disable` (`409 confirmation_mismatch`). In one transaction - a bulk `change` proposal (`remove_cross_company_links`) is created and approved by this confirmation, every cross-company relation is marked dying, every open cross-company proposal is rejected, the setting is turned off, and the audit entry `companies may interact disabled · N cross-company relationships removed` is written. This cannot be undone by re-enabling.
+      description: Requires the literal confirmation text `disable` (`409 confirmation_mismatch`); when companies already do not interact it answers `409 cross_company_disabled`. In one transaction - a bulk `change` proposal (`remove_cross_company_links`) is created and approved by this confirmation, every cross-company relation is marked dying, every open cross-company proposal is rejected, the setting is turned off, and the audit entry `companies may interact disabled · N cross-company relationships removed` is written. This cannot be undone by re-enabling.
       operationId: disableCrossCompany
       x-ontaix-permission: settings.write
       requestBody:
@@ -7317,7 +7317,7 @@ components:
     LlmUsage:
       type: object
       additionalProperties: false
-      description: Language model calls Ontaix itself made for the tenant in the month (teach extraction, concept expansion, whole-document extraction and OCR of scanned documents), from the `llm_call` cost records. Separate from the agent figures - `measuredEur` and `byPlatform` stay agent reads through the gateway. The Studio's Cost management page shows no new element for it until the UI contract records one.
+      description: Language model calls Ontaix itself made for the tenant in the month (teach extraction, concept expansion, whole-document extraction and OCR of scanned documents), from the `llm_call` cost records. Separate from the agent figures - `measuredEur` and `byPlatform` stay agent reads through the gateway. The Studio's Cost management page shows it: model calls, tokens against the cap, OCR pages against the cap and the cost by purpose.
       required: [calls, inputTokens, outputTokens, tokensUsed, tokenCap, costEur, byPurpose]
       properties:
         calls:

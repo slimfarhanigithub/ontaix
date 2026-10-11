@@ -73,6 +73,7 @@ LOCKED_ON_DETAIL = "{key} is always on"
 SINGLE_COMPANY_DETAIL = "Several companies stay off while the organization has one company only"
 CONFIRMATION_REQUIRED_DETAIL = "companies already interact; confirm by typing disable"
 CONFIRMATION_MISMATCH_DETAIL = "type disable to confirm"
+ALREADY_DISABLED_DETAIL = "companies already do not interact"
 DISABLE_WHY = "confirmed by typing disable"
 DISABLE_CAPTION = "Companies no longer interact; their shared relationships left the model."
 
@@ -98,8 +99,11 @@ async def update_settings(session: AsyncSession, caller: Caller, patch: Settings
         raise conflict("locked_setting", SINGLE_COMPANY_DETAIL)
     settings = await _settings_row(session, caller.tenant_id)
     if patch.cross_company is False and settings.cross_company:
+        # Under the decision lock, so no cross-company proposal lands between this check and
+        # the commit.
+        await decision_lock_service.acquire(session, caller.tenant_id)
         view = await load_view(session, caller.tenant_id)
-        open_proposals = await proposal_repository.list_open(session, caller.tenant_id)
+        open_proposals = await proposal_repository.lock_open(session, caller.tenant_id)
         if _cross_company_relations(view) or _cross_company_proposals(view, open_proposals):
             raise conflict("confirmation_required", CONFIRMATION_REQUIRED_DETAIL)
     values: dict[str, Any] = {}
@@ -160,6 +164,8 @@ async def disable_cross_company(
     open_proposals = await proposal_repository.lock_open(session, caller.tenant_id)
     view = await load_view(session, caller.tenant_id, open_proposals)
     settings = await _settings_row(session, caller.tenant_id)
+    if not settings.cross_company:
+        raise conflict("cross_company_disabled", ALREADY_DISABLED_DETAIL)
     relations = _cross_company_relations(view)
     rejected = _cross_company_proposals(view, open_proposals)
     proposal = await _store_removal(session, caller, view, relations)
@@ -172,6 +178,9 @@ async def disable_cross_company(
     )
     outcome = DecisionOutcome(artefacts=Artefacts())
     for q in rejected:
+        # A dependant of an earlier rejection in this loop has already left with it.
+        if q.state not in OPEN_STATES:
+            continue
         cascaded = await reject_one(session, caller, view, q, open_proposals, None, True)
         outcome.add_cascaded(view.proposal_dto(q, cascaded.artefacts), proposal_company_ids(q))
         outcome.absorb_cascade(cascaded)

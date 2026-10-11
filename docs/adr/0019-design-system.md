@@ -30,7 +30,7 @@ Superseded on 2026-10-11 (decision row 176): the owner chose one theme, light on
 
 ### 3. Three Guards Replace the Reference Comparison
 
-- `contrast.test.ts` checks the AA pairs of the design system in both themes, with a two-way `KNOWN_BELOW_AA` ledger.
+- `contrast.test.ts` checks the AA pairs of the design system in the light theme, with a two-way `KNOWN_BELOW_AA` ledger.
 - `rawColours.test.ts` bans raw hex, `rgb()`, `rgba()` and `hsl()` outside `src/design/**`, with a `RESTYLE_PENDING` ledger that each restyle pull request drains.
 - The screenshot suite compares every scene with a stored baseline under `tests/screenshots/baselines` (one image per scene, theme, viewport and platform) at 0.1 percent tolerance, through Playwright's `toHaveScreenshot`, and no longer renders the reference. The harness drops the stylesheets that hid the Studio's own elements from the reference; every element the product renders is in its baseline.
 

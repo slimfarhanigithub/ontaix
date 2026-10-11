@@ -4,8 +4,9 @@ Brings a database of revision 0011 to the current `contracts/schema.sql`: drops
 `tenant_settings.theme` and the `theme_name` type. The appearance values a tenant still holds
 from before the design system move with it: an accent on the old default (`#3fb8a9`) becomes the
 crimson `#d30c55`, and a `tenant_domain` copy of a template still on that template's old colour
-takes the template's categorical colour. A colour or accent a tenant chose stays, and so does the
-`tenant_domain_revision` history. Every statement is idempotent, so on a database revision 0001
+takes the template's categorical colour. Any other colour or accent stays, and so does the
+`tenant_domain_revision` history; a tenant that picked the old default value itself moves with
+the rest, since the stored value cannot tell the two apart. Every statement is idempotent, so on a database revision 0001
 already created from the current contract this revision changes nothing.
 
 Revision ID: 0012
