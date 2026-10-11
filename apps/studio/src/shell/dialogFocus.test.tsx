@@ -129,7 +129,7 @@ describe('the admin portal', () => {
     const from = opener();
     const { container } = render(<AdminOverlay />);
     const admin = container.querySelector('#admin') as HTMLElement;
-    expect(document.getElementById(admin.getAttribute('aria-labelledby') as string)?.textContent).toBe('Ontaix admin portal');
+    expect(document.getElementById(admin.getAttribute('aria-labelledby') as string)?.textContent).toBe('Ontology Builder admin portal');
     act(() => {
       store.ui.adminOpen = true;
       store.bump();

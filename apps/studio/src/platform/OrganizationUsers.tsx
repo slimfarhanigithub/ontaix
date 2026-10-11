@@ -18,7 +18,7 @@ import { RowActions } from '../admin/RowActions';
 
 const ACT = (w: number) => ({ width: `${w}px`, textAlign: 'center' as const });
 
-export const ADD_USER_NOTE = 'They must choose a new password at first sign-in. Give them this password yourself; Ontaix never shows it again.';
+export const ADD_USER_NOTE = 'They must choose a new password at first sign-in. Give them this password yourself; Ontology Builder never shows it again.';
 export const RESET_NOTE = 'They must choose a new password at next sign-in, and every session of theirs is signed out.';
 
 export type UserStatus = 'Active' | 'Disabled' | 'Locked' | 'Must change password';
