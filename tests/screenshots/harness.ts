@@ -1,7 +1,7 @@
 /**
  * Drives the Studio under one seeded random source and one fake clock, so every run draws the
  * same numbers in the same frames, and compares each scene with its stored baseline under
- * tests/screenshots/baselines (one image per scene, theme, viewport and platform).
+ * tests/screenshots/baselines (one image per scene, viewport and platform).
  */
 import { expect, type Page } from '../../apps/studio/test-support/playwright';
 
@@ -11,8 +11,6 @@ export const SEED = 42;
 export const START_TIME = new Date('2026-09-28T09:00:00Z');
 /** Fraction of pixels allowed to differ from the baseline. */
 export const TOLERANCE = 0.001;
-
-export type Theme = 'dark' | 'light';
 
 export interface Viewport {
   width: number;
@@ -28,8 +26,11 @@ export const VIEWPORTS: Viewport[] = [
 /** The localStorage key of the Studio's open teach bar; cleared so every run starts collapsed. */
 export const TEACH_BAR_EXPANDED_KEY = 'ontaix.teachBar.expanded';
 
-/** The baseline name of a scene: `{scene}-{theme}-{width}x{height}.png`, the platform added by the config. */
-export const snapshotName = (scene: string, theme: Theme, vp: Viewport): string => `${scene}-${theme}-${vp.width}x${vp.height}.png`;
+/**
+ * The baseline name of a scene: `{scene}-light-{width}x{height}.png`, the platform added by the
+ * config. `light` names the Studio's one theme.
+ */
+export const snapshotName = (scene: string, vp: Viewport): string => `${scene}-light-${vp.width}x${vp.height}.png`;
 
 /**
  * Installs the fake clock and pauses it before navigation, so no frame runs until the test
@@ -250,18 +251,6 @@ export async function approveAll(page: Page): Promise<void> {
   await captioned(page, seq);
 }
 
-/**
- * Puts the page in a theme through the store without persisting it, so the scene's data (the
- * audit log, the tenant settings) reads the same in both themes. Light is the default, so a light
- * scene changes nothing.
- */
-export async function useTheme(page: Page, theme: Theme): Promise<void> {
-  const current = await page.evaluate(() => document.documentElement.dataset.theme);
-  if (current === theme) return;
-  await page.evaluate((name) => (window as unknown as { __ontaix: { store: { setTheme(n: 'dark' | 'light', persist: boolean): void } } }).__ontaix.store.setTheme(name, false), theme);
-  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-}
-
 export interface ShotOptions {
   animations?: 'disabled' | 'allow';
   caret?: 'hide' | 'initial';
@@ -269,6 +258,6 @@ export interface ShotOptions {
 }
 
 /** Compares the page with the scene's baseline at the tolerance; `--update-snapshots` writes the baseline. */
-export async function expectScene(page: Page, scene: string, theme: Theme, vp: Viewport, options: ShotOptions = {}): Promise<void> {
-  await expect(page).toHaveScreenshot(snapshotName(scene, theme, vp), { maxDiffPixelRatio: TOLERANCE, ...options });
+export async function expectScene(page: Page, scene: string, vp: Viewport, options: ShotOptions = {}): Promise<void> {
+  await expect(page).toHaveScreenshot(snapshotName(scene, vp), { maxDiffPixelRatio: TOLERANCE, ...options });
 }

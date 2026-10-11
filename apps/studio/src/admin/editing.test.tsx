@@ -49,7 +49,7 @@ function model(): { a: Company; b: Company; plant: Node; line: Node; valve: Node
   s.selected.clear();
   store.ui.domains = templates();
   store.ui.settings = { ...settings };
-  store.ui.appearance = { theme: 'dark', colors: {}, accent: '#3fb8a9', source: '#d6bd8a', defaults: { colors: {}, accent: '#3fb8a9', source: '#d6bd8a' } };
+  store.ui.appearance = { colors: {}, accent: '#3fb8a9', source: '#d6bd8a', defaults: { colors: {}, accent: '#3fb8a9', source: '#d6bd8a' } };
   const a = addCompany(s, 'Northwind Industries', '');
   a.sid = 'co-1';
   const production = domainOf(s, 'production', a);
@@ -213,9 +213,9 @@ describe('domains', () => {
     const dialog = render(<Dialog />);
     const page = render(<DomainProducts />);
     const heads = Array.from(page.container.querySelectorAll('thead th'));
-    expect(heads.map((h) => h.textContent)).toEqual(['Select', 'Company', 'Domain product', 'Owner', 'Version', 'Concepts', 'Bound', 'Visible', '']);
+    expect(heads.map((h) => h.textContent)).toEqual(['Select', 'Company', 'Domain product', 'Owner', 'Version', 'Concepts', 'Visible', '']);
     expect(heads[0].getAttribute('data-ox-new')).toBe('');
-    expect(heads[8].getAttribute('data-ox-new')).toBe('');
+    expect(heads[7].getAttribute('data-ox-new')).toBe('');
     const rows = Array.from(page.container.querySelectorAll('tbody tr'));
     // Two products with cells, then every tenant domain without cells (eight templates and the custom one).
     expect(rows).toHaveLength(2 + 9);
@@ -243,7 +243,8 @@ describe('domains', () => {
     store.ui.domains = [...templates(), { key: 'sustainability', name: 'Sustainability', owner: 'Facilities', color: '#112233', defaultColor: '#112233', template: false, position: 9, revision: 0 }];
     const { container } = render(<Appearance />);
     const cols = Array.from(container.querySelectorAll('.colors .col'));
-    expect(cols).toHaveLength(9 + 1 + 2);
+    // The nine templates, the custom domain and the accent; no data-source colour.
+    expect(cols).toHaveLength(9 + 1 + 1);
     const custom = cols[9];
     expect(custom.getAttribute('data-ox-new')).toBe('');
     expect(custom.querySelector('b')?.textContent).toBe('Sustainability');

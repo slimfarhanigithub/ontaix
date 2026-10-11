@@ -10,7 +10,7 @@ from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, Text,
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.storage.base import Base, RefreshInterval, ThemeName, pg_enum
+from app.models.storage.base import Base, RefreshInterval, pg_enum
 
 
 class TenantSettings(Base):
@@ -18,9 +18,6 @@ class TenantSettings(Base):
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("tenant.id", ondelete="CASCADE"), primary_key=True
-    )
-    theme: Mapped[ThemeName] = mapped_column(
-        pg_enum(ThemeName, "theme_name"), server_default=text("'light'")
     )
     colors: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     accent: Mapped[str] = mapped_column(server_default=text("'#d30c55'"))

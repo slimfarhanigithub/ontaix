@@ -65,7 +65,7 @@ describe('session headers', () => {
     await api.listProposals();
     await api.approve('p1');
     await api.importSentences(new File(['a sentence.'], 'a.txt', { type: 'text/plain' }));
-    await api.proposeUnbind('b1');
+    await api.proposeRemoveCompany('co1');
 
     const [get, post, upload, del] = fetchMock.mock.calls.map((c) => c[1] as RequestInit);
     for (const init of [get, post, upload, del]) expect(init.credentials).toBe('same-origin');

@@ -13,7 +13,6 @@ import { drawNeck } from './neck';
 import { step } from './physics';
 import { background, drawCompanies, drawDomains } from './regions';
 import { neighbours, shown, type SceneState } from './state';
-import { themeFor } from './themes';
 import type { Company, Link, Node, SplitInfo } from './types';
 import { createView, resize, toWorld, worldTransform, type View } from './view';
 
@@ -35,7 +34,6 @@ export interface Renderer {
   v: View;
   start(): void;
   stop(): void;
-  applyTheme(name: string): void;
 }
 
 const clampN = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -266,10 +264,6 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
       canvas.removeEventListener('dblclick', onDblClick);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('pointerleave', onPointerLeave);
-    },
-    applyTheme(name) {
-      document.documentElement.setAttribute('data-theme', name === 'light' ? 'light' : 'dark');
-      v.TH = themeFor(name);
     },
   };
 }

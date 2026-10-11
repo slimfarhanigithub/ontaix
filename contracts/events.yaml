@@ -1020,7 +1020,7 @@ components:
       traits:
         - $ref: '#/components/messageTraits/Audience'
       title: appearance.changed
-      summary: Theme, domain colours, accent or source colour changed.
+      summary: Domain colours, accent or source colour changed.
       payload:
         type: object
         required: [appearance, changed]

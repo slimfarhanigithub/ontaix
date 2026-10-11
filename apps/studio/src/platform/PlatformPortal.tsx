@@ -27,7 +27,7 @@ export function PlatformPortal() {
         <div className="win">
           <div className="head">
             <div id="platformTitle">Ontology Builder platform</div>
-            <AccountControls end />
+            <AccountControls />
           </div>
           <nav id="platformNav">
             <div className="grp">Platform</div>

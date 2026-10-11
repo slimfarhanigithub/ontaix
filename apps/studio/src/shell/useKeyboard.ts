@@ -35,7 +35,6 @@ export function useKeyboard(): void {
       if (e.key === 'd' || e.key === 'D') store.toggleDomainsCard();
       if (e.key === 'p' || e.key === 'P') store.togglePanel();
       if (e.key === 's' || e.key === 'S') store.toggleSkip();
-      if (e.key === 'c' || e.key === 'C') store.toggleCoverage();
       if (e.key === 'f' || e.key === 'F') {
         if (document.fullscreenElement) void document.exitFullscreen();
         else void document.documentElement.requestFullscreen?.();

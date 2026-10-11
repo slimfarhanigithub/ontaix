@@ -1,7 +1,7 @@
 /**
  * Baselines of the compact teach bar in each of its states (the
- * canvas scenes capture it at rest). Each state is captured at 1440x900 and 1920x1080 in
- * light and dark, and at 390x844, and compared with a stored baseline under
+ * canvas scenes capture it at rest). Each state is captured at 1440x900 and 1920x1080, and at
+ * 390x844, and compared with a stored baseline under
  * tests/screenshots/baselines at 0.1 percent tolerance. Only the bottom of the page, where the
  * bar, the tools row and the open history sit, is captured.
  *
@@ -12,7 +12,7 @@
  * `--update-snapshots` writes the baselines of the running platform.
  */
 import { test, expect, type Page } from '../../apps/studio/test-support/playwright';
-import { advance, fontsReady, openStudio, TOLERANCE, useTheme, VIEWPORTS, type Theme, type Viewport } from './harness';
+import { advance, fontsReady, openStudio, TOLERANCE, VIEWPORTS, type Viewport } from './harness';
 
 /** The narrow viewport of the proposal's mobile layout. */
 const PHONE: Viewport = { width: 390, height: 844 };
@@ -111,37 +111,32 @@ const STATES: State[] = [
   },
 ];
 
-const themes: Theme[] = ['light', 'dark'];
 const only = process.env.ONTAIX_SCENE?.split(',');
-const onlyTheme = process.env.ONTAIX_THEME;
 
 for (const vp of [...VIEWPORTS, PHONE]) {
   for (const state of STATES) {
     if (only && !only.some((o) => state.name.includes(o))) continue;
-    for (const theme of themes) {
-      if (onlyTheme && onlyTheme !== theme) continue;
-      const name = `teachbar-${state.name}-${theme}-${vp.width}x${vp.height}`;
-      test(`${state.name} · ${theme} · ${vp.width}x${vp.height}`, async ({ browser }) => {
-        const ctx = await browser.newContext({ viewport: vp });
-        const page = await ctx.newPage();
-        try {
-          await openStudio(page);
-          await useTheme(page, theme);
-          await fontsReady(page);
-          await advance(page, 500);
-          await state.drive(page);
-          // The caption typer, the status delay and the log's entrance finish before the capture.
-          await advance(page, 5000);
-          await expect(page).toHaveScreenshot(`${name}.png`, {
-            clip: { x: 0, y: vp.height - STRIP, width: vp.width, height: STRIP },
-            animations: 'disabled',
-            caret: 'hide',
-            maxDiffPixelRatio: TOLERANCE,
-          });
-        } finally {
-          await ctx.close();
-        }
-      });
-    }
+    // `light` names the Studio's one theme.
+    const name = `teachbar-${state.name}-light-${vp.width}x${vp.height}`;
+    test(`${state.name} · ${vp.width}x${vp.height}`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: vp });
+      const page = await ctx.newPage();
+      try {
+        await openStudio(page);
+        await fontsReady(page);
+        await advance(page, 500);
+        await state.drive(page);
+        // The caption typer, the status delay and the log's entrance finish before the capture.
+        await advance(page, 5000);
+        await expect(page).toHaveScreenshot(`${name}.png`, {
+          clip: { x: 0, y: vp.height - STRIP, width: vp.width, height: STRIP },
+          animations: 'disabled',
+          caret: 'hide',
+          maxDiffPixelRatio: TOLERANCE,
+        });
+      } finally {
+        await ctx.close();
+      }
+    });
   }
 }

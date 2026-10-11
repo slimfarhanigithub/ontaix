@@ -10,14 +10,14 @@ export const FONT_SANS = "'Hanken Grotesk Variable', ui-sans-serif, system-ui, s
 /** The monospace typeface for ids, hashes, column paths and timestamps. */
 export const FONT_MONO = "'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace";
 
-/** The brand accent a tenant starts with (light theme); crimson, chrome only. */
+/** The brand accent a tenant starts with; crimson, chrome only. */
 export const DEFAULT_ACCENT = '#d30c55';
 
 /** The ends of the mixes the canvas shades with: highlights toward white, rims toward black. */
 export const MIX_WHITE = '#ffffff';
 export const MIX_BLACK = '#000000';
 
-/** Light-theme values of the tokens read at runtime, so a reader never gets an empty string. */
+/** The values of the tokens read at runtime, so a reader never gets an empty string. */
 export const LIGHT_FALLBACK: Record<string, string> = {
   '--bg': '#f5f5f5',
   '--surface': '#ffffff',
@@ -50,24 +50,18 @@ export const LIGHT_FALLBACK: Record<string, string> = {
 /** The categorical order: domain products and series take these tokens in turn. */
 export const CATEGORICAL = ['--accent', '--link', '--good', '--human', '--text-3', '--violet', '--teal', '--orange', '--olive'] as const;
 
-/** Light values of the categorical tokens, in order; the stored default colour of each template. */
+/** Values of the categorical tokens, in order; the stored default colour of each template. */
 export const CATEGORICAL_LIGHT: string[] = CATEGORICAL.map((name) => LIGHT_FALLBACK[name]);
 
 const cache = new Map<string, string>();
-let cacheTheme: string | undefined;
 
 /**
- * Reads a token from the document's computed style, in the theme currently applied, falling back
- * to its light value when the document has none (tests, a detached canvas). Values are cached per
- * theme, so a renderer may call this every frame.
+ * Reads a token from the document's computed style, falling back to its value in LIGHT_FALLBACK
+ * when the document has none (tests, a detached canvas). Values are cached, so a renderer may call
+ * this every frame.
  */
 export function token(name: keyof typeof LIGHT_FALLBACK | string): string {
   if (typeof document === 'undefined') return LIGHT_FALLBACK[name] ?? '';
-  const theme = document.documentElement.dataset.theme;
-  if (theme !== cacheTheme) {
-    cache.clear();
-    cacheTheme = theme;
-  }
   const hit = cache.get(name);
   if (hit !== undefined) return hit;
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim() || LIGHT_FALLBACK[name] || '';
@@ -78,9 +72,8 @@ export function token(name: keyof typeof LIGHT_FALLBACK | string): string {
 const tokenOfLight = new Map<string, string>(Object.entries(LIGHT_FALLBACK).map(([name, value]) => [value, name]));
 
 /**
- * The colour to draw a stored colour with in the current theme: a stored default (one of the
- * light token values) follows its token into the dark theme, a tenant's own colour is drawn as it
- * is. Stored colours stay light values, so what the API holds never depends on a theme.
+ * The colour to draw a stored colour with: a stored default (one of the token values) follows its
+ * token, so a rebrand of the tokens reaches it; a tenant's own colour is drawn as it is.
  */
 export function themedColour(stored: string): string {
   const name = tokenOfLight.get(stored.toLowerCase());

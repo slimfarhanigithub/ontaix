@@ -1,7 +1,6 @@
 /**
- * Screenshot regression of the admin portal: every page, the data-source wizard steps 1 to 3,
- * the relationship dialog opened from the Relationships page and the typed-"disable"
- * confirmation. The Studio runs each script under the same seed and clock and is compared with
+ * Screenshot regression of the admin portal: every page, the relationship dialog opened from the
+ * Relationships page and the typed-"disable" confirmation. The Studio runs each script under the same seed and clock and is compared with
  * its stored baseline at 0.1 percent tolerance.
  *
  * Every scene starts from a first model taught through text and approved. CSS animations
@@ -19,9 +18,7 @@ import {
   openStudio,
   relate,
   teachFirstModel,
-  useTheme,
   VIEWPORTS,
-  type Theme,
 } from './harness';
 
 interface SceneScript {
@@ -52,16 +49,10 @@ const PAGES: [string, string][] = [
   ['overview', 'overview'],
   ['settings', 'tenant-settings'],
   ['appearance', 'appearance'],
-  ['sources', 'data-sources'],
-  ['connectors', 'connectors'],
   ['entities', 'entities'],
   ['relations', 'relationships'],
-  ['bindings', 'bindings'],
   ['companies', 'companies'],
   ['domains', 'domain-products'],
-  ['groups', 'groups'],
-  ['users', 'users'],
-  ['roles', 'roles'],
   ['audit', 'audit-log'],
   ['agents', 'cost-management'],
 ];
@@ -76,43 +67,6 @@ const scenes: SceneScript[] = [
       },
     }),
   ),
-  {
-    name: 'wizard-step-1',
-    play: async (page) => {
-      await seeded(page);
-      await adminPage(page, 'sources');
-      await page.click('#adminMain [data-act="add"]');
-      await advance(page, 600);
-    },
-  },
-  {
-    name: 'wizard-step-2',
-    play: async (page) => {
-      await seeded(page);
-      await adminPage(page, 'sources');
-      await page.click('#adminMain [data-act="add"]');
-      await advance(page, 300);
-      await page.click('#wzCat .c[data-k="SAP"]');
-      await advance(page, 100);
-      await page.click('.dlg .df .btn.primary');
-      await advance(page, 600);
-    },
-  },
-  {
-    name: 'wizard-step-3',
-    play: async (page) => {
-      await seeded(page);
-      await adminPage(page, 'sources');
-      await page.click('#adminMain [data-act="add"]');
-      await advance(page, 300);
-      await page.click('#wzCat .c[data-k="SAP"]');
-      await advance(page, 100);
-      await page.click('.dlg .df .btn.primary');
-      await advance(page, 300);
-      await page.click('.dlg .df .btn.primary');
-      await advance(page, 1600);
-    },
-  },
   {
     name: 'relationship-dialog',
     play: async (page) => {
@@ -141,30 +95,24 @@ const scenes: SceneScript[] = [
   },
 ];
 
-const themes: Theme[] = ['light', 'dark'];
-/** Optional filters for a partial run: scene name fragments (comma-separated), one viewport, one theme. */
+/** Optional filters for a partial run: scene name fragments (comma-separated), one viewport. */
 const only = process.env.ONTAIX_SCENE?.split(',');
 const onlyViewport = process.env.ONTAIX_VIEWPORT;
-const onlyTheme = process.env.ONTAIX_THEME;
 
 for (const vp of VIEWPORTS) {
   if (onlyViewport && onlyViewport !== `${vp.width}x${vp.height}`) continue;
   for (const scene of scenes) {
     if (only && !only.some((o) => scene.name.includes(o))) continue;
-    for (const theme of themes) {
-      if (onlyTheme && onlyTheme !== theme) continue;
-      test(`${scene.name} · ${theme} · ${vp.width}x${vp.height}`, async ({ browser }) => {
-        const ctx = await browser.newContext({ viewport: vp });
-        const page = await ctx.newPage();
-        try {
-          await openStudio(page);
-          await useTheme(page, theme);
-          await scene.play(page);
-          await expectScene(page, scene.name, theme, vp, { animations: 'disabled', caret: 'hide' });
-        } finally {
-          await ctx.close();
-        }
-      });
-    }
+    test(`${scene.name} · ${vp.width}x${vp.height}`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: vp });
+      const page = await ctx.newPage();
+      try {
+        await openStudio(page);
+        await scene.play(page);
+        await expectScene(page, scene.name, vp, { animations: 'disabled', caret: 'hide' });
+      } finally {
+        await ctx.close();
+      }
+    });
   }
 }

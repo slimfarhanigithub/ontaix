@@ -1,8 +1,8 @@
 /**
  * Studio-only baselines of the screens the reference does not have (ADR 0017 section 9): the
  * sign-in page, the "Choose a new password" page, and the platform portal's Organizations and
- * Platform audit log pages. Each is captured at 1440x900 and 1920x1080 in light and dark and
- * compared with a stored baseline under tests/screenshots/baselines at 0.1 percent tolerance.
+ * Platform audit log pages. Each is captured at 1440x900 and 1920x1080 and compared with a
+ * stored baseline under tests/screenshots/baselines at 0.1 percent tolerance.
  *
  * The Studio is opened with `?api=real`, so its calls reach the network, where this spec answers
  * the session and platform routes with fixtures. No fixture holds a credential.
@@ -10,7 +10,7 @@
  * `--update-snapshots` writes the baselines of the running platform.
  */
 import { test, expect, type Page, type Route } from '../../apps/studio/test-support/playwright';
-import { animationsSettled, fontsReady, TOLERANCE, VIEWPORTS, type Theme } from './harness';
+import { animationsSettled, fontsReady, TOLERANCE, VIEWPORTS } from './harness';
 
 const CSRF = 'screenshot-csrf-'.padEnd(43, 'x');
 
@@ -122,38 +122,32 @@ const SCREENS: Screen[] = [
   },
 ];
 
-const themes: Theme[] = ['light', 'dark'];
 const only = process.env.ONTAIX_SCENE?.split(',');
-const onlyTheme = process.env.ONTAIX_THEME;
 
 for (const vp of VIEWPORTS) {
   for (const screen of SCREENS) {
     if (only && !only.some((o) => screen.name.includes(o))) continue;
-    for (const theme of themes) {
-      if (onlyTheme && onlyTheme !== theme) continue;
-      const name = `auth-${screen.name}-${theme}-${vp.width}x${vp.height}`;
-      test(`${screen.name} · ${theme} · ${vp.width}x${vp.height}`, async ({ browser }) => {
-        // The audit log shows its fixtures' times in the browser's zone, so every platform renders them in UTC.
-        const ctx = await browser.newContext({ viewport: vp, timezoneId: 'UTC' });
-        const page = await ctx.newPage();
-        try {
-          // No fake clock: nothing on these screens depends on the current time.
-          await page.route(/\/api\/v1\//, serve(screen.routes));
-          await page.goto('/?api=real');
-          await page.waitForSelector(screen.mounted ?? screen.ready.split(' ')[0]);
-          // These screens load no tenant appearance, so the page is light until the attribute says otherwise.
-          if (theme === 'dark') await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
-          if (screen.drive) await screen.drive(page);
-          await page.waitForSelector(screen.ready);
-          await fontsReady(page);
-          await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-          // The window's or dialog's entrance animation runs in real time; it ends before the capture.
-          await animationsSettled(page);
-          await expect(page).toHaveScreenshot(`${name}.png`, { animations: 'disabled', caret: 'hide', maxDiffPixelRatio: TOLERANCE });
-        } finally {
-          await ctx.close();
-        }
-      });
-    }
+    // `light` names the Studio's one theme.
+    const name = `auth-${screen.name}-light-${vp.width}x${vp.height}`;
+    test(`${screen.name} · ${vp.width}x${vp.height}`, async ({ browser }) => {
+      // The audit log shows its fixtures' times in the browser's zone, so every platform renders them in UTC.
+      const ctx = await browser.newContext({ viewport: vp, timezoneId: 'UTC' });
+      const page = await ctx.newPage();
+      try {
+        // No fake clock: nothing on these screens depends on the current time.
+        await page.route(/\/api\/v1\//, serve(screen.routes));
+        await page.goto('/?api=real');
+        await page.waitForSelector(screen.mounted ?? screen.ready.split(' ')[0]);
+        if (screen.drive) await screen.drive(page);
+        await page.waitForSelector(screen.ready);
+        await fontsReady(page);
+        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        // The window's or dialog's entrance animation runs in real time; it ends before the capture.
+        await animationsSettled(page);
+        await expect(page).toHaveScreenshot(`${name}.png`, { animations: 'disabled', caret: 'hide', maxDiffPixelRatio: TOLERANCE });
+      } finally {
+        await ctx.close();
+      }
+    });
   }
 }

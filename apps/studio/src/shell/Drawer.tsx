@@ -1,14 +1,15 @@
 /**
  * What the model knows about a cell, and its lineage. Markup from
  * reference/ontaix-studio-reference.html line 214; content from `openDrawer` (lines 637-646)
- * and `showLineage` (lines 653-662). Labels, subs, names and freshness are rendered as text.
- * The action row holds one button, More actions, whose menu offers every action on the cell:
- * the reference's Grow a concept from it and Lineage, and the owner's Expand, Rename, Move to
- * domain and Delete, each a dialog whose outcome is a proposal.
+ * and `showLineage` (lines 653-662), without the data-source box and the data lineage, since no
+ * cell has data behind it. Labels, subs and names are rendered as text. The action row holds one
+ * button, More actions, whose menu offers every action on the cell: the reference's Grow a
+ * concept from it and Lineage, and the owner's Expand, Rename, Move to domain and Delete, each a
+ * dialog whose outcome is a proposal.
  */
 import { useEffect } from 'react';
 
-import { C, DEFAULT_BRASS, NEUTRAL } from '../canvas/constants';
+import { C, NEUTRAL } from '../canvas/constants';
 import { ancestorsOf, childrenOf, descendantsOf } from '../canvas/lineage';
 import type { Node } from '../canvas/types';
 import { useDelayed } from './busy';
@@ -50,7 +51,6 @@ export function Drawer() {
           <span id="drName"></span>
         </h2>
         <div className="meta" id="drMeta"></div>
-        <div className="src" id="drSrc"></div>
         <h3 id="drAttrTitle">Attributes</h3>
         <div id="drAttrs"></div>
         <div className="actions"></div>
@@ -60,7 +60,6 @@ export function Drawer() {
   }
 
   const d = n.domain;
-  const bindCount = (pending: boolean) => s.links.filter((l) => l.kind === 'bind' && l.a === n && l.pending === pending).length;
   const meta =
     n.kind === 'root' ? (
       <>
@@ -70,13 +69,6 @@ export function Drawer() {
         <br />
         {`${n.company?.domains.filter((x) => s.nodes.some((m) => m.domain === x && !m.dying)).length} domain products · ${s.nodes.filter((m) => m.company === n.company && m.kind === 'concept').length} concepts`}
       </>
-    ) : n.kind === 'source' ? (
-      <>
-        <b>{n.sub}</b>
-        {` · ${n.company?.name}`}
-        <br />
-        {`${bindCount(false)} concepts bound · ${bindCount(true)} pending`}
-      </>
     ) : (
       <>
         <b>{d ? d.name : '—'}</b>
@@ -85,33 +77,6 @@ export function Drawer() {
         {`${n.pending ? 'awaiting approval' : 'approved'} · ${s.links.filter((l) => (l.a === n || l.b === n) && l.kind !== 'bind').length} relations`}
       </>
     );
-  let srcClass = 'src';
-  let src: React.ReactNode;
-  if (n.kind === 'source')
-    src = (
-      <>
-        <b>{n.label}</b>
-        {` feeds: ${s.links.filter((l) => l.kind === 'bind' && l.a === n).map((l) => l.b.label).join(', ') || 'nothing yet'}`}
-      </>
-    );
-  else if (n.bound)
-    src = (
-      <>
-        Bound to <b>{n.bound.source.label}</b>
-        {` · ${n.bound.records.toLocaleString('en-GB')} records · fresh ${n.bound.fresh}`}
-      </>
-    );
-  else {
-    srcClass = 'src none';
-    src =
-      n.kind === 'root' ? (
-        <b>Company</b>
-      ) : (
-        <>
-          <b>No data behind it yet.</b> Bind it to a system to read its attributes.
-        </>
-      );
-  }
 
   return (
     <section className="drawer on" id="drawer" aria-live="polite">
@@ -119,14 +84,11 @@ export function Drawer() {
         ×
       </button>
       <h2>
-        <i id="drDot" style={{ color: themedColour(safeColour(n.kind === 'source' ? s.BRASS : n.color, NEUTRAL)) }}></i>
-        <span id="drName">{n.label + (n.sub && n.kind !== 'source' ? ' · ' + n.sub : '')}</span>
+        <i id="drDot" style={{ color: themedColour(safeColour(n.color, NEUTRAL)) }}></i>
+        <span id="drName">{n.label + (n.sub ? ' · ' + n.sub : '')}</span>
       </h2>
       <div className="meta" id="drMeta">
         {meta}
-      </div>
-      <div className={srcClass} id="drSrc">
-        {src}
       </div>
       <h3 id="drAttrTitle" style={{ display: n.attrs && n.attrs.length ? undefined : 'none' }}>
         Attributes
@@ -159,7 +121,7 @@ export function Drawer() {
   );
 }
 
-/** Ancestry, descendants and data lineage of a cell. */
+/** Ancestry and descendants of a cell. */
 function Lineage({ n }: { n: Node }) {
   const st = useStore();
   const s = st.s;
@@ -205,29 +167,6 @@ function Lineage({ n }: { n: Node }) {
       ) : (
         <div className="kids" style={{ color: 'var(--ink-3)' }}>
           Nothing has been born from it yet.
-        </div>
-      )}
-      <h3>Data lineage</h3>
-      {n.bound ? (
-        <>
-          <div className="step" style={{ color: themedColour(safeColour(s.BRASS, DEFAULT_BRASS)) }}>
-            <i></i>
-            <div>
-              <b onClick={() => n.bound && st.goTo(n.bound.source)}>{n.bound.source.label}</b>
-              <small>{`feeds ${n.label} · ${n.bound.records.toLocaleString('en-GB')} records · fresh ${n.bound.fresh}`}</small>
-            </div>
-          </div>
-          <div className="step me" style={{ color: themedColour(safeColour(n.color, NEUTRAL)) }}>
-            <i></i>
-            <div>
-              <b>{n.label}</b>
-              <small>{`${(n.attrs || []).filter((a) => a.state === 'approved').length} attributes read from ${n.bound.source.label}`}</small>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="kids" style={{ color: 'var(--ink-3)' }}>
-          No data behind it yet.
         </div>
       )}
     </div>

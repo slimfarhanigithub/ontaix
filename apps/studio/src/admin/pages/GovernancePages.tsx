@@ -1,245 +1,28 @@
 /**
- * The Governance group of the admin portal: Groups, Users, Roles, Audit log and Cost management
- * (`pageGroups` to `pageAgents`, reference lines 1017-1036). Directory, audit and cost data come
- * from the API; an unavailable endpoint leaves the page empty.
+ * The Governance group of the admin portal: Audit log and Cost management (`pageAudit` and
+ * `pageAgents`, reference lines 1030-1036). Audit and cost data come from the API; an
+ * unavailable endpoint leaves the page empty. Cost management shows the month's language model
+ * and OCR usage of the tenant, `GET /cost`'s `llm` block: calls, tokens against the monthly token
+ * cap, OCR pages against the monthly page cap, the estimated cost and the breakdown by purpose.
  */
 import { useEffect, useState } from 'react';
 
 import { api } from '../../api/client';
-import type { CostSummary, Group, RoleInfo } from '../../api/types';
+import type { CostSummary, LlmPurpose } from '../../api/types';
 import { useStore } from '../../shell/dom';
 import { directory, failed } from '../adminData';
-import { agentRegistry, deleteGroupDialog, groupEdit, groupMembers, groupRoles, roleGroups } from '../actions';
-import { List, type Column } from '../List';
 import { en } from '../listModel';
-import { distinctRoles, roleLabel } from '../roles';
-import { SetRow } from '../Toggle';
-import { RowActions } from '../RowActions';
 
-const ACT = (w: number) => ({ width: `${w}px`, textAlign: 'center' as const });
+/** The purposes in the order the table lists them, with their labels. */
+export const PURPOSE_LABEL: Record<LlmPurpose, string> = {
+  teach_extraction: 'Teach extraction',
+  concept_expansion: 'Concept expansion',
+  document_extraction: 'Document extraction',
+  document_ocr: 'Document OCR',
+};
 
-interface GroupRow extends Record<string, unknown> {
-  id: string;
-  g: Group;
-  name: string;
-  desc: string;
-  members: number;
-  roles: string;
-  nroles: number;
-}
-
-export function Groups() {
-  const st = useStore();
-  const rows: GroupRow[] = directory.groups.map((g) => ({
-    id: g.id,
-    g,
-    name: g.name,
-    desc: g.description,
-    members: g.memberCount,
-    roles: g.roles.map((r) => `${roleLabel(r.role)} · ${r.scope.label}`).join(', ') || '—',
-    nroles: g.roles.length,
-  }));
-  const columns: Column[] = [
-    { label: 'Group', key: 'name' },
-    { label: 'Description', key: 'desc' },
-    { label: 'Members', key: 'members', num: true },
-    { label: 'Roles', key: 'roles' },
-    { label: '', w: '300px' },
-  ];
-  return (
-    <>
-      <h2>Groups</h2>
-      <p className="lead">
-        Groups are Ontology Builder’s own: you create them here, add users, and give each group roles with a scope. Nothing depends on your identity provider’s
-        groups; sign-in can still come from anywhere.
-      </p>
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-        <button className="btn primary" data-act="newGroup" onClick={() => groupEdit(null)}>
-          + Create a group
-        </button>
-      </div>
-      <div className="lst-host" id="lstGroups" style={{ height: 'calc(100% - 120px)' }}>
-        {directory.loaded ? (
-        <List
-          key={st.ui.adminRev}
-          columns={columns}
-          rows={rows}
-          rowKey={(r) => r.id}
-          searchKeys={['name', 'desc', 'roles']}
-          pageSize={40}
-          renderRow={(r) => (
-            <>
-              <td>
-                <b>{r.name}</b>
-              </td>
-              <td style={{ color: 'var(--ink-2)' }}>{r.desc}</td>
-              <td className="num">{r.members}</td>
-              <td>{r.roles}</td>
-              <td className="act">
-                <RowActions
-                  id={`grp-${r.g.id}`}
-                  primary={
-                    <button data-fn="members" style={ACT(78)} onClick={() => groupMembers(r.g)}>
-                      Members
-                    </button>
-                  }
-                  items={[
-                    { label: 'Roles', icon: 'key', group: 1, attrs: { 'data-fn': 'roles' }, act: () => groupRoles(r.g) },
-                    { label: 'Edit', icon: 'edit', group: 1, attrs: { 'data-fn': 'edit' }, act: () => groupEdit(r.g) },
-                    { label: 'Delete', icon: 'delete', group: 2, danger: true, attrs: { 'data-fn': 'del' }, act: () => deleteGroupDialog(r.g) },
-                  ]}
-                />
-              </td>
-            </>
-          )}
-          footer={(l) => `${l.reduce((a, r) => a + r.members, 0)} memberships`}
-        />
-        ) : null}
-      </div>
-    </>
-  );
-}
-
-interface UserRow extends Record<string, unknown> {
-  id: string;
-  name: string;
-  email: string;
-  dept: string;
-  company: string;
-  groups: string;
-  roles: string;
-}
-
-export function Users() {
-  const st = useStore();
-  const rows: UserRow[] = directory.users.map((u) => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    dept: u.department || '',
-    company: u.companyName || '',
-    groups: u.groups.map((g) => g.name).join(', ') || '—',
-    roles: distinctRoles(u.effectiveRoles).join(', ') || '—',
-  }));
-  const columns: Column[] = [
-    { label: 'User', key: 'name' },
-    { label: 'Email', key: 'email' },
-    { label: 'Department', key: 'dept' },
-    { label: 'Company', key: 'company' },
-    { label: 'Groups', key: 'groups' },
-    { label: 'Effective roles', key: 'roles' },
-  ];
-  return (
-    <>
-      <h2>Users</h2>
-      <p className="lead">Everyone who can sign in. Roles come from the groups a user belongs to; a user with no group can read nothing.</p>
-      <div className="lst-host" id="lstUsers" style={{ height: 'calc(100% - 80px)' }}>
-        {directory.loaded ? (
-        <List
-          key={st.ui.adminRev}
-          columns={columns}
-          rows={rows}
-          rowKey={(r) => r.id}
-          searchKeys={['name', 'email', 'dept', 'company', 'groups', 'roles']}
-          filterKey="company"
-          pageSize={40}
-          renderRow={(r) => (
-            <>
-              <td>
-                <b>{r.name}</b>
-              </td>
-              <td className="wrap" style={{ color: 'var(--ink-2)' }}>{r.email}</td>
-              <td>{r.dept}</td>
-              <td>{r.company}</td>
-              <td>{r.groups}</td>
-              <td>{r.roles}</td>
-            </>
-          )}
-          footer={(l) => `${l.filter((r) => r.groups !== '—').length} in at least one group`}
-        />
-        ) : null}
-      </div>
-    </>
-  );
-}
-
-/** Loads one API resource each time the portal renders from scratch; a failure leaves it null. `load` must be stable. */
-function useAdminResource<T>(load: () => Promise<T>): T | null {
-  const st = useStore();
-  const [value, setValue] = useState<T | null>(null);
-  const rev = st.ui.adminRev;
-  useEffect(() => {
-    let live = true;
-    load().then(
-      (v) => {
-        if (live) setValue(v);
-      },
-      (err: unknown) => failed(err, 'Unavailable'),
-    );
-    return () => {
-      live = false;
-    };
-  }, [rev, load]);
-  return value;
-}
-
-const loadRoles = () => api.listRoles();
-const loadCost = () => api.getCost();
-
-export function Roles() {
-  const roles: RoleInfo[] = useAdminResource(loadRoles) || [];
-  const people = roles.filter((r) => r.role !== 'agent');
-  const agent = roles.find((r) => r.role === 'agent');
-  return (
-    <>
-      <h2>Roles</h2>
-      <p className="lead">
-        Five people roles plus Auditor and Agent. A role is given to a group, with a scope: Tenant, a company, or a domain product. The count is the
-        number of users who hold it through their groups.
-      </p>
-      <table className="tbl">
-        <thead>
-          <tr>
-            <th>Role</th>
-            <th>What it can do</th>
-            <th>Assigned</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {people.map((r) => (
-            <tr key={r.role}>
-              <td>
-                <b>{r.label}</b>
-              </td>
-              <td>{r.description}</td>
-              <td>{r.assigned}</td>
-              <td className="act">
-                <button data-act="groups" data-id={r.label} style={ACT(120)} onClick={() => roleGroups(r.label)}>
-                  Groups
-                </button>
-              </td>
-            </tr>
-          ))}
-          {agent ? (
-            <tr>
-              <td>
-                <b>{agent.label}</b>
-              </td>
-              <td>{agent.description}</td>
-              <td>{en(agent.assigned)}</td>
-              <td className="act">
-                <button data-act="registry" style={ACT(120)} onClick={agentRegistry}>
-                  Registry
-                </button>
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-    </>
-  );
-}
+/** An amount in euro with two decimals, `€ 1.87`. */
+export const eur = (n: number): string => `€ ${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function AuditLog() {
   useStore();
@@ -271,63 +54,91 @@ export function AuditLog() {
   );
 }
 
+/** Loads one API resource each time the portal renders from scratch; a failure leaves it null. `load` must be stable. */
+function useAdminResource<T>(load: () => Promise<T>): T | null {
+  const st = useStore();
+  const [value, setValue] = useState<T | null>(null);
+  const rev = st.ui.adminRev;
+  useEffect(() => {
+    let live = true;
+    load().then(
+      (v) => {
+        if (live) setValue(v);
+      },
+      (err: unknown) => failed(err, 'Unavailable'),
+    );
+    return () => {
+      live = false;
+    };
+  }, [rev, load]);
+  return value;
+}
+
+const loadCost = () => api.getCost();
+
+/** The caption under a used count: the monthly cap it counts against, or that a cap of 0 turned the step off. */
+export const capText = (cap: number, unit: string, off: string): string => (cap ? `${unit} of ${en(cap)} this month` : `${unit} · ${off}`);
+
 export function CostManagement() {
   const cost: CostSummary | null = useAdminResource(loadCost);
-  const measured = cost ? cost.measuredEur : 0;
+  const llm = cost ? cost.llm : null;
+  const rows = llm ? llm.byPurpose : [];
   return (
     <>
       <h2>Cost management</h2>
       <p className="lead">
-        Agents from any platform that read this model through the gateway, and what they cost this month, measured against what was allocated.
+        What the model costs this month: every sentence, suggestion and document read by the language model, and every scanned page the OCR read,
+        measured against the tenant’s monthly caps.
       </p>
       <div className="kpis">
         <div>
-          <b>{`€ ${en(measured)}`}</b>
-          <span>measured this month</span>
+          <b>{en(llm ? llm.calls : 0)}</b>
+          <span>model calls this month</span>
         </div>
         <div>
-          <b>{`€ ${cost ? cost.allocatedEur : 0}`}</b>
-          <span>allocated</span>
+          <b>{en(llm ? llm.tokensUsed : 0)}</b>
+          <span>{capText(llm ? llm.tokenCap : 0, 'tokens', 'the model step is off')}</span>
         </div>
         <div>
-          <b>{en(cost ? cost.agentsRegistered : 0)}</b>
-          <span>{`agents registered · ${en(cost ? cost.agentsWithAccess : 0)} with access`}</span>
+          <b>{en(llm ? llm.ocrPagesUsed : 0)}</b>
+          <span>{capText(llm ? llm.ocrPageCap : 0, 'OCR pages', 'OCR is off')}</span>
         </div>
         <div>
-          <b>{en(cost ? cost.reads : 0)}</b>
-          <span>model reads</span>
+          <b>{eur(llm ? llm.costEur : 0)}</b>
+          <span>{`estimated · ${en(llm ? llm.inputTokens : 0)} in · ${en(llm ? llm.outputTokens : 0)} out`}</span>
         </div>
       </div>
-      <SetRow k="agentAccess" title="Agents may read the certified model" desc="When off, the gateway answers nothing." />
-      <SetRow k="costCap" title="Stop agents at 100 percent of allocation" desc="Alerts at 50 and 80 percent." />
-      <h3>By platform</h3>
+      <h3>By purpose</h3>
       <table className="tbl">
         <thead>
           <tr>
-            <th>Platform</th>
-            <th className="num">Agents with access</th>
+            <th>Purpose</th>
+            <th className="num">Calls</th>
+            <th className="num">Pages</th>
             <th className="num">Cost · month</th>
-            <th className="num">Share</th>
           </tr>
         </thead>
         <tbody>
-          {(cost ? cost.byPlatform : []).map((p) => (
-            <tr key={p.platform}>
-              <td>
-                <b>{p.platform}</b>
+          {rows.length ? (
+            rows.map((p) => (
+              <tr key={p.purpose}>
+                <td>
+                  <b>{PURPOSE_LABEL[p.purpose] || p.purpose}</b>
+                </td>
+                <td className="num">{en(p.calls)}</td>
+                <td className="num">{p.pages === undefined || p.pages === null ? '—' : en(p.pages)}</td>
+                <td className="num">{eur(p.costEur)}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={4} style={{ color: 'var(--ink-3)' }}>
+                No model call this month.
               </td>
-              <td className="num">{en(p.agentsWithAccess)}</td>
-              <td className="num">{`€ ${en(p.costEur)}`}</td>
-              <td className="num">{`${p.sharePercent} %`}</td>
             </tr>
-          ))}
+          )}
         </tbody>
       </table>
-      <div style={{ marginTop: '12px' }}>
-        <button className="btn primary" data-act="registry" onClick={agentRegistry}>
-          Open the agent registry
-        </button>
-      </div>
     </>
   );
 }
