@@ -50,7 +50,7 @@ export function Groups() {
     <>
       <h2>Groups</h2>
       <p className="lead">
-        Groups are Ontaix’s own: you create them here, add users, and give each group roles with a scope. Nothing depends on your identity provider’s
+        Groups are Ontology Builder’s own: you create them here, add users, and give each group roles with a scope. Nothing depends on your identity provider’s
         groups; sign-in can still come from anywhere.
       </p>
       <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>

@@ -65,7 +65,7 @@ async def test_scene_returns_both_seeded_companies(
     assert scene["proposals"] == []
     assert "demoStory" not in scene["settings"]
     assert scene["settings"]["approvalRequired"] is True
-    assert scene["appearance"]["colors"]["production"] == "#3fb8a9"
+    assert scene["appearance"]["colors"]["production"] == "#d30c55"
     assert len(scene["connectors"]) == 15
     assert "demoStory" not in scene
     assert scene["viewState"] == {"coverage": False}

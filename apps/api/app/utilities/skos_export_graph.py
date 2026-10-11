@@ -37,7 +37,13 @@ def skos_triples(snapshot: ExportSnapshot) -> list[Triple]:
 
     ontology = ontology_iri(base, s.scope, s.exported_at)
     g.add((ontology, T.RDF_TYPE, T.OWL_ONTOLOGY))
-    g.add((ontology, T.SKOS_PREF_LABEL, Literal(f"Ontaix export · {s.scope_name}", lang=lang)))
+    g.add(
+        (
+            ontology,
+            T.SKOS_PREF_LABEL,
+            Literal(f"Ontology Builder export · {s.scope_name}", lang=lang),
+        )
+    )
     g.add((ox.ACTION, T.RDF_TYPE, T.OWL_ANNOTATION_PROPERTY))
     for company in s.companies:
         scheme = company_iri(base, company.key)

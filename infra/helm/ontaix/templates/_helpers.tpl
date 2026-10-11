@@ -22,6 +22,18 @@ ontaix-gateway and ontaix-studio.
 {{- printf "%s-studio" (include "ontaix.fullname" .) -}}
 {{- end -}}
 
+{{- define "ontaix.admin.name" -}}
+{{- printf "%s-admin" (include "ontaix.fullname" .) -}}
+{{- end -}}
+
+{{/*
+The files the fetch-secrets step writes from Key Vault, as JSON: /secrets/.env for the API
+process, /secrets/admin.env for the migration step, the login step and the admin terminal.
+*/}}
+{{- define "ontaix.keyVaultFiles" -}}
+{{- toJson (dict "/secrets/.env" .Values.secrets.keyVault.secrets "/secrets/admin.env" .Values.secrets.keyVault.adminSecrets) -}}
+{{- end -}}
+
 {{- define "ontaix.labels" -}}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | quote }}
 app.kubernetes.io/name: {{ .Chart.Name }}
@@ -90,5 +102,18 @@ default-src 'self'; script-src 'self'; style-src {{ join " " $style }}; font-src
 {{- end -}}
 {{- if and .Values.secrets.keyVault.enabled (not .Values.secrets.keyVault.name) -}}
 {{- fail "secrets.keyVault.name is required when secrets.keyVault is enabled" -}}
+{{- end -}}
+{{- if .Values.secrets.keyVault.enabled -}}
+{{- if not (hasKey .Values.secrets.keyVault.secrets "ONTAIX_DATABASE_URL") -}}
+{{- fail "secrets.keyVault.secrets must map ONTAIX_DATABASE_URL to the API login's URL secret" -}}
+{{- end -}}
+{{- range $variable := list "ONTAIX_DATABASE_URL" "ONTAIX_API_DATABASE_URL" -}}
+{{- if not (hasKey $.Values.secrets.keyVault.adminSecrets $variable) -}}
+{{- fail (printf "secrets.keyVault.adminSecrets must map %s (the migration and login steps read the schema owner's URL and the API login's URL)" $variable) -}}
+{{- end -}}
+{{- end -}}
+{{- if eq (get .Values.secrets.keyVault.secrets "ONTAIX_DATABASE_URL") (get .Values.secrets.keyVault.adminSecrets "ONTAIX_DATABASE_URL") -}}
+{{- fail "secrets.keyVault.secrets.ONTAIX_DATABASE_URL and secrets.keyVault.adminSecrets.ONTAIX_DATABASE_URL name the same secret: the API process must not carry the schema owner's URL" -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}

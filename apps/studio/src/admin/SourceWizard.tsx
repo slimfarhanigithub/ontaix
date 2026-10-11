@@ -283,7 +283,7 @@ function SourceWizard({ n, src, cat, close }: { n: Node | null; src: Source | nu
             ))}
           </select>
           <label></label>
-          <small style={{ color: 'var(--ink-3)' }}>Read-only. Ontaix never writes into a source system.</small>
+          <small style={{ color: 'var(--ink-3)' }}>Read-only. Ontology Builder never writes into a source system.</small>
         </div>
       ) : null}
       {step === 3 ? (

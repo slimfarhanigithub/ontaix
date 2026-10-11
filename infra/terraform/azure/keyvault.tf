@@ -39,9 +39,19 @@ resource "azurerm_key_vault_secret" "postgres_admin_password" {
   depends_on   = [azurerm_role_assignment.ci_secrets_officer, azurerm_role_assignment.owner_secrets_officer]
 }
 
+# The administrator's URL: the migration step, the login step and the admin terminal read it;
+# the API process does not.
 resource "azurerm_key_vault_secret" "database_url" {
   name         = "database-url"
   value        = local.database_url
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_role_assignment.ci_secrets_officer, azurerm_role_assignment.owner_secrets_officer]
+}
+
+# The API's own URL: the one database secret the API process reads.
+resource "azurerm_key_vault_secret" "database_url_api" {
+  name         = "database-url-api"
+  value        = local.database_url_api
   key_vault_id = azurerm_key_vault.main.id
   depends_on   = [azurerm_role_assignment.ci_secrets_officer, azurerm_role_assignment.owner_secrets_officer]
 }

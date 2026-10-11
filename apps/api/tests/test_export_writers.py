@@ -178,7 +178,7 @@ def test_the_word_document_has_the_sections_and_no_ids() -> None:
     document = Document(io.BytesIO(write_export(snapshot(), "docx")))
 
     headings = [(p.style.name, p.text) for p in document.paragraphs if p.style.name != "Normal"]
-    assert ("Title", "Ontaix export") in headings
+    assert ("Title", "Ontology Builder export") in headings
     assert ("Heading 1", "Northwind") in headings
     for name in ("Domains", "Entity hierarchy", "Relationships", "Equivalences"):
         assert ("Heading 2", name) in headings
