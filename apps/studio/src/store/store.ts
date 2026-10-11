@@ -999,6 +999,7 @@ class StudioStore {
     if (ap.accent && ap.accent.toLowerCase() !== DEFAULT_ACCENT) document.documentElement.style.setProperty('--accent', ap.accent);
     else document.documentElement.style.removeProperty('--accent');
     s.BRASS = ap.source;
+    document.documentElement.style.setProperty('--source', ap.source);
     this.bump();
   }
 

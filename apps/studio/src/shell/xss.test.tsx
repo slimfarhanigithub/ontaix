@@ -16,7 +16,7 @@ const proposal = (html: string): Proposal => ({
   state: 'pending',
   title: PAYLOAD,
   heading: 'New concept · Production',
-  color: '#3fb8a9',
+  color: '#d30c55',
   deps: [],
   ready: true,
   html,

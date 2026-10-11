@@ -115,7 +115,11 @@ Light is **warm stone**; dark is **cool slate**.
 | `--good-soft` | `#dcf0e9` | `#17322d` | Success tint |
 | `--danger` | `#c0181d` | `#e5736b` | Error, rejection, refusal, conflict, destructive action |
 | `--danger-soft` | `#fbe9e9` | `#3a2420` | Error tint |
-| `--violet` | `#7c3aed` | `#a78bfa` | The sixth categorical colour |
+| `--violet` | `#7c3aed` | `#a78bfa` | Categorical colour 6 |
+| `--teal` | `#0e7490` | `#5fc7e0` | Categorical colour 7 |
+| `--orange` | `#c2410c` | `#f59e6b` | Categorical colour 8 |
+| `--olive` | `#4d7c0f` | `#a3c957` | Categorical colour 9 |
+| `--source` | `#d6bd8a` | `#d6bd8a` | Data sources on the canvas (squares, binding lines, the legend's binding row); tenant-settable; shapes only, never text |
 
 > Light `--good` as body text is below AA (A11Y-C2). Prefer it for icons, dots and badges, or pair it with a label in `--text`.
 
@@ -225,7 +229,9 @@ Pairs already below AA are recorded in `KNOWN_BELOW_AA` and below. The ledger wo
 
 The canvas renderer reads its colours from the tokens **at runtime** through `token()` in [`tokens.ts`](../apps/studio/src/design/tokens.ts), so cells, hulls, links and labels follow a rebrand and the theme switch automatically. If a variable is missing, the light-theme fallback applies so nothing renders blank.
 
-- **Categorical order** for domain products and series: `accent`, `link`, `good`, `human`, `text-3`, `violet`, then AA-checked tints. Blue sits second so crimson and the warm danger red are never adjacent.
+- **Categorical order** for domain products and series: `accent`, `link`, `good`, `human`, `text-3`, `violet`, `teal`, `orange`, `olive` (`CATEGORICAL` in `tokens.ts`). Blue sits second so crimson and the warm danger red are never adjacent. The nine domain templates take these nine in order; a new custom domain takes the first one no domain uses.
+- **Stored colours stay light values.** A domain's colour is stored as the light value of its token (or a tenant's own hex); `themedColour()` draws a stored default with its token's value in the applied theme and a tenant's own colour as it is, so the API never holds a theme-dependent value.
+- **Theme object:** `canvas/themes.ts` derives the renderer's background, label inks, chip surface, label halo, vignette and hull colour from the tokens; only the hull and region alphas are fixed per theme.
 - **Labels:** Hanken Grotesk at the sizes the renderer sets, in `--text` and `--text-2`; chips on `--surface`.
 
 ## 11. Iconography

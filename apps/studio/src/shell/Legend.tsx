@@ -16,7 +16,7 @@ interface LegendEntry {
   icon: ReactNode;
 }
 
-/** The rows in the reference's order; colours are the canvas colours of each kind of line. */
+/** The rows in the reference's order; each icon takes the token its kind of line is drawn with. */
 export const LEGEND: LegendEntry[] = [
   {
     key: 'rel',
@@ -24,8 +24,8 @@ export const LEGEND: LegendEntry[] = [
     detail: 'A continuous line, brighter toward the target, with the action written on it',
     icon: (
       <>
-        <path d="M2 11 Q14 3 30 7" stroke="#d9a15b" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-        <path d="M34 8 l-6.5 -3.4 v6.2 z" fill="#d9a15b" />
+        <path d="M2 11 Q14 3 30 7" stroke="var(--text-2)" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+        <path d="M34 8 l-6.5 -3.4 v6.2 z" fill="var(--text-2)" />
       </>
     ),
   },
@@ -35,8 +35,8 @@ export const LEGEND: LegendEntry[] = [
     detail: 'A dashed line pointing to the parent it inherits from',
     icon: (
       <>
-        <path d="M2 7 H24" stroke="#3fb8a9" strokeWidth="1.8" strokeDasharray="5 3.5" fill="none" />
-        <path d="M34 7 l-9 -4.6 v9.2 z" className="hollow" stroke="#3fb8a9" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M2 7 H24" stroke="var(--link)" strokeWidth="1.8" strokeDasharray="5 3.5" fill="none" />
+        <path d="M34 7 l-9 -4.6 v9.2 z" className="hollow" stroke="var(--link)" strokeWidth="1.5" strokeLinejoin="round" />
       </>
     ),
   },
@@ -55,7 +55,7 @@ export const LEGEND: LegendEntry[] = [
     key: 'conflict',
     label: 'Conflict',
     detail: 'A zigzag line: two definitions share one name',
-    icon: <path d="M2 7 l4 -4 l5 8 l5 -8 l5 8 l5 -8 l5 8 l3 -4" stroke="#d95a68" strokeWidth="1.8" strokeLinejoin="round" fill="none" />,
+    icon: <path d="M2 7 l4 -4 l5 8 l5 -8 l5 8 l5 -8 l5 8 l3 -4" stroke="var(--danger)" strokeWidth="1.8" strokeLinejoin="round" fill="none" />,
   },
   {
     key: 'bind',
@@ -63,9 +63,9 @@ export const LEGEND: LegendEntry[] = [
     detail: 'A line from a data source (the square) that feeds the concept with records',
     icon: (
       <>
-        <rect x="1.5" y="2.5" width="9" height="9" rx="2.2" fill="none" stroke="#d6bd8a" strokeWidth="1.6" />
-        <path d="M11 7 H28" stroke="#d6bd8a" strokeWidth="1.5" fill="none" />
-        <path d="M34 7 l-6 -3.2 v6.4 z" fill="#d6bd8a" />
+        <rect x="1.5" y="2.5" width="9" height="9" rx="2.2" fill="none" stroke="var(--source)" strokeWidth="1.6" />
+        <path d="M11 7 H28" stroke="var(--source)" strokeWidth="1.5" fill="none" />
+        <path d="M34 7 l-6 -3.2 v6.4 z" fill="var(--source)" />
       </>
     ),
   },
@@ -75,8 +75,8 @@ export const LEGEND: LegendEntry[] = [
     detail: 'Drawn lighter until you approve it',
     icon: (
       <>
-        <path d="M2 11 Q14 3 30 7" stroke="#d9a15b" strokeOpacity=".4" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-        <path d="M34 8 l-6.5 -3.4 v6.2 z" fill="#d9a15b" fillOpacity=".4" />
+        <path d="M2 11 Q14 3 30 7" stroke="var(--text-2)" strokeOpacity=".4" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+        <path d="M34 8 l-6.5 -3.4 v6.2 z" fill="var(--text-2)" fillOpacity=".4" />
       </>
     ),
   },

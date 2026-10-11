@@ -15,6 +15,7 @@ import { openAddCompany } from '../../shell/AddCompany';
 import { BusyButton } from '../../shell/busy';
 import { openExport } from '../ExportDialog';
 import { useStore } from '../../shell/dom';
+import { themedColour } from '../../design/tokens';
 import { api } from '../../api/client';
 import {
   bindDialog,
@@ -492,7 +493,7 @@ export function DomainProducts() {
                 </td>
                 <td>{d.company.name}</td>
                 <td>
-                  <b style={{ color: d.color }}>{d.name}</b>
+                  <b style={{ color: themedColour(d.color) }}>{d.name}</b>
                 </td>
                 <td>{d.owner}</td>
                 <td>{`v${d.version.toFixed(1)}`}</td>
@@ -524,7 +525,7 @@ export function DomainProducts() {
               <td></td>
               <td>—</td>
               <td>
-                <b style={{ color: t.color }}>{t.name}</b>
+                <b style={{ color: themedColour(t.color) }}>{t.name}</b>
               </td>
               <td>{t.owner}</td>
               <td>—</td>
