@@ -12,7 +12,8 @@ Terraform (`infra/terraform/azure`), applied by GitHub Actions through OIDC fede
 | Container registry | crontaixdevfrc&lt;hash&gt; | Basic; AcrPull for the kubelet identity, no admin user |
 | PostgreSQL Flexible 16 | psql-ontaix-dev-frc-&lt;hash&gt; | B_Standard_B2s, VNet-only, private DNS; password generated → Key Vault |
 | Key Vault | kv-ontaix-dev-frc-&lt;hash&gt; | RBAC; secrets `postgres-admin-password`, `database-url` (the administrator `ontaix_admin`), `database-url-api` (the API's own login `ontaix_api`); the optional `anthropic-api-key` is set by the owner, not by Terraform, and only when the `anthropic` provider is used (see below) |
-| Azure AI Foundry | ais-ontaix-dev-frc-&lt;hash&gt; | Kind `AIServices`, S0, key authentication disabled; model deployment `gpt-6-sol` (version 2026-09-22), DataZoneStandard (EU); outputs `foundry_endpoint`, `foundry_deployment_name` |
+| Azure AI Foundry | ais-ontaix-dev-frc-&lt;hash&gt; | Kind `AIServices`, S0, key authentication disabled; model deployment `gpt-6-sol` (version 2026-09-22), DataZoneStandard (EU), capacity 3,000 units (3,000,000 tokens and 3,000 requests per minute) of the subscription's 3,333-unit quota for the model and SKU in the region; outputs `foundry_endpoint`, `foundry_deployment_name` |
+| Public IP | pip-ontaix-dev-frc | Standard, static, zone-redundant; DNS label `ontaix-dev` (`ingress_dns_label`); Network Contributor for the cluster identity; the deploy workflow binds the ingress controller to it; outputs `ingress_public_ip_name`, `ingress_public_ip_address`, `ingress_public_fqdn` |
 | Managed identity | id-ontaix-dev-frc | workload identity for `ontaix/ontaix-api`; Key Vault Secrets User; Cognitive Services OpenAI User on the Foundry resource |
 | Log Analytics | log-ontaix-dev-frc | 30-day retention |
 | Budget | budget-ontaix-dev-frc | €400/month; alerts at 80 % actual and 100 % forecast |
@@ -211,7 +212,38 @@ Network policies (`networkPolicy` in the values, on by default) deny all traffic
 
 ### The Public Address and Certificate
 
-The address is a DNS label on the public IP the cloud provider creates for the ingress controller's LoadBalancer service, in the cluster's node resource group; no Azure resource outside Terraform is declared. The IP is dynamic: it exists while that service exists, and the label is released with it. A fixed address is a Terraform change the owner approves separately: an `azurerm_public_ip` (Standard, static, `domain_name_label = "ontaix-dev"`) in `rg-ontaix-dev-frc`, a Network Contributor assignment for the cluster identity (`azurerm_kubernetes_cluster.main.identity[0].principal_id`) on that IP, and in `infra/helm/platform/ingress-nginx.values.yaml` the annotation `service.beta.kubernetes.io/azure-load-balancer-resource-group: rg-ontaix-dev-frc` with `controller.service.loadBalancerIP` set to the address. Network Contributor is one of the four roles the CI identity may assign.
+The address is the DNS label `ontaix-dev` on the ingress controller's public IP. Terraform declares that IP: `azurerm_public_ip.ingress` (`pip-ontaix-dev-frc` in `rg-ontaix-dev-frc`, Standard, static, zone-redundant, `domain_name_label = var.ingress_dns_label`) with Network Contributor for the cluster identity on it (one of the roles the CI identity may assign). The deploy workflow's preflight looks the IP up in the resource group, refuses to run when its label differs from the workflow's `DNS_LABEL` (so Terraform alone owns the label), and the deploy binds the ingress-nginx LoadBalancer service to it with the annotations `service.beta.kubernetes.io/azure-pip-name` and `service.beta.kubernetes.io/azure-load-balancer-resource-group`; the address and the name then outlive the service, and reinstalling ingress-nginx or the cluster keeps them. Until that IP exists in the resource group, the cloud provider creates a dynamic IP in the node resource group, puts the label on it, and releases both with the service; the workflow handles either state and prints which one it found.
+
+### Cut-Over to the Fixed Address
+
+Two public IPs cannot hold the label `ontaix-dev` in France Central at the same time, so the dynamic IP must give it up before Terraform creates the fixed one. Expected downtime of the name: about 10 minutes, up to 15, from step 2 until the ingress-nginx step of step 4 is through; the pods keep running, and the old address answers by IP until step 4 moves the load balancer frontend. Every command runs as the owner, signed in with `az login` and `gh auth login`.
+
+1. Note the dynamic IP: `az network public-ip list -g MC_rg-ontaix-dev-frc_aks-ontaix-dev-frc_francecentral --query "[?dnsSettings.domainNameLabel=='ontaix-dev'].{name:name,ip:ipAddress}" -o table`.
+2. Release the label. The annotation goes first, so the cloud provider does not put the label back on its next reconciliation (with the annotation absent it leaves the DNS settings alone); then the IP loses it:
+
+   ```bash
+   az aks get-credentials -n aks-ontaix-dev-frc -g rg-ontaix-dev-frc
+   kubectl -n ingress-nginx annotate svc ingress-nginx-controller service.beta.kubernetes.io/azure-dns-label-name-
+   az network public-ip update -g MC_rg-ontaix-dev-frc_aks-ontaix-dev-frc_francecentral -n <dynamic IP name> --remove dnsSettings
+   az network public-ip show -g MC_rg-ontaix-dev-frc_aks-ontaix-dev-frc_francecentral -n <dynamic IP name> --query dnsSettings   # null
+   ```
+
+   The name stops resolving here.
+3. Apply the Terraform change locally as the owner. CI cannot create role assignments: the CI identity holds no Role Based Access Control Administrator assignment (the owner's Owner role is conditioned by the tenant and cannot grant one), so an `infra.yml` apply would create the public IP and raise the Foundry capacity, then fail on `azurerm_role_assignment.aks_ingress_public_ip`. From the repository root:
+
+   ```bash
+   az login
+   source infra/scripts/ontaix-ci.env   # identifiers only: subscription id, state resource group and storage account
+   terraform -chdir=infra/terraform/azure init      -backend-config="resource_group_name=$TF_STATE_RESOURCE_GROUP"      -backend-config="storage_account_name=$TF_STATE_STORAGE_ACCOUNT"      -backend-config="container_name=$TF_STATE_CONTAINER" -backend-config="key=azure-dev.tfstate"
+   TF_VAR_subscription_id=$AZURE_SUBSCRIPTION_ID terraform -chdir=infra/terraform/azure apply -var-file=env/dev.tfvars
+   ```
+
+   The apply creates `pip-ontaix-dev-frc` with the label, so the name resolves to the new address with nothing behind it yet, raises the Foundry capacity and assigns Network Contributor on the IP to the cluster identity. An apply that fails on the public IP with `DnsRecordInUse` means step 2 did not take: repeat it and apply again. Then merge the pull request; the `infra.yml` apply on main finds nothing to change.
+4. Deploy the running release again: `gh workflow run deploy.yml --ref main -f image_tag=<deployed SHA> -f certificate_issuer=letsencrypt-production` (`helm -n ontaix get values ontaix | grep tag` shows the SHA). The preflight reports the fixed address; the ingress-nginx step binds the service to it, the cloud provider rebuilds the frontend in one to three minutes, and the step waits until the service shows that address and the name resolves to it. The name answers again. If the step times out, its last lines show the service events: Network Contributor on the IP not yet effective for the cluster identity (role assignments take a few minutes to propagate; run again), or the label still held elsewhere.
+5. Delete the orphaned dynamic IP: the cloud provider cleans up only the resource group named on the service, so the old IP stays in the node resource group: `az network public-ip delete -g MC_rg-ontaix-dev-frc_aks-ontaix-dev-frc_francecentral -n <dynamic IP name>` (refused while still attached, which means step 4 has not moved the frontend yet).
+6. Check: `curl -sI https://ontaix-dev.francecentral.cloudapp.azure.com/healthz` answers `200`, and a `terraform plan` shows no change (the `k8s-azure-*` tags the cloud provider writes on the IP are ignored).
+
+Back to the dynamic address, should step 4 not succeed: clear the label on the fixed IP (`az network public-ip update -g rg-ontaix-dev-frc -n pip-ontaix-dev-frc --remove dnsSettings`), revert the pull request on main, run `deploy.yml` from the reverted main (the service moves to a new dynamic IP carrying the label), then destroy the fixed IP and its role assignment with the owner's local `terraform apply` from the reverted main (step 3 commands; CI cannot delete a role assignment either), which Azure refuses while a frontend still uses the IP.
 
 cert-manager requests the certificate from Let's Encrypt with an HTTP-01 challenge through ingress-nginx and renews it a month before expiry; the ACME account email is `infra/helm/cluster-issuers/values.yaml`. ingress-nginx adds HSTS (one year, the host only), redirects HTTP to HTTPS, sets `X-Content-Type-Options: nosniff` on every response (the API's JSON included) and limits each client to 10 requests per second on `/api` with a burst of 50 (`503` above); the Studio's own server sends the Content Security Policy (its origin, Google Fonts and the regional Speech WebSocket `wss://francecentral.stt.speech.microsoft.com`, the one endpoint the Studio's recogniser opens), `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` (microphone for itself only) and `Cross-Origin-Opener-Policy`. The session cookie is `__Host-` prefixed, Secure, HttpOnly and Lax.
 
@@ -298,7 +330,7 @@ Sign-in needs an allowed `Origin`, and the cluster allows the public host only; 
 - `ONTAIX_LLM_PRICE_TABLE` in `values-azure-dev.yaml` is the current Azure retail price of `gpt-6-sol`; the hourly caps (`ONTAIX_LLM_CALLS_PER_HOUR` and the others there) and the monthly Azure budget are the limits wanted for strangers' usage.
 - `curl -sI https://ontaix-dev.francecentral.cloudapp.azure.com/` shows `strict-transport-security` and `content-security-policy`; the microphone works in the Studio (the CSP allows the Speech endpoints).
 - Every account was invited by the super admin; disabled organizations stay disabled.
-- The decision on a fixed address (the Terraform change above) is taken, since the dynamic IP changes if the ingress controller is reinstalled.
+- The cut-over to the fixed address is done (`az network public-ip show -g rg-ontaix-dev-frc -n pip-ontaix-dev-frc --query dnsSettings.fqdn` is the public host and the deploy preflight reports the fixed address), so reinstalling the ingress controller keeps the address and the name.
 
 Terraform follow-ups the owner approves separately, each a decision row:
 
@@ -307,6 +339,6 @@ Terraform follow-ups the owner approves separately, each a decision row:
 ## Security posture
 - No client secret anywhere: CI uses OIDC federation; pods use workload identity; images are pulled
   with the kubelet identity; the database is VNet-only.
-- The CI identity can assign no role at all. It holds Contributor on the environment group, blob access to the state container and Key Vault Secrets Officer, and no Role Based Access Control Administrator assignment anywhere (read-only check of 2026-10-05): the owner's Owner role is conditioned by the tenant and can never grant that role, so the bootstrap script's conditioned assignment and its ALLOWED list are dead code (`assign ... || true` swallows the refusal). Every `azurerm_role_assignment` is applied by the owner's local Terraform run; a CI apply that has to create one applies everything before it and then fails on it.
+- The CI identity can assign no role at all. It holds Contributor on the environment group, blob access to the state container and Key Vault Secrets Officer, and no Role Based Access Control Administrator assignment anywhere (read-only check of 2026-10-05): the owner's Owner role is conditioned by the tenant and can never grant that role, so the bootstrap script's conditioned assignment and its ALLOWED list are dead code (`assign ... || true` swallows the refusal). Every `azurerm_role_assignment` (AcrPull, Network Contributor, the two Key Vault secrets roles, the three Cognitive Services user roles, the two Azure Kubernetes Service RBAC Cluster Admin assignments) is applied by the owner's local Terraform run; a CI apply that has to create one applies everything before it and then fails on it.
 - Kubernetes access is Entra ID with Azure RBAC: the owner and the CI identity hold Azure Kubernetes Service RBAC Cluster Admin on the cluster, kubeconfigs carry no credential, and local accounts are disabled after the cut-over (Cluster Access).
 - Terraform state storage is Entra-only (shared keys disabled), versioned, soft-deleted 30 days.

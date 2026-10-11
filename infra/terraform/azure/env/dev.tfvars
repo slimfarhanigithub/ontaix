@@ -23,7 +23,14 @@ foundry_public_network_access_enabled = true
 foundry_deployment_name               = "gpt-6-sol"
 foundry_model_version                 = "2026-09-22"
 foundry_deployment_sku                = "DataZoneStandard"
-foundry_deployment_capacity           = 100
+# 3,000,000 tokens and 3,000 requests per minute. The subscription's quota for
+# OpenAI.DataZoneStandard.gpt-6-sol in France Central is 3,333 units and this is its only
+# deployment, so 333 units stay free for a second deployment (an evaluation or a newer model
+# version beside this one) without a quota request. Capacity on this SKU is not billed; usage is.
+foundry_deployment_capacity = 3000
+
+# The public address of Ontaix: ontaix-dev.francecentral.cloudapp.azure.com.
+ingress_dns_label = "ontaix-dev"
 
 # Teach extraction models: Claude, GlobalStandard in Sweden Central (not EU data zone).
 # Versions as listed by `az cognitiveservices model list --location swedencentral` on 2026-09-29.

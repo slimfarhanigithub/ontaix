@@ -31,6 +31,20 @@ output "log_analytics_workspace_id" {
   value = azurerm_log_analytics_workspace.main.id
 }
 
+output "ingress_public_ip_name" {
+  description = "Name of the ingress public IP; the deploy workflow binds the ingress-nginx service to it (INGRESS_PUBLIC_IP)."
+  value       = azurerm_public_ip.ingress.name
+}
+
+output "ingress_public_ip_address" {
+  value = azurerm_public_ip.ingress.ip_address
+}
+
+output "ingress_public_fqdn" {
+  description = "The public address of Ontaix: the DNS label on the ingress public IP."
+  value       = azurerm_public_ip.ingress.fqdn
+}
+
 output "foundry_endpoint" {
   description = "Foundry endpoint (custom subdomain); callers authenticate with Entra ID."
   value       = azurerm_cognitive_account.foundry.endpoint
