@@ -11,7 +11,7 @@ Terraform (`infra/terraform/azure`), applied by GitHub Actions through OIDC fede
 | AKS | aks-ontaix-dev-frc | Free tier, 1–3 × Standard_D4s_v5, Azure CNI overlay + Cilium, OIDC issuer + workload identity, Container Insights |
 | Container registry | crontaixdevfrc&lt;hash&gt; | Basic; AcrPull for the kubelet identity, no admin user |
 | PostgreSQL Flexible 16 | psql-ontaix-dev-frc-&lt;hash&gt; | B_Standard_B2s, VNet-only, private DNS; password generated → Key Vault |
-| Key Vault | kv-ontaix-dev-frc-&lt;hash&gt; | RBAC; secrets `postgres-admin-password`, `database-url`; the optional `anthropic-api-key` is set by the owner, not by Terraform, and only when the `anthropic` provider is used (see below) |
+| Key Vault | kv-ontaix-dev-frc-&lt;hash&gt; | RBAC; secrets `postgres-admin-password`, `database-url` (the administrator `ontaix_admin`), `database-url-api` (the API's own login `ontaix_api`); the optional `anthropic-api-key` is set by the owner, not by Terraform, and only when the `anthropic` provider is used (see below) |
 | Azure AI Foundry | ais-ontaix-dev-frc-&lt;hash&gt; | Kind `AIServices`, S0, key authentication disabled; model deployment `gpt-6-sol` (version 2026-09-22), DataZoneStandard (EU); outputs `foundry_endpoint`, `foundry_deployment_name` |
 | Managed identity | id-ontaix-dev-frc | workload identity for `ontaix/ontaix-api`; Key Vault Secrets User; Cognitive Services OpenAI User on the Foundry resource |
 | Log Analytics | log-ontaix-dev-frc | 30-day retention |
@@ -109,28 +109,49 @@ Only when `ONTAIX_LLM_PROVIDER` is `anthropic` (with `ONTAIX_LLM_MODEL` set to a
 The key is never in settings, API responses, events, audit entries, logs, tests, fixtures, commits or documentation, and no agent asks the owner for it in a conversation. This provider sends prompts to Anthropic outside Azure, with no EU residency guarantee (ADR 0008, Data Residency).
 
 ## Sign-In and Organizations
-Users sign in with an email and a password held by Ontaix (ADR 0017, decision row 140). There is no sign-up: the only default account is the super admin, created once by the owner from a terminal attached to the API image, so the password travels only over his own TTY and never enters chat, code, logs, commits or Key Vault:
+Users sign in with an email and a password held by Ontaix (ADR 0017, decision row 140). There is no sign-up: the only default account is the super admin, created once by the owner from a terminal attached to the API image (on Azure the admin terminal pod, see Database Logins), so the password travels only over his own TTY and never enters chat, code, logs, commits or Key Vault:
 
 ```bash
-kubectl exec -it <api pod> -- python -m app.admin create-super-admin slim.farhani@outlook.com   # prompts twice, no echo
-kubectl exec -it <api pod> -- python -m app.admin set-password slim.farhani@outlook.com        # his own recovery
+kubectl -n ontaix scale deploy/ontaix-admin --replicas=1
+kubectl -n ontaix exec -it deploy/ontaix-admin -- python -m app.admin create-super-admin slim.farhani@outlook.com   # prompts twice, no echo
+kubectl -n ontaix exec -it deploy/ontaix-admin -- python -m app.admin set-password slim.farhani@outlook.com        # his own recovery
+kubectl -n ontaix scale deploy/ontaix-admin --replicas=0
 ```
 
 The super admin reaches an organization's data in two ways (ADR 0017 section 3 and ADR 0018): a read-only support session, or entering the organization from the platform portal's `Enter` action, after which the session acts inside it with every tenant role for 60 minutes, or until `Exit`, sign-out or the session's expiry. Both are recorded in the platform audit log and in the organization's own audit log, and every action inside carries the super admin's account. Entering runs on the same application database role and row-level security as a member's session; it needs no setting and no extra grant.
 
 The API opens two connection pools on `ONTAIX_DATABASE_URL`, and each connection switches with `SET ROLE` as it opens: organization requests to the NOLOGIN role `ontaix_app`, which row-level security confines to the organization of the session, and sign-in, the platform portal and cross-organization jobs to `ontaix_platform`. Migration `0008` creates both roles and grants them to no login; the login the API connects with must be able to `SET ROLE` to the role it switches to. A separate platform login goes in `ONTAIX_PLATFORM_DATABASE_URL`. The bootstrap commands run with the schema owner's login (the `database-url` secret), because only that login may grant the platform role.
 
-### Database Role Grant (Once per Database)
+### Database Logins
 
-On Azure the API connects with the server's administrator login `ontaix_admin` (the `database-url` secret; the password lives in Key Vault only). That login is not a superuser: on PostgreSQL 16 a login that creates a role gets ADMIN OPTION on it but not the SET option, so after the migration `SET ROLE ontaix_app` is refused with `permission denied to set role` and the API cannot serve a request. The embedded and compose databases do not show this, because their login is a superuser. Decision row 152.
+Two logins exist on Azure, each with its own Key Vault secret, and no process holds both URLs unless it needs both:
 
-The grant is applied by the bootstrap CLI, with the schema owner's login (the roles' creator, which holds ADMIN OPTION on both) and the login names from the environment. Login names are not secrets; the command takes no password and prints no URL:
+| Login | Secret | Who reads it | Rights |
+|---|---|---|---|
+| `ontaix_admin` | `database-url` | the `migrate` and `api-login` init steps of the API pod; the admin terminal pod `ontaix-admin` | the server administrator: owns the schema, creates roles (CREATEROLE, not a superuser) |
+| `ontaix_api` | `database-url-api` | the API process (its `.env`); the `api-login` step and the admin terminal, as `ONTAIX_API_DATABASE_URL`, to create it | member of `ontaix_app` and `ontaix_platform` WITH INHERIT FALSE, SET TRUE; nothing else |
 
-```bash
-kubectl exec -it <api pod> -- env ONTAIX_APP_DATABASE_LOGIN=ontaix_admin python -m app.admin grant-database-roles
+The API process connects as `ontaix_api`. Outside `SET ROLE` that login owns no table and may not read, alter or drop one, and it can create neither roles nor databases, so a SQL execution primitive inside the API that runs `RESET ROLE` lands on a login with no right over the schema instead of on its owner. Decision rows 152 and 174. Terraform generates the password (`random_password.postgres_api`) and writes the URL to Key Vault; it carries no PostgreSQL provider, so the login is created in the server by the pod:
+
+```mermaid
+flowchart LR
+    F[fetch-secrets<br/>admin.env: database-url + database-url-api<br/>.env: database-url-api] --> M[migrate<br/>admin.env]
+    M --> L[api-login<br/>admin.env<br/>python -m app.admin ensure-api-login]
+    L --> A[api<br/>.env only]
 ```
 
-It runs `GRANT ontaix_app TO <app login> WITH INHERIT FALSE, SET TRUE` and `GRANT ontaix_platform TO <platform login> WITH INHERIT FALSE, SET TRUE` in one transaction, then confirms each login can `SET ROLE` to its role. `INHERIT FALSE` means the login holds none of the role's privileges outside `SET ROLE`. It grants nothing else and revokes nothing; a second run is a no-op (PostgreSQL answers a repeated grant with a notice). Run it once after the first migration that reaches `0008`, and again only when the login changes or a new login is added. When the platform pool has its own login, name it in `ONTAIX_PLATFORM_DATABASE_LOGIN`: each login then holds only its own role. A connection that lacks ADMIN OPTION on the roles (any login other than their creator or a superuser) is refused by the server and the command exits 1.
+`ensure-api-login` runs with the administrator's URL in `ONTAIX_DATABASE_URL` and the API's URL in `ONTAIX_API_DATABASE_URL`. It creates the login named in the API's URL with that URL's password, or sets the password on an existing login (so a rotation of `database-url-api` converges at the next pod start), refuses a login that holds SUPERUSER, CREATEROLE, CREATEDB, REPLICATION or BYPASSRLS and refuses the administrator's own login, then grants `ontaix_app` and `ontaix_platform` to it exactly as `grant-database-roles` does (`WITH INHERIT FALSE, SET TRUE`, one transaction, each `SET ROLE` confirmed) and ends by connecting with the API's URL and switching to both roles. The password reaches the server as its SCRAM-SHA-256 verifier, never in clear, and the verifier is the same on every run for one login and password, so a repeated run changes nothing. The step prints the login name and the grants, never a URL. The API pod uses `Recreate`, so a login step that fails leaves the pod in its init phase, the rollout fails, and `helm -n ontaix rollback ontaix` restores the previous revision.
+
+On PostgreSQL 16 a login that creates a role gets ADMIN OPTION on it but not the SET option, so `ontaix_admin` itself cannot `SET ROLE` after the migration; the embedded and compose databases do not show this, because their login is a superuser. The older `grant-database-roles` command still exists for a plain cluster whose API login the operator created: with the schema owner's login (the roles' creator, which holds ADMIN OPTION on both) and the login names from `ONTAIX_APP_DATABASE_LOGIN` and `ONTAIX_PLATFORM_DATABASE_LOGIN`, it grants each role `WITH INHERIT FALSE, SET TRUE` and nothing else; a second run is a no-op. A connection that lacks ADMIN OPTION on the roles is refused by the server and either command exits 1.
+
+The admin terminal is a Deployment of the API image, `ontaix-admin`, scaled to zero between uses; it carries `admin.env` (both URLs) and runs the owner's commands. The API container carries `.env` (the API's URL only) and cannot run them:
+
+```bash
+kubectl -n ontaix scale deploy/ontaix-admin --replicas=1 && kubectl -n ontaix rollout status deploy/ontaix-admin
+kubectl -n ontaix exec -it deploy/ontaix-admin -- python -m app.admin ensure-api-login       # safe to repeat
+kubectl -n ontaix exec -it deploy/ontaix-admin -- python -m app.admin create-super-admin <email>
+kubectl -n ontaix scale deploy/ontaix-admin --replicas=0
+```
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -138,7 +159,8 @@ It runs `GRANT ontaix_app TO <app login> WITH INHERIT FALSE, SET TRUE` and `GRAN
 | `ONTAIX_TRUSTED_PROXY_HOPS` | 0 | 1 behind the ingress: the client IP of the sign-in throttle comes from that hop of `X-Forwarded-For` |
 | `ONTAIX_DEV_IDENTITY_HEADER` | false | Accept `X-Ontaix-User`; only in `dev` or `test`, the API refuses to start with it on elsewhere. Never set in the cluster |
 | `ONTAIX_PLATFORM_DATABASE_URL` | `ONTAIX_DATABASE_URL` | A distinct login for the platform pool, when the deployment wants one |
-| `ONTAIX_APP_DATABASE_LOGIN` | none | Login name inside `ONTAIX_DATABASE_URL`, granted `ontaix_app` by `grant-database-roles`; `ontaix_admin` on Azure. Not a secret |
+| `ONTAIX_API_DATABASE_URL` | none | The API's own URL, read by `ensure-api-login` (with the administrator's URL in `ONTAIX_DATABASE_URL`) to create that login; set in the login step and the admin terminal only, never in the API process |
+| `ONTAIX_APP_DATABASE_LOGIN` | none | Login name inside `ONTAIX_DATABASE_URL`, granted `ontaix_app` by `grant-database-roles`; `ontaix_api` on Azure. Not a secret |
 | `ONTAIX_PLATFORM_DATABASE_LOGIN` | `ONTAIX_APP_DATABASE_LOGIN` | Login name inside `ONTAIX_PLATFORM_DATABASE_URL`, granted `ontaix_platform` |
 
 ## Deploying to AKS
@@ -154,17 +176,17 @@ flowchart LR
     B --> D[deploy]
     D --> I[ingress-nginx<br/>public IP + DNS label]
     I --> C[cert-manager<br/>Let's Encrypt issuers]
-    C --> O[helm upgrade --install ontaix<br/>fetch secrets, migrate, API]
-    O --> G[grant-database-roles]
+    C --> O[helm upgrade --install ontaix<br/>fetch secrets, migrate, api-login, API]
+    O --> G[the API's login checked<br/>ontaix_api, no server right, SET ROLE]
     G --> K[checks in the cluster<br/>health, sign-in probe, no dev header]
     K --> T[certificate ready<br/>checks at the public address]
 ```
 
-1. `preflight` resolves the non-secret values from the resource group with read-only `az` calls (registry, Key Vault name, the two identity client ids, the Foundry endpoint and its `gpt-6-sol` deployment, the Speech resource, the Postgres FQDN) and checks that the secret `database-url` exists (names only). It then checks the rights the run needs and stops with the missing role assignment named: reading the registry and listing the cluster credentials (both in Contributor on `rg-ontaix-dev-frc`, which the CI identity holds) and cluster-admin in Kubernetes (the cluster uses local accounts, so the cluster user credential is cluster-admin). Image builds need `Microsoft.ContainerRegistry/registries/scheduleRun/action`, also in Contributor.
+1. `preflight` resolves the non-secret values from the resource group with read-only `az` calls (registry, Key Vault name, the two identity client ids, the Foundry endpoint and its `gpt-6-sol` deployment, the Speech resource, the Postgres FQDN) and checks that the secrets `database-url` and `database-url-api` exist (names only). It then checks the rights the run needs and stops with the missing role assignment named: reading the registry and listing the cluster credentials (both in Contributor on `rg-ontaix-dev-frc`, which the CI identity holds) and cluster-admin in Kubernetes (the cluster uses local accounts, so the cluster user credential is cluster-admin). Image builds need `Microsoft.ContainerRegistry/registries/scheduleRun/action`, also in Contributor.
 2. `build` runs `az acr build` for the three images, in parallel, tagged with the commit SHA. The Studio is built with `VITE_ONTAIX_API_URL=/api/v1`, so it calls the API on its own origin; a production build carries no development identity header. With `image_tag` set (letters, digits, `_`, `.` and `-`, at most 128 characters), this job is skipped. Either way the deploy resolves each image's digest from the registry and pins the pods to it (`<image>@sha256:…`), so a tag moved later changes nothing in the cluster.
-3. `deploy` installs ingress-nginx (its LoadBalancer service carries the DNS label, the Azure health-probe path and `externalTrafficPolicy: Local`, so the API's sign-in throttle sees the real client address), waits for the public IP and for the name to resolve, installs cert-manager and the two ClusterIssuers, then `helm upgrade --install ontaix` with the values of `values-azure-dev.yaml` plus the resolved ones (`--set-string`). The API pod runs two init steps before the API process: `fetch-secrets` reads `database-url` from Key Vault with the workload identity and writes it as the container's `.env` file, and `migrate` applies every migration and prints the revision. After the rollout the workflow prints that revision, runs `python -m app.admin grant-database-roles` with `ONTAIX_APP_DATABASE_LOGIN=ontaix_admin` (when `run_role_grant` is on, the default; a repeat is a no-op), and checks the release in the cluster: the three health routes, the Studio's `/api` proxy, a sign-in with an unknown account that must answer `401` (it opens a connection and runs `SET ROLE ontaix_platform`, so a missing grant answers `500`), no `permission denied to set role` in the API log, and no `ONTAIX_DEV_IDENTITY_HEADER` anywhere. Every check runs inside a pod of the release with `kubectl exec`, so the network policies need no exception for a probe pod. It waits for the certificate, then checks the public address: `/healthz` and `/api/v1/healthz` answer `200`, `/api/v1/openapi.json` answers `404` (the API serves no documentation in production), the Studio sends HSTS and a Content Security Policy, the API's responses carry `X-Content-Type-Options: nosniff`, HTTP redirects to HTTPS, and the certificate issuer is printed.
+3. `deploy` installs ingress-nginx (its LoadBalancer service carries the DNS label, the Azure health-probe path and `externalTrafficPolicy: Local`, so the API's sign-in throttle sees the real client address), waits for the public IP and for the name to resolve, installs cert-manager and the two ClusterIssuers, then `helm upgrade --install ontaix` with the values of `values-azure-dev.yaml` plus the resolved ones (`--set-string`). The API pod runs three init steps before the API process: `fetch-secrets` reads `database-url` and `database-url-api` from Key Vault with the workload identity and writes two `.env` files (the administrator's for the next two steps, the API's for the API process), `migrate` applies every migration and prints the revision, and `api-login` creates or converges the API's own login `ontaix_api` and grants it the two roles (Database Logins above). After the rollout the workflow prints that revision, prints the login step's log, checks from inside the API container that it connects as `ontaix_api` with no server-wide right, switches to both roles and holds no table right of its own, and checks the release in the cluster: the three health routes, the Studio's `/api` proxy, a sign-in with an unknown account that must answer `401` (it opens a connection and runs `SET ROLE ontaix_platform`, so a missing grant answers `500`), no `permission denied to set role` in the API log, and no `ONTAIX_DEV_IDENTITY_HEADER` anywhere. Every check runs inside a pod of the release with `kubectl exec`, so the network policies need no exception for a probe pod. It waits for the certificate, then checks the public address: `/healthz` and `/api/v1/healthz` answer `200`, `/api/v1/openapi.json` answers `404` (the API serves no documentation in production), the Studio sends HSTS and a Content Security Policy, the API's responses carry `X-Content-Type-Options: nosniff`, HTTP redirects to HTTPS, and the certificate issuer is printed.
 
-Inputs: `image_tag` (empty builds the commit), `run_role_grant` (default true), `certificate_issuer` (`letsencrypt-staging`, the default, or `letsencrypt-production`). Let's Encrypt limits production issuance to five certificates per week for one name, so the first runs use staging; browsers do not trust that certificate, and the workflow checks it with `--insecure`.
+Inputs: `image_tag` (empty builds the commit), `certificate_issuer` (`letsencrypt-staging`, the default, or `letsencrypt-production`). Let's Encrypt limits production issuance to five certificates per week for one name, so the first runs use staging; browsers do not trust that certificate, and the workflow checks it with `--insecure`.
 
 ### Running It
 
@@ -174,12 +196,12 @@ From a signed-in GitHub CLI, after the pull request is merged:
 gh workflow run deploy.yml --ref main -f certificate_issuer=letsencrypt-staging
 gh run watch
 gh workflow run deploy.yml --ref main -f certificate_issuer=letsencrypt-production      # once staging is green
-gh workflow run deploy.yml --ref main -f image_tag=<sha> -f run_role_grant=false -f certificate_issuer=letsencrypt-production   # redeploy a built tag
+gh workflow run deploy.yml --ref main -f image_tag=<sha> -f certificate_issuer=letsencrypt-production   # redeploy a built tag
 ```
 
 ### Secrets in the Cluster
 
-No Kubernetes Secret holds an Ontaix secret and no deployment value is one. The API pod's service account `ontaix-api` federates to `id-ontaix-dev-frc` (Terraform), which holds Key Vault Secrets User; the `fetch-secrets` step exchanges the pod's projected token for a Key Vault token and writes `ONTAIX_DATABASE_URL` into an in-memory, pod-scoped volume mounted as `/app/.env`, where the API's settings, the migrations and `python -m app.admin` read it. The chart refuses `ONTAIX_DATABASE_URL`, `ONTAIX_DEV_IDENTITY_HEADER` and `ONTAIX_ALLOWED_ORIGINS` in `api.env`: the first is a secret, the second is never set in a cluster, the third is computed from the ingress host. On a plain cluster the same chart takes `secrets.existingSecret`, a Secret whose keys are the variables, and no `fetch-secrets` step runs.
+No Kubernetes Secret holds an Ontaix secret and no deployment value is one. The API pod's service account `ontaix-api` federates to `id-ontaix-dev-frc` (Terraform), which holds Key Vault Secrets User; the `fetch-secrets` step exchanges the pod's projected token for a Key Vault token and writes two files into an in-memory, pod-scoped volume: `admin.env` (`ONTAIX_DATABASE_URL` as the administrator, `ONTAIX_API_DATABASE_URL`), mounted as `/app/.env` in the `migrate` and `api-login` steps and in the admin terminal pod, and `.env` (`ONTAIX_DATABASE_URL` as `ontaix_api`), mounted as `/app/.env` in the API container; each container sees its own file only (`subPath` mounts). The chart refuses `ONTAIX_DATABASE_URL`, `ONTAIX_DEV_IDENTITY_HEADER` and `ONTAIX_ALLOWED_ORIGINS` in `api.env`: the first is a secret, the second is never set in a cluster, the third is computed from the ingress host. On a plain cluster the same chart takes `secrets.existingSecret`, a Secret whose keys are the variables, and no `fetch-secrets` step runs.
 
 ### Pod and Network Hardening
 
@@ -195,11 +217,13 @@ cert-manager requests the certificate from Let's Encrypt with an HTTP-01 challen
 
 ### First Sign-In and Inviting Users
 
-There is no sign-up route, so nobody enters without an account the super admin created. The super admin is created once, from a terminal attached to the API container (the password travels over the owner's TTY only):
+There is no sign-up route, so nobody enters without an account the super admin created. The super admin is created once, from a terminal attached to the admin terminal pod, the one pod that carries the administrator's database URL (the password travels over the owner's TTY only):
 
 ```bash
 az aks get-credentials -n aks-ontaix-dev-frc -g rg-ontaix-dev-frc
-kubectl -n ontaix exec -it deploy/ontaix-api -c api -- python -m app.admin create-super-admin slim.farhani@outlook.com
+kubectl -n ontaix scale deploy/ontaix-admin --replicas=1 && kubectl -n ontaix rollout status deploy/ontaix-admin
+kubectl -n ontaix exec -it deploy/ontaix-admin -- python -m app.admin create-super-admin slim.farhani@outlook.com
+kubectl -n ontaix scale deploy/ontaix-admin --replicas=0
 ```
 
 The super admin signs in at `https://ontaix-dev.francecentral.cloudapp.azure.com/` and, from the platform portal (`POST /api/v1/admin/organizations`, then `POST /api/v1/admin/organizations/{id}/users`), creates an organization and its accounts with a name, an email, the groups and an initial password handed to the person outside Ontaix. An initial or reset password must be changed at the first sign-in (`mustChangePassword`; every other request answers `403 password_change_required` until it is). Accounts and organizations are disabled and enabled from the same portal, and `PUT .../users/{id}/password` resets a password, which again forces a change. The super admin's own recovery is `python -m app.admin set-password <email>` from the same terminal.
@@ -218,7 +242,9 @@ Sign-in needs an allowed `Origin`, and the cluster allows the public host only; 
 ### Rollback and Rotation
 
 - Releases: `helm -n ontaix history ontaix` lists the revisions; `helm -n ontaix rollback ontaix <revision>` restores one, images included, and the migration step runs again (migrations are forward-only, so an older release must accept the current schema). Deploying a known image again is a run with `image_tag`.
-- Database password: Terraform generates it (`random_password.postgres`) and writes `database-url`; after a Terraform change of the password, `kubectl -n ontaix rollout restart deploy/ontaix-api` makes the pod read the new value.
+- Administrator password: Terraform generates it (`random_password.postgres`) and writes `database-url`; after a Terraform change of the password, `kubectl -n ontaix rollout restart deploy/ontaix-api` makes the pod read the new value.
+- API login password: `terraform apply -replace=random_password.postgres_api` writes a new `database-url-api`; `kubectl -n ontaix rollout restart deploy/ontaix-api` then makes the `api-login` step set the new password on `ontaix_api` before the API starts with it. Until the restart the running API keeps its open connections and the old password still works, so the rotation has no outage beyond the restart itself.
+- Back to the administrator login for the API (rollback of the dedicated login): `helm -n ontaix rollback ontaix <revision>` to a revision before the change, or a deploy run of the previous commit with `image_tag` set; that chart runs the API as the administrator again and has no login step. The login `ontaix_api` stays in the server, harmless, until `DROP ROLE ontaix_api` from the admin terminal; the chart refuses a values file that hands the API process `database-url`.
 - Super admin password: `python -m app.admin set-password` as above. Any account: the portal's password reset.
 - Certificate: renewed by cert-manager; `kubectl -n ontaix describe certificate ontaix-tls` shows its state. Changing `certificate_issuer` on a run re-issues it.
 - Platform versions: `INGRESS_NGINX_VERSION` and `CERT_MANAGER_VERSION` in the workflow.
@@ -235,7 +261,6 @@ Sign-in needs an allowed `Origin`, and the cluster allows the public host only; 
 
 Terraform follow-ups the owner approves separately, each a decision row:
 
-- A dedicated database login for the API. The pods connect as the server administrator `ontaix_admin` today. A login `ontaix_api` (password generated by Terraform, stored as a second Key Vault secret `database-url-api`, created in the server by the owner from a terminal since Terraform carries no PostgreSQL provider) would hold only `ontaix_app` and `ontaix_platform` through `grant-database-roles` (`ONTAIX_APP_DATABASE_LOGIN=ontaix_api`, run with the administrator's URL), and `secrets.keyVault.secrets` would point `ONTAIX_DATABASE_URL` at it; the administrator's URL then serves migrations and the admin commands only.
 - Entra-integrated AKS with local accounts off: `azure_active_directory_role_based_access_control` with Azure RBAC on `azurerm_kubernetes_cluster.main`, `local_account_disabled = true`, the CI identity assigned Azure Kubernetes Service RBAC Writer on the `ontaix`, `ingress-nginx` and `cert-manager` namespaces (and Azure Kubernetes Service RBAC Cluster Admin only if the CRDs of cert-manager stay installed by the workflow), `kubelogin` in the workflow after `az aks get-credentials`, and the owner as Azure Kubernetes Service RBAC Cluster Admin. The preflight check then expects those roles instead of the cluster user credential.
 
 ## Security posture

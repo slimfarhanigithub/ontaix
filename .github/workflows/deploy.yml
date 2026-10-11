@@ -5,9 +5,10 @@ name: deploy
 #               rights the run needs, failing early with the missing role assignment named
 #   build     → the API, gateway and Studio images, built by ACR Tasks, tagged with the commit SHA
 #   deploy    → ingress-nginx (the public address), cert-manager and the Let's Encrypt issuers,
-#               then the Ontaix chart pinned to the images' digests; waits for the rollout,
-#               prints the migration revision, grants the database roles, checks the release in
-#               the cluster and at its address
+#               then the Ontaix chart pinned to the images' digests; waits for the rollout
+#               (the API pod migrates, then creates the API's own database login and grants it
+#               the roles, before the API starts), prints the migration revision, checks the
+#               API's login and the release in the cluster and at its address
 # Authentication is GitHub OIDC federation only; there is no client secret. Pods read their
 # secrets from Key Vault with workload identity; this workflow never reads a secret value.
 # Every action is pinned to a commit; the comment names the release it is.
@@ -20,10 +21,6 @@ on:
         type: string
         required: false
         default: ""
-      run_role_grant:
-        description: Grant the database roles to the API's login after the rollout (safe to repeat)
-        type: boolean
-        default: true
       certificate_issuer:
         description: Let's Encrypt issuer of the public certificate (staging first, production once staging works)
         type: choice
@@ -108,11 +105,15 @@ jobs:
           speech_endpoint=$(az cognitiveservices account show -g "$rg" -n "$speech_account" \
             --query properties.endpoint -o tsv)
           postgres_fqdn=$(az postgres flexible-server list -g "$rg" --query "[0].fullyQualifiedDomainName" -o tsv)
+          # Names only: the administrator's URL (migrations, the login step, the admin terminal)
+          # and the API's own URL (the API process).
           database_url_secret=$(az keyvault secret list --vault-name "$key_vault" \
             --query "[?name=='database-url'].name" -o tsv)
+          database_url_api_secret=$(az keyvault secret list --vault-name "$key_vault" \
+            --query "[?name=='database-url-api'].name" -o tsv)
           for name in registry login_server key_vault workload_client_id speech_client_id foundry_endpoint \
                       foundry_deployment speech_account speech_resource_id speech_endpoint postgres_fqdn \
-                      database_url_secret; do
+                      database_url_secret database_url_api_secret; do
             [ -n "${!name}" ] || fail "$name was not found in $rg: Terraform (infra.yml) has not created it yet"
           done
           tag="${IMAGE_TAG:-$COMMIT_SHA}"
@@ -131,7 +132,7 @@ jobs:
             echo "postgres_fqdn=$postgres_fqdn"
           } >> "$GITHUB_OUTPUT"
           echo "images $login_server/ontaix/{api,gateway,studio}:$tag → https://$host"
-          echo "Key Vault $key_vault (secret database-url present), Postgres $postgres_fqdn, Foundry $foundry_endpoint ($foundry_deployment)"
+          echo "Key Vault $key_vault (secrets database-url and database-url-api present), Postgres $postgres_fqdn, Foundry $foundry_endpoint ($foundry_deployment)"
       - name: check the rights this run needs (fail fast)
         env:
           REGISTRY: ${{ steps.values.outputs.registry }}
@@ -339,7 +340,7 @@ jobs:
             --wait --timeout 15m; then
             echo "::group::pods"; kubectl -n "$NAMESPACE" get pods -o wide; echo "::endgroup::"
             echo "::group::events"; kubectl -n "$NAMESPACE" get events --sort-by=.lastTimestamp | tail -n 40; echo "::endgroup::"
-            for container in fetch-secrets migrate api; do
+            for container in fetch-secrets migrate api-login api; do
               echo "::group::logs $RELEASE-api/$container"
               kubectl -n "$NAMESPACE" logs "deploy/$RELEASE-api" -c "$container" --tail=100 || true
               echo "::endgroup::"
@@ -357,12 +358,42 @@ jobs:
           [ -n "$revision" ] || fail "the migration step reported no head revision; its log is above"
           echo "DATABASE_REVISION=$revision" >> "$GITHUB_ENV"
           echo "database at revision $revision"
-      - name: grant the database roles to the API's login
-        if: inputs.run_role_grant
+      - name: the API connects with its own login, which holds the two roles and nothing else
+        # The login step of the pod created or converged the login before the API started; its
+        # log names the login and the grants (never a URL). The API container's own settings
+        # are then checked from inside: the login is not the administrator, holds no server-wide
+        # right, switches to both roles, and holds no right over a table once it resets its role.
         run: |
           set -euo pipefail
-          kubectl -n "$NAMESPACE" exec "deploy/$RELEASE-api" -c api -- \
-            env ONTAIX_APP_DATABASE_LOGIN=ontaix_admin python -m app.admin grant-database-roles
+          fail() { echo "::error::$1"; exit 1; }
+          api="deploy/$RELEASE-api"
+          echo "::group::logs $RELEASE-api/api-login"
+          kubectl -n "$NAMESPACE" logs "$api" -c api-login
+          echo "::endgroup::"
+          kubectl -n "$NAMESPACE" exec -i "$api" -c api -- python - <<'PY' || fail "the API container's database login is not the dedicated API login; see above"
+          import psycopg
+          from urllib.parse import urlsplit
+          from app.config import get_settings
+          settings = get_settings()
+          url = settings.database_url
+          assert url, "ONTAIX_DATABASE_URL is not set in the API container"
+          assert settings.api_database_url is None, "ONTAIX_API_DATABASE_URL is set in the API container; only the login step and the admin terminal carry it"
+          login = urlsplit(url).username
+          assert login == "ontaix_api", f"the API connects as {login!r} instead of ontaix_api"
+          with psycopg.connect(url, autocommit=True) as c:
+              rights = c.execute("SELECT rolsuper, rolcreaterole, rolcreatedb, rolbypassrls FROM pg_roles WHERE rolname = current_user").fetchone()
+              assert not any(rights), f"{login} holds a server-wide right: {rights}"
+              for role in ("ontaix_app", "ontaix_platform"):
+                  c.execute(f"SET ROLE {role}")
+                  c.execute("RESET ROLE")
+              try:
+                  c.execute("SELECT count(*) FROM ontaix.tenant")
+              except psycopg.errors.InsufficientPrivilege:
+                  pass
+              else:
+                  raise AssertionError(f"{login} reads ontaix.tenant without SET ROLE; it must hold no table right of its own")
+          print(f"the API connects as {login}: no server-wide right, SET ROLE to both roles, no table right outside a role")
+          PY
       - name: checks in the cluster
         # Every check runs inside a pod of the release (kubectl exec), so the network policies
         # need no exception for a probe pod.
@@ -389,9 +420,9 @@ jobs:
           PY
           )
           echo "sign-in probe answered $status"
-          [ "$status" = "401" ] || fail "the sign-in probe answered $status instead of 401: the API cannot use its database (role grant, network or credentials)"
+          [ "$status" = "401" ] || fail "the sign-in probe answered $status instead of 401: the API cannot use its database (login step, network or credentials)"
           if kubectl -n "$NAMESPACE" logs "$api" -c api --since=1h | grep -q "permission denied to set role"; then
-            fail "the API log contains 'permission denied to set role': run again with run_role_grant, or see docs/provisioning.md, Database Role Grant"
+            fail "the API log contains 'permission denied to set role': the login step did not grant the roles; see its log above and docs/provisioning.md, Database Logins"
           fi
           kubectl -n "$NAMESPACE" exec "deploy/$RELEASE-gateway" -- python -c \
             "import urllib.request; r = urllib.request.urlopen('http://127.0.0.1:8100/healthz', timeout=5); print('gateway /healthz', r.status); assert r.status == 200"
@@ -452,16 +483,18 @@ jobs:
             echo "| Digests | api $API_DIGEST, gateway $GATEWAY_DIGEST, studio $STUDIO_DIGEST |"
             echo "| Database | $POSTGRES_FQDN at revision $DATABASE_REVISION |"
             echo "| Certificate | $ISSUER ($CERTIFICATE_ISSUER) |"
-            echo "| Role grant | ${{ inputs.run_role_grant }} |"
+            echo "| Database login | ontaix_api (created or converged by the API pod's login step) |"
             echo
             if [ "$ISSUER" = "letsencrypt-staging" ]; then
               echo "The staging certificate is not trusted by browsers. Once this run is green, run again with certificate_issuer=letsencrypt-production."
               echo
             fi
-            echo "Create the super admin once (prompts twice, no echo):"
+            echo "Create the super admin once (prompts twice, no echo) from the admin terminal, the one pod that carries the administrator's database URL:"
             echo
             echo '```'
             echo "az aks get-credentials -n $AKS_CLUSTER -g $RESOURCE_GROUP"
-            echo "kubectl -n $NAMESPACE exec -it deploy/$RELEASE-api -c api -- python -m app.admin create-super-admin <email>"
+            echo "kubectl -n $NAMESPACE scale deploy/$RELEASE-admin --replicas=1 && kubectl -n $NAMESPACE rollout status deploy/$RELEASE-admin"
+            echo "kubectl -n $NAMESPACE exec -it deploy/$RELEASE-admin -- python -m app.admin create-super-admin <email>"
+            echo "kubectl -n $NAMESPACE scale deploy/$RELEASE-admin --replicas=0"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

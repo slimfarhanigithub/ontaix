@@ -27,15 +27,22 @@ secrets:
   # Plain Kubernetes: a Secret in the release namespace whose keys are environment variables
   # (ONTAIX_DATABASE_URL at least). Loaded into the API and its migration step with envFrom.
   existingSecret: ""
-  # Azure: an init container reads each listed secret from Key Vault with the pod's workload
-  # identity and writes it as the API's .env file (never a Kubernetes Secret, never an argument).
+  # Azure: an init container reads the listed secrets from Key Vault with the pod's workload
+  # identity and writes them as .env files (never a Kubernetes Secret, never an argument).
   keyVault:
     enabled: false
     # Key Vault name (Terraform output key_vault_name).
     name: ""
-    # Environment variable -> Key Vault secret name.
+    # The API process's .env (environment variable -> Key Vault secret name): the API's own
+    # login, which holds the two NOLOGIN roles and nothing else.
     secrets:
+      ONTAIX_DATABASE_URL: database-url-api
+    # The .env of the migration step, the login step and the admin terminal, never mounted in
+    # the API container: the schema owner's URL (ONTAIX_DATABASE_URL) and the API login's URL
+    # (ONTAIX_API_DATABASE_URL), from which the login step creates the API's login.
+    adminSecrets:
       ONTAIX_DATABASE_URL: database-url
+      ONTAIX_API_DATABASE_URL: database-url-api
 
 api:
   image:
@@ -45,8 +52,8 @@ api:
   # One replica with one worker process.
   replicas: 1
   port: 8000
-  # The login name inside the database URL, granted ontaix_app and ontaix_platform by
-  # `python -m app.admin grant-database-roles`. A name, not a secret.
+  # The login name inside the API's database URL, granted ontaix_app and ontaix_platform by
+  # `python -m app.admin grant-database-roles` from the admin terminal. A name, not a secret.
   databaseLogin: ""
   # Origins allowed to sign in and to send cookie-authenticated writes, besides the ingress host
   # (added automatically when the ingress is enabled).
@@ -77,6 +84,18 @@ api:
     readOnlyRootFilesystem: true
     capabilities:
       drop: ["ALL"]
+
+# The admin terminal (Key Vault mode only): a pod of the API image carrying the schema owner's
+# URL for the owner's `python -m app.admin` commands. Scaled to zero between uses; the owner
+# scales it to one, runs `kubectl exec -it`, and scales it back.
+admin:
+  replicas: 0
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
 
 gateway:
   image:
