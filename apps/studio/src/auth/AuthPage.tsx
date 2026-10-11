@@ -26,7 +26,7 @@ export function AuthPage({ title, sub, onSubmit, children, footer }: Props) {
       ref={refStyle('position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:20px;background:var(--bg)')}
     >
       <div className="wordmark">
-        <i></i>Ontaix <small>business as a product</small>
+        <i></i>Ontology Builder <small>business as a product</small>
       </div>
       <form className="dlg sm" aria-labelledby="authTitle" onSubmit={submit} noValidate>
         <div className="dh">

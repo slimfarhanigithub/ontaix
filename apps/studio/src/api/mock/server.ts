@@ -1002,7 +1002,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
         changeKind: 'resolve_conflict',
         title: 'Resolve the conflict',
         heading: KIND_HEADING.change,
-        color: '#3fb8a9',
+        color: DEFAULT_ACCENT,
         companyId: first.companyId,
         domainId: null,
         parentLabel: null,
@@ -3123,7 +3123,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     // No Speech resource behind the mock: the microphone uses the browser's recogniser.
     if (is('POST', 'speech', 'token')) throw new Refusal(503, 'unavailable', 'speech recognition is not configured');
     // The export files are written by the Ontaix API; the mock has no writer for them.
-    if (is('GET', 'export')) throw new Refusal(503, 'unavailable', 'export needs the Ontaix API');
+    if (is('GET', 'export')) throw new Refusal(503, 'unavailable', 'export needs the Ontology Builder API');
     if (is('POST', 'import', 'sentences'))
       throw new Refusal(422, 'validation_failed', 'the document is sent as multipart form data in the field file');
     if (is('GET', 'healthz')) return json(200, { status: 'ok' });

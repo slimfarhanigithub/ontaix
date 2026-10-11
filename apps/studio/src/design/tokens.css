@@ -64,8 +64,16 @@
   --danger: #c0181d;
   --danger-soft: #fbe9e9;
 
-  /* The sixth categorical colour, after accent, link, good, human and text-3. */
+  /* Categorical colours 6 to 9, after accent, link, good, human and text-3: the domain products
+     and any series take them in that order. */
   --violet: #7c3aed;
+  --teal: #0e7490;
+  --orange: #c2410c;
+  --olive: #4d7c0f;
+
+  /* Data sources on the canvas: the squares, binding lines and the legend's binding row. A tenant
+     may set it from the Appearance page; it colours shapes, never text. */
+  --source: #d6bd8a;
 
   /* Type. Self-hosted through @fontsource; the Studio makes no external font request. */
   --font-sans: 'Hanken Grotesk Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -136,6 +144,9 @@
   --danger-soft: #3a2420;
 
   --violet: #a78bfa;
+  --teal: #5fc7e0;
+  --orange: #f59e6b;
+  --olive: #a3c957;
 
   --shadow-float: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
   --shadow-pop: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);

@@ -80,16 +80,16 @@ class _Writer:
 
     def _properties(self) -> None:
         props = self.doc.core_properties
-        props.title = _text(f"Ontaix export · {self.s.scope_name}")
-        props.author = "Ontaix"
-        props.last_modified_by = "Ontaix"
+        props.title = _text(f"Ontology Builder export · {self.s.scope_name}")
+        props.author = "Ontology Builder"
+        props.last_modified_by = "Ontology Builder"
         props.created = self.s.exported_at
         props.modified = self.s.exported_at
         props.comments = ""
 
     def _title_page(self) -> None:
         doc, s = self.doc, self.s
-        doc.add_heading("Ontaix export", level=0)
+        doc.add_heading("Ontology Builder export", level=0)
         for name, value in (
             ("Scope", s.scope_name),
             ("Date", s.exported_at.date().isoformat()),

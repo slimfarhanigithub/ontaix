@@ -268,8 +268,8 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
       canvas.removeEventListener('pointerleave', onPointerLeave);
     },
     applyTheme(name) {
-      v.TH = themeFor(name);
       document.documentElement.setAttribute('data-theme', name === 'light' ? 'light' : 'dark');
+      v.TH = themeFor(name);
     },
   };
 }

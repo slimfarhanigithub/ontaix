@@ -10,14 +10,7 @@ import { join, relative, resolve, sep } from 'node:path';
 const SRC = resolve(__dirname, '..');
 
 /** Files allowed to hold raw colours for now, relative to src, with the pull request that drains them. */
-const RESTYLE_PENDING: Record<string, string> = {
-  'shell/Legend.tsx': 'canvas restyle',
-  'canvas/cells.ts': 'canvas restyle',
-  'canvas/constants.ts': 'canvas restyle',
-  'canvas/neck.ts': 'canvas restyle',
-  'canvas/regions.ts': 'canvas restyle',
-  'canvas/themes.ts': 'canvas restyle',
-};
+const RESTYLE_PENDING: Record<string, string> = {};
 
 /** `#rgb`, `#rrggbb`, `#rrggbbaa`, and `rgb()`, `rgba()`, `hsl()` or `hsla()` with literal channels, outside a word. */
 const RAW_COLOUR = /(?<![\w-])#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![\w-])|(?<![\w-])(?:rgba?|hsla?)\(\s*\d/gi;
