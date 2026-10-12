@@ -156,9 +156,9 @@ body.panel-off #panelShow{ display:inline-flex !important; }
 .dr-menu [role^="menuitem"] .label{ flex:1; }
 .dr-menu [role^="menuitem"] .on{ color:var(--accent-text); }
 .dr-menu [role^="menuitem"] .spin{ margin-right:0; }
-.dr-menu [role^="menuitem"]:hover, .dr-menu [role^="menuitem"]:focus{ background:var(--accent-soft); outline:0; }
-.dr-menu [role^="menuitem"]:hover .ico, .dr-menu [role^="menuitem"]:focus .ico{ color:var(--ink); }
+.dr-menu [role^="menuitem"]:hover, .dr-menu [role^="menuitem"]:focus-visible{ background:var(--accent-soft); outline:0; }
+.dr-menu [role^="menuitem"]:hover .ico, .dr-menu [role^="menuitem"]:focus-visible .ico{ color:var(--ink); }
 .dr-menu [role^="menuitem"]:disabled{ opacity:.5; cursor:default; background:transparent; }
 .dr-menu [role^="menuitem"].danger, .dr-menu [role^="menuitem"].danger .ico{ color:var(--conflict); }
-.dr-menu [role^="menuitem"].danger:hover, .dr-menu [role^="menuitem"].danger:focus{ background:var(--danger-soft); }
+.dr-menu [role^="menuitem"].danger:hover, .dr-menu [role^="menuitem"].danger:focus-visible{ background:var(--danger-soft); }
 @media (prefers-reduced-motion: reduce){ .dr-menu{ animation:none; } }

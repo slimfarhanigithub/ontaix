@@ -4,7 +4,9 @@
  * inside it; it hangs under the button with their right edges aligned, and moves up or sideways
  * when it would leave the viewport. The button takes the focus first, so a dialog an item opens
  * gives it back there when it closes. Items stand in groups separated by dividers; a danger item
- * reads in red; a waiting item is disabled and shows the ring in place of its icon.
+ * reads in red; a waiting item is disabled and shows the ring in place of its icon. An item is
+ * highlighted under the pointer or under keyboard focus, never under focus a click put there, and
+ * the pointer moves the focus with it, so one item at most is highlighted.
  */
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -232,6 +234,9 @@ export function MoreMenu({ id, menuId, label, items, className = 'more', oxNew, 
                     aria-busy={it.waiting ? 'true' : undefined}
                     aria-checked={it.checked === undefined ? undefined : it.checked}
                     onClick={() => activate(it)}
+                    onPointerMove={(e) => {
+                      if (document.activeElement !== e.currentTarget) e.currentTarget.focus({ preventScroll: true });
+                    }}
                     {...it.attrs}
                   >
                     {it.waiting ? (

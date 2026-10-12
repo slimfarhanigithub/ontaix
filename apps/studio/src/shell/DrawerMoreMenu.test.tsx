@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { act, fireEvent, render } from '@testing-library/react';
 
 import { DOMAIN_TEMPLATES } from '../canvas/constants';
@@ -155,6 +158,25 @@ describe('drawer More actions menu', () => {
     key('Tab');
     expect(menu()).toBeNull();
     expect(document.activeElement?.id).toBe('drMore');
+  });
+
+  it('the pointer moves the focus to the item under it, so one item at most is highlighted', () => {
+    const { plant } = model();
+    store.ui.drawerNode = plant;
+    render(<Drawer />);
+    openMenu();
+    expect(document.activeElement?.id).toBe('drGrow');
+    act(() => fireEvent.pointerMove(document.getElementById('drRename') as Element));
+    expect(document.activeElement?.id).toBe('drRename');
+    key('ArrowDown');
+    expect(document.activeElement?.id).toBe('drMove');
+  });
+
+  it('highlights an item under the pointer or keyboard focus, never under focus a click put there', () => {
+    const css = readFileSync(resolve(__dirname, '../styles/studio.css'), 'utf8');
+    const rules = css.split('\n').filter((l) => l.startsWith('.dr-menu [role^="menuitem"]'));
+    expect(rules.some((l) => /:focus-visible/.test(l))).toBe(true);
+    expect(rules.some((l) => /:focus[^-]/.test(l))).toBe(false);
   });
 
   it('Down on the button opens it; a press outside closes it and gives the focus back', () => {
