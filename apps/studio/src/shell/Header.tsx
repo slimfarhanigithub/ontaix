@@ -2,7 +2,8 @@
  * Wordmark, listening status, admin button and the "Show changes" button that appears while the
  * panel is hidden. Markup from reference/ontaix-studio-reference.html lines 186-190, without the
  * scene counter and scene name. "Show changes" sits in the header row after the admin button, in
- * the same style, so the two never overlap when the panel's width goes to 0.
+ * the same style, so the two never overlap when the panel's width goes to 0. Under 900 px it
+ * always shows and opens the changes panel's full-screen sheet.
  */
 import { useAuth } from '../auth/authStore';
 import { refStyle, useStore } from './dom';

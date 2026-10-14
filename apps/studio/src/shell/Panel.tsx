@@ -5,9 +5,11 @@
  * owner addition absent from the reference, in the row's existing button style. `Reject all`, and
  * `Reject` on a proposal with open proposals below it, ask first in the reference's own
  * `confirmDialog`, as neither can be undone. `Edit`, on a pending concept, specialisation or
- * relation, is an owner addition that edits the draft in place at its revision.
+ * relation, is an owner addition that edits the draft in place at its revision. Under 900 px the
+ * panel is a full-screen sheet: opening it moves the focus to its ×, closing it gives the focus back
+ * to `Show changes`.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { confirmDialog } from '../admin/actions';
 import type { Proposal } from '../api/types';
@@ -60,6 +62,22 @@ export function Panel() {
   const proposals = st.ui.proposals;
   /** The proposal whose draft is being edited in place. */
   const [editing, setEditing] = useState<string | null>(null);
+  const sheet = st.ui.panelSheet;
+  const opened = useRef(false);
+  useEffect(() => {
+    if (sheet) document.getElementById('panelHide')?.focus();
+    else if (opened.current) document.getElementById('panelShow')?.focus();
+    opened.current = sheet;
+  }, [sheet]);
+  // Crossing 900 px (a rotated tablet, a resized window) closes the sheet, so the side panel and
+  // the sheet never mix and the sheet never comes back unasked.
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
+    const narrow = matchMedia('(max-width:900px)');
+    const close = () => st.closePanelSheet();
+    narrow.addEventListener?.('change', close);
+    return () => narrow.removeEventListener?.('change', close);
+  }, [st]);
   return (
     <aside className="panel" aria-label="Proposed changes">
       <h2>

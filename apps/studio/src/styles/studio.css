@@ -162,3 +162,80 @@ body.panel-off #panelShow{ display:inline-flex !important; }
 .dr-menu [role^="menuitem"].danger, .dr-menu [role^="menuitem"].danger .ico{ color:var(--conflict); }
 .dr-menu [role^="menuitem"].danger:hover, .dr-menu [role^="menuitem"].danger:focus-visible{ background:var(--danger-soft); }
 @media (prefers-reduced-motion: reduce){ .dr-menu{ animation:none; } }
+
+/*
+ * Phones and small tablets, under 900 px. Every action of the desktop stays one tap away: the
+ * changes panel is a full-screen sheet opened from `Show changes`, the tool row and the selection
+ * bar stay above the teach bar on one row that scrolls sideways, and the domains card stays in the
+ * left dock above them. The legend and the keyboard shortcuts stay hidden, as above.
+ */
+@media (max-width:900px){
+  header{ left:12px; right:12px; top:calc(12px + env(safe-area-inset-top,0px)); }
+  .wordmark small{ display:none; }
+  .scene > div{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .admin-open{ margin-left:0; }
+  #panelShow{ display:inline-flex !important; margin-left:0; }
+
+  body.panel-sheet .panel{ display:flex; left:0; width:100%; z-index:15; animation:fade .15s ease both; }
+  /* The sheet's × closes it from the right end of the title row (its inline style resets the margin). */
+  body.panel-sheet #panelHide{ margin-left:auto !important; }
+
+  .tools, .tools.sel{ display:flex; left:12px; right:12px; transform:none; justify-content:safe center; overflow-x:auto; scrollbar-width:none; padding:4px 0 10px; }
+  .tools::-webkit-scrollbar{ display:none; }
+  .tools button{ flex:none; }
+  .tools{ bottom:calc(var(--teach-h,70px) + 18px + env(safe-area-inset-bottom,0px)); }
+  .tools.sel{ bottom:calc(var(--teach-h,70px) + 64px + env(safe-area-inset-bottom,0px)); }
+
+  .dock-l{ left:12px; width:min(236px,calc(100% - 24px)); bottom:calc(var(--teach-h,70px) + 110px + env(safe-area-inset-bottom,0px)); }
+  .dock-l #domainsToggle{ display:block; }
+  .dock-l .domains{ display:block; width:100%; max-height:min(32vh,280px); }
+  .dock-l .domains.off{ display:none; }
+
+  .drawer{ left:12px; right:12px; width:auto; top:calc(104px + env(safe-area-inset-top,0px)); max-height:calc(100vh - var(--teach-h,70px) - 260px); max-height:calc(100dvh - var(--teach-h,70px) - 260px); }
+
+  .linkbox{ left:12px !important; right:12px; top:calc(104px + env(safe-area-inset-top,0px)) !important; width:auto; transform:none; }
+
+  .platform-access{ max-width:calc(100% - 24px); white-space:normal; }
+}
+
+/* Touch screens under 900 px: the 40 px tool buttons make each row 8 px taller, so the rows above move up with them. */
+@media (max-width:900px) and (pointer:coarse){
+  .tools.sel{ bottom:calc(var(--teach-h,70px) + 72px + env(safe-area-inset-bottom,0px)); }
+  .dock-l{ bottom:calc(var(--teach-h,70px) + 126px + env(safe-area-inset-bottom,0px)); }
+  .drawer{ max-height:calc(100vh - var(--teach-h,70px) - 280px); max-height:calc(100dvh - var(--teach-h,70px) - 280px); }
+}
+
+/* Small phones: dialogs keep 8 px from the screen edges and may use its whole height. */
+@media (max-width:600px){
+  .dlg-back{ padding:8px; }
+  .dlg{ max-height:100%; }
+  .dlg.lg{ height:100%; }
+  .dlg .dh, .dlg .db, .dlg .df{ padding-left:16px; padding-right:16px; }
+  .dlg .df{ flex-wrap:wrap; }
+}
+
+/*
+ * Touch screens: every control a finger aims at offers at least 40 px, and text fields use 16 px
+ * text, below which mobile browsers zoom the page when a field takes focus.
+ */
+@media (pointer:coarse){
+  form.bar input, form.bar textarea, form.bar select, .linkbox input, .linkbox select, .form input, .form select, .search{ font-size:16px; }
+  form.bar button, form.bar select{ height:40px; }
+  form.bar button.mic{ width:40px; }
+  .tools button{ height:40px; }
+  .drawer .x{ top:2px; right:2px; width:40px; height:40px; }
+  .drawer h2{ margin-right:40px; }
+  .linkbox .x{ top:0; right:0; width:40px; height:40px; }
+  .linkbox{ padding-right:44px; }
+  .linkbox .ico{ width:40px; height:40px; }
+  .dlg .dh .x, .admin .head .x{ width:40px; height:40px; }
+  /* Its inline style resets every property, so only !important reaches it. */
+  #panelHide{ min-width:40px !important; min-height:40px !important; text-align:center !important; }
+  .panel .bulk button, .prop .act button, .drawer .actions button{ min-height:40px; }
+  .dr-menu [role^="menuitem"]{ min-height:44px; }
+  .admin nav button{ padding:12px 10px; }
+  .tbl .act button, .btn, .lst-foot .pg button, .lst-top .filters button{ padding-top:10px; padding-bottom:10px; }
+  .legend-toggle, .admin-open{ min-height:36px; box-sizing:border-box; }
+  .domains .row{ padding:8px 0; }
+  .domains .title button{ padding:8px 0; }
+}

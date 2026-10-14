@@ -63,3 +63,33 @@ describe('decision refusals', () => {
     expect(store.ui.toasts.map((t) => t.strong)).toEqual(['Refused']);
   });
 });
+
+describe('the changes panel toggle', () => {
+  const narrow = (matches: boolean) => vi.stubGlobal('matchMedia', (q: string) => ({ matches, media: q }) as MediaQueryList);
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.classList.remove('panel-off', 'panel-sheet');
+    store.ui.panelOff = false;
+    store.ui.panelSheet = false;
+  });
+
+  it('from 901 px hides and shows the side panel', () => {
+    narrow(false);
+    store.togglePanel();
+    expect(document.body.classList.contains('panel-off')).toBe(true);
+    expect(store.ui.panelOff).toBe(true);
+    expect(document.body.classList.contains('panel-sheet')).toBe(false);
+  });
+
+  it('under 900 px opens and closes the full-screen sheet, leaving the side panel state alone', () => {
+    narrow(true);
+    store.togglePanel();
+    expect(document.body.classList.contains('panel-sheet')).toBe(true);
+    expect(store.ui.panelSheet).toBe(true);
+    store.togglePanel();
+    expect(document.body.classList.contains('panel-sheet')).toBe(false);
+    expect(document.body.classList.contains('panel-off')).toBe(false);
+    expect(store.ui.panelOff).toBe(false);
+  });
+});

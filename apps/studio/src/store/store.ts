@@ -132,6 +132,8 @@ export interface UiState {
   say: string;
   sayPlaceholder: string;
   panelOff: boolean;
+  /** Under 900 px the changes panel is a full-screen sheet over the canvas, closed until asked for (`body.panel-sheet`). */
+  panelSheet: boolean;
   legendOff: boolean;
   domainsOff: boolean;
   adminOpen: boolean;
@@ -203,8 +205,10 @@ class StudioStore {
       say: '',
       sayPlaceholder: '',
       panelOff: false,
+      panelSheet: false,
       legendOff: false,
-      domainsOff: false,
+      // Under 900 px the card would cover a third of the canvas, so it starts closed there.
+      domainsOff: typeof matchMedia === 'function' && matchMedia('(max-width:900px)').matches,
       adminOpen: false,
       settings: null,
       appearance: null,
@@ -1058,8 +1062,18 @@ class StudioStore {
 
   // ------------------------------------------------------------ toggles
 
+  /** Shows or hides the changes panel; under 900 px, opens or closes its full-screen sheet. */
   togglePanel(): void {
-    this.ui.panelOff = document.body.classList.toggle('panel-off');
+    if (typeof matchMedia === 'function' && matchMedia('(max-width:900px)').matches) this.ui.panelSheet = document.body.classList.toggle('panel-sheet');
+    else this.ui.panelOff = document.body.classList.toggle('panel-off');
+    this.bump();
+  }
+
+  /** Closes the changes panel's full-screen sheet, if open. */
+  closePanelSheet(): void {
+    if (!this.ui.panelSheet) return;
+    document.body.classList.remove('panel-sheet');
+    this.ui.panelSheet = false;
     this.bump();
   }
 
