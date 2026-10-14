@@ -6,7 +6,8 @@
  * least 40 px.
  *
  * Scenes: empty canvas; pending proposals; the changes sheet open; the first model approved
- * through the sheet; the domains card open; the drawer of a cell; the admin portal's Overview.
+ * through the sheet; the domains card open; the drawer of a cell; the admin portal's Overview; its
+ * Entities list, one card per row.
  *
  * `--update-snapshots` writes the baselines of the running platform.
  */
@@ -87,6 +88,15 @@ const scenes: PhoneScene[] = [
       await fontsReady(page);
       await advance(page, 500);
       await page.tap('#adminOpen');
+      await advance(page, 1500);
+    },
+  },  {
+    name: 'admin-entities',
+    play: async (page) => {
+      await approvedModel(page);
+      await page.tap('#adminOpen');
+      await advance(page, 500);
+      await page.tap('button[data-page="entities"]');
       await advance(page, 1500);
     },
   },

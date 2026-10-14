@@ -235,7 +235,36 @@ body.panel-off #panelShow{ display:inline-flex !important; }
   .dr-menu [role^="menuitem"]{ min-height:44px; }
   .admin nav button{ padding:12px 10px; }
   .tbl .act button, .btn, .lst-foot .pg button, .lst-top .filters button{ padding-top:10px; padding-bottom:10px; }
-  .legend-toggle, .admin-open{ min-height:36px; box-sizing:border-box; }
+  .legend-toggle, .admin-open{ min-height:40px; box-sizing:border-box; }
   .domains .row{ padding:8px 0; }
-  .domains .title button{ padding:8px 0; }
+  .domains .title button{ padding:8px 0; min-height:40px; box-sizing:border-box; }
+  .domains .row button.name{ min-height:40px; }
+  /* The switch keeps its 30 x 16 look; an invisible frame around it takes the touch. */
+  .sw::before{ content:''; position:absolute; inset:-12px -8px; }
+  form.bar button.more{ height:40px; }
+  form.bar input, form.bar textarea{ min-height:40px; box-sizing:border-box; }
+  .linkbox input, .linkbox select, .linkbox button{ min-height:40px; box-sizing:border-box; }
+  .dlg .dh .x, .admin .head .x{ flex:none; }
+  .tg{ height:40px; }
+  .tbl .act button{ min-height:40px; box-sizing:border-box; }
+  .tbl .act button.more{ width:40px; }
+  input[type=checkbox], input[type=radio]{ flex:none; width:22px; height:22px; }
+  .col input[type=color]{ width:40px; height:40px; }
+}
+
+/*
+ * Phones: a table of five or more columns shows one card per row, each cell with its column's
+ * name (`data-label`, written by shell/tableCellLabels) in front of its value, so no row scrolls
+ * sideways and its actions stay in view. Narrower tables keep their columns.
+ */
+@media (max-width:600px){
+  .tbl:has(> thead th:nth-child(5)), .tbl:has(> thead th:nth-child(5)) > tbody{ display:block; }
+  .tbl:has(> thead th:nth-child(5)) > thead{ display:none; }
+  .tbl:has(> thead th:nth-child(5)) > tbody > tr{ display:block; padding:8px 0; border-bottom:1px solid var(--line); }
+  .tbl:has(> thead th:nth-child(5)) > tbody > tr > td{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:4px 8px; border-bottom:0; text-align:right; white-space:normal; overflow-wrap:anywhere; }
+  .tbl:has(> thead th:nth-child(5)) > tbody > tr > td::before{ content:attr(data-label); flex:none; max-width:45%; text-align:left; color:var(--ink-3); font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:.04em; }
+  .tbl:has(> thead th:nth-child(5)) > tbody > tr > td[data-label=""]::before{ content:none; }
+  .tbl:has(> thead th:nth-child(5)) > tbody > tr > td.act{ justify-content:flex-start; flex-wrap:wrap; align-items:center; padding-top:8px; }
+  .tbl:has(> thead th:nth-child(5)) > tbody > tr > td:has(> input[type=checkbox]){ align-items:center; }
+  .tbl .act button{ white-space:nowrap; }
 }

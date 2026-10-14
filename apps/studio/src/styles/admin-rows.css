@@ -19,9 +19,17 @@
   .admin nav{ flex-direction:row; gap:4px; padding:8px 10px; overflow-x:auto; overflow-y:hidden; border-right:0; border-bottom:1px solid var(--line); }
   .admin nav .grp{ display:none; }
   .admin nav button{ flex:none; gap:8px; }
+  .admin nav button.on::before{ left:10px; right:10px; top:auto; bottom:0; width:auto; height:3px; }
   .admin main{ padding:16px; }
   .kpis{ grid-template-columns:repeat(2,1fr); }
   .log div{ grid-template-columns:minmax(0,1fr) auto; }
   .log div > :nth-child(3){ grid-column:1/-1; }
   .form{ grid-template-columns:1fr; }
+}
+
+/* Phones: the portal head wraps when the account buttons do not fit beside the title. */
+@media (max-width:600px){
+  .admin .win{ grid-template-rows:auto auto 1fr; }
+  .admin .head{ flex-wrap:wrap; row-gap:6px; min-height:52px; padding:8px 12px; box-sizing:border-box; }
+  .admin .head .btn{ white-space:nowrap; }
 }
