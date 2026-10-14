@@ -2,7 +2,9 @@
  * The frame loop and the pointer interactions of the canvas. Ported from
  * reference/ontaix-studio-reference.html lines 241-242 (`resize` wiring), 467-474 (`frame`,
  * `frameBody`), 477 and 493-504 (hover, drag, pan, zoom). The ghost drag path is not part of
- * the port.
+ * the port. Two fingers on a touch screen pinch to zoom, as the wheel does; a second finger
+ * cancels the drag or pan the first one started, and a pinch never counts as a click. A finger
+ * held still on a cell for LONG_PRESS_MS selects it, as Shift+click does with a mouse.
  */
 import { now } from '../runtime/clock';
 import { drawCell } from './cells';
@@ -38,6 +40,15 @@ export interface Renderer {
 
 const clampN = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
+/** A move count far above the 3 moves that end a click: set after a pinch or a cancelled pointer, so neither acts as one. */
+const PINCHED = 1000;
+
+/** How far a finger may wander, in CSS pixels, before its moves count: a tap jitters, a mouse click does not. */
+const TOUCH_SLOP = 8;
+
+/** How long a finger rests on a cell, without moving, before it selects the cell. */
+const LONG_PRESS_MS = 500;
+
 export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: RendererHooks): Renderer {
   const v = createView(canvas);
   let last = now();
@@ -49,6 +60,28 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
   let clickedRoot: Node | null = null;
   /** The cell under a Shift+click or Ctrl+click; it neither drags nor opens the drawer. */
   let modClick: Node | null = null;
+  /** The pointers pressed on the canvas, by id, at their last position. */
+  const pointers = new Map<number, { x: number; y: number }>();
+  /** A two-finger pinch: the fingers' distance and the camera zoom when it started. */
+  let pinch: { d: number; ts: number } | null = null;
+  /** Where the press began, and whether its moves count yet (at once for a mouse or pen, past TOUCH_SLOP for a finger). */
+  let downAt = { x: 0, y: 0 };
+  let counting = true;
+  const countMove = (e: PointerEvent) => {
+    if (!counting && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) >= TOUCH_SLOP) counting = true;
+    if (counting) moved++;
+  };
+  /** The pending long press of a finger resting on a cell. */
+  let press = 0;
+  const cancelPress = () => {
+    clearTimeout(press);
+    press = 0;
+  };
+
+  const spread = (): number => {
+    const [a, b] = [...pointers.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y) || 1;
+  };
 
   function frameBody(): void {
     const t = now(),
@@ -105,12 +138,22 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
 
   const onPointerMove = (e: PointerEvent) => {
     s.lastInteract = now();
+    const prev = pointers.get(e.pointerId);
+    if (prev) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch) {
+      if (pointers.size >= 2) {
+        s.userZoomed = true;
+        s.cam.ts = clampN((pinch.ts * spread()) / pinch.d, 0.3, 2.4);
+      }
+      return;
+    }
     if (s.dragging) {
       const [wx, wy] = toWorld(v, s.cam, e.clientX, e.clientY);
       s.dragging.x = wx;
       s.dragging.y = wy;
       s.dragging.vx = s.dragging.vy = 0;
-      moved++;
+      countMove(e);
+      if (moved > 3) cancelPress();
       const tgt = hitAt(s, wx, wy, s.dragging);
       s.dropTarget = tgt;
       s.hover = tgt || s.dragging;
@@ -119,11 +162,13 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
     }
     if (s.panning) {
       s.userZoomed = true;
-      s.cam.tx -= e.movementX / s.cam.s;
-      s.cam.ty -= e.movementY / s.cam.s;
+      const dx = prev ? e.clientX - prev.x : 0,
+        dy = prev ? e.clientY - prev.y : 0;
+      s.cam.tx -= dx / s.cam.s;
+      s.cam.ty -= dy / s.cam.s;
       s.cam.x = s.cam.tx;
       s.cam.y = s.cam.ty;
-      moved++;
+      countMove(e);
       return;
     }
     const n = hit(s, v, e.clientX, e.clientY);
@@ -137,7 +182,17 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
   const onPointerDown = (e: PointerEvent) => {
     s.lastInteract = now();
     canvas.setPointerCapture(e.pointerId);
+    // The first pointer of a gesture starts afresh, so a lost release never leaves a stale finger behind.
+    if (e.isPrimary) pointers.clear();
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size >= 2) {
+      cancelPress();
+      if (pointers.size === 2) startPinch();
+      return;
+    }
     moved = 0;
+    downAt = { x: e.clientX, y: e.clientY };
+    counting = e.pointerType !== 'touch';
     const n = hit(s, v, e.clientX, e.clientY);
     if (n) hooks.setActive(n.company);
     if (n && !n.fixed && (e.shiftKey || e.ctrlKey || e.metaKey)) {
@@ -151,13 +206,58 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
       dragStart = { x: n.x, y: n.y };
       s.dropTarget = null;
       canvas.classList.add('drag');
+      if (e.pointerType === 'touch') press = window.setTimeout(() => longPress(n), LONG_PRESS_MS);
     } else if (!n) {
       s.panning = true;
       canvas.classList.add('drag');
     }
   };
 
+  /** A second finger: whatever the first one started stops, and the camera zooms with the fingers. */
+  const startPinch = () => {
+    if (s.dragging) {
+      s.dragging.drag = false;
+      if (dragStart) {
+        s.dragging.x = dragStart.x;
+        s.dragging.y = dragStart.y;
+      }
+    }
+    s.dragging = null;
+    s.dropTarget = null;
+    s.panning = false;
+    modClick = null;
+    clickedRoot = null;
+    moved = PINCHED;
+    canvas.classList.remove('drag');
+    pinch = { d: spread(), ts: s.cam.ts };
+  };
+
+  /** The finger rested on the cell: the cell goes back where it was and joins the selection or leaves it. */
+  const longPress = (n: Node) => {
+    press = 0;
+    if (s.dragging !== n || moved > 3) return;
+    n.drag = false;
+    if (dragStart) {
+      n.x = dragStart.x;
+      n.y = dragStart.y;
+    }
+    s.dragging = null;
+    s.dropTarget = null;
+    moved = PINCHED;
+    canvas.classList.remove('drag');
+    hooks.toggleSelected(n);
+    s.hover = null;
+    s.focusSet = s.stickyFocus;
+  };
+
   const onPointerUp = (e: PointerEvent) => {
+    cancelPress();
+    pointers.delete(e.pointerId);
+    if (pinch) {
+      // A third finger lifted: the two left measure from here on.
+      pinch = pointers.size >= 2 ? { d: spread(), ts: s.cam.ts } : null;
+      return;
+    }
     canvas.classList.remove('drag');
     if (modClick) {
       if (moved <= 3) hooks.toggleSelected(modClick);
@@ -234,6 +334,16 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
     s.cam.ts = clampN(s.cam.ts * (1 - e.deltaY * 0.0012), 0.3, 2.4);
   };
 
+  /** The browser took the pointer back (a system gesture): nothing it started counts as a click. */
+  const onPointerCancel = (e: PointerEvent) => {
+    moved = PINCHED;
+    s.dropTarget = null;
+    onPointerUp(e);
+  };
+
+  /** A finger held on the canvas selects a cell; the browser's own long-press menu would cover it. */
+  const onContextMenu = (e: Event) => e.preventDefault();
+
   const onPointerLeave = () => {
     s.hover = null;
     s.focusSet = s.stickyFocus;
@@ -247,6 +357,8 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
       canvas.addEventListener('pointermove', onPointerMove);
       canvas.addEventListener('pointerdown', onPointerDown);
       canvas.addEventListener('pointerup', onPointerUp);
+      canvas.addEventListener('pointercancel', onPointerCancel);
+      canvas.addEventListener('contextmenu', onContextMenu);
       canvas.addEventListener('dblclick', onDblClick);
       canvas.addEventListener('wheel', onWheel, { passive: false });
       canvas.addEventListener('pointerleave', onPointerLeave);
@@ -256,11 +368,14 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
     },
     stop() {
       cancelAnimationFrame(raf);
+      cancelPress();
       removeEventListener('resize', onResize);
       document.removeEventListener('fullscreenchange', onFullscreen);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerCancel);
+      canvas.removeEventListener('contextmenu', onContextMenu);
       canvas.removeEventListener('dblclick', onDblClick);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('pointerleave', onPointerLeave);

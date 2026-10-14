@@ -19,11 +19,13 @@ import { SelectionBar } from './shell/SelectionBar';
 import { TeachBar } from './shell/TeachBar';
 import { Tools } from './shell/Tools';
 import { Toasts } from './shell/Toasts';
+import { useTableCellLabels } from './shell/tableCellLabels';
 import { useKeyboard } from './shell/useKeyboard';
 import { store } from './store/store';
 
 export function App() {
   useKeyboard();
+  useTableCellLabels();
   useEffect(() => {
     void store.load();
   }, []);

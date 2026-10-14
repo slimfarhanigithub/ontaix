@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 import { AccountControls } from '../auth/AccountControls';
 import { Dialog } from '../shell/Dialog';
+import { useTableCellLabels } from '../shell/tableCellLabels';
 import { Toasts } from '../shell/Toasts';
 import { Organizations } from './Organizations';
 import { PlatformAudit } from './PlatformAudit';
@@ -20,6 +21,7 @@ const NAV: [PlatformPage, string][] = [
 
 export function PlatformPortal() {
   const [page, setPage] = useState<PlatformPage>('organizations');
+  useTableCellLabels();
   return (
     <>
       <Toasts />
