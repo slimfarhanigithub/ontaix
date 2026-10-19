@@ -9,6 +9,7 @@
 import { now } from '../runtime/clock';
 import { random } from '../runtime/rng';
 import { C, CELL, CUSTOM_RING_STEP, DEFAULT_BRASS, DOMAIN_R, DOMAIN_TEMPLATES, TEMPLATE_COUNT } from './constants';
+import type { BrainDemo } from '../demo/brainDemo';
 import type { Cam, Company, Domain, Link, LinkKind, Node, SplitInfo } from './types';
 
 /** Side effects the canvas raises toward the shell. Defaults are no-ops so pure tests need none. */
@@ -49,6 +50,8 @@ export interface SceneState {
   splitting: Map<Node, SplitInfo>;
   /** Cells picked with Shift+click or Ctrl+click for a bulk deletion; shown as the sticky focus set. */
   selected: Set<Node>;
+  /** The demo brain growing on the canvas, drawn only and never saved; null while it is off. */
+  brain: BrainDemo | null;
   effects: SceneEffects;
 }
 
@@ -87,6 +90,7 @@ export function createScene(effects: Partial<SceneEffects> = {}): SceneState {
     running: false,
     splitting: new Map(),
     selected: new Set(),
+    brain: null,
     effects: { ...noEffects, ...effects },
   };
 }

@@ -162,7 +162,9 @@ export function step(s: SceneState, v: View, dt: number): void {
   for (const l of links) {
     l.alpha = Math.min(1, l.alpha + dt * 1.4);
   }
-  if (!s.userZoomed && nodes.length > 1 && !s.dragging && !s.panning) {
+  if (s.brain) {
+    // The demo brain moves the camera itself (`brainStep`).
+  } else if (!s.userZoomed && nodes.length > 1 && !s.dragging && !s.panning) {
     let x0 = 1e9,
       y0 = 1e9,
       x1 = -1e9,

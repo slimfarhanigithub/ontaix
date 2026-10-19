@@ -55,6 +55,16 @@ import { singular } from '../nl/parser';
 import { random } from '../runtime/rng';
 import { now } from '../runtime/clock';
 import type { CustomDialog, DialogEntry, DialogSpec } from '../shell/Dialog';
+import {
+  finishBrain,
+  pauseBrain,
+  replayBrain,
+  resumeBrain,
+  SPACING_LARGE,
+  SPACING_SMALL,
+  startBrain,
+  stopBrain,
+} from '../demo/brainDemo';
 import { readSkipAnimation, writeSkipAnimation } from './skipAnimation';
 
 /**
@@ -1342,9 +1352,59 @@ class StudioStore {
 
   // ------------------------------------------------------------ keyboard escape
 
-  /** Escape on the canvas: zoom, focus, selection, boxes, drawer and lineage all release. */
+  // ------------------------------------------------------------ demo brain
+
+  /**
+   * Grows the demo brain from the model on the canvas: drawn only, never sent to the API. Every
+   * shown domain takes a lobe; a phone or a touch screen grows a smaller brain.
+   */
+  startBrain(): void {
+    const s = this.s;
+    const shownKeys = new Set(s.DOMAINS.filter((d) => !d.hidden).map((d) => d.key));
+    const domains = this.ui.domains
+      .filter((d) => shownKeys.has(d.key) || !s.DOMAINS.some((x) => x.key === d.key))
+      .map((d) => ({ key: d.key, name: d.name, color: d.color }));
+    const small = typeof matchMedia === 'function' && matchMedia('(max-width:900px), (pointer:coarse)').matches;
+    s.cellFocus = null;
+    focusOnDomain(s, null);
+    this.closeNewBox();
+    this.closeLinkBox();
+    this.closeDrawer();
+    this.hideLineage();
+    this.clearSelection();
+    startBrain(s, domains, now(), { spacing: small ? SPACING_SMALL : SPACING_LARGE, instant: s.SKIP });
+    this.bump();
+  }
+
+  /** Pauses the growing brain, or lets it grow on. */
+  toggleBrainPause(): void {
+    const d = this.s.brain;
+    if (!d || d.ending !== null) return;
+    if (d.pausedAt === null) pauseBrain(d, now());
+    else resumeBrain(d, now());
+    this.bump();
+  }
+
+  /** Grows the brain again from its seeds. */
+  replayBrain(): void {
+    const d = this.s.brain;
+    if (!d || d.ending !== null) return;
+    replayBrain(this.s, d, now());
+    this.bump();
+  }
+
+  /** Stops the demo: it fades out and the real model goes back where it stood. */
+  stopBrain(): void {
+    if (!this.s.brain) return;
+    if (this.s.SKIP) finishBrain(this.s);
+    else stopBrain(this.s, now());
+    this.bump();
+  }
+
+  /** Escape on the canvas: the demo brain stops; zoom, focus, selection, boxes, drawer and lineage all release. */
   escape(): void {
     const s = this.s;
+    if (s.brain && s.brain.ending === null) this.stopBrain();
     s.userZoomed = false;
     s.cellFocus = null;
     focusOnDomain(s, null);
