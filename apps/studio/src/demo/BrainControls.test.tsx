@@ -38,7 +38,7 @@ describe('the demo brain controls', () => {
     expect(screen.getByRole('button', { name: 'Grow a demo brain', pressed: true })).toBe(button);
     expect(button).toHaveAttribute('title', 'Stop the demo brain (Esc)');
     const bar = screen.getByRole('region', { name: 'Demo brain' });
-    expect(bar).toHaveTextContent('Growing a demo brain');
+    expect(bar).toHaveTextContent('Starting a demo brain');
     expect(bar).toHaveTextContent('not saved');
     expect(screen.getByRole('progressbar', { name: 'Growth' })).toHaveAttribute('aria-valuenow', '0');
     act(() => fireEvent.click(document.getElementById('brainStop') as HTMLElement));

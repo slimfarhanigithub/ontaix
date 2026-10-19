@@ -56,6 +56,7 @@ import { random } from '../runtime/rng';
 import { now } from '../runtime/clock';
 import type { CustomDialog, DialogEntry, DialogSpec } from '../shell/Dialog';
 import {
+  brainDomains,
   finishBrain,
   pauseBrain,
   replayBrain,
@@ -1355,15 +1356,17 @@ class StudioStore {
   // ------------------------------------------------------------ demo brain
 
   /**
-   * Grows the demo brain from the model on the canvas: drawn only, never sent to the API. Every
-   * shown domain takes a lobe; a phone or a touch screen grows a smaller brain.
+   * Plays the demo brain from the first company: drawn only, never sent to the API. The shown
+   * domains take the first lobes and the story grows the first three of them; a phone or a touch
+   * screen grows a smaller brain and a shorter story.
    */
   startBrain(): void {
     const s = this.s;
     const shownKeys = new Set(s.DOMAINS.filter((d) => !d.hidden).map((d) => d.key));
-    const domains = this.ui.domains
+    const shown = this.ui.domains
       .filter((d) => shownKeys.has(d.key) || !s.DOMAINS.some((x) => x.key === d.key))
       .map((d) => ({ key: d.key, name: d.name, color: d.color }));
+    const held = new Set([...this.ui.domains.map((d) => d.key), ...s.DOMAINS.map((d) => d.key)]);
     const small = typeof matchMedia === 'function' && matchMedia('(max-width:900px), (pointer:coarse)').matches;
     s.cellFocus = null;
     focusOnDomain(s, null);
@@ -1372,7 +1375,7 @@ class StudioStore {
     this.closeDrawer();
     this.hideLineage();
     this.clearSelection();
-    startBrain(s, domains, now(), { spacing: small ? SPACING_SMALL : SPACING_LARGE, instant: s.SKIP });
+    startBrain(s, brainDomains(shown, held), now(), { spacing: small ? SPACING_SMALL : SPACING_LARGE, small, instant: s.SKIP });
     this.bump();
   }
 
