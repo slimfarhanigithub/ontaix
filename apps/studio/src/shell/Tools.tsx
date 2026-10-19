@@ -4,10 +4,12 @@
  * setting on the admin portal's Appearance page; no cell has data behind it to cover); behaviours
  * from lines 548-565 (arrange), 616 (add a company) and 904-906 (import, drag and drop). The file is read the way its detection says;
  * `#imAs` reads it another way. Add company is hidden while the `companyCreation` setting is off,
- * as well as while `multiCompany` is off.
+ * as well as while `multiCompany` is off. The brain button at the end grows the demo brain
+ * (`demo/BrainControls.tsx`).
  */
 import { useEffect, useRef } from 'react';
 
+import { BrainButton } from '../demo/BrainControls';
 import { importFile } from '../teach/importFile';
 import { openAddCompany } from './AddCompany';
 import { useDelayed } from './busy';
@@ -89,6 +91,7 @@ export function Tools() {
         </svg>
         Arrange
       </button>
+      <BrainButton />
     </div>
   );
 }

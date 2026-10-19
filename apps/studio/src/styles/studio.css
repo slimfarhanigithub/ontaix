@@ -268,3 +268,38 @@ body.panel-off #panelShow{ display:inline-flex !important; }
   .tbl:has(> thead th:nth-child(5)) > tbody > tr > td:has(> input[type=checkbox]){ align-items:center; }
   .tbl .act button{ white-space:nowrap; }
 }
+
+/*
+ * The demo brain: the tool row's icon-only brain button, and the demo bar centred under the
+ * header while the brain grows. Under 900 px the bar spans the screen with 12 px margins; on a
+ * touch screen its buttons and the brain button are 40 px.
+ */
+.tools button.icon{ width:32px; padding:0; }
+.tools button.icon svg{ width:16px; height:16px; }
+.brainbar{ position:fixed; z-index:3; top:calc(84px + env(safe-area-inset-top,0px)); left:calc((100% - var(--panel-w)) / 2); transform:translateX(-50%); display:flex; align-items:center; gap:10px; width:min(540px, calc(100% - var(--panel-w) - 48px)); padding:8px 8px 8px 10px; border-radius:var(--radius-lg); background:var(--surface); border:1px solid var(--line); box-shadow:var(--shadow-float); animation:brainBarIn .25s var(--ease-expressive) both; }
+.brainbar svg{ width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+.brainbar .bb-icon{ flex:none; width:32px; height:32px; border-radius:var(--radius-full); background:var(--accent-soft); color:var(--accent-text); display:grid; place-items:center; }
+.brainbar .bb-text{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.brainbar .bb-text b{ font-size:13px; font-weight:600; color:var(--ink); }
+.brainbar .bb-text span{ font-size:11.5px; color:var(--ink-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
+.brainbar .bb-progress{ height:3px; margin-top:4px; border-radius:var(--radius-full); background:var(--border-faint); overflow:hidden; }
+.brainbar .bb-progress i{ display:block; height:100%; border-radius:inherit; background:var(--accent); transition:width .25s linear; }
+.brainbar .bb-btn{ flex:none; width:32px; height:32px; padding:0; display:grid; place-items:center; border:1px solid var(--line); border-radius:var(--radius-full); background:var(--surface); color:var(--ink-2); cursor:pointer; transition:background .15s, border-color .15s, transform .1s; }
+.brainbar .bb-btn:hover{ background:var(--hover); border-color:var(--border-strong); color:var(--ink); }
+.brainbar .bb-btn:active{ transform:scale(.95); }
+@keyframes brainBarIn{ from{ opacity:0; transform:translate(-50%,-6px); } }
+@keyframes brainBarInNarrow{ from{ opacity:0; transform:translateY(-6px); } }
+@media (max-width:600px){
+  .brainbar .bb-text span{ white-space:normal; }
+}
+@media (max-width:900px){
+  .brainbar{ left:12px; right:12px; width:auto; transform:none; top:calc(104px + env(safe-area-inset-top,0px)); animation-name:brainBarInNarrow; }
+}
+@media (pointer:coarse){
+  .tools button.icon{ width:40px; }
+  .brainbar .bb-btn{ width:40px; height:40px; }
+}
+@media (prefers-reduced-motion:reduce){
+  .brainbar{ animation:none; }
+  .brainbar .bb-progress i{ transition:none; }
+}

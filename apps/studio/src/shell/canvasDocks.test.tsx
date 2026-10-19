@@ -106,7 +106,7 @@ describe('Skip animation', () => {
     expect(container.querySelector('#skip')).toBeNull();
     expect(container.querySelector('#coverage')).toBeNull();
     expect(container.textContent).not.toMatch(/skip|animations off|coverage/i);
-    expect([...container.querySelectorAll('button')].map((b) => b.id)).toEqual(['addCo', 'importBtn', 'arrange']);
+    expect([...container.querySelectorAll('button')].map((b) => b.id)).toEqual(['addCo', 'importBtn', 'arrange', 'brainDemo']);
   });
 
   it('the C key does nothing', () => {

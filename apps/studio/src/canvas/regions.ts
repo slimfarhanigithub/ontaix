@@ -30,7 +30,7 @@ export function background(v: View): void {
 }
 
 /** Prepares the half-resolution layer in the current world transform; false when too small. */
-function beginLayer(v: View): boolean {
+export function beginLayer(v: View): boolean {
   const { canvas, off, octx, ctx } = v;
   const w = Math.max(1, Math.round(canvas.width * OFFS)),
     h = Math.max(1, Math.round(canvas.height * OFFS));
@@ -64,7 +64,8 @@ function fillHull(octx: CanvasRenderingContext2D, pts: Pt[], pad: number, col: s
   octx.fill();
 }
 
-function compositeLayer(v: View, alpha: number, smooth: boolean): void {
+/** Draws the half-resolution layer over the canvas at `alpha`. */
+export function compositeLayer(v: View, alpha: number, smooth: boolean): void {
   const { ctx, off, canvas } = v;
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);

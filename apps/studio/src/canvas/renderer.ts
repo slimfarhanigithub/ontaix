@@ -7,6 +7,8 @@
  * held still on a cell for LONG_PRESS_MS selects it, as Shift+click does with a mouse.
  */
 import { now } from '../runtime/clock';
+import { BRAIN_MIN_ZOOM, brainStep } from '../demo/brainDemo';
+import { drawBrain, drawBrainTint } from '../demo/brainLayer';
 import { drawCell } from './cells';
 import { focusOnCell, focusOnDomain, hit, hitAt, hitChip } from './focus';
 import { hitDomain } from './hulls';
@@ -39,6 +41,9 @@ export interface Renderer {
 }
 
 const clampN = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+
+/** How far the wheel and a pinch zoom out: 0.3, or further while the demo brain is on. */
+const minZoom = (s: SceneState): number => (s.brain ? BRAIN_MIN_ZOOM : 0.3);
 
 /** A move count far above the 3 moves that end a click: set after a pinch or a cancelled pointer, so neither acts as one. */
 const PINCHED = 1000;
@@ -92,6 +97,7 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
       return;
     }
     step(s, v, dt);
+    brainStep(s, v, t);
     s.splitting = new Map<Node, SplitInfo>();
     for (const n of s.nodes)
       if (n.split) {
@@ -107,8 +113,14 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
     }
     background(v);
     worldTransform(v, s.cam);
-    drawCompanies(s, v, t);
-    drawDomains(s, v, t);
+    if (s.brain) {
+      // The demo's lobes stand in for the company and domain regions.
+      drawBrainTint(s, v, t);
+      drawBrain(s, v, t);
+    } else {
+      drawCompanies(s, v, t);
+      drawDomains(s, v, t);
+    }
     drawLinks(s, v, t);
     for (const n of s.nodes) if (n.split && shown(n)) drawNeck(s, v, n, t);
     const sorted = s.nodes
@@ -143,7 +155,7 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
     if (pinch) {
       if (pointers.size >= 2) {
         s.userZoomed = true;
-        s.cam.ts = clampN((pinch.ts * spread()) / pinch.d, 0.3, 2.4);
+        s.cam.ts = clampN((pinch.ts * spread()) / pinch.d, minZoom(s), 2.4);
       }
       return;
     }
@@ -331,7 +343,7 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
     e.preventDefault();
     s.lastInteract = now();
     s.userZoomed = true;
-    s.cam.ts = clampN(s.cam.ts * (1 - e.deltaY * 0.0012), 0.3, 2.4);
+    s.cam.ts = clampN(s.cam.ts * (1 - e.deltaY * 0.0012), minZoom(s), 2.4);
   };
 
   /** The browser took the pointer back (a system gesture): nothing it started counts as a click. */
