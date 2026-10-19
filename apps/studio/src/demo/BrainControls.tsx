@@ -8,12 +8,29 @@ import { useEffect, useState } from 'react';
 
 import { now } from '../runtime/clock';
 import { useStore } from '../shell/dom';
-import { bornCount, bornLinks, brainGrown } from './brainDemo';
+import { bornCount, bornDomains, bornLinks, brainPhase, type BrainDemo } from './brainDemo';
 
 /** How often the demo bar reads the growth, in milliseconds. */
 const TICK_MS = 250;
 
 const number = (n: number): string => n.toLocaleString('en-GB');
+
+const COUNT_WORDS = ['no', 'one', 'two', 'three'];
+
+/** The demo bar's title for what the demo shows at `t`. */
+export function brainTitle(d: BrainDemo, t: number): string {
+  if (d.pausedAt !== null) return 'Demo brain paused';
+  switch (brainPhase(d, t)) {
+    case 'company':
+      return d.company ? `Starting from ${d.company}` : 'Starting a demo brain';
+    case 'domains':
+      return `Growing ${COUNT_WORDS[d.storyDomains] ?? d.storyDomains} domain${d.storyDomains === 1 ? '' : 's'}`;
+    case 'brain':
+      return 'Growing a demo brain';
+    default:
+      return 'Demo brain grown';
+  }
+}
 
 /** The brain icon: two hemispheres with a fold in each. */
 export function BrainIcon() {
@@ -63,11 +80,12 @@ export function BrainBar() {
   const t = now();
   const born = bornCount(d, t);
   const total = d.cells.length;
-  const grown = brainGrown(d, t);
+  const grown = brainPhase(d, t) === 'grown';
   const paused = d.pausedAt !== null;
-  const concepts = d.realConcepts + born;
+  const concepts = born;
+  const domains = bornDomains(d, t);
   const pct = total ? Math.round((born / total) * 100) : 100;
-  const title = grown ? 'Demo brain grown' : paused ? 'Demo brain paused' : 'Growing a demo brain';
+  const title = brainTitle(d, t);
   return (
     <div className="brainbar" id="brainBar" role="region" aria-label="Demo brain">
       <span className="bb-icon">
@@ -76,7 +94,7 @@ export function BrainBar() {
       <div className="bb-text">
         <b>{title}</b>
         <span>
-          {number(concepts)} concepts · {number(bornLinks(d, t))} relations · {d.lobes} domain product{d.lobes === 1 ? '' : 's'} · not saved
+          {number(concepts)} concepts · {number(bornLinks(d, t))} relations · {domains} domain product{domains === 1 ? '' : 's'} · not saved
         </span>
         <div className="bb-progress" role="progressbar" aria-label="Growth" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
           <i style={{ width: `${pct}%` }}></i>

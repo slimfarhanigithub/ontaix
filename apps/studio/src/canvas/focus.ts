@@ -8,8 +8,9 @@ import { neighbours, shown, type SceneState } from './state';
 import type { Domain, Link, Node } from './types';
 import { toWorld, type View } from './view';
 
-/** Alpha factor of a node outside the focus set. */
-export const dimOf = (s: SceneState, n: Node): number => (s.focusSet && !s.focusSet.has(n) ? 0.2 : 1);
+/** Alpha factor of a node outside the focus set, or set aside while the demo brain is on. */
+export const dimOf = (s: SceneState, n: Node): number =>
+  (s.focusSet && !s.focusSet.has(n) ? 0.2 : 1) * (s.brain && s.brain.aside.has(n) ? 1 - s.brain.veil : 1);
 
 export function focusOnCell(s: SceneState, n: Node | null): void {
   s.cellFocus = n;
@@ -68,6 +69,7 @@ export function hitAt(s: SceneState, wx: number, wy: number, except: Node | null
     bd = 1e9;
   for (const n of s.nodes) {
     if (n === except || (n.split && !n.split.broken) || n.dying || !shown(n)) continue;
+    if (s.brain && s.brain.ending === null && s.brain.aside.has(n)) continue;
     const d = Math.hypot(n.x - wx, n.y - wy);
     if (d < n.r * 1.6 && d < bd) {
       best = n;

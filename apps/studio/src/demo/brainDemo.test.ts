@@ -3,14 +3,21 @@ import { describe, expect, it } from 'vitest';
 import { createScene } from '../canvas/state';
 import { northwindModel, settleTweens } from '../canvas/testModels';
 import { DOMAIN_TEMPLATES } from '../canvas/constants';
+import { dimOf, hitAt } from '../canvas/focus';
+import type { Node } from '../canvas/types';
 import {
+  ACT_ONE,
   bornCount,
+  bornDomains,
   bornLinks,
   brainAlpha,
+  brainDomains,
   brainGrown,
+  brainPhase,
   brainStep,
-  DURATION,
   FADE_OUT,
+  GROW,
+  MIGRATE,
   pauseBrain,
   replayBrain,
   resumeBrain,
@@ -18,6 +25,7 @@ import {
   SPACING_SMALL,
   startBrain,
   stopBrain,
+  STORY_DOMAINS,
 } from './brainDemo';
 import { brainPoints, growthOrder, lobesOf, neighboursOf } from './brainShape';
 import { namesFor } from './brainVocabulary';
@@ -28,7 +36,7 @@ const DOMAINS = DOMAIN_TEMPLATES.map((d) => ({ key: d.key, name: d.name, color: 
 const view = (W: number, H: number): View => ({ W, H, panelOff: () => false }) as unknown as View;
 
 describe('the brain shape', () => {
-  it('draws the same points from the same seed, about 3,000 on a large screen and 1,600 on a phone', () => {
+  it('draws the same points from the same seed, about 3,400 on a large screen and 1,800 on a phone', () => {
     const a = brainPoints(SPACING_LARGE, 7);
     expect(brainPoints(SPACING_LARGE, 7)).toEqual(a);
     expect(a.length).toBeGreaterThan(2600);
@@ -91,52 +99,114 @@ describe('the brain vocabulary', () => {
 });
 
 describe('the demo brain', () => {
-  it('moves the real cells into the brain, roots to the stem, and puts them back on stop', () => {
+  it('starts from the company alone: the root moves to the stem, every other real cell is set aside and comes back on stop', () => {
     const s = createScene();
     northwindModel(s);
     settleTweens(s);
     const before = new Map(s.nodes.map((n) => [n, [n.x, n.y]]));
     const company = s.companies[0];
+    const root = company.root as Node;
     const home = [company.x, company.y];
     const d = startBrain(s, DOMAINS, 100, { spacing: SPACING_SMALL });
     expect(s.brain).toBe(d);
-    expect(d.realConcepts).toBe(s.nodes.filter((n) => n.kind === 'concept').length);
+    expect(d.root).toBe(root);
+    expect(d.company).toBe(company.name);
     expect(d.lobes).toBe(9);
-    const targets = s.nodes.map((n) => n.tween && [n.tween.tx, n.tween.ty]);
-    expect(targets.every(Boolean)).toBe(true);
-    expect(new Set(targets.map((p) => String(p))).size).toBe(s.nodes.length);
-    expect(s.nodes.find((n) => n.kind === 'root')?.tween?.tx).toBe(company.x);
+    expect(root.tween?.tx).toBe(company.x);
+    const others = s.nodes.filter((n) => n !== root);
+    expect(others.length).toBeGreaterThan(0);
+    for (const n of others) {
+      expect(d.aside.has(n)).toBe(true);
+      expect([n.tween?.tx, n.tween?.ty]).toEqual(before.get(n));
+    }
+    brainStep(s, view(1440, 900), 101);
+    expect(dimOf(s, others[0])).toBe(0);
+    expect(dimOf(s, root)).toBe(1);
+    expect(hitAt(s, others[0].x, others[0].y, null)).not.toBe(others[0]);
     stopBrain(s, 110);
     expect([company.x, company.y]).toEqual(home);
     for (const n of s.nodes) expect([n.tween?.tx, n.tween?.ty]).toEqual(before.get(n));
   });
 
-  it('grows nothing that sits on a real cell, every cell from a cell or a real cell close by', () => {
+  it('grows three domains beside the company, each with named concepts and relations within and across them', () => {
     const s = createScene();
     northwindModel(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
-    const real = new Set(s.nodes.map((n) => `${n.tween?.tx},${n.tween?.ty}`));
-    for (const c of d.cells) {
-      expect(real.has(`${c.x},${c.y}`)).toBe(false);
+    expect(d.storyDomains).toBe(STORY_DOMAINS);
+    const story = d.cells.slice(0, d.stories);
+    const hubs = story.filter((c) => c.story?.hub);
+    expect(hubs.map((c) => c.label)).toEqual(DOMAINS.slice(0, 3).map((x) => x.name));
+    expect(story.length).toBe(3 * 7);
+    expect(story[0].born).toBe(ACT_ONE);
+    expect(bornCount(d, ACT_ONE - 0.01)).toBe(0);
+    for (const c of story) expect(c.born).toBeLessThan(d.act3);
+    // Every concept buds from its domain, every domain from the root.
+    for (const c of story) {
+      const hub = story.findIndex((h) => h.story?.hub && h.domain === c.domain);
+      expect(c.story?.parent).toBe(c.story?.hub ? -1 : hub);
+    }
+    const storyLinks = d.links.filter(([, b]) => b < d.stories);
+    const across = storyLinks.filter(([a, b]) => story[a].domain !== story[b].domain);
+    expect(across.length).toBe(3);
+    expect(storyLinks.length).toBeGreaterThan(across.length);
+    expect(new Set(story.map((c) => c.label)).size).toBe(story.length);
+    // No brain cell repeats a story name.
+    const brainNames = new Set(d.cells.slice(d.stories).map((c) => c.label));
+    for (const c of story) expect(brainNames.has(c.label)).toBe(false);
+  });
+
+  it('plays the acts in order and grows the rest of the brain fast, faster and faster', () => {
+    const s = createScene();
+    northwindModel(s);
+    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
+    expect(brainPhase(d, 1)).toBe('company');
+    expect(brainPhase(d, ACT_ONE + 0.1)).toBe('domains');
+    expect(bornDomains(d, ACT_ONE + 0.1)).toBe(1);
+    expect(brainPhase(d, d.act3 + 0.1)).toBe('brain');
+    expect(bornCount(d, d.act3)).toBe(d.stories);
+    const grow0 = d.act3 + 0.6;
+    const grown = (e: number) => bornCount(d, grow0 + e) - d.stories;
+    expect(grown(GROW / 2) - grown(GROW / 4)).toBeGreaterThan(grown(GROW / 4));
+    expect(d.duration - d.act3).toBeLessThan(12);
+    expect(d.duration).toBeLessThan(30);
+    expect(brainGrown(d, d.duration - 0.5)).toBe(false);
+    expect(brainGrown(d, d.duration)).toBe(true);
+    expect(brainPhase(d, d.duration)).toBe('grown');
+    expect(bornDomains(d, d.duration)).toBe(9);
+    expect(bornLinks(d, d.duration)).toBeGreaterThan(d.cells.length);
+  });
+
+  it('grows nothing on the root or a story cell, every brain cell from a cell or the root close by', () => {
+    const s = createScene();
+    northwindModel(s);
+    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
+    const placed = new Set(d.cells.slice(0, d.stories).map((c) => `${c.x},${c.y}`));
+    placed.add(`${d.root?.tween?.tx},${d.root?.tween?.ty}`);
+    const brain = d.cells.slice(d.stories);
+    for (const c of brain) {
+      expect(placed.has(`${c.x},${c.y}`)).toBe(false);
       if (c.linked) expect(Math.hypot(c.x - c.px, c.y - c.py)).toBeLessThan(d.spacing * 40);
     }
-    expect(d.cells.filter((c) => c.linked).length).toBeGreaterThan(d.cells.length * 0.95);
+    expect(brain.filter((c) => c.linked).length).toBeGreaterThan(brain.length * 0.95);
   });
 
-  it('grows slowly at first, faster and faster, and is grown after DURATION seconds', () => {
+  it('grows a shorter story on a phone', () => {
     const s = createScene();
     northwindModel(s);
-    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
-    const at = (t: number) => bornCount(d, t);
-    expect(at(0)).toBe(0);
-    expect(at(2)).toBeLessThan(at(DURATION / 2) / 10);
-    expect(at(DURATION * 0.75) - at(DURATION / 2)).toBeGreaterThan(at(DURATION / 4));
-    expect(brainGrown(d, DURATION - 1)).toBe(false);
-    expect(brainGrown(d, DURATION)).toBe(true);
-    expect(bornLinks(d, DURATION)).toBeGreaterThan(d.cells.length);
+    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL, small: true });
+    expect(d.stories).toBe(3 * 5);
   });
 
-  it('pauses, resumes and replays', () => {
+  it('fills the brain with templates the tenant does not hold, after its shown domains', () => {
+    const shown = [{ key: 'carbon', name: 'Carbon', color: '#123456' }];
+    const picked = brainDomains(shown, new Set(['carbon', 'production']));
+    expect(picked[0]).toBe(shown[0]);
+    expect(picked.map((d) => d.key)).not.toContain('production');
+    expect(picked.length).toBe(9);
+    expect(picked[1].key).toBe('supply');
+  });
+
+  it('pauses, resumes and replays from the company alone', () => {
     const s = createScene();
     northwindModel(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
@@ -148,6 +218,7 @@ describe('the demo brain', () => {
     expect(bornCount(d, 40)).toBeGreaterThan(held);
     replayBrain(s, d, 50);
     expect(bornCount(d, 50)).toBe(0);
+    expect(brainPhase(d, 50)).toBe('company');
   });
 
   it('grows at once when animations are skipped', () => {
@@ -155,32 +226,43 @@ describe('the demo brain', () => {
     northwindModel(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL, instant: true });
     expect(brainGrown(d, 0)).toBe(true);
+    expect(d.veil).toBe(1);
+    replayBrain(s, d, 10);
+    expect(brainGrown(d, 10)).toBe(true);
   });
 
-  it('fades out after stop and then leaves the scene', () => {
+  it('fades out after stop, brings the cells set aside back, and then leaves the scene', () => {
     const s = createScene();
     northwindModel(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
+    const other = [...d.aside][0];
     stopBrain(s, 10);
     expect(brainAlpha(d, 10)).toBe(1);
     expect(brainAlpha(d, 10 + FADE_OUT / 2)).toBeCloseTo(0.5);
+    brainStep(s, view(1440, 900), 10 + FADE_OUT / 2);
+    expect(dimOf(s, other)).toBeCloseTo(0.5);
     brainStep(s, view(1440, 900), 10 + FADE_OUT + 0.01);
     expect(s.brain).toBeNull();
+    expect(dimOf(s, other)).toBe(1);
   });
 
-  it('pulls the camera back as the brain grows, past the usual 0.3 zoom, until the user zooms', () => {
+  it('keeps the camera close on the story, then pulls back past the usual 0.3 zoom, until the user zooms', () => {
     const s = createScene();
     northwindModel(s);
-    startBrain(s, DOMAINS, 0, { spacing: SPACING_LARGE });
+    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_LARGE });
     const v = view(1440, 900);
-    brainStep(s, v, 5);
-    const early = s.cam.ts;
-    brainStep(s, v, DURATION);
-    expect(s.cam.ts).toBeLessThan(early);
+    brainStep(s, v, 1);
+    expect(s.cam.ts).toBe(1);
+    brainStep(s, v, d.act3 - 0.1);
+    const story = s.cam.ts;
+    expect(story).toBeGreaterThanOrEqual(0.3);
+    brainStep(s, v, d.act3 + MIGRATE / 2);
+    expect(s.cam.ts).toBeLessThan(story);
+    brainStep(s, v, d.duration);
     expect(s.cam.ts).toBeLessThan(0.3);
     s.userZoomed = true;
     s.cam.ts = 1;
-    brainStep(s, v, DURATION);
+    brainStep(s, v, d.duration);
     expect(s.cam.ts).toBe(1);
   });
 });
