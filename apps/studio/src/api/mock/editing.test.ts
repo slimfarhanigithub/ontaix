@@ -294,3 +294,20 @@ describe('mock API: company creation setting', () => {
     body(server.handle('POST', '/companies', { name: 'Aurora Valves', start: 'one_cell' }), 201);
   });
 });
+
+describe('mock API: model reset', () => {
+  it('empties the model on approval, keeps the companies and rejects the other open proposals', () => {
+    const { server, co, line } = seeded();
+    const p = body<Proposal>(server.handle('POST', '/proposals', { type: 'change', changeKind: 'reset_model', payload: {} }), 202);
+    expect(p).toMatchObject({ changeKind: 'reset_model', title: 'Reset the model', companyId: null });
+    expect(p.html).toBe('Remove <b>2 concepts</b> and 2 relations from every company, and reject 1 open proposal');
+    const res = body<DecisionResult>(server.handle('POST', `/proposals/${p.id}/approve`));
+    expect(res.proposal.state).toBe('approved');
+    const scene = body<Scene>(server.handle('GET', '/scene'));
+    expect(scene.nodes.map((n) => n.label)).toEqual([co.name]);
+    expect(scene.links).toHaveLength(0);
+    expect(scene.companies.map((c) => c.id)).toEqual([co.id]);
+    expect(scene.proposals.find((q) => q.id === line.id)).toBeUndefined();
+    expect(code(server.handle('POST', '/proposals', { type: 'change', changeKind: 'reset_model', payload: {} }), 422)).toBe('validation_failed');
+  });
+});

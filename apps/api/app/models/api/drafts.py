@@ -199,6 +199,7 @@ class ChangeDraft(ApiModel):
         "delete_domain",
         "move_concept_domain",
         "delete_bulk",
+        "reset_model",
     ]
     payload: ChangePayload
     caption: str | None = Field(default=None, max_length=300)

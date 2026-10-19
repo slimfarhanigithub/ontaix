@@ -1346,7 +1346,7 @@ components:
           enum: [concept, spec, relation, source, bind, attr, change]
         changeKind:
           type: [string, 'null']
-          description: As `Proposal.changeKind` in contracts/openapi.yaml, including `create_domain`, `edit_domain`, `delete_domain`, `move_concept_domain` and `delete_bulk` (ADR 0015).
+          description: As `Proposal.changeKind` in contracts/openapi.yaml, including `create_domain`, `edit_domain`, `delete_domain`, `move_concept_domain` and `delete_bulk` (ADR 0015), and `reset_model` (decision row 181).
         revision:
           type: integer
           minimum: 0

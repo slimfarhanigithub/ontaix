@@ -68,6 +68,7 @@ class ChangeKind(enum.StrEnum):
     DELETE_DOMAIN = "delete_domain"
     MOVE_CONCEPT_DOMAIN = "move_concept_domain"
     DELETE_BULK = "delete_bulk"
+    RESET_MODEL = "reset_model"
 
 
 class AttributeType(enum.StrEnum):

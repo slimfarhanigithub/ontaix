@@ -338,3 +338,34 @@ describe('company creation setting row', () => {
     store.ui.dialogs = [];
   });
 });
+
+describe('Reset model', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    store.ui.dialogs = [];
+    store.ui.toasts = [];
+    store.ui.proposals = [];
+  });
+
+  it('sits on Entities as an addition and proposes one reset_model change after naming what goes and what stays', async () => {
+    model();
+    store.ui.proposals = [change('rename')];
+    const created = vi.spyOn(api, 'createProposal').mockResolvedValue(change('reset_model'));
+    const dialog = render(<Dialog />);
+    const page = render(<Entities />);
+    const button = page.container.querySelector<HTMLButtonElement>('#entResetModel') as HTMLButtonElement;
+    expect(button.textContent).toBe('Reset model…');
+    expect(button.className).toBe('btn danger');
+    expect(button.closest('[data-ox-new]')).not.toBeNull();
+    const relations = store.s.links.filter((l) => l.kind !== 'bind' && !l.dying).length;
+    act(() => button.click());
+    expect(dialog.container.querySelector('.dlg .dh b')?.textContent).toBe('Reset the model?');
+    const text = dialog.container.querySelector('.dlg')?.textContent || '';
+    expect(text).toContain(`3 concepts and ${relations} relation${relations === 1 ? '' : 's'} leave every company, and 1 open proposal is rejected.`);
+    expect(text).toContain('The companies, their domain products and sources');
+    act(() => (dialog.container.querySelector('.dlg .df .btn.danger') as HTMLButtonElement).click());
+    await flush();
+    expect(created).toHaveBeenCalledWith({ type: 'change', changeKind: 'reset_model', payload: {} });
+    expect(store.ui.toasts.map((t) => t.text)).toEqual(['model reset · approve it on the canvas']);
+  });
+});

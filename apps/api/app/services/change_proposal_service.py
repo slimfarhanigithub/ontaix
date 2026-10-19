@@ -1,4 +1,5 @@
-"""Change proposals: rename, delete a concept, edit or remove a relation, remove a company.
+"""Change proposals: rename, delete a concept, edit or remove a relation, remove a company,
+reset the model.
 
 A change proposal writes no pending artefact: it points at the live row it would change through
 its payload, and the row changes only when the proposal is approved. A change to a relation
@@ -22,7 +23,7 @@ from app.models.storage.concept import Concept
 from app.models.storage.proposal import Proposal
 from app.models.storage.relation import Relation
 from app.repositories import proposal_repository
-from app.services import deletion_change_service, domain_change_service
+from app.services import deletion_change_service, domain_change_service, model_reset_service
 from app.services.deletion_impact_service import describe, names_line, resolve, to_impact
 from app.services.ontology_view_service import OntologyView
 from app.services.proposal_store_service import (
@@ -84,6 +85,10 @@ async def propose_change(
             )
         case "delete_domain" | "delete_bulk":
             return await deletion_change_service.propose(
+                session, caller, proposer, view, draft, bulk, enforce, provenance
+            )
+        case "reset_model":
+            return await model_reset_service.propose(
                 session, caller, proposer, view, draft, bulk, enforce, provenance
             )
         case _:

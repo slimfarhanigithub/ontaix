@@ -373,7 +373,8 @@ export type ChangeKind =
   | 'edit_domain'
   | 'delete_domain'
   | 'move_concept_domain'
-  | 'delete_bulk';
+  | 'delete_bulk'
+  | 'reset_model';
 
 export interface ChangeDraft extends DraftOrigin {
   type: 'change';

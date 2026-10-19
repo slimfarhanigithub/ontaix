@@ -5281,7 +5281,7 @@ components:
 
     ChangeDraft:
       type: object
-      description: A change to something already approved. `changeKind` selects which fields of `payload` apply.
+      description: A change to something already approved. `changeKind` selects which fields of `payload` apply. `reset_model` takes an empty `payload` and is a tenant-level proposal that only an Administrator at tenant scope may create (the tenant's administrator, or a super admin who entered the organization; `403` otherwise, also for an agent), `422` when the model holds no concept besides the company roots, no relation and no open proposal. Approval needs approval rights at tenant scope; it rejects every other open proposal, removes every concept except the company roots with every relation (one `concept.dying` and a `relation.removed` per relation left between roots), and bumps the revision of each domain product it emptied. The companies, their roots, domain products and sources, the tenant domains, users, groups, settings and the audit log stay. `POST /proposals/approve-all` never approves a `reset_model` proposal; it is decided on its own.
       required: [type, changeKind, payload]
       properties:
         type:
@@ -5293,7 +5293,7 @@ components:
           $ref: '#/components/schemas/ImportRef'
         changeKind:
           type: string
-          enum: [rename, delete_concept, edit_relation, remove_relation, unbind, rename_source, remove_source, remove_company, resolve_conflict, create_domain, edit_domain, delete_domain, move_concept_domain, delete_bulk]
+          enum: [rename, delete_concept, edit_relation, remove_relation, unbind, rename_source, remove_source, remove_company, resolve_conflict, create_domain, edit_domain, delete_domain, move_concept_domain, delete_bulk, reset_model]
         payload:
           type: object
           properties:
@@ -5449,7 +5449,7 @@ components:
           enum: [concept, spec, relation, source, bind, attr, change]
         changeKind:
           type: [string, 'null']
-          enum: [rename, delete_concept, edit_relation, remove_relation, unbind, rename_source, remove_source, remove_company, resolve_conflict, remove_cross_company_links, create_domain, edit_domain, delete_domain, move_concept_domain, delete_bulk, null]
+          enum: [rename, delete_concept, edit_relation, remove_relation, unbind, rename_source, remove_source, remove_company, resolve_conflict, remove_cross_company_links, create_domain, edit_domain, delete_domain, move_concept_domain, delete_bulk, reset_model, null]
         state:
           type: string
           enum: [pending, half_approved, approved, rejected]

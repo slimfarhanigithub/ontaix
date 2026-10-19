@@ -26,7 +26,8 @@ CREATE TYPE proposal_origin AS ENUM ('text', 'speech', 'document', 'suggestion',
 CREATE TYPE change_kind AS ENUM (
   'rename', 'delete_concept', 'edit_relation', 'remove_relation', 'unbind',
   'rename_source', 'remove_source', 'remove_company', 'resolve_conflict', 'remove_cross_company_links',
-  'create_domain', 'edit_domain', 'delete_domain', 'move_concept_domain', 'delete_bulk'
+  'create_domain', 'edit_domain', 'delete_domain', 'move_concept_domain', 'delete_bulk',
+  'reset_model'
 );
 CREATE TYPE attribute_type AS ENUM ('id', 'text', 'number', 'ref', 'date');
 CREATE TYPE attribute_state AS ENUM ('proposed', 'approved');
