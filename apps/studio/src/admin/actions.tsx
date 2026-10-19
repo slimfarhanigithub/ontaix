@@ -4,7 +4,7 @@
  * copy from reference/ontaix-studio-reference.html lines 947-1053. Ontology changes are
  * proposals; settings changes are immediate. The ontology-editing dialogs (move to domain,
  * company removal named from the deletion impact, domain creation, edit and deletion, bulk
- * deletion) are owner additions in the same markup.
+ * deletion, model reset) are owner additions in the same markup.
  */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -565,4 +565,31 @@ export function bulkDeleteSelection(): Promise<void> {
     return Promise.resolve();
   }
   return bulkDeleteDialog(companies[0], cells, []);
+}
+
+/**
+ * Confirms resetting the whole model in one proposal: every concept except the company roots
+ * and every relation leave, every other open proposal is rejected, and the companies stay. Only
+ * a tenant administrator or a super admin may propose it; the server refuses anyone else.
+ */
+export function resetModelDialog(): void {
+  const concepts = store.s.nodes.filter((n) => n.kind === 'concept' && !n.dying).length;
+  const relations = store.s.links.filter((l) => l.kind !== 'bind' && !l.dying).length;
+  const open = store.ui.proposals.length;
+  confirmDialog(
+    'Reset the model?',
+    <>
+      <p>
+        {`${plural(concepts, 'concept')} and ${plural(relations, 'relation')} leave every company, and ${plural(open, 'open proposal')} ${open === 1 ? 'is' : 'are'} rejected.`}
+      </p>
+      <p>The companies, their domain products and sources, the domains, users, groups, settings and the audit log stay. The reset is a proposal: it changes nothing until a tenant-wide Owner or Governor approves it on its own.</p>
+    </>,
+    'Propose reset',
+    () =>
+      proposeThen({ type: 'change', changeKind: 'reset_model', payload: {} }, () => {
+        store.toast2('Proposed', 'model reset · approve it on the canvas');
+        renderAdmin();
+      }),
+    true,
+  );
 }

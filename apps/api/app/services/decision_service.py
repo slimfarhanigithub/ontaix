@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import Caller
 from app.models.api.proposal import BulkResult, DecisionResult
 from app.models.decisions.decision_outcome import DecisionOutcome
-from app.models.storage.base import ProposalState, ProposalType
+from app.models.storage.base import ChangeKind, ProposalState, ProposalType
 from app.models.storage.proposal import Proposal
 from app.repositories import (
     concept_repository,
@@ -176,6 +176,8 @@ async def approve_ready(
                 continue
             if not may_approve(caller, view, proposal) or _needs_second_approval(view, proposal):
                 continue
+            if _decided_alone(proposal):
+                continue
             if not view.readiness(proposal)[0]:
                 continue
             await _complete_approval(session, caller, view, proposal, proposals, 1, True)
@@ -205,6 +207,11 @@ async def _load_decidable(
 async def _lock_open(session: AsyncSession, caller: Caller) -> list[Proposal]:
     await decision_lock_service.acquire(session, caller.tenant_id)
     return await proposal_repository.lock_open(session, caller.tenant_id)
+
+
+def _decided_alone(proposal: Proposal) -> bool:
+    """A model reset is approved only by its own decision, never by a bulk approval."""
+    return proposal.change_kind is ChangeKind.RESET_MODEL
 
 
 def _may_approve(caller: Caller, view: OntologyView, proposal: Proposal) -> bool:
@@ -341,6 +348,8 @@ async def _approve_rounds(
         progressed = False
         for proposal in list(proposals):
             if proposal.state not in OPEN_STATES or not _may_approve(caller, view, proposal):
+                continue
+            if _decided_alone(proposal):
                 continue
             if not view.readiness(proposal)[0]:
                 continue

@@ -1314,6 +1314,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     if (draft.changeKind === 'move_concept_domain') return pMoveConcept(pl.conceptId || '', pl.domainKey || '');
     if (draft.changeKind === 'delete_bulk')
       return pBulkDelete({ companyId: pl.companyId || '', conceptIds: pl.conceptIds, domainProductIds: pl.domainProductIds });
+    if (draft.changeKind === 'reset_model') return pResetModel();
     throw new Refusal(422, 'unsupported_change', `${draft.changeKind} is not available in the mock API`);
   }
 
@@ -1765,6 +1766,53 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     });
   }
 
+  /** Like the API: every concept but the roots and every relation leave on approval, every other open proposal is rejected. */
+  function pResetModel(): MProposal {
+    const doomed = () => concepts.filter((c) => c.kind !== 'root' && !c.dyingAt);
+    const live = () => relations.filter((l) => !l.dyingAt);
+    const nc = doomed().length,
+      nr = live().length,
+      no = open().length;
+    if (!nc && !nr && !no) throw new Refusal(422, 'validation_failed', 'the model is already empty');
+    const n = (k: number, w: string) => `${k.toLocaleString('en')} ${w}${k === 1 ? '' : 's'}`;
+    return newProposal({
+      type: 'change',
+      changeKind: 'reset_model',
+      title: 'Reset the model',
+      heading: KIND_HEADING.change,
+      color: C.conflict,
+      companyId: null,
+      domainId: null,
+      parentLabel: null,
+      deps: [],
+      ready: () => true,
+      waitFor: null,
+      html: `Remove <b>${n(nc, 'concept')}</b> and ${n(nr, 'relation')} from every company, and reject ${n(no, 'open proposal')}`,
+      why: 'every other open proposal is rejected · the companies, their domain products and sources, the domains, users, groups, settings and the audit log stay',
+      caption: 'The model was reset. The companies stay, ready to be taught again.',
+      conceptId: null,
+      relationId: null,
+      relationIds: [],
+      sourceId: null,
+      bindingIds: [],
+      attributeId: null,
+      apply() {
+        for (const q of open()) if (q !== this) reject(q, []);
+        const t = iso();
+        const gone = doomed();
+        const ids = new Set(gone.map((c) => c.id));
+        const products = new Set(gone.map((c) => domainOfConcept(c)?.id).filter((d): d is string => !!d));
+        for (const c of gone) c.dyingAt = t;
+        const rels = live();
+        for (const l of rels) l.dyingAt = t;
+        bindings = bindings.filter((b) => !ids.has(b.conceptId));
+        this.conceptIds = gone.map((c) => c.id);
+        this.relationIds = rels.map((l) => l.id);
+        this.domainIds = [...products];
+      },
+    });
+  }
+
   /** Like the API, a relation end given by both id and label (or neither) refuses the whole request. */
   function refuseMixedDrafts(drafts: T.ProposalDraft[]): void {
     for (const draft of drafts) {
@@ -1881,7 +1929,7 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     if (p.apply) p.apply();
     const dom = domainById(p.domainId);
     if (dom) dom.revision += 1;
-    if (p.changeKind === 'edit_domain' || p.changeKind === 'delete_bulk') for (const d of (p.domainIds || []).map(domainById)) if (d) d.revision += 1;
+    if (p.changeKind === 'edit_domain' || p.changeKind === 'delete_bulk' || p.changeKind === 'reset_model') for (const d of (p.domainIds || []).map(domainById)) if (d) d.revision += 1;
     const result = decision(p, cascade, entry, p.caption ?? undefined);
     emit('proposal.approved', { ...result, audit: undefined }, bulk);
     afterApply();

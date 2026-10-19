@@ -25,6 +25,7 @@ from app.services import (
     attribute_proposal_service,
     deletion_change_service,
     domain_change_service,
+    model_reset_service,
     outbox_service,
 )
 from app.services.concept_removal_service import remove_concepts
@@ -74,6 +75,10 @@ async def apply(
             )
         case ChangeKind.DELETE_DOMAIN | ChangeKind.DELETE_BULK:
             return await deletion_change_service.apply(
+                session, caller, view, proposal, open_proposals, bulk
+            )
+        case ChangeKind.RESET_MODEL:
+            return await model_reset_service.apply(
                 session, caller, view, proposal, open_proposals, bulk
             )
         case _:

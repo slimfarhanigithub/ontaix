@@ -4,7 +4,8 @@
  * the canvas shows; every change they offer is a proposal. The owner additions for editing, each
  * marked `data-ox-new` and hidden from the screenshot suite: a checkbox column and `Delete
  * selected` on Entities and Domain products, `Move` per entity, `New domain`, `Edit` and `Delete`
- * per domain product, and rows for tenant domains no company has cells in yet.
+ * per domain product, rows for tenant domains no company has cells in yet, and `Reset model…` on
+ * Entities.
  */
 import { useEffect, useState } from 'react';
 
@@ -27,6 +28,7 @@ import {
   newDomainDialog,
   removeCompanyDialog,
   renameDialog,
+  resetModelDialog,
 } from '../actions';
 import { List, type Column } from '../List';
 import { Tg } from '../Toggle';
@@ -114,9 +116,14 @@ export function Entities() {
           filterKey="company"
           pageSize={40}
           extra={
-            <BusyButton className="btn danger" id="entDeleteSelected" disabled={!chosen.length} onClick={() => deletePicked(chosen, [])}>
-              {`Delete selected (${chosen.length})`}
-            </BusyButton>
+            <>
+              <BusyButton className="btn danger" id="entDeleteSelected" disabled={!chosen.length} onClick={() => deletePicked(chosen, [])}>
+                {`Delete selected (${chosen.length})`}
+              </BusyButton>
+              <button className="btn danger" id="entResetModel" onClick={resetModelDialog}>
+                Reset model…
+              </button>
+            </>
           }
           renderRow={(r) => (
             <>
