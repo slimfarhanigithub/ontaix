@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { createScene } from '../canvas/state';
-import { northwindModel, settleTweens } from '../canvas/testModels';
+import { fixtureModel, northwindModel, settleTweens } from '../canvas/testModels';
+import { ease } from '../canvas/colour';
 import { DOMAIN_TEMPLATES } from '../canvas/constants';
 import { dimOf, hitAt } from '../canvas/focus';
-import type { Node } from '../canvas/types';
+import type { Company, Node } from '../canvas/types';
 import {
   ACT_ONE,
   bornCount,
@@ -34,6 +35,29 @@ import type { View } from '../canvas/view';
 const DOMAINS = DOMAIN_TEMPLATES.map((d) => ({ key: d.key, name: d.name, color: d.color }));
 
 const view = (W: number, H: number): View => ({ W, H, panelOff: () => false }) as unknown as View;
+
+/** Northwind Industries with its root only: a company with no concept yet. */
+function companyAlone(s: ReturnType<typeof createScene>): Company {
+  const company = northwindModel(s);
+  s.nodes = s.nodes.filter((n) => n === company.root);
+  s.links = [];
+  return company;
+}
+
+/** Runs the canvas's tweens to `t`, as the physics step does. */
+function tweenTo(nodes: Iterable<Node>, t: number): void {
+  for (const n of nodes) {
+    if (!n.tween) continue;
+    const q = Math.min(1, Math.max(0, (t - n.tween.start) / 1.3));
+    const e = ease(q);
+    n.x = n.tween.fx + (n.tween.tx - n.tween.fx) * e;
+    n.y = n.tween.fy + (n.tween.ty - n.tween.fy) * e;
+    if (q >= 1) {
+      n.tween = null;
+      n.pinned = true;
+    }
+  }
+}
 
 describe('the brain shape', () => {
   it('draws the same points from the same seed, about 3,400 on a large screen and 1,800 on a phone', () => {
@@ -99,38 +123,141 @@ describe('the brain vocabulary', () => {
 });
 
 describe('the demo brain', () => {
-  it('starts from the company alone: the root moves to the stem, every other real cell is set aside and comes back on stop', () => {
+  it('starts from the company alone: the root moves to the stem at once, and comes back on stop', () => {
     const s = createScene();
-    northwindModel(s);
+    const company = companyAlone(s);
     settleTweens(s);
-    const before = new Map(s.nodes.map((n) => [n, [n.x, n.y]]));
-    const company = s.companies[0];
     const root = company.root as Node;
+    const before = [root.x, root.y];
     const home = [company.x, company.y];
     const d = startBrain(s, DOMAINS, 100, { spacing: SPACING_SMALL });
     expect(s.brain).toBe(d);
     expect(d.root).toBe(root);
     expect(d.company).toBe(company.name);
     expect(d.lobes).toBe(9);
-    expect(root.tween?.tx).toBe(company.x);
-    const others = s.nodes.filter((n) => n !== root);
-    expect(others.length).toBeGreaterThan(0);
-    for (const n of others) {
-      expect(d.aside.has(n)).toBe(true);
-      expect([n.tween?.tx, n.tween?.ty]).toEqual(before.get(n));
-    }
-    brainStep(s, view(1440, 900), 101);
-    expect(dimOf(s, others[0])).toBe(0);
-    expect(dimOf(s, root)).toBe(1);
-    expect(hitAt(s, others[0].x, others[0].y, null)).not.toBe(others[0]);
+    expect(d.joined.size).toBe(0);
+    expect(root.tween?.start).toBe(100);
+    expect([root.tween?.tx, root.tween?.ty]).toEqual([company.x, company.y]);
     stopBrain(s, 110);
     expect([company.x, company.y]).toEqual(home);
+    expect([root.tween?.tx, root.tween?.ty]).toEqual(before);
+  });
+
+  it('builds on the model already there: every concept joins the lobe of its domain, other companies are set aside', () => {
+    const s = createScene();
+    const { northwind, aurora } = fixtureModel(s);
+    settleTweens(s);
+    const before = new Map(s.nodes.map((n) => [n, [n.x, n.y]]));
+    const concepts = s.nodes.filter((n) => n.company === northwind && n.kind === 'concept' && !n.dying);
+    s.activeCompany = northwind;
+    const d = startBrain(s, DOMAINS, 100, { spacing: SPACING_SMALL });
+    expect(d.stories).toBe(0);
+    expect(d.storyDomains).toBe(0);
+    expect([...d.joined.keys()].sort((a, b) => a.id - b.id)).toEqual(concepts.sort((a, b) => a.id - b.id));
+    for (const n of s.nodes.filter((x) => x.company === aurora)) expect(d.aside.has(n)).toBe(true);
+    for (const n of d.joined.keys()) expect(d.aside.has(n)).toBe(false);
+    // Joined concepts never touch one another and never share a place with a brain cell.
+    const places = [...d.joined.values()];
+    for (let i = 0; i < places.length; i++)
+      for (let j = i + 1; j < places.length; j++)
+        expect(Math.hypot(places[i].x - places[j].x, places[i].y - places[j].y)).toBeGreaterThan(d.spacing * 1.5);
+    const placed = new Set(places.map((p) => `${p.x},${p.y}`));
+    for (const c of d.cells) expect(placed.has(`${c.x},${c.y}`)).toBe(false);
+    // Each joins its own domain's lobe: nearer its lobe's brain cells than any other lobe's, on the whole.
+    let home = 0;
+    for (const [n, p] of d.joined) {
+      let best = d.cells[0];
+      for (const c of d.cells) if (Math.hypot(c.x - p.x, c.y - p.y) < Math.hypot(best.x - p.x, best.y - p.y)) best = c;
+      if (best.domain === n.domain?.key) home++;
+    }
+    expect(home).toBeGreaterThan(d.joined.size * 0.8);
+    // The model stands where it was through the first act, then the root and its concepts leave together.
+    const root = northwind.root as Node;
+    for (const n of [...d.joined.keys(), root]) {
+      expect([n.x, n.y]).toEqual(before.get(n));
+      expect(n.tween?.start).toBe(100 + d.act3);
+    }
+    expect(dimOf(s, concepts[0])).toBe(1);
+    expect(hitAt(s, concepts[0].x, concepts[0].y, null)).toBe(concepts[0]);
+    tweenTo(s.nodes, 100 + d.act3 + 1.3);
+    for (const [n, p] of d.joined) expect(Math.hypot(n.x - p.x, n.y - p.y)).toBeLessThan(1e-6);
+    expect(Math.hypot(root.x - (d.rootAt?.x ?? 0), root.y - (d.rootAt?.y ?? 0))).toBeLessThan(1e-6);
+    // Stop puts every real cell back.
+    stopBrain(s, 130);
     for (const n of s.nodes) expect([n.tween?.tx, n.tween?.ty]).toEqual(before.get(n));
+  });
+
+  it('builds on the company being taught, or on the company that holds concepts when the one taught has none', () => {
+    const s = createScene();
+    const { aurora } = fixtureModel(s);
+    s.activeCompany = aurora;
+    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
+    expect(d.company).toBe(aurora.name);
+    expect([...d.joined.keys()].every((n) => n.company === aurora)).toBe(true);
+    expect(d.joined.size).toBeGreaterThan(0);
+
+    // A company added after a reset is taught while the home company is empty: the brain builds on the one with concepts.
+    const t = createScene();
+    const { northwind: home, aurora: added } = fixtureModel(t);
+    t.nodes = t.nodes.filter((n) => n.company !== home || n === home.root);
+    t.links = t.links.filter((l) => l.a.company !== home && l.b.company !== home);
+    t.activeCompany = home;
+    const e = startBrain(t, DOMAINS, 0, { spacing: SPACING_SMALL });
+    expect(e.company).toBe(added.name);
+    expect(e.stories).toBe(0);
+    expect(e.joined.size).toBe(t.nodes.filter((n) => n.company === added && n.kind === 'concept').length);
+    expect(e.aside.has(home.root as Node)).toBe(true);
+  });
+
+  it('grows the brain on from the concepts already there, once they have reached their places', () => {
+    const s = createScene();
+    northwindModel(s);
+    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
+    expect(brainPhase(d, 1)).toBe('company');
+    expect(brainPhase(d, d.act3 + 0.1)).toBe('brain');
+    expect(bornCount(d, d.act3 + 1.2)).toBe(0);
+    expect(d.growAt).toBeCloseTo(d.act3 + 1.3);
+    expect(bornDomains(d, d.growAt)).toBe(9);
+    expect(brainGrown(d, d.duration)).toBe(true);
+    expect(d.cells.length).toBeGreaterThan(1000);
+    // The first brain cells bud from the joined concepts and the root.
+    const starts = new Set([...d.joined.values()].map((p) => `${p.x},${p.y}`));
+    starts.add(`${d.rootAt?.x},${d.rootAt?.y}`);
+    const first = d.cells.slice(0, 40).filter((c) => starts.has(`${c.px},${c.py}`));
+    expect(first.length).toBeGreaterThan(0);
+  });
+
+  it('replays from the model as it stood, and a paused demo holds its concepts back', () => {
+    const s = createScene();
+    northwindModel(s);
+    settleTweens(s);
+    const before = new Map(s.nodes.map((n) => [n, [n.x, n.y]]));
+    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
+    const n = [...d.joined.keys()][0];
+    pauseBrain(d, 1);
+    resumeBrain(d, 11);
+    expect(n.tween?.start).toBe(d.act3 + 10);
+    tweenTo(s.nodes, 40);
+    replayBrain(s, d, 50);
+    expect([n.x, n.y]).toEqual(before.get(n));
+    expect(n.tween?.start).toBe(50 + d.act3);
+    expect(brainPhase(d, 50)).toBe('company');
+  });
+
+  it('builds on the model at once when animations are skipped', () => {
+    const s = createScene();
+    northwindModel(s);
+    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL, instant: true });
+    expect(brainGrown(d, 0)).toBe(true);
+    for (const [n, p] of d.joined) {
+      expect(n.tween).toBeNull();
+      expect([n.x, n.y]).toEqual([p.x, p.y]);
+    }
   });
 
   it('grows three domains beside the company, each with named concepts and relations within and across them', () => {
     const s = createScene();
-    northwindModel(s);
+    companyAlone(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
     expect(d.storyDomains).toBe(STORY_DOMAINS);
     const story = d.cells.slice(0, d.stories);
@@ -157,7 +284,7 @@ describe('the demo brain', () => {
 
   it('plays the acts in order and grows the rest of the brain fast, faster and faster', () => {
     const s = createScene();
-    northwindModel(s);
+    companyAlone(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
     expect(brainPhase(d, 1)).toBe('company');
     expect(brainPhase(d, ACT_ONE + 0.1)).toBe('domains');
@@ -178,7 +305,7 @@ describe('the demo brain', () => {
 
   it('grows nothing on the root or a story cell, every brain cell from a cell or the root close by', () => {
     const s = createScene();
-    northwindModel(s);
+    companyAlone(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
     const placed = new Set(d.cells.slice(0, d.stories).map((c) => `${c.x},${c.y}`));
     placed.add(`${d.root?.tween?.tx},${d.root?.tween?.ty}`);
@@ -192,7 +319,7 @@ describe('the demo brain', () => {
 
   it('grows a shorter story on a phone', () => {
     const s = createScene();
-    northwindModel(s);
+    companyAlone(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL, small: true });
     expect(d.stories).toBe(3 * 5);
   });
@@ -208,7 +335,7 @@ describe('the demo brain', () => {
 
   it('pauses, resumes and replays from the company alone', () => {
     const s = createScene();
-    northwindModel(s);
+    companyAlone(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
     pauseBrain(d, 20);
     const held = bornCount(d, 20);
@@ -223,7 +350,7 @@ describe('the demo brain', () => {
 
   it('grows at once when animations are skipped', () => {
     const s = createScene();
-    northwindModel(s);
+    companyAlone(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL, instant: true });
     expect(brainGrown(d, 0)).toBe(true);
     expect(d.veil).toBe(1);
@@ -233,7 +360,7 @@ describe('the demo brain', () => {
 
   it('fades out after stop, brings the cells set aside back, and then leaves the scene', () => {
     const s = createScene();
-    northwindModel(s);
+    fixtureModel(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
     const other = [...d.aside][0];
     stopBrain(s, 10);
@@ -248,7 +375,7 @@ describe('the demo brain', () => {
 
   it('keeps the camera close on the story, then pulls back past the usual 0.3 zoom, until the user zooms', () => {
     const s = createScene();
-    northwindModel(s);
+    companyAlone(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_LARGE });
     const v = view(1440, 900);
     brainStep(s, v, 1);
