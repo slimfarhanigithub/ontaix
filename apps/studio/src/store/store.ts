@@ -1356,7 +1356,7 @@ class StudioStore {
   // ------------------------------------------------------------ demo brain
 
   /**
-   * Plays the demo brain from the first company: drawn only, never sent to the API. The shown
+   * Plays the demo brain from the company `startBrain` picks: drawn only, never sent to the API. The shown
    * domains take the first lobes and the story grows the first three of them; a phone or a touch
    * screen grows a smaller brain and a shorter story.
    */

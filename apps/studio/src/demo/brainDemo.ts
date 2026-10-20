@@ -3,13 +3,16 @@
  * in three acts. It is drawn only: nothing goes to the API, nothing is saved, and a reload or
  * Stop brings the real model back where it was.
  *
- * First the company stands alone: every other real cell fades out and the company's root moves
- * to the top of the brain stem, close up. Then three domains bud from it one after another,
- * each with a few named concepts, their relations drawn one by one and a few relations across
- * the domains, while the camera stays close enough to read every name. Last, the camera pulls
- * back, the story cells fly to the cores of their lobes and the rest of the brain grows fast,
- * faster and faster, every domain filling one lobe of a side view of a brain whose faint
- * outline shows from the start of the pull-back. Once grown, the brain holds still.
+ * A company that already holds concepts is the brain's starting point: its model stands as it
+ * is, close up, then the root moves to the top of the brain stem and every concept joins the lobe
+ * of its domain while the camera pulls back, and the brain grows on from them. A company with no
+ * concept yet stands alone at the top of the brain stem, close up, then three domains bud from its
+ * root one after another, each with a few named concepts, their relations drawn one by one and a
+ * few relations across the domains, while the camera stays close enough to read every name; then
+ * the camera pulls back and the story cells fly to the cores of their lobes. Either way the rest
+ * of the brain grows fast, faster and faster, every domain filling one lobe of a side view of a
+ * brain whose faint outline shows from the start of the pull-back. Once grown, the brain holds
+ * still. Cells of other companies fade out and stay set aside until Stop.
  */
 import { CELL, C, DOMAIN_TEMPLATES, REDUCED } from '../canvas/constants';
 import { clamp, ease } from '../canvas/colour';
@@ -78,8 +81,13 @@ export interface BrainDemo {
   /** The company the demo starts from, and its root; null on a canvas with no company. */
   company: string | null;
   root: Node | null;
-  /** Seconds after the start when the third act begins, and when the brain is grown. */
+  /** The root's place at the top of the brain stem. */
+  rootAt: { x: number; y: number } | null;
+  /** The company's real concepts that join the brain, each with its place in its lobe. */
+  joined: Map<Node, { x: number; y: number }>;
+  /** Seconds after the start when the third act begins, when the brain cells start budding, and when the brain is grown. */
   act3: number;
+  growAt: number;
   duration: number;
   /** Bounds of the whole grown brain, the root included: x0, y0, x1, y1. */
   box: [number, number, number, number];
@@ -93,7 +101,7 @@ export interface BrainDemo {
   /** Everything at once (Skip animation), and the reduced-motion drawing. */
   instant: boolean;
   reduced: boolean;
-  /** The real cells set aside while the demo is on, and how far they have faded out (0 to 1). */
+  /** The real cells set aside while the demo is on, with no place in the brain, and how far they have faded out (0 to 1). */
   aside: Set<Node>;
   veil: number;
   /** Where every real cell and company stood before the demo, to put them back. */
@@ -129,6 +137,10 @@ export const MIGRATE = 1.6;
 export const ZOOM_OUT = 2.6;
 /** Third act: seconds before the first brain cell, the growth time, and how sharply it speeds up. */
 const GROW_DELAY = 0.6;
+/** Seconds a real cell takes to reach its place in the brain: the canvas's own tween. */
+const JOIN = 1.3;
+/** Least distance between two real cells in the brain, in neighbour distances, so canvas-sized cells never touch. */
+const JOIN_GAP = 1.9;
 export const GROW = 10;
 const SPEED_UP = 1.5;
 /** Story layout beside the root, in world units: domain distance, concept distance and arc. */
@@ -184,9 +196,9 @@ export function brainDomains(shown: BrainDomain[], held: Set<string>): BrainDoma
 }
 
 /**
- * Plans the brain around the company and starts it at `t`: every other real cell is set aside,
- * the root moves to the top of the brain stem and the demo is set on the scene. A demo already on
- * is replaced.
+ * Plans the brain around the company and starts it at `t`: the company's concepts take places in
+ * the lobes of their domains, every other real cell is set aside, the root heads for the top of
+ * the brain stem and the demo is set on the scene. A demo already on is replaced.
  */
 export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: BrainOptions = {}): BrainDemo {
   if (s.brain) finishBrain(s);
@@ -200,10 +212,21 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
   const cy = -0.08 * scale;
   const world = (p: BrainPoint): [number, number] => [cx + p.x * scale, cy + p.y * scale];
 
-  const company = s.companies.find((c) => c.root && !c.root.dying) ?? null;
-  const root = company?.root ?? null;
   const real = s.nodes.filter((n) => !n.dying);
-  const aside = new Set(real.filter((n) => n !== root));
+  // The brain builds on the company being taught when it holds concepts, else on the first one
+  // that does; on a canvas with no concept it starts from the company being taught, or the first.
+  const live = s.companies.filter((c) => c.root && !c.root.dying);
+  const holds = (c: Company) => real.some((n) => n.kind === 'concept' && n.company === c);
+  const active = live.find((c) => c === s.activeCompany) ?? null;
+  const company = (active && holds(active) ? active : live.find(holds)) ?? active ?? live[0] ?? null;
+  const root = company?.root ?? null;
+  const aside = new Set<Node>();
+  const own: Node[] = [];
+  for (const n of real) {
+    if (n === root) continue;
+    if (company && n.kind === 'concept' && n.company === company) own.push(n);
+    else aside.add(n);
+  }
 
   const taken = new Set<number>();
   const nearestFree = (ux: number, uy: number, ok: (i: number) => boolean): number => {
@@ -224,6 +247,31 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
   const [rx, ry] = stemTop >= 0 ? world(pts[stemTop]) : [cx, cy];
   const coreOf = (lobe: number): [number, number] => LOBE_CENTRES[lobe] ?? [0, -0.2];
 
+  // The company's concepts join the brain, oldest first, so a parent sits nearer its lobe's core
+  // than its children. A concept of no domain joins the stem; one whose domain has no lobe (a
+  // hidden domain) is set aside.
+  const joined = new Map<Node, { x: number; y: number }>();
+  const joinedPoints: number[] = [];
+  const apart = (j: number) => joinedPoints.every((k) => Math.hypot(pts[j].x - pts[k].x, pts[j].y - pts[k].y) >= spacing * JOIN_GAP);
+  for (const n of own.slice().sort((a, b) => a.born - b.born || a.id - b.id)) {
+    const lobe = n.domain ? domains.findIndex((x) => x.key === n.domain?.key) : -1;
+    if (n.domain && lobe < 0) {
+      aside.add(n);
+      continue;
+    }
+    const [ux, uy] = lobe >= 0 ? coreOf(lobe) : STEM_TOP;
+    const inLobe = (j: number) => lobes[j] === lobe;
+    let i = nearestFree(ux, uy, (j) => inLobe(j) && apart(j));
+    if (i < 0) i = nearestFree(ux, uy, inLobe);
+    if (i < 0) {
+      aside.add(n);
+      continue;
+    }
+    joinedPoints.push(i);
+    const [x, y] = world(pts[i]);
+    joined.set(n, { x, y });
+  }
+
   // Names come from one source per domain, so the brain never repeats a story name.
   const names = new Map<string, { next(): string }>();
   const nameOf = (key: string, label: string) => {
@@ -238,7 +286,8 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
   // Second act: the story cells, beside the root, each with its place in its lobe's core.
   const cells: BrainCell[] = [];
   const links: BrainLink[] = [];
-  const story = domains.slice(0, STORY_DOMAINS);
+  // A company with concepts of its own needs no story: its model is the story.
+  const story = joined.size ? [] : domains.slice(0, STORY_DOMAINS);
   const perDomain = o.small ? STORY_CONCEPTS_SMALL : STORY_CONCEPTS;
   const hubR = o.small ? HUB_R_SMALL : HUB_R,
     conceptR = o.small ? CONCEPT_R_SMALL : CONCEPT_R,
@@ -321,11 +370,12 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
   const stories = cells.length;
   const act3 = stories ? clock + HOLD : ACT_ONE;
 
-  // Third act: the rest of the brain grows from the root, the story cells and the core of every
-  // lobe no story reached.
+  // Third act: the rest of the brain grows from the root, the story cells, the joined concepts and
+  // the core of every lobe none of them reached.
   const seeds = [...taken];
+  const reached = new Set(seeds.map((i) => lobes[i]));
   domains.forEach((_, lobe) => {
-    if (lobe < story.length) return;
+    if (reached.has(lobe)) return;
     const i = nearestFree(...coreOf(lobe), (j) => lobes[j] === lobe);
     if (i >= 0) {
       taken.delete(i);
@@ -336,7 +386,8 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
   const { order, parent } = growthOrder(pts, near, seeds, seed + 4);
   const grown = order.filter((i) => !taken.has(i));
   const total = grown.length;
-  const g0 = act3 + GROW_DELAY;
+  // Joined concepts reach their places before the first brain cell buds from them.
+  const g0 = act3 + (joined.size ? JOIN : GROW_DELAY);
   for (const [k, i] of grown.entries()) {
     const lobe = lobes[i];
     const d = lobe >= 0 ? domains[lobe] : null;
@@ -377,14 +428,14 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     y0 = ry,
     x1 = rx,
     y1 = ry;
-  for (const c of cells) {
+  for (const c of [...cells, ...joined.values()]) {
     x0 = Math.min(x0, c.x);
     y0 = Math.min(y0, c.y);
     x1 = Math.max(x1, c.x);
     y1 = Math.max(y1, c.y);
   }
 
-  const duration = Math.max(act3 + MIGRATE, total ? g0 + GROW : act3);
+  const duration = Math.max(act3 + (joined.size ? JOIN : MIGRATE), total ? g0 + GROW : act3);
   const instant = !!o.instant;
   const demo: BrainDemo = {
     cells,
@@ -396,7 +447,10 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     spacing: WORLD_SPACING,
     company: company?.name ?? null,
     root,
+    rootAt: root ? { x: rx, y: ry } : null,
+    joined,
     act3,
+    growAt: g0,
     duration,
     box: [x0, y0, x1, y1],
     start: instant ? t - duration : t,
@@ -411,19 +465,41 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     saved: new Map(real.map((n) => [n, { x: n.x, y: n.y, pinned: n.pinned }])),
     savedCompanies: new Map(s.companies.map((c) => [c, { x: c.x, y: c.y }])),
   };
-  // The root moves to the top of the stem and takes its company along; the cells set aside stay
-  // where they are.
-  if (root) {
-    if (company) {
-      company.x = rx;
-      company.y = ry;
-    }
-    root.tween = { fx: root.x, fy: root.y, tx: rx, ty: ry, start: t, pin: true };
+  // The company follows its root to the top of the stem; the cells set aside stay where they are.
+  if (root && company) {
+    company.x = rx;
+    company.y = ry;
   }
   for (const n of aside) n.tween = { fx: n.x, fy: n.y, tx: n.x, ty: n.y, start: t, pin: true };
+  moveIntoBrain(demo);
   s.brain = demo;
   s.userZoomed = false;
   return demo;
+}
+
+/**
+ * Sets the root and the joined concepts on their way into the brain from where they stood before
+ * the demo: the root at once when the company stands alone, the root and its concepts together at
+ * the third act otherwise; already in place when the demo grows at once.
+ */
+function moveIntoBrain(d: BrainDemo): void {
+  const moves: [Node, { x: number; y: number }][] = [...d.joined];
+  if (d.root && d.rootAt) moves.push([d.root, d.rootAt]);
+  const leave = d.start + (d.joined.size ? d.act3 : 0);
+  for (const [n, to] of moves) {
+    if (d.instant) {
+      n.tween = null;
+      n.x = to.x;
+      n.y = to.y;
+      n.vx = n.vy = 0;
+      n.pinned = true;
+      continue;
+    }
+    const from = d.saved.get(n) ?? { x: n.x, y: n.y };
+    n.x = from.x;
+    n.y = from.y;
+    n.tween = { fx: from.x, fy: from.y, tx: to.x, ty: to.y, start: leave, pin: true };
+  }
 }
 
 /** Seconds of the demo so far: the time since the start, less the time paused. */
@@ -470,7 +546,7 @@ export function bornLinks(d: BrainDemo, t: number): number {
 /** How many domains have grown at `t`. */
 export function bornDomains(d: BrainDemo, t: number): number {
   const e = brainElapsed(d, t);
-  if (e >= d.act3 + GROW_DELAY) return d.lobes;
+  if (e >= d.growAt) return d.lobes;
   let k = 0;
   for (let i = 0; i < d.stories; i++) if (d.cells[i].story?.hub && d.cells[i].born <= e) k++;
   return k;
@@ -493,17 +569,22 @@ export function pauseBrain(d: BrainDemo, t: number): void {
   if (d.pausedAt === null) d.pausedAt = t;
 }
 
+/** Grows on from where it paused; a real cell that had not yet left for the brain leaves that much later. */
 export function resumeBrain(d: BrainDemo, t: number): void {
   if (d.pausedAt === null) return;
-  d.pausedFor += t - d.pausedAt;
+  const paused = t - d.pausedAt;
+  for (const n of [...d.joined.keys(), ...(d.root ? [d.root] : [])])
+    if (n.tween && n.tween.start > d.pausedAt) n.tween.start += paused;
+  d.pausedFor += paused;
   d.pausedAt = null;
 }
 
-/** Plays the demo again from the company alone; the cells set aside stay aside. */
+/** Plays the demo again from the company as it stood; the cells set aside stay aside. */
 export function replayBrain(s: SceneState, d: BrainDemo, t: number): void {
   d.start = d.instant ? t - d.duration : t;
   d.pausedAt = null;
   d.pausedFor = 0;
+  if (d.joined.size) moveIntoBrain(d);
   s.userZoomed = false;
 }
 
@@ -576,10 +657,29 @@ export function brainStep(s: SceneState, v: View, t: number): void {
   s.cam.ty = ty - (top - bottom) / 2 / ts;
 }
 
-/** Zoom and centre that show the root and the story cells born after `e` seconds, at their places beside it. */
+/**
+ * Zoom and centre that show the company's model where it stood before the demo, or the root and
+ * the story cells born after `e` seconds, at their places beside it.
+ */
 function storyView(d: BrainDemo, v: View, e: number): [number, number, number] {
-  const rx = d.root ? (d.root.tween?.tx ?? d.root.x) : (d.box[0] + d.box[2]) / 2;
-  const ry = d.root ? (d.root.tween?.ty ?? d.root.y) : (d.box[1] + d.box[3]) / 2;
+  const [top, bottom] = v.W > 900 ? CLEAR_WIDE : CLEAR_NARROW;
+  if (d.joined.size) {
+    let x0 = Infinity,
+      y0 = Infinity,
+      x1 = -Infinity,
+      y1 = -Infinity;
+    for (const n of [...d.joined.keys(), ...(d.root ? [d.root] : [])]) {
+      const at = d.saved.get(n) ?? n;
+      x0 = Math.min(x0, at.x - 120);
+      y0 = Math.min(y0, at.y - 90);
+      x1 = Math.max(x1, at.x + 120);
+      y1 = Math.max(y1, at.y + 100);
+    }
+    const ts = clamp(Math.min((v.W - panelW(v) - 80) / (x1 - x0), (v.H - top - bottom) / (y1 - y0)), STORY_MIN_ZOOM, 1);
+    return [ts, (x0 + x1) / 2, (y0 + y1) / 2];
+  }
+  const rx = d.rootAt ? d.rootAt.x : (d.box[0] + d.box[2]) / 2;
+  const ry = d.rootAt ? d.rootAt.y : (d.box[1] + d.box[3]) / 2;
   let x0 = rx - 120,
     y0 = ry - 120,
     x1 = rx + 120,
@@ -592,7 +692,6 @@ function storyView(d: BrainDemo, v: View, e: number): [number, number, number] {
     x1 = Math.max(x1, p.x + 90);
     y1 = Math.max(y1, p.y + 70);
   }
-  const [top, bottom] = v.W > 900 ? CLEAR_WIDE : CLEAR_NARROW;
   const ts = clamp(Math.min((v.W - panelW(v) - 80) / (x1 - x0), (v.H - top - bottom) / (y1 - y0)), STORY_MIN_ZOOM, 1);
   return [ts, (x0 + x1) / 2, (y0 + y1) / 2];
 }
