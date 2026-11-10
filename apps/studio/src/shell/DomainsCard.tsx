@@ -2,9 +2,11 @@
  * The domain products card and its toggle. Markup from reference/ontaix-studio-reference.html
  * lines 222-223; behaviour from `renderDomains` (lines 621-632) and `toggleDomainsCard`
  * (lines 552-554). The toggle and the card stack in the left-hand dock (`.dock-l`), which keeps
- * the toggle 8 px above the card as `placeDomainsToggle` does, without measuring.
+ * the toggle 8 px above the card as `placeDomainsToggle` does, without measuring. The dock
+ * steps aside while the demo brain grows, so the canvas is the brain's alone.
  */
 import { liveOf } from '../canvas/state';
+import { brainRunning } from '../demo/BrainControls';
 import { themedColour } from '../design/tokens';
 import { useT } from '../i18n/i18n';
 import { refStyle, useStore } from './dom';
@@ -16,7 +18,7 @@ export function DomainsCard() {
   const off = st.ui.domainsOff;
   const allOn = s.DOMAINS.every((d) => !d.hidden);
   return (
-    <div className="dock-l">
+    <div className={`dock-l${brainRunning(st) ? ' away' : ''}`}>
       <button
         className="legend-toggle"
         id="domainsToggle"

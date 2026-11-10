@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { applyLanguage } from '../i18n/language';
+import { DockRight } from '../shell/DockRight';
+import { DomainsCard } from '../shell/DomainsCard';
 import { useKeyboard } from '../shell/useKeyboard';
 import { Tools } from '../shell/Tools';
 import { store } from '../store/store';
@@ -47,6 +49,25 @@ describe('the demo brain controls', () => {
     act(() => fireEvent.click(button));
     expect(document.getElementById('brainStatus')).toBeNull();
     expect(screen.getByRole('button', { name: 'Grow a demo brain' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('fades the domains card, the legend and the shortcuts away while the demo grows, and brings them back on stop', () => {
+    const { container } = render(
+      <>
+        <Studio />
+        <DomainsCard />
+        <DockRight>
+          <span>legend</span>
+        </DockRight>
+      </>,
+    );
+    const docks = () => [container.querySelector('.dock-l'), container.querySelector('.dock-r')];
+    for (const dock of docks()) expect(dock).not.toHaveClass('away');
+    const button = screen.getByRole('button', { name: 'Grow a demo brain' });
+    act(() => fireEvent.click(button));
+    for (const dock of docks()) expect(dock).toHaveClass('away');
+    act(() => fireEvent.click(button));
+    for (const dock of docks()) expect(dock).not.toHaveClass('away');
   });
 
   it('reads in German when the portal language is German', () => {
