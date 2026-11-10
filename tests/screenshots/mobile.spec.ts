@@ -97,9 +97,11 @@ const scenes: PhoneScene[] = [
       await page.tap('#adminOpen');
       await advance(page, 500);
       await page.tap('button[data-page="entities"]');
-      // The tap may scroll the tab strip to reach the tab; the scene shows the strip from its start.
-      await page.locator('.admin nav').evaluate((nav) => {
-        nav.scrollLeft = 0;
+      // The tap scrolls the tab strip by however much it takes; the scene always scrolls it from
+      // its start by the least amount that shows the whole Entities tab.
+      await page.locator('button[data-page="entities"]').evaluate((tab) => {
+        (tab.closest('nav') as HTMLElement).scrollLeft = 0;
+        tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       });
       await advance(page, 1500);
     },
