@@ -60,9 +60,6 @@ import type { CustomDialog, DialogEntry, DialogSpec } from '../shell/Dialog';
 import {
   brainDomains,
   finishBrain,
-  pauseBrain,
-  replayBrain,
-  resumeBrain,
   SPACING_LARGE,
   SPACING_SMALL,
   startBrain,
@@ -1381,23 +1378,6 @@ class StudioStore {
     this.hideLineage();
     this.clearSelection();
     startBrain(s, brainDomains(shown, held), now(), { spacing: small ? SPACING_SMALL : SPACING_LARGE, small, instant: s.SKIP });
-    this.bump();
-  }
-
-  /** Pauses the growing brain, or lets it grow on. */
-  toggleBrainPause(): void {
-    const d = this.s.brain;
-    if (!d || d.ending !== null) return;
-    if (d.pausedAt === null) pauseBrain(d, now());
-    else resumeBrain(d, now());
-    this.bump();
-  }
-
-  /** Grows the brain again from its seeds. */
-  replayBrain(): void {
-    const d = this.s.brain;
-    if (!d || d.ending !== null) return;
-    replayBrain(this.s, d, now());
     this.bump();
   }
 

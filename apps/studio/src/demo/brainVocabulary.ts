@@ -13,7 +13,7 @@ export const CORE_KEY = 'core';
 export const SOURCE_KEY = 'source';
 
 /** Names of the example data sources the model maps to, in the order they appear. */
-export const SOURCES = ['ERP · SAP S/4HANA', 'CRM · Salesforce', 'Data warehouse · Snowflake', 'MES · Plant floor', 'HR · Workday'];
+export const SOURCES = ['ERP', 'CRM', 'Data warehouse', 'Manufacturing execution', 'HR system'];
 
 const NOUNS: Record<string, string[]> = {
   [CORE_KEY]: ['Business capability', 'Value stream', 'Site', 'Legal entity', 'Business unit', 'Strategic goal', 'Company policy', 'Business rule', 'Product family', 'Market', 'Brand', 'Programme'],

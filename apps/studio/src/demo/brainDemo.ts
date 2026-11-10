@@ -110,8 +110,6 @@ export interface BrainDemo {
   start: number;
   /** When the demo was turned on: the other real cells fade out from then. */
   began: number;
-  pausedAt: number | null;
-  pausedFor: number;
   /** When Stop was pressed: the demo fades out, then leaves the scene. */
   ending: number | null;
   /** Everything at once (Skip animation), and the reduced-motion drawing. */
@@ -588,8 +586,6 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     box: [x0, y0, x1, y1],
     start: instant ? t - duration : t,
     began: instant ? t - VEIL_IN : t,
-    pausedAt: null,
-    pausedFor: 0,
     ending: null,
     instant,
     reduced: o.reduced ?? REDUCED,
@@ -714,10 +710,8 @@ export function joinPlaces(pts: BrainPoint[], lobes: number[], taken: Set<number
   };
 }
 
-/** Seconds of the demo so far: the time since the start, less the time paused. */
-export function brainElapsed(d: BrainDemo, t: number): number {
-  return (d.pausedAt ?? t) - d.start - d.pausedFor;
-}
+/** Seconds of the demo so far. */
+export const brainElapsed = (d: BrainDemo, t: number): number => t - d.start;
 
 /** How many demo cells are born after `e` seconds. */
 export function bornBy(d: BrainDemo, e: number): number {
@@ -776,29 +770,6 @@ export function brainPhase(d: BrainDemo, t: number): BrainPhase {
 
 /** How far the story cells have flown from beside the company into the brain, 0 to 1, after `e` seconds. */
 export const migration = (d: BrainDemo, e: number): number => ease(clamp((e - d.act3) / MIGRATE, 0, 1));
-
-export function pauseBrain(d: BrainDemo, t: number): void {
-  if (d.pausedAt === null) d.pausedAt = t;
-}
-
-/** Grows on from where it paused; a real cell that had not yet left for the brain leaves that much later. */
-export function resumeBrain(d: BrainDemo, t: number): void {
-  if (d.pausedAt === null) return;
-  const paused = t - d.pausedAt;
-  for (const n of [...d.joined.keys(), ...(d.root ? [d.root] : [])])
-    if (n.tween && n.tween.start > d.pausedAt) n.tween.start += paused;
-  d.pausedFor += paused;
-  d.pausedAt = null;
-}
-
-/** Plays the demo again from the company as it stood; the cells set aside stay aside. */
-export function replayBrain(s: SceneState, d: BrainDemo, t: number): void {
-  d.start = d.instant ? t - d.duration : t;
-  d.pausedAt = null;
-  d.pausedFor = 0;
-  if (d.joined.size) moveIntoBrain(d);
-  s.userZoomed = false;
-}
 
 /** Stop: the demo fades out and the real cells go back where they stood. */
 export function stopBrain(s: SceneState, t: number): void {

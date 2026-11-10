@@ -19,9 +19,6 @@ import {
   FADE_OUT,
   GROW,
   MIGRATE,
-  pauseBrain,
-  replayBrain,
-  resumeBrain,
   SPACING_LARGE,
   SPACING_SMALL,
   startBrain,
@@ -269,23 +266,6 @@ describe('the demo brain', () => {
     ]);
   });
 
-  it('replays from the model as it stood, and a paused demo holds its concepts back', () => {
-    const s = createScene();
-    northwindModel(s);
-    settleTweens(s);
-    const before = new Map(s.nodes.map((n) => [n, [n.x, n.y]]));
-    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
-    const n = [...d.joined.keys()][0];
-    pauseBrain(d, 1);
-    resumeBrain(d, 11);
-    expect(n.tween?.start).toBe(d.act3 + 10);
-    tweenTo(s.nodes, 40);
-    replayBrain(s, d, 50);
-    expect([n.x, n.y]).toEqual(before.get(n));
-    expect(n.tween?.start).toBe(50 + d.act3);
-    expect(brainPhase(d, 50)).toBe('company');
-  });
-
   it('builds on the model at once when animations are skipped', () => {
     const s = createScene();
     northwindModel(s);
@@ -375,29 +355,12 @@ describe('the demo brain', () => {
     expect(picked[1].key).toBe('supply');
   });
 
-  it('pauses, resumes and replays from the company alone', () => {
-    const s = createScene();
-    companyAlone(s);
-    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
-    pauseBrain(d, 20);
-    const held = bornCount(d, 20);
-    expect(bornCount(d, 35)).toBe(held);
-    resumeBrain(d, 35);
-    expect(bornCount(d, 35)).toBe(held);
-    expect(bornCount(d, 40)).toBeGreaterThan(held);
-    replayBrain(s, d, 50);
-    expect(bornCount(d, 50)).toBe(0);
-    expect(brainPhase(d, 50)).toBe('company');
-  });
-
   it('grows at once when animations are skipped', () => {
     const s = createScene();
     companyAlone(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL, instant: true });
     expect(brainGrown(d, 0)).toBe(true);
     expect(d.veil).toBe(1);
-    replayBrain(s, d, 10);
-    expect(brainGrown(d, 10)).toBe(true);
   });
 
   it('fades out after stop, brings the cells set aside back, and then leaves the scene', () => {
