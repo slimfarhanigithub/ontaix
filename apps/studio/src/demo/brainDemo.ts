@@ -3,23 +3,25 @@
  * in three acts. It is drawn only: nothing goes to the API, nothing is saved, and a reload or
  * Stop brings the real model back where it was.
  *
- * Nothing grows on its own: example data sources feed every new cell. Each cell buds the moment
- * a pulse of information from the source nearest it reaches the place it buds from.
+ * Nothing grows unplugged: example data sources connect first, and the brain grows while they
+ * are plugged into it (the rig, `brainRig.ts`: cores under the brain, cables, the data run and the
+ * agents at the end).
  *
  * A company that already holds concepts is the brain's starting point: its model stands as it
  * is, close up; then the sources light up under the model one after another and map to its
- * concepts, and new concepts bud from its concepts, each fed by a source and mapped to it; then
+ * concepts, and new concepts bud from its concepts, each mapped to the source nearest it; then
  * the root moves to the top of the brain stem, every concept joins the lobe of its domain, the
- * new concepts fly to their lobes and the sources to their places around the brain while the
- * camera pulls back, and the brain grows on from them while more sources join. A company with no
+ * new concepts fly to their lobes and the sources, grown into data cores, to their places under
+ * the brain while the camera pulls back; the cores plug their cables into the brain, and the
+ * brain grows on from them while more cores slide in and plug in. A company with no
  * concept yet stands alone at the top of the brain stem, close up; the sources light up under it,
  * then three domains bud from its root one after another, each with a few named concepts, their
  * relations drawn one by one and a few relations across the domains, while the camera stays close
  * enough to read every name; then the camera pulls back and the story cells fly to the cores of
  * their lobes. Either way the rest of the brain grows fast, faster and faster, every domain filling one lobe of a side view of a
- * brain whose faint outline shows from the start of the pull-back. As the last pulses land, a
- * wave of light runs through the brain from the top of the stem and leaves it glowing; then it
- * holds still. Cells of other companies fade out and stay set aside until Stop.
+ * brain whose faint outline shows from the start of the pull-back. Once grown, data runs up the
+ * cables into one lobe after another, then into the whole brain, which stays glowing; then the
+ * agents work on it. Cells of other companies fade out and stay set aside until Stop.
  */
 import { CELL, C, DOMAIN_TEMPLATES, REDUCED } from '../canvas/constants';
 import { clamp, ease } from '../canvas/colour';
@@ -27,6 +29,7 @@ import type { SceneState } from '../canvas/state';
 import type { Company, Node } from '../canvas/types';
 import { panelW, type View } from '../canvas/view';
 import { brainPoints, growthOrder, LOBE_CENTRES, lobesOf, neighboursOf, seeded, STEM_TOP, type BrainPoint } from './brainShape';
+import { BACK, FOCUS_IN, planRig, PLUG, type BrainRig } from './brainRig';
 import { CORE_KEY, namesFor, SOURCE_KEY, SOURCES } from './brainVocabulary';
 
 /** A domain the brain gives a lobe to. */
@@ -56,13 +59,6 @@ export interface StoryPlace {
 export interface BrainBind {
   source: number;
   to: number | Node;
-  at: number;
-}
-
-/** A pulse of information from a source to a brain cell: the source cell, the brain cell, and when it leaves the source. */
-export interface BrainFeed {
-  source: number;
-  to: number;
   at: number;
 }
 
@@ -102,8 +98,8 @@ export interface BrainDemo {
   links: BrainLink[];
   /** Mappings from the example sources to concepts, in the order they are drawn. */
   binds: BrainBind[];
-  /** Pulses from the sources to the brain cells they feed, in the order they leave. */
-  feeds: BrainFeed[];
+  /** The cores and cables under the brain, the data run and the agents; null with no source. */
+  rig: BrainRig | null;
   /** Cell radius and distance between neighbours in the brain, in world units. */
   radius: number;
   spacing: number;
@@ -120,7 +116,7 @@ export interface BrainDemo {
   duration: number;
   /** Bounds of the whole grown brain, the root included: x0, y0, x1, y1. */
   box: [number, number, number, number];
-  /** What the camera shows once pulled back: the brain and the row of sources under it. */
+  /** What the camera shows once pulled back: the brain, the cores under it and the agents around it. */
   frame: [number, number, number, number];
   start: number;
   /** When the demo was turned on: the other real cells fade out from then. */
@@ -179,24 +175,10 @@ const SOURCE_LEAD = 0.35;
 const BIND_GAP = 0.12;
 const SOURCE_TAIL = 0.25;
 const BINDS_MAX = 6;
-/**
- * Feeding the brain: sources in all (fewer on a phone); how far under the brain's outline they
- * stand (further on a phone, where a source is larger beside the brain), how much lower every second one stands so long names never meet, the half-width of the
- * strip of cells that outline is read from, and the room the camera keeps beside and under each,
- * in neighbour distances; the share of the brain's width kept free at each end of their row; when the sources that join in the third act appear, as shares of the
- * growth time; and how long a pulse takes from its source to its cell.
- */
+/** Sources in all once the brain has grown (fewer on a phone), and when those that join in the third act appear, as shares of the growth time. */
 const SOURCE_TOTAL = 8;
-const SOURCE_TOTAL_SMALL = 4;
-const SOURCE_GAP = 4;
-const SOURCE_GAP_SMALL = 7;
-const SOURCE_STAGGER = 3;
-const SOURCE_BAND = 4;
-const SOURCE_SIDE_ROOM = 5;
-const SOURCE_ROOM = 4;
-const SOURCE_INSET = 0.04;
+const SOURCE_TOTAL_SMALL = 6;
 const SOURCE_JOIN = 0.7;
-export const FEED_TRAVEL = 0.9;
 /** First act: seconds the company stands alone. */
 export const ACT_ONE = 2.4;
 /** Second act: seconds before a domain's first concept, between its concepts, and after its last one. */
@@ -246,6 +228,8 @@ const CLEAR_NARROW: [number, number] = [180, 170];
 /** How far the camera may zoom out while the demo is on, and how close it comes to the story. */
 export const BRAIN_MIN_ZOOM = 0.05;
 const STORY_MIN_ZOOM = 0.3;
+/** The closest the camera comes while the first agent works: the cached picture of the brain stays sharp and brain names stay hidden. */
+const FOCUS_MAX_ZOOM = 0.45;
 /** World room the close-up camera keeps beside and under a source, for its name. */
 const SOURCE_ROOM_CLOSE: [number, number] = [120, 130];
 
@@ -498,10 +482,9 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
   }
 
   // Before any of it, the sources light up in a row under the model or the story, one after
-  // another, and each maps to the company's concepts nearest it. Then every story cell buds as a
-  // pulse from the source nearest it arrives, and a new concept is mapped to that source.
+  // another, and each maps to the company's concepts nearest it. Then the story grows, and every
+  // new concept is mapped to the source nearest it as it buds.
   const binds: BrainBind[] = [];
-  const feeds: BrainFeed[] = [];
   const planned = cells.length;
   const first: number[] = [];
   if (planned) {
@@ -548,14 +531,12 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
       }
       t += SOURCE_TAIL;
     });
-    const start = t + LINK_DRAW + FEED_TRAVEL;
+    const start = t + LINK_DRAW;
     for (let i = 0; i < planned; i++) {
       const c = cells[i];
       const p = c.story as StoryPlace;
       c.born += start;
-      const src = first[nearestSpot(p.x, p.y)];
-      feeds.push({ source: src, to: i, at: c.born - FEED_TRAVEL });
-      if (!p.hub) binds.push({ source: src, to: i, at: c.born });
+      if (!p.hub) binds.push({ source: first[nearestSpot(p.x, p.y)], to: i, at: c.born });
     }
     for (const l of links) l[2] += start;
   }
@@ -579,8 +560,8 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
   const { order, parent } = growthOrder(pts, near, seeds, seed + 4);
   const grown = order.filter((i) => !taken.has(i));
   const total = grown.length;
-  // Joined concepts reach their places before the first brain cell buds from them.
-  const g0 = act3 + (joined.size ? JOIN : GROW_DELAY);
+  // Joined concepts reach their places, and the first cores plug in, before the first brain cell buds.
+  const g0 = act3 + Math.max(joined.size ? JOIN : GROW_DELAY, first.length ? MIGRATE + PLUG : 0);
   for (const [k, i] of grown.entries()) {
     const lobe = lobes[i];
     const d = lobe >= 0 ? domains[lobe] : null;
@@ -628,15 +609,10 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     y1 = Math.max(y1, c.y);
   }
 
-  // More sources join as the brain grows; all of them stand across its width, each just under
-  // the brain's outline where it stands, the first ones spread among the rest, and every brain cell buds as a pulse from the source
-  // nearest it, among those shown by then, reaches the place it buds from.
-  const frame: [number, number, number, number] = [x0, y0, x1, y1];
+  // More sources join as the brain grows; the rig gives every one its place under the brain.
   if (first.length) {
     const count = Math.max(first.length, Math.min(o.small ? SOURCE_TOTAL_SMALL : SOURCE_TOTAL, SOURCES.length));
-    const all = [...first];
-    for (let k = first.length; k < count; k++) {
-      all.push(cells.length);
+    for (let k = first.length; k < count; k++)
       cells.push({
         x: 0,
         y: 0,
@@ -649,56 +625,24 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
         born: g0 + GROW * SOURCE_JOIN * ((k - first.length + 1) / (count - first.length + 1)),
         story: { x: 0, y: 0, r: SOURCE_R, parent: -1, hub: false, from: null, source: true },
       });
-    }
-    const band = SOURCE_BAND * WORLD_SPACING;
-    const inBrain = [...cells.filter((c) => !c.story?.source), ...joined.values()];
-    const under = (x: number): number => {
-      let y = -Infinity;
-      for (const c of inBrain) if (Math.abs(c.x - x) < band) y = Math.max(y, c.y);
-      return (y === -Infinity ? (y0 + y1) / 2 : y) + (o.small ? SOURCE_GAP_SMALL : SOURCE_GAP) * WORLD_SPACING;
-    };
-    const left = x0 + (x1 - x0) * SOURCE_INSET,
-      right = x1 - (x1 - x0) * SOURCE_INSET;
-    const slots = new Map<number, number>();
-    first.forEach((i, k) => slots.set(i, first.length > 1 ? Math.round((k * (count - 1)) / (first.length - 1)) : Math.floor((count - 1) / 2)));
-    const used = new Set(slots.values());
-    let free = 0;
-    for (const i of all.slice(first.length)) {
-      while (used.has(free)) free++;
-      slots.set(i, free);
-      used.add(free);
-    }
-    for (const i of all) {
-      const j = slots.get(i) as number;
-      const c = cells[i];
-      c.x = c.px = count > 1 ? left + ((right - left) * j) / (count - 1) : (left + right) / 2;
-      c.y = c.py = under(c.x) + (j % 2) * SOURCE_STAGGER * WORLD_SPACING;
-      // A source that joins in the third act appears at its place.
-      if (!first.includes(i)) Object.assign(c.story as StoryPlace, { x: c.x, y: c.y });
-      frame[0] = Math.min(frame[0], c.x - SOURCE_SIDE_ROOM * WORLD_SPACING);
-      frame[2] = Math.max(frame[2], c.x + SOURCE_SIDE_ROOM * WORLD_SPACING);
-      frame[3] = Math.max(frame[3], c.y + SOURCE_ROOM * WORLD_SPACING);
-    }
-    for (let i = stories; i < cells.length; i++) {
-      const c = cells[i];
-      if (c.story?.source) continue;
-      const at = c.born - FEED_TRAVEL;
-      let src = -1,
-        bd = Infinity;
-      for (const j of all) {
-        if (cells[j].born > at) continue;
-        const dd = Math.hypot(cells[j].x - c.px, cells[j].y - c.py);
-        if (dd < bd) {
-          bd = dd;
-          src = j;
-        }
-      }
-      if (src >= 0) feeds.push({ source: src, to: i, at });
-    }
   }
-  inBirthOrder(cells, links, binds, feeds);
+  inBirthOrder(cells, links, binds);
+  const grownAt = total ? g0 + GROW : act3;
+  const rig = first.length
+    ? planRig({
+        cells,
+        joined,
+        domains: domains.map((x) => x.key),
+        box: [x0, y0, x1, y1],
+        spacing: WORLD_SPACING,
+        radius: BRAIN_CELL,
+        small: !!o.small,
+        arrive: act3 + MIGRATE,
+        grown: grownAt,
+      })
+    : null;
 
-  const duration = Math.max(act3 + (joined.size ? JOIN : MIGRATE), total ? g0 + GROW : act3);
+  const duration = Math.max(act3 + (joined.size ? JOIN : MIGRATE), grownAt, rig ? rig.end : 0);
   const instant = !!o.instant;
   const demo: BrainDemo = {
     cells,
@@ -707,7 +651,7 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     storyDomains: story.length,
     links,
     binds,
-    feeds,
+    rig,
     radius: BRAIN_CELL,
     spacing: WORLD_SPACING,
     company: company?.name ?? null,
@@ -718,7 +662,7 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     growAt: g0,
     duration,
     box: [x0, y0, x1, y1],
-    frame,
+    frame: rig ? rig.frame : [x0, y0, x1, y1],
     start: instant ? t - duration : t,
     began: instant ? t - VEIL_IN : t,
     ending: null,
@@ -768,10 +712,10 @@ function moveIntoBrain(d: BrainDemo): void {
 
 /**
  * Puts the cells in the order they are born, as `bornBy` needs: a source lights up before the
- * story it feeds, and one that joins in the third act among the brain cells budding then. Every
- * index into the cells follows, and each relation keeps its earlier cell first.
+ * story it is mapped to, and one that joins in the third act among the brain cells budding then.
+ * Every index into the cells follows, and each relation keeps its earlier cell first.
  */
-function inBirthOrder(cells: BrainCell[], links: BrainLink[], binds: BrainBind[], feeds: BrainFeed[]): void {
+function inBirthOrder(cells: BrainCell[], links: BrainLink[], binds: BrainBind[]): void {
   const order = cells.map((_, i) => i).sort((a, b) => cells[a].born - cells[b].born || a - b);
   const moved = new Array<number>(cells.length);
   order.forEach((old, i) => (moved[old] = i));
@@ -787,10 +731,6 @@ function inBirthOrder(cells: BrainCell[], links: BrainLink[], binds: BrainBind[]
   for (const b of binds) {
     b.source = moved[b.source];
     if (typeof b.to === 'number') b.to = moved[b.to];
-  }
-  for (const f of feeds) {
-    f.source = moved[f.source];
-    f.to = moved[f.to];
   }
 }
 
@@ -996,6 +936,16 @@ export function brainStep(s: SceneState, v: View, t: number): void {
     const w = z0 === zb ? q : (1 / ts - 1 / z0) / (1 / zb - 1 / z0);
     tx += ((bx0 + bx1) / 2 - tx) * w;
     ty += ((by0 + by1) / 2 - ty) * w;
+    // While the first agent works, the camera closes in on it, then pulls back to every agent.
+    const rig = d.rig;
+    const k = rig ? ease(clamp((e - rig.focusAt) / FOCUS_IN, 0, 1)) * (1 - ease(clamp((e - rig.backAt) / BACK, 0, 1))) : 0;
+    if (rig && k > 0) {
+      const [fx0, fy0, fx1, fy1] = rig.focus;
+      const zf = Math.max(zb, Math.min(FOCUS_MAX_ZOOM, fitZoom(rig.focus, v, d.spacing * 2)));
+      ts = Math.exp(Math.log(ts) + (Math.log(zf) - Math.log(ts)) * k);
+      tx += ((fx0 + fx1) / 2 - tx) * k;
+      ty += ((fy0 + fy1) / 2 - ty) * k;
+    }
   }
   s.cam.ts = ts;
   s.cam.tx = tx;
@@ -1043,10 +993,12 @@ function storyView(d: BrainDemo, v: View, e: number): [number, number, number] {
   return [ts, (x0 + x1) / 2, (y0 + y1) / 2];
 }
 
-/** The zoom that shows the whole grown brain, and its sources, in the room the camera leaves free. */
-export function brainFitZoom(d: BrainDemo, v: View): number {
-  const [x0, y0, x1, y1] = d.frame;
-  const pad = d.spacing * 2;
+/** The zoom that shows the whole grown brain, its cores and its agents, in the room the camera leaves free. */
+export const brainFitZoom = (d: BrainDemo, v: View): number => fitZoom(d.frame, v, d.spacing * 2);
+
+/** The zoom that shows a world rectangle, `pad` around it, in the room the camera leaves free. */
+function fitZoom(box: [number, number, number, number], v: View, pad: number): number {
+  const [x0, y0, x1, y1] = box;
   const bw = x1 - x0 + 2 * pad,
     bh = y1 - y0 + 2 * pad;
   const [top, bottom] = v.W > 900 ? CLEAR_WIDE : CLEAR_NARROW;
