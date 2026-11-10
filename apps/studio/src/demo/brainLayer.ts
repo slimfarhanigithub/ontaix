@@ -5,11 +5,16 @@
  * Beside the company, the story cells of the second act are drawn as large as concepts on the
  * canvas, with their names, and their relations reach from one cell to the next as they are
  * made. In the third act they fly into the cores of their lobes and shrink to brain cells.
- * Example data sources are drawn as the canvas draws a source, and their mappings reach from the
- * source to a concept one by one, a pulse of information running along each. The mappings fade
- * out as the story cells fly into the brain, while the sources move to their row under it, never
- * smaller on screen than a canvas source, and feed it: each pulse runs from its source to a brain
- * cell, brass at its tail and the cell's colour at its head, and reaches it as the cell buds.
+ * Example data sources are drawn as the canvas draws a source, never smaller on screen than a
+ * canvas source, and their mappings reach from the source to a concept one by one, a pulse of
+ * information running along each; the mappings fade out as the story cells fly into the brain.
+ * Every new cell is fed: a pulse runs from its source to the place the cell buds from, a brass
+ * streak behind a bright spark in the cell's colour, and the cell buds as it lands. A source
+ * glows while it sends, the more the more it sends.
+ *
+ * As the last pulses land, a wave of light runs out from the top of the brain stem, a flash at
+ * its front lightening the cells it passes, and leaves every cell in a soft, steady halo of its
+ * colour, the sources glowing with it.
  *
  * Thousands of cells stay smooth. A cell that has settled never moves again, so from afar
  * settled cells and their relations are painted once into a cached picture of the whole brain,
@@ -21,7 +26,7 @@
  * A cell buds from its parent along its birth link, grows to full size and glows while it is
  * new; with reduced motion it fades in where it belongs, without the glow. From the start of
  * the pull-back a faint ghost of every cell shows the brain the growth is filling. A grown brain
- * holds still.
+ * holds still, glowing.
  */
 import { FONT_SANS, MIX_BLACK, MIX_WHITE, themedColour } from '../design/tokens';
 import { clamp, ease, hex, mix } from '../canvas/colour';
@@ -34,12 +39,28 @@ import { brainAlpha, brainElapsed, brainFitZoom, bornBy, FEED_TRAVEL, LINK_DRAW,
 /** Opacity and world width of a source's mapping, as the canvas draws a binding. */
 const BIND_ALPHA = 0.5;
 const BIND_WIDTH = 1;
-/** Seconds a pulse takes along a mapping, its tail's length as a share of the way, and its head's, glow's and tail's size in CSS pixels. */
+/** Seconds a pulse takes along a mapping, its streak's length as a share of the way, and its spark's radius and streak's width in CSS pixels. */
 const PULSE_PERIOD = 1.4;
 const PULSE_TAIL = 0.14;
-const PULSE_HEAD_PX = 2.4;
-const PULSE_GLOW_PX = 8;
-const PULSE_WIDTH_PX = 1.6;
+const PULSE_SPARK_PX = 7;
+const PULSE_WIDTH_PX = 1.4;
+/** Opacity of a pulse's streak. */
+const PULSE_TAIL_ALPHA = 0.5;
+/** Pulses a source sends at once to glow at full strength, and its glow's radius in source radii. */
+const SEND_FULL = 6;
+const SOURCE_GLOW = 2.6;
+/**
+ * The finale: seconds before the brain has grown that the wave of light starts, how long it runs,
+ * its crest's width as a share of its reach, the halo's opacity once lit and at the crest, how
+ * strongly the crest lightens the cells, and each cell's halo radius in cell radii.
+ */
+const SHINE_START = 0.3;
+const SHINE_WAVE = 1.8;
+const SHINE_CREST = 0.12;
+const SHINE_ALPHA = 0.5;
+const SHINE_CREST_ALPHA = 0.6;
+const SHINE_FLASH = 0.85;
+const SHINE_R = 4.5;
 /** Smallest on-screen radius of a source, in CSS pixels, and the world radius its corners, edge and bars are drawn for. */
 const SOURCE_PX = 16;
 const SOURCE_R_CANVAS = 16;
@@ -75,6 +96,7 @@ const CACHE_STRETCH = 1.25;
 
 const sprites = new Map<string, HTMLCanvasElement | null>();
 const glowSprites = new Map<string, HTMLCanvasElement | null>();
+const sparkSprites = new Map<string, HTMLCanvasElement | null>();
 
 function paint(size: number, draw: (g: CanvasRenderingContext2D) => void): HTMLCanvasElement | null {
   const c = document.createElement('canvas');
@@ -162,38 +184,76 @@ function drawSourceTile(g: CanvasRenderingContext2D, color: string, chip: string
   for (let i = -1; i <= 1; i++) g.fillRect(x - r * 0.55, y + i * r * 0.36 - 1.1 * k, r * 1.1, 2.2 * k);
 }
 
-/**
- * Draws a pulse of information heading from ax, ay to bx, by, `q` of the way there: a fading tail
- * in `tail` behind a glowing head in `head`, both stored colours, sized in CSS pixels at `zoom`.
- */
-function drawPulse(g: CanvasRenderingContext2D, tail: string, head: string, ax: number, ay: number, bx: number, by: number, q: number, zoom: number, alpha: number): void {
-  const x = ax + (bx - ax) * q,
-    y = ay + (by - ay) * q;
-  const q0 = Math.max(0, q - PULSE_TAIL);
-  const tx = ax + (bx - ax) * q0,
-    ty = ay + (by - ay) * q0;
-  if (q > q0) {
-    const trail = g.createLinearGradient(tx, ty, x, y);
-    trail.addColorStop(0, hex(themedColour(tail), 0));
-    trail.addColorStop(1, hex(themedColour(tail), 0.8 * alpha));
-    g.strokeStyle = trail;
-    g.lineWidth = PULSE_WIDTH_PX / zoom;
-    g.beginPath();
-    g.moveTo(tx, ty);
-    g.lineTo(x, y);
-    g.stroke();
+/** The spark at a pulse's head: near white at its heart, then its colour, fading out. */
+function sparkSprite(color: string): HTMLCanvasElement | null {
+  if (!sparkSprites.has(color))
+    sparkSprites.set(
+      color,
+      paint(SPRITE_R * 2, (g) => {
+        const col = themedColour(color);
+        const gr = g.createRadialGradient(0, 0, 0, 0, 0, SPRITE_R);
+        gr.addColorStop(0, hex(mix(col, MIX_WHITE, 0.85), 1));
+        gr.addColorStop(0.16, hex(mix(col, MIX_WHITE, 0.35), 0.95));
+        gr.addColorStop(0.45, hex(col, 0.35));
+        gr.addColorStop(1, hex(col, 0));
+        g.fillStyle = gr;
+        g.fillRect(-SPRITE_R, -SPRITE_R, SPRITE_R * 2, SPRITE_R * 2);
+      }),
+    );
+  return sparkSprites.get(color) ?? null;
+}
+
+/** Pulses of a frame: their streaks gathered in one path per colour and opacity, their sparks drawn one by one over the cells. */
+class Pulses {
+  private streaks = new Map<string, { color: string; alpha: number; path: Path2D }>();
+  private sparks: [string, number, number, number][] = [];
+
+  /** A pulse heading from ax, ay to bx, by, `q` of the way there, a streak in `tail` behind a spark in `head`. */
+  add(tail: string, head: string, ax: number, ay: number, bx: number, by: number, q: number, alpha: number): void {
+    if (alpha <= 0.01) return;
+    const x = ax + (bx - ax) * q,
+      y = ay + (by - ay) * q;
+    const q0 = Math.max(0, q - PULSE_TAIL);
+    const a = Math.round(alpha * 10) / 10;
+    const key = `${tail}|${a}`;
+    let st = this.streaks.get(key);
+    if (!st) this.streaks.set(key, (st = { color: tail, alpha: a, path: new Path2D() }));
+    st.path.moveTo(ax + (bx - ax) * q0, ay + (by - ay) * q0);
+    st.path.lineTo(x, y);
+    this.sparks.push([head, x, y, alpha]);
   }
-  const img = glowSprite(head);
-  if (img) {
-    const R = PULSE_GLOW_PX / zoom;
-    g.globalAlpha = alpha;
-    g.drawImage(img, x - R, y - R, R * 2, R * 2);
+
+  drawStreaks(g: CanvasRenderingContext2D, zoom: number): void {
+    g.lineWidth = PULSE_WIDTH_PX / zoom;
+    for (const st of this.streaks.values()) {
+      g.strokeStyle = hex(themedColour(st.color), PULSE_TAIL_ALPHA * st.alpha);
+      g.stroke(st.path);
+    }
+  }
+
+  drawSparks(g: CanvasRenderingContext2D, zoom: number): void {
+    const R = PULSE_SPARK_PX / zoom;
+    for (const [color, x, y, alpha] of this.sparks) {
+      const img = sparkSprite(color);
+      if (!img) continue;
+      g.globalAlpha = alpha;
+      g.drawImage(img, x - R, y - R, R * 2, R * 2);
+    }
     g.globalAlpha = 1;
   }
-  g.fillStyle = hex(mix(themedColour(head), MIX_WHITE, 0.25), alpha);
-  g.beginPath();
-  g.arc(x, y, PULSE_HEAD_PX / zoom, 0, 6.283);
-  g.fill();
+}
+
+/**
+ * The finale after `e` seconds: how far the wave of light has run, 0 to 1, and the halo's
+ * strength. With reduced motion there is no wave: the halo fades in. Skipping animations, the
+ * brain stands lit at once.
+ */
+function shineOf(d: BrainDemo, e: number): [number, number] {
+  if (d.instant) return e >= d.duration ? [1, 1] : [0, 0];
+  const t = e - (d.duration - SHINE_START);
+  if (t <= 0) return [0, 0];
+  if (d.reduced) return [1, clamp(t / SHINE_WAVE, 0, 1)];
+  return [ease(clamp(t / SHINE_WAVE, 0, 1)), 1];
 }
 
 /** The world rectangle on screen, grown by `m`. */
@@ -274,6 +334,9 @@ interface Cache {
   tint: CanvasRenderingContext2D;
   /** Every cell as a faint dot, painted once. */
   ghost: CanvasRenderingContext2D;
+  /** Every cell's halo for the finale, painted once when first needed. */
+  shine: CanvasRenderingContext2D;
+  shone: boolean;
   /** Cells and further relations painted so far. */
   upTo: number;
   linksUpTo: number;
@@ -302,8 +365,9 @@ function newCache(d: BrainDemo, v: View, hidden: string): Cache | null {
   };
   const cells = canvas(1),
     tint = canvas(0.5),
-    ghost = canvas(0.5);
-  if (!cells || !tint || !ghost) return null;
+    ghost = canvas(0.5),
+    shine = canvas(0.5);
+  if (!cells || !tint || !ghost || !shine) return null;
   const hiddenKeys = new Set(hidden.split(','));
   for (const c of d.cells) {
     if (hiddenKeys.has(c.domain) || isSource(c)) continue;
@@ -323,10 +387,47 @@ function newCache(d: BrainDemo, v: View, hidden: string): Cache | null {
     cells,
     tint,
     ghost,
+    shine,
+    shone: false,
     upTo: 0,
     linksUpTo: 0,
     lineWidth: Math.max(1.2, 0.9 / brainFitZoom(d, v)),
   };
+}
+
+/** Draws the finale's halo, lit out to `wave` of the way from the top of the stem, a flash at its front lightening the cells. */
+function drawShine(ctx: CanvasRenderingContext2D, c: Cache, d: BrainDemo, wave: number, alpha: number): void {
+  if (!c.shone) {
+    const hidden = new Set(c.hidden.split(','));
+    const R = d.radius * SHINE_R;
+    for (const cell of d.cells) {
+      if (hidden.has(cell.domain) || isSource(cell)) continue;
+      const img = glowSprite(cell.color);
+      if (img) c.shine.drawImage(img, cell.x - R, cell.y - R, R * 2, R * 2);
+    }
+    c.shone = true;
+  }
+  const [bx0, by0, bx1, by1] = d.box;
+  const [ox, oy] = d.rootAt ? [d.rootAt.x, d.rootAt.y] : [(bx0 + bx1) / 2, (by0 + by1) / 2];
+  const reach = Math.max(...[bx0, bx1].flatMap((x) => [by0, by1].map((y) => Math.hypot(x - ox, y - oy)))) + d.radius * SHINE_R;
+  const r = reach * wave;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(ox, oy, r, 0, 6.283);
+  ctx.clip();
+  drawCached(ctx, c, c.shine, SHINE_ALPHA * alpha);
+  ctx.restore();
+  if (wave < 1) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(ox, oy, r, 0, 6.283);
+    ctx.arc(ox, oy, Math.max(0, r - reach * SHINE_CREST), 0, 6.283, true);
+    ctx.clip();
+    drawCached(ctx, c, c.shine, SHINE_CREST_ALPHA * alpha);
+    ctx.globalCompositeOperation = 'lighter';
+    drawCached(ctx, c, c.cells, SHINE_FLASH * alpha);
+    ctx.restore();
+  }
 }
 
 /** How many cells have settled after `e` seconds: none until the story cells have reached the brain. */
@@ -456,6 +557,8 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
   const cached = cacheServes(cache, s, v);
   // From afar the cached picture holds the settled cells; only the newer ones are drawn here.
   const from = cached ? cache.upTo : 0;
+  const [wave, shine] = shineOf(d, e);
+  if (cached && wave > 0) drawShine(ctx, cache, d, wave, shine * fade);
   if (cached) drawCached(ctx, cache, cache.cells, fade);
   const [x0, y0, x1, y1] = viewRect(s, v, d.spacing * 2);
   const inRect = (x: number, y: number) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
@@ -525,6 +628,7 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
 
   // Mappings: each reaches from its source to its concept, a pulse of information running along
   // it once drawn, and fades out as the brain forms.
+  const pulses = new Pulses();
   for (const b of d.binds) {
     if (b.at > e || m >= 1) break;
     const target = typeof b.to === 'number' ? d.cells[b.to] : null;
@@ -538,11 +642,12 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
     const run = e - b.at - LINK_DRAW;
     if (!d.reduced && run > 0) {
       const head = target ? target.color : typeof b.to === 'number' ? source : (b.to.domain?.color ?? source);
-      drawPulse(ctx, source, head, sx, sy, tx, ty, (run % PULSE_PERIOD) / PULSE_PERIOD, zoom, k * fade);
+      pulses.add(source, head, sx, sy, tx, ty, (run % PULSE_PERIOD) / PULSE_PERIOD, k * fade);
     }
   }
 
-  // Feeding: pulses run from the sources to the brain cells about to bud.
+  // Feeding: a pulse runs from its source to the place each new cell buds from.
+  const sending = new Map<number, number>();
   if (!d.reduced && d.feeds.length && e < d.duration) {
     let lo = 0,
       hi = d.feeds.length;
@@ -555,12 +660,14 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
       const f = d.feeds[k];
       const c = d.cells[f.to];
       if (hidden.has(c.domain)) continue;
+      sending.set(f.source, (sending.get(f.source) ?? 0) + 1);
       const [sx, sy] = placeOf(f.source);
-      const [bx, by] = restOf(d, c, e);
+      const [bx, by] = budOf(d, c, e) ?? restOf(d, c, e);
       if (!inRect(sx, sy) && !inRect(bx, by)) continue;
-      drawPulse(ctx, d.cells[f.source].color, c.color, sx, sy, bx, by, ease(clamp((e - f.at) / FEED_TRAVEL, 0, 1)), zoom, fade);
+      pulses.add(d.cells[f.source].color, c.color, sx, sy, bx, by, ease(clamp((e - f.at) / FEED_TRAVEL, 0, 1)), fade);
     }
   }
+  pulses.drawStreaks(ctx, zoom);
 
   // Glows: new cells while they bud.
   if (!d.reduced) {
@@ -568,7 +675,7 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
       const c = d.cells[i];
       const a = e - c.born;
       if (a >= GLOW) break;
-      if (hidden.has(c.domain)) continue;
+      if (hidden.has(c.domain) || isSource(c)) continue;
       const [x, y, r] = placeOf(i);
       if (!inRect(x, y)) continue;
       const img = glowSprite(c.color);
@@ -596,9 +703,10 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
     else if (shownCells.length <= LABELS_MAX) shownCells.push([c, x, y, r, alpha]);
   }
   ctx.globalAlpha = 1;
-  // Sources, over the pulses they send: drawn whatever the cached picture holds, and never
-  // smaller on screen than a canvas source.
-  for (let i = 0; i < Math.min(n, d.stories); i++) {
+  pulses.drawSparks(ctx, zoom);
+  // Sources, over the pulses they send: drawn whatever the cached picture holds, never smaller
+  // on screen than a canvas source, glowing as they light up, while they send, and in the finale.
+  for (let i = 0; i < n; i++) {
     const c = d.cells[i];
     if (!isSource(c)) continue;
     const [x, y, r] = placeOf(i);
@@ -606,6 +714,14 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
     const alpha = fade * cellAlpha(d, c, e);
     if (alpha <= 0.01) continue;
     const sr = Math.max(r, SOURCE_PX / zoom);
+    const lit = d.reduced ? shine * wave : Math.max(clamp((sending.get(i) ?? 0) / SEND_FULL, 0, 1), 1 - (e - c.born) / GLOW, shine * wave);
+    const img = lit > 0.01 ? glowSprite(c.color) : null;
+    if (img) {
+      const R = sr * SOURCE_GLOW;
+      ctx.globalAlpha = alpha * lit;
+      ctx.drawImage(img, x - R, y - R, R * 2, R * 2);
+      ctx.globalAlpha = 1;
+    }
     drawSourceTile(ctx, c.color, TH.CHIP, x, y, sr, alpha);
     storyCells.push([c, x, y, sr, alpha]);
   }

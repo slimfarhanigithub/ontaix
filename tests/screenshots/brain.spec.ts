@@ -2,10 +2,11 @@
  * Screenshot regression of the demo brain built on a first model, same seed and fake clock as the
  * canvas scenes, compared with its stored baseline at 0.1 percent tolerance.
  *
- * Scenes, each a moment of the demo's own plan: the sources mapping to the model with pulses on
- * the mappings (the last source's first mapping drawn); the brain growing, fed by the sources
- * (3 s into the growth); the grown brain with its sources under it (1 s after it has grown). The
- * first two run at 1440x900 and on a phone (390x844, touch); the grown brain at 1440x900.
+ * Scenes, each a moment of the demo's own plan: the new concepts being fed by the sources close up
+ * (1.8 s after the first one buds); the brain growing, fed by the sources (3 s into the growth);
+ * the wave of light running through the grown brain (0.4 s after it has grown); the grown brain
+ * glowing, its sources around it (2.5 s after it has grown). The first two run at 1440x900 and on
+ * a phone (390x844, touch); the last two at 1440x900.
  *
  * The first model is taught with Skip animation on, as every canvas scene is; the scene turns it
  * off with `S` before starting the demo, so the demo plays.
@@ -21,6 +22,7 @@ const PHONE: Viewport = { width: 390, height: 844 };
 interface Plan {
   mapping: number;
   feeding: number;
+  finale: number;
   grown: number;
 }
 
@@ -34,6 +36,7 @@ interface BrainScene {
 const scenes: BrainScene[] = [
   { name: 'brain-mapping', at: (p) => p.mapping, viewports: [DESKTOP, PHONE] },
   { name: 'brain-feeding', at: (p) => p.feeding, viewports: [DESKTOP, PHONE] },
+  { name: 'brain-finale', at: (p) => p.finale, viewports: [DESKTOP] },
   { name: 'brain-grown', at: (p) => p.grown, viewports: [DESKTOP] },
 ];
 
@@ -49,11 +52,11 @@ async function startDemo(page: Page, phone: boolean): Promise<Plan> {
   if (phone) await page.tap('#brainDemo');
   else await page.click('#brainDemo');
   return page.evaluate(() => {
-    type Demo = { act3: number; growAt: number; duration: number; cells: { story: { source: boolean } | null }[]; binds: { source: number; at: number }[] };
+    type Demo = { stories: number; growAt: number; duration: number; cells: { born: number; story: { source: boolean } | null }[] };
     const d = (window as unknown as { __ontaix: { store: { s: { brain: Demo } } } }).__ontaix.store.s.brain;
-    const last = Math.max(...d.binds.map((b) => b.source));
-    const lastBind = d.binds.find((b) => b.source === last) as { at: number };
-    return { mapping: lastBind.at + 1, feeding: d.growAt + 3, grown: d.duration + 1 };
+    const fed = d.cells.slice(0, d.stories).filter((c) => !c.story?.source);
+    const firstFed = Math.min(...fed.map((c) => c.born));
+    return { mapping: firstFed + 1.8, feeding: d.growAt + 3, finale: d.duration + 0.4, grown: d.duration + 2.5 };
   });
 }
 

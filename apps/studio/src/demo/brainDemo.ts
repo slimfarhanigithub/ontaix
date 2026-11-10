@@ -3,21 +3,23 @@
  * in three acts. It is drawn only: nothing goes to the API, nothing is saved, and a reload or
  * Stop brings the real model back where it was.
  *
+ * Nothing grows on its own: example data sources feed every new cell. Each cell buds the moment
+ * a pulse of information from the source nearest it reaches the place it buds from.
+ *
  * A company that already holds concepts is the brain's starting point: its model stands as it
- * is, close up, then new concepts bud from its concepts one after another, and example data
- * sources appear under the model and map to its concepts one by one, information flowing along
- * each mapping; then the root moves to the top of the brain stem, every concept joins the lobe of
- * its domain, the new concepts fly to their lobes and the sources to a row under the brain while
- * the camera pulls back, and the brain grows on from them, fed by the sources: a pulse of
- * information leaves a source for each cell a moment before it buds. A company with no
- * concept yet stands alone at the top of the brain stem, close up, then three domains bud from its
- * root one after another, each with a few named concepts, their relations drawn one by one and a
- * few relations across the domains, while the camera stays close enough to read every name, and
- * the sources appear under the story and map to its concepts; then the camera pulls back and the
- * story cells fly to the cores of their lobes. Either way the sources feed the rest of the brain
- * as it grows fast, faster and faster, every domain filling one lobe of a side view of a
- * brain whose faint outline shows from the start of the pull-back. Once grown, the brain holds
- * still. Cells of other companies fade out and stay set aside until Stop.
+ * is, close up; then the sources light up under the model one after another and map to its
+ * concepts, and new concepts bud from its concepts, each fed by a source and mapped to it; then
+ * the root moves to the top of the brain stem, every concept joins the lobe of its domain, the
+ * new concepts fly to their lobes and the sources to their places around the brain while the
+ * camera pulls back, and the brain grows on from them while more sources join. A company with no
+ * concept yet stands alone at the top of the brain stem, close up; the sources light up under it,
+ * then three domains bud from its root one after another, each with a few named concepts, their
+ * relations drawn one by one and a few relations across the domains, while the camera stays close
+ * enough to read every name; then the camera pulls back and the story cells fly to the cores of
+ * their lobes. Either way the rest of the brain grows fast, faster and faster, every domain filling one lobe of a side view of a
+ * brain whose faint outline shows from the start of the pull-back. As the last pulses land, a
+ * wave of light runs through the brain from the top of the stem and leaves it glowing; then it
+ * holds still. Cells of other companies fade out and stay set aside until Stop.
  */
 import { CELL, C, DOMAIN_TEMPLATES, REDUCED } from '../canvas/constants';
 import { clamp, ease } from '../canvas/colour';
@@ -175,15 +177,24 @@ const BIND_GAP = 0.12;
 const SOURCE_TAIL = 0.25;
 const BINDS_MAX = 6;
 /**
- * Feeding the brain: the sources' row under the grown brain and the room under the row, in
- * neighbour distances, and the share of the brain's width the row spans. One brain cell in
- * FEED_EVERY is fed by a pulse from the source nearest it, which leaves FEED_TRAVEL seconds before
- * the cell buds and reaches it as it does.
+ * Feeding the brain: sources in all (fewer on a phone); how far under the brain's outline they
+ * stand (further on a phone, where a source is larger beside the brain), how much lower every second one stands so long names never meet, the half-width of the
+ * strip of cells that outline is read from, and the room the camera keeps beside and under each,
+ * in neighbour distances; the share of the brain's width kept free at the left and right ends of
+ * their row (on a large screen more on the right, where the legend stands); when the sources that join in the third act appear, as shares of the
+ * growth time; and how long a pulse takes from its source to its cell.
  */
-const SOURCE_BELOW = 5;
+const SOURCE_TOTAL = 8;
+const SOURCE_TOTAL_SMALL = 4;
+const SOURCE_GAP = 4;
+const SOURCE_GAP_SMALL = 7;
+const SOURCE_STAGGER = 3;
+const SOURCE_BAND = 4;
+const SOURCE_SIDE_ROOM = 5;
 const SOURCE_ROOM = 4;
-const SOURCE_SPREAD = 0.6;
-const FEED_EVERY = 6;
+const SOURCE_INSET: [number, number] = [0.04, 0.2];
+const SOURCE_INSET_SMALL: [number, number] = [0.04, 0.04];
+const SOURCE_JOIN = 0.7;
 export const FEED_TRAVEL = 0.9;
 /** First act: seconds the company stands alone. */
 export const ACT_ONE = 2.4;
@@ -355,7 +366,8 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     conceptR = o.small ? CONCEPT_R_SMALL : CONCEPT_R,
     arc = o.small ? ARC_SMALL : ARC;
   const pointOf = new Map<number, number>();
-  let clock = ACT_ONE;
+  // Story times count from when the sources have connected; they are set once that is known.
+  let clock = 0;
   const concepts: number[][] = [];
   story.forEach((d, k) => {
     // Three domains stand up left, up right and below the root.
@@ -431,9 +443,8 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
   }
 
   // Second act on a model: new concepts bud from the company's own, close up, one after another.
-  const binds: BrainBind[] = [];
+  const model = [...joined.keys()];
   if (joined.size) {
-    const model = [...joined.keys()];
     const k = Math.min(model.length, o.small ? BUD_PARENTS_SMALL : BUD_PARENTS);
     const parents = Array.from({ length: k }, (_, i) => model[Math.floor((i * model.length) / k)]);
     const per = clamp(Math.ceil((o.small ? BUD_TOTAL_SMALL : BUD_TOTAL) / k), 1, BUD_MAX);
@@ -477,20 +488,19 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
         last.set(p, idx);
         clock += BUD_GAP;
       }
-    clock += DOMAIN_GAP;
   }
 
-  // Then example data sources stand in a row under the model or the story; each maps to the
-  // concepts nearest it, real and new (a domain maps to no source).
-  if (cells.length) {
-    const model = [...joined.keys()];
+  // Before any of it, the sources light up in a row under the model or the story, one after
+  // another, and each maps to the company's concepts nearest it. Then every story cell buds as a
+  // pulse from the source nearest it arrives, and a new concept is mapped to that source.
+  const binds: BrainBind[] = [];
+  const feeds: BrainFeed[] = [];
+  const planned = cells.length;
+  const first: number[] = [];
+  if (planned) {
     const occupied: [number, number][] = [
       ...[...model, ...(root ? [root] : [])].map((n): [number, number] => [n.x, n.y]),
       ...cells.map((c): [number, number] => [(c.story as StoryPlace).x, (c.story as StoryPlace).y]),
-    ];
-    const targets: { to: number | Node; x: number; y: number }[] = [
-      ...model.map((n) => ({ to: n, x: n.x, y: n.y })),
-      ...cells.flatMap((c, i) => (c.story?.hub ? [] : [{ to: i, x: (c.story as StoryPlace).x, y: (c.story as StoryPlace).y }])),
     ];
     const xs0 = Math.min(...occupied.map((p) => p[0])),
       xs1 = Math.max(...occupied.map((p) => p[0])),
@@ -498,16 +508,19 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     const count = Math.min(o.small ? SOURCE_COUNT_SMALL : SOURCE_COUNT, SOURCES.length);
     const step = Math.max(SOURCE_STEP, (xs1 - xs0) / Math.max(1, count - 1));
     const spots = Array.from({ length: count }, (_, i): [number, number] => [(xs0 + xs1) / 2 + (i - (count - 1) / 2) * step, ys1 + SOURCE_DROP]);
-    const mine = spots.map((): typeof targets => []);
-    for (const g of targets) {
+    const nearestSpot = (x: number, y: number) => {
       let best = 0;
-      spots.forEach(([x, y], i) => {
-        if (Math.hypot(g.x - x, g.y - y) < Math.hypot(g.x - spots[best][0], g.y - spots[best][1])) best = i;
+      spots.forEach(([sx, sy], i) => {
+        if (Math.hypot(x - sx, y - sy) < Math.hypot(x - spots[best][0], y - spots[best][1])) best = i;
       });
-      mine[best].push(g);
-    }
+      return best;
+    };
+    const mine = spots.map((): Node[] => []);
+    for (const n of model) mine[nearestSpot(n.x, n.y)].push(n);
+    let t = ACT_ONE;
     spots.forEach(([x, y], i) => {
       const src = cells.length;
+      first.push(src);
       cells.push({
         x,
         y,
@@ -517,21 +530,31 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
         color: s.BRASS,
         domain: SOURCE_KEY,
         label: SOURCES[i],
-        born: clock,
+        born: t,
         story: { x, y, r: SOURCE_R, parent: -1, hub: false, from: null, source: true },
       });
-      clock += SOURCE_LEAD;
+      t += SOURCE_LEAD;
       const nearest = mine[i].sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y)).slice(0, BINDS_MAX);
-      for (const g of nearest) {
-        binds.push({ source: src, to: g.to, at: clock });
-        clock += BIND_GAP;
+      for (const n of nearest) {
+        binds.push({ source: src, to: n, at: t });
+        t += BIND_GAP;
       }
-      clock += SOURCE_TAIL;
+      t += SOURCE_TAIL;
     });
-    clock += LINK_DRAW;
+    const start = t + LINK_DRAW + FEED_TRAVEL;
+    for (let i = 0; i < planned; i++) {
+      const c = cells[i];
+      const p = c.story as StoryPlace;
+      c.born += start;
+      const src = first[nearestSpot(p.x, p.y)];
+      feeds.push({ source: src, to: i, at: c.born - FEED_TRAVEL });
+      if (!p.hub) binds.push({ source: src, to: i, at: c.born });
+    }
+    for (const l of links) l[2] += start;
   }
   const stories = cells.length;
-  const act3 = stories ? clock + HOLD : ACT_ONE;
+  const settledAt = Math.max(...cells.map((c) => c.born), ...links.map((l) => l[2]));
+  const act3 = stories ? settledAt + LINK_DRAW + HOLD : ACT_ONE;
 
   // Third act: the rest of the brain grows from the root, the story cells, the joined concepts and
   // the core of every lobe none of them reached.
@@ -598,27 +621,76 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     y1 = Math.max(y1, c.y);
   }
 
-  // The sources take a row under the brain, in their order, and feed the cells nearest them.
-  const sourceCells = cells.flatMap((c, i) => (c.story?.source ? [i] : []));
+  // More sources join as the brain grows; all of them stand across its width, each just under
+  // the brain's outline where it stands, the first ones spread among the rest, and every brain cell buds as a pulse from the source
+  // nearest it, among those shown by then, reaches the place it buds from.
   const frame: [number, number, number, number] = [x0, y0, x1, y1];
-  const feeds: BrainFeed[] = [];
-  if (sourceCells.length) {
-    const rowY = y1 + SOURCE_BELOW * WORLD_SPACING;
-    const span = (x1 - x0) * SOURCE_SPREAD;
-    sourceCells.forEach((i, k) => {
+  if (first.length) {
+    const count = Math.max(first.length, Math.min(o.small ? SOURCE_TOTAL_SMALL : SOURCE_TOTAL, SOURCES.length));
+    const all = [...first];
+    for (let k = first.length; k < count; k++) {
+      all.push(cells.length);
+      cells.push({
+        x: 0,
+        y: 0,
+        px: 0,
+        py: 0,
+        linked: false,
+        color: s.BRASS,
+        domain: SOURCE_KEY,
+        label: SOURCES[k],
+        born: g0 + GROW * SOURCE_JOIN * ((k - first.length + 1) / (count - first.length + 1)),
+        story: { x: 0, y: 0, r: SOURCE_R, parent: -1, hub: false, from: null, source: true },
+      });
+    }
+    const band = SOURCE_BAND * WORLD_SPACING;
+    const inBrain = [...cells.filter((c) => !c.story?.source), ...joined.values()];
+    const under = (x: number): number => {
+      let y = -Infinity;
+      for (const c of inBrain) if (Math.abs(c.x - x) < band) y = Math.max(y, c.y);
+      return (y === -Infinity ? (y0 + y1) / 2 : y) + (o.small ? SOURCE_GAP_SMALL : SOURCE_GAP) * WORLD_SPACING;
+    };
+    const [insetLeft, insetRight] = o.small ? SOURCE_INSET_SMALL : SOURCE_INSET;
+    const left = x0 + (x1 - x0) * insetLeft,
+      right = x1 - (x1 - x0) * insetRight;
+    const slots = new Map<number, number>();
+    first.forEach((i, k) => slots.set(i, first.length > 1 ? Math.round((k * (count - 1)) / (first.length - 1)) : Math.floor((count - 1) / 2)));
+    const used = new Set(slots.values());
+    let free = 0;
+    for (const i of all.slice(first.length)) {
+      while (used.has(free)) free++;
+      slots.set(i, free);
+      used.add(free);
+    }
+    for (const i of all) {
+      const j = slots.get(i) as number;
       const c = cells[i];
-      c.x = c.px = (x0 + x1) / 2 + (sourceCells.length > 1 ? (k / (sourceCells.length - 1) - 0.5) * span : 0);
-      c.y = c.py = rowY;
-    });
-    frame[3] = rowY + SOURCE_ROOM * WORLD_SPACING;
-    for (let i = stories, k = 0; i < cells.length; i++, k++) {
-      if (k % FEED_EVERY) continue;
+      c.x = c.px = count > 1 ? left + ((right - left) * j) / (count - 1) : (left + right) / 2;
+      c.y = c.py = under(c.x) + (j % 2) * SOURCE_STAGGER * WORLD_SPACING;
+      // A source that joins in the third act appears at its place.
+      if (!first.includes(i)) Object.assign(c.story as StoryPlace, { x: c.x, y: c.y });
+      frame[0] = Math.min(frame[0], c.x - SOURCE_SIDE_ROOM * WORLD_SPACING);
+      frame[2] = Math.max(frame[2], c.x + SOURCE_SIDE_ROOM * WORLD_SPACING);
+      frame[3] = Math.max(frame[3], c.y + SOURCE_ROOM * WORLD_SPACING);
+    }
+    for (let i = stories; i < cells.length; i++) {
       const c = cells[i];
-      let src = sourceCells[0];
-      for (const j of sourceCells) if (Math.abs(cells[j].x - c.x) < Math.abs(cells[src].x - c.x)) src = j;
-      feeds.push({ source: src, to: i, at: c.born - FEED_TRAVEL });
+      if (c.story?.source) continue;
+      const at = c.born - FEED_TRAVEL;
+      let src = -1,
+        bd = Infinity;
+      for (const j of all) {
+        if (cells[j].born > at) continue;
+        const dd = Math.hypot(cells[j].x - c.px, cells[j].y - c.py);
+        if (dd < bd) {
+          bd = dd;
+          src = j;
+        }
+      }
+      if (src >= 0) feeds.push({ source: src, to: i, at });
     }
   }
+  inBirthOrder(cells, links, binds, feeds);
 
   const duration = Math.max(act3 + (joined.size ? JOIN : MIGRATE), total ? g0 + GROW : act3);
   const instant = !!o.instant;
@@ -685,6 +757,34 @@ function moveIntoBrain(d: BrainDemo): void {
     n.x = from.x;
     n.y = from.y;
     n.tween = { fx: from.x, fy: from.y, tx: to.x, ty: to.y, start: leave, pin: true };
+  }
+}
+
+/**
+ * Puts the cells in the order they are born, as `bornBy` needs: a source lights up before the
+ * story it feeds, and one that joins in the third act among the brain cells budding then. Every
+ * index into the cells follows, and each relation keeps its earlier cell first.
+ */
+function inBirthOrder(cells: BrainCell[], links: BrainLink[], binds: BrainBind[], feeds: BrainFeed[]): void {
+  const order = cells.map((_, i) => i).sort((a, b) => cells[a].born - cells[b].born || a - b);
+  const moved = new Array<number>(cells.length);
+  order.forEach((old, i) => (moved[old] = i));
+  const sorted = order.map((i) => cells[i]);
+  cells.splice(0, cells.length, ...sorted);
+  for (const c of cells) if (c.story && c.story.parent >= 0) c.story.parent = moved[c.story.parent];
+  for (const l of links) {
+    const a = moved[l[0]],
+      b = moved[l[1]];
+    l[0] = Math.min(a, b);
+    l[1] = Math.max(a, b);
+  }
+  for (const b of binds) {
+    b.source = moved[b.source];
+    if (typeof b.to === 'number') b.to = moved[b.to];
+  }
+  for (const f of feeds) {
+    f.source = moved[f.source];
+    f.to = moved[f.to];
   }
 }
 

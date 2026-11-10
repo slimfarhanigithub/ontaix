@@ -27,7 +27,7 @@ import {
   STORY_DOMAINS,
 } from './brainDemo';
 import { brainPoints, growthOrder, lobesOf, neighboursOf } from './brainShape';
-import { namesFor } from './brainVocabulary';
+import { namesFor, SOURCES } from './brainVocabulary';
 import type { View } from '../canvas/view';
 
 const DOMAINS = DOMAIN_TEMPLATES.map((d) => ({ key: d.key, name: d.name, color: d.color }));
@@ -224,7 +224,7 @@ describe('the demo brain', () => {
     expect(first.length).toBeGreaterThan(0);
   });
 
-  it('grows new concepts from the model close up, then maps example sources to its concepts', () => {
+  it('lights the sources up under the model, maps them to its concepts, then grows new concepts, each fed by a source', () => {
     const s = createScene();
     northwindModel(s);
     settleTweens(s);
@@ -233,7 +233,7 @@ describe('the demo brain', () => {
     const buds = story.filter((c) => !c.story?.source);
     const sources = story.filter((c) => c.story?.source);
     expect(buds.length).toBe(12);
-    expect(sources.length).toBe(4);
+    expect(sources.map((c) => c.label)).toEqual(SOURCES.slice(0, 4));
     // Every new concept buds from one of the company's own concepts, in that concept's domain, with a name the model does not hold.
     const realNames = new Set([...d.joined.keys()].map((n) => n.label));
     for (const c of buds) {
@@ -242,21 +242,28 @@ describe('the demo brain', () => {
       expect(c.domain).toBe(from.domain?.key ?? 'core');
       expect(realNames.has(c.label)).toBe(false);
     }
-    // The model grows first, then the sources appear, all before the third act; the sources stand under the model.
-    expect(Math.min(...buds.map((c) => c.born))).toBe(ACT_ONE);
-    expect(Math.max(...buds.map((c) => c.born))).toBeLessThan(Math.min(...sources.map((c) => c.born)));
+    // The sources light up first, from the end of the first act, under the model and the new concepts.
+    expect(Math.min(...sources.map((c) => c.born))).toBe(ACT_ONE);
+    expect(Math.max(...sources.map((c) => c.born))).toBeLessThan(Math.min(...buds.map((c) => c.born)));
     const lowest = Math.max(...[...d.joined.keys()].map((n) => n.y), ...buds.map((c) => c.story?.y ?? 0));
-    for (const c of sources) expect(c.y).toBeGreaterThan(lowest);
+    for (const c of sources) expect(c.story?.y).toBeGreaterThan(lowest);
     expect(brainPhase(d, ACT_ONE + 0.1)).toBe('domains');
-    // Each source maps to concepts, real and new, before the third act; none maps twice to the same concept.
-    expect(d.binds.length).toBeGreaterThan(sources.length);
-    for (const b of d.binds) {
-      expect(d.cells[b.source].story?.source).toBe(true);
-      expect(b.at).toBeLessThan(d.act3);
-    }
+    // Each source maps to the company's concepts before any new concept buds; none is mapped twice.
+    const firstBud = Math.min(...buds.map((c) => c.born));
+    const toModel = d.binds.filter((b) => typeof b.to !== 'number');
+    expect(toModel.length).toBeGreaterThan(sources.length);
+    for (const b of toModel) expect(b.at).toBeLessThan(firstBud);
     expect(new Set(d.binds.map((b) => b.to)).size).toBe(d.binds.length);
-    expect(d.binds.some((b) => typeof b.to !== 'number')).toBe(true);
-    expect(d.binds.some((b) => typeof b.to === 'number')).toBe(true);
+    for (let k = 1; k < d.binds.length; k++) expect(d.binds[k].at).toBeGreaterThanOrEqual(d.binds[k - 1].at);
+    // Every new concept buds as a pulse from a source reaches it, and is mapped to that source as it does.
+    for (const c of buds) {
+      const i = d.cells.indexOf(c);
+      const feed = d.feeds.find((f) => f.to === i);
+      expect(feed?.at).toBeCloseTo(c.born - FEED_TRAVEL);
+      expect(d.cells[feed?.source as number].story?.source).toBe(true);
+      expect(d.binds.find((b) => b.to === i)).toEqual({ source: feed?.source, to: i, at: c.born });
+    }
+    for (const b of d.binds) expect(b.at).toBeLessThan(d.act3);
     // Sources have no place in the brain: its bounds hold the brain only.
     const inBrain = [...d.cells.filter((c) => !c.story?.source), ...d.joined.values(), d.rootAt as { x: number; y: number }];
     expect(d.box).toEqual([
@@ -267,55 +274,69 @@ describe('the demo brain', () => {
     ]);
   });
 
-  it('moves the sources to a row under the brain, which they feed as it grows', () => {
+  it('stands the sources under the brain, more joining as it grows, and feeds every brain cell from the nearest one', () => {
     const s = createScene();
     northwindModel(s);
     settleTweens(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
+    // The cells stay in the order they are born.
+    for (let k = 1; k < d.cells.length; k++) expect(d.cells[k].born).toBeGreaterThanOrEqual(d.cells[k - 1].born);
     const sources = d.cells.flatMap((c, i) => (c.story?.source ? [i] : []));
-    const [x0, , x1, y1] = d.box;
-    // One row under the brain, left to right in their order, inside the brain's width; the camera's frame holds it.
-    const row = sources.map((i) => d.cells[i]);
-    for (const c of row) {
-      expect(c.y).toBe(row[0].y);
+    expect(sources.map((i) => d.cells[i].label)).toEqual(SOURCES);
+    // Four light up in the second act, four more join while the brain grows.
+    expect(sources.filter((i) => d.cells[i].born < d.act3).length).toBe(4);
+    for (const i of sources.filter((i) => d.cells[i].born >= d.act3)) {
+      expect(i).toBeGreaterThanOrEqual(d.stories);
+      expect(d.cells[i].born).toBeGreaterThan(d.growAt);
+      expect(d.cells[i].born).toBeLessThan(d.duration);
+    }
+    // Each stands across the brain's width, apart from every brain cell, inside the camera's frame.
+    const brain = d.cells.filter((c) => !c.story?.source);
+    const [x0, , x1] = d.box;
+    for (const i of sources) {
+      const c = d.cells[i];
       expect(c.x).toBeGreaterThan(x0);
       expect(c.x).toBeLessThan(x1);
+      expect(Math.min(...brain.map((b) => Math.hypot(b.x - c.x, b.y - c.y)))).toBeGreaterThan(3 * d.spacing);
+      expect(c.x).toBeGreaterThan(d.frame[0]);
+      expect(c.x).toBeLessThan(d.frame[2]);
+      expect(c.y).toBeLessThan(d.frame[3]);
     }
-    expect(row[0].y).toBeGreaterThan(y1);
-    for (let k = 1; k < row.length; k++) expect(row[k].x).toBeGreaterThan(row[k - 1].x);
-    expect(d.frame.slice(0, 3)).toEqual(d.box.slice(0, 3));
-    expect(d.frame[3]).toBeGreaterThan(row[0].y);
-    // Pulses feed brain cells from the source nearest each, leaving in order and reaching each cell as it buds.
-    expect(d.feeds.length).toBeGreaterThan(100);
-    for (const [k, f] of d.feeds.entries()) {
-      expect(sources).toContain(f.source);
-      expect(f.to).toBeGreaterThanOrEqual(d.stories);
-      expect(f.at).toBeCloseTo(d.cells[f.to].born - FEED_TRAVEL);
-      if (k) expect(f.at).toBeGreaterThanOrEqual(d.feeds[k - 1].at);
-      const dx = Math.abs(d.cells[f.source].x - d.cells[f.to].x);
-      for (const j of sources) expect(dx).toBeLessThanOrEqual(Math.abs(d.cells[j].x - d.cells[f.to].x));
+    expect(new Set(sources.map((i) => d.cells[i].x)).size).toBe(sources.length);
+    // Every brain cell is fed once, by the source nearest the place it buds from among those shown by then, in order.
+    const fed = d.feeds.filter((f) => f.to >= d.stories);
+    const cells = d.cells.flatMap((c, i) => (i >= d.stories && !c.story?.source ? [i] : []));
+    expect(fed.map((f) => f.to)).toEqual(cells);
+    for (const [k, f] of d.feeds.entries()) if (k) expect(f.at).toBeGreaterThanOrEqual(d.feeds[k - 1].at);
+    for (const f of fed) {
+      const c = d.cells[f.to];
+      expect(f.at).toBeCloseTo(c.born - FEED_TRAVEL);
+      const shown = sources.filter((j) => d.cells[j].born <= f.at);
+      expect(shown).toContain(f.source);
+      const far = (j: number) => Math.hypot(d.cells[j].x - c.px, d.cells[j].y - c.py);
+      for (const j of shown) expect(far(f.source)).toBeLessThanOrEqual(far(j));
     }
-    expect(Math.max(...d.feeds.map((f) => f.at + FEED_TRAVEL))).toBeLessThanOrEqual(d.duration);
   });
 
-  it('maps the story to sources and feeds the brain from them when the company starts with no concept', () => {
+  it('lights the sources up first and feeds the story from them when the company starts with no concept', () => {
     const s = createScene();
     companyAlone(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
     const story = d.cells.slice(0, d.stories);
     const sources = story.filter((c) => c.story?.source);
-    expect(sources.map((c) => c.label)).toEqual(['ERP', 'CRM', 'Data warehouse', 'Manufacturing execution']);
-    // The sources come after the story's concepts and relations, and map to concepts only, never to a domain.
-    const lastConcept = Math.max(...story.filter((c) => !c.story?.source).map((c) => c.born));
-    for (const c of sources) expect(c.born).toBeGreaterThan(lastConcept);
-    expect(d.binds.length).toBeGreaterThan(sources.length);
-    for (const b of d.binds) {
-      expect(typeof b.to).toBe('number');
-      expect(d.cells[b.to as number].story?.hub).toBe(false);
-      expect(d.cells[b.to as number].story?.source).toBe(false);
-      expect(b.at).toBeLessThan(d.act3);
+    const grown = story.filter((c) => !c.story?.source);
+    expect(sources.map((c) => c.label)).toEqual(SOURCES.slice(0, 4));
+    expect(Math.max(...sources.map((c) => c.born))).toBeLessThan(Math.min(...grown.map((c) => c.born)));
+    // Every domain and concept is fed; a concept, never a domain, is mapped to its source as it buds.
+    for (const c of grown) {
+      const i = d.cells.indexOf(c);
+      expect(d.feeds.find((f) => f.to === i)?.at).toBeCloseTo(c.born - FEED_TRAVEL);
+      const bind = d.binds.find((b) => b.to === i);
+      if (c.story?.hub) expect(bind).toBeUndefined();
+      else expect(bind?.at).toBe(c.born);
     }
-    expect(d.feeds.length).toBeGreaterThan(100);
+    expect(d.binds.length).toBe(grown.filter((c) => !c.story?.hub).length);
+    expect(d.feeds.length).toBeGreaterThan(1000);
     expect(d.frame[3]).toBeGreaterThan(d.box[3]);
   });
 
@@ -339,16 +360,16 @@ describe('the demo brain', () => {
     const hubs = story.filter((c) => c.story?.hub);
     expect(hubs.map((c) => c.label)).toEqual(DOMAINS.slice(0, 3).map((x) => x.name));
     expect(story.length).toBe(3 * 7);
-    expect(story[0].born).toBe(ACT_ONE);
+    expect(story[0].born).toBeGreaterThan(ACT_ONE);
     expect(bornCount(d, ACT_ONE - 0.01)).toBe(0);
     for (const c of story) expect(c.born).toBeLessThan(d.act3);
     // Every concept buds from its domain, every domain from the root.
     for (const c of story) {
-      const hub = story.findIndex((h) => h.story?.hub && h.domain === c.domain);
+      const hub = d.cells.findIndex((h) => h.story?.hub && h.domain === c.domain);
       expect(c.story?.parent).toBe(c.story?.hub ? -1 : hub);
     }
     const storyLinks = d.links.filter(([, b]) => b < d.stories);
-    const across = storyLinks.filter(([a, b]) => story[a].domain !== story[b].domain);
+    const across = storyLinks.filter(([a, b]) => d.cells[a].domain !== d.cells[b].domain);
     expect(across.length).toBe(3);
     expect(storyLinks.length).toBeGreaterThan(across.length);
     expect(new Set(story.map((c) => c.label)).size).toBe(story.length);
@@ -363,7 +384,9 @@ describe('the demo brain', () => {
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
     expect(brainPhase(d, 1)).toBe('company');
     expect(brainPhase(d, ACT_ONE + 0.1)).toBe('domains');
-    expect(bornDomains(d, ACT_ONE + 0.1)).toBe(1);
+    const firstHub = (d.cells.find((c) => c.story?.hub) as { born: number }).born;
+    expect(bornDomains(d, firstHub - 0.01)).toBe(0);
+    expect(bornDomains(d, firstHub)).toBe(1);
     expect(brainPhase(d, d.act3 + 0.1)).toBe('brain');
     expect(bornCount(d, d.act3)).toBe(d.stories);
     const grow0 = d.act3 + 0.6;
