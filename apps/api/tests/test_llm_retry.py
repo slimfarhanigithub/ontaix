@@ -131,11 +131,18 @@ async def test_other_4xx_statuses_are_one_attempt(monkeypatch, status: int) -> N
 @pytest.mark.asyncio(loop_scope="session")
 async def test_retry_after_ms_is_honoured(monkeypatch) -> None:
     seen = install(monkeypatch, scripted((429, THROTTLED, {"retry-after-ms": "300"}), answered()))
-    started = time.monotonic()
+    waits: list[float] = []
+    sleep = asyncio.sleep
+
+    async def recorded_sleep(delay: float, *args, **kwargs):
+        waits.append(delay)
+        return await sleep(delay, *args, **kwargs)
+
+    monkeypatch.setattr(llm_retry.asyncio, "sleep", recorded_sleep)
 
     await adapter().complete(request())
 
-    assert len(seen) == 2 and time.monotonic() - started >= 0.3
+    assert len(seen) == 2 and 0.3 in waits
 
 
 @pytest.mark.asyncio(loop_scope="session")
