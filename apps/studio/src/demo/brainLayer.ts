@@ -395,8 +395,8 @@ function newCache(d: BrainDemo, v: View, hidden: string): Cache | null {
   };
 }
 
-/** Draws the finale's halo, lit out to `wave` of the way from the top of the stem, a flash at its front lightening the cells. */
-function drawShine(ctx: CanvasRenderingContext2D, c: Cache, d: BrainDemo, wave: number, alpha: number): void {
+/** Draws the finale's halo, lit out to `wave` of the way from the top of the stem, its front lightening the cells by `flash`. */
+function drawShine(ctx: CanvasRenderingContext2D, c: Cache, d: BrainDemo, wave: number, alpha: number, flash: number): void {
   if (!c.shone) {
     const hidden = new Set(c.hidden.split(','));
     const R = d.radius * SHINE_R;
@@ -425,7 +425,7 @@ function drawShine(ctx: CanvasRenderingContext2D, c: Cache, d: BrainDemo, wave: 
     ctx.clip();
     drawCached(ctx, c, c.shine, SHINE_CREST_ALPHA * alpha);
     ctx.globalCompositeOperation = 'lighter';
-    drawCached(ctx, c, c.cells, SHINE_FLASH * alpha);
+    if (flash > 0) drawCached(ctx, c, c.cells, flash * alpha);
     ctx.restore();
   }
 }
@@ -558,7 +558,8 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
   // From afar the cached picture holds the settled cells; only the newer ones are drawn here.
   const from = cached ? cache.upTo : 0;
   const [wave, shine] = shineOf(d, e);
-  if (cached && wave > 0) drawShine(ctx, cache, d, wave, shine * fade);
+  // The halo shows at any zoom; the crest's flash lightens the cached cells, so only from afar.
+  if (cache && wave > 0) drawShine(ctx, cache, d, wave, shine * fade, cached ? SHINE_FLASH : 0);
   if (cached) drawCached(ctx, cache, cache.cells, fade);
   const [x0, y0, x1, y1] = viewRect(s, v, d.spacing * 2);
   const inRect = (x: number, y: number) => x >= x0 && x <= x1 && y >= y0 && y <= y1;

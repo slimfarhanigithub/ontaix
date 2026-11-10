@@ -10,6 +10,7 @@ import { AdminOverlay } from './shell/AdminOverlay';
 import { NewBox, LinkBox } from './shell/Boxes';
 import { CanvasView } from './shell/CanvasView';
 import { Dialog } from './shell/Dialog';
+import { DockRight } from './shell/DockRight';
 import { DomainsCard } from './shell/DomainsCard';
 import { Drawer } from './shell/Drawer';
 import { Header } from './shell/Header';
@@ -46,10 +47,10 @@ export function App() {
       <NewBox />
       <LinkBox />
       <DomainsCard />
-      <div className="dock-r">
+      <DockRight>
         <Legend />
         <Hint />
-      </div>
+      </DockRight>
       <Dialog />
     </>
   );

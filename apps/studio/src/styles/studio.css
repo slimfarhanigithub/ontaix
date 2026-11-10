@@ -64,6 +64,9 @@ form.bar .hist p{ margin:2px 0 0; font-size:13px; line-height:1.5; color:var(--i
 .dock-l > *, .dock-r > *{ position:static; pointer-events:auto; }
 .dock-l .domains{ width:236px; }
 .dock-r .legend{ width:100%; }
+/* While the demo brain grows both docks fade away, so the canvas is the brain's alone; Stop brings them back. */
+.dock-l, .dock-r{ transition:opacity .3s, visibility 0s; }
+.dock-l.away, .dock-r.away{ opacity:0; visibility:hidden; transition:opacity .3s, visibility 0s .3s; }
 @media (min-width:1360px){
   form.bar{ max-width:calc(100% - var(--panel-w) - 2 * var(--dock-side)); }
   .tools{ max-width:calc(100% - var(--panel-w) - 2 * var(--dock-side) + 32px); flex-wrap:wrap; justify-content:center; }

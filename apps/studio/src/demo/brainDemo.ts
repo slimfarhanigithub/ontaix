@@ -162,6 +162,9 @@ const BUD_MAX = 4;
 const BUD_R = 140;
 const BUD_R_SMALL = 115;
 const BUD_GAP = 0.34;
+/** Where a name stands under its cell, in world units: half its width and its drop below the cell's centre. */
+const NAME_HALF = 45;
+const NAME_DROP = 30;
 /**
  * Example data sources: how many (fewer on a phone), their row's distance under the model and
  * least distance between them, their radius (a canvas source's), seconds before a source's first
@@ -180,8 +183,7 @@ const BINDS_MAX = 6;
  * Feeding the brain: sources in all (fewer on a phone); how far under the brain's outline they
  * stand (further on a phone, where a source is larger beside the brain), how much lower every second one stands so long names never meet, the half-width of the
  * strip of cells that outline is read from, and the room the camera keeps beside and under each,
- * in neighbour distances; the share of the brain's width kept free at the left and right ends of
- * their row (on a large screen more on the right, where the legend stands); when the sources that join in the third act appear, as shares of the
+ * in neighbour distances; the share of the brain's width kept free at each end of their row; when the sources that join in the third act appear, as shares of the
  * growth time; and how long a pulse takes from its source to its cell.
  */
 const SOURCE_TOTAL = 8;
@@ -192,8 +194,7 @@ const SOURCE_STAGGER = 3;
 const SOURCE_BAND = 4;
 const SOURCE_SIDE_ROOM = 5;
 const SOURCE_ROOM = 4;
-const SOURCE_INSET: [number, number] = [0.04, 0.2];
-const SOURCE_INSET_SMALL: [number, number] = [0.04, 0.04];
+const SOURCE_INSET = 0.04;
 const SOURCE_JOIN = 0.7;
 export const FEED_TRAVEL = 0.9;
 /** First act: seconds the company stands alone. */
@@ -453,6 +454,12 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
       occupied.reduce((a, p) => a + p[0], 0) / occupied.length,
       occupied.reduce((a, p) => a + p[1], 0) / occupied.length,
     ];
+    // A name stands under its cell: its two ends count as taken too, so no new concept lands on a name.
+    const named = (x: number, y: number): [number, number][] => [
+      [x - NAME_HALF, y + NAME_DROP],
+      [x + NAME_HALF, y + NAME_DROP],
+    ];
+    for (const n of [...model, ...(root ? [root] : [])]) occupied.push(...named(n.x, n.y));
     const realNames = new Set(model.map((n) => n.label));
     const freshName = (key: string, label: string) => {
       let name = nameOf(key, label);
@@ -465,7 +472,7 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
         const lobe = p.domain ? domains.findIndex((x) => x.key === p.domain?.key) : -1;
         const d = lobe >= 0 ? domains[lobe] : null;
         const [sx, sy] = budPlace([p.x, p.y], mid, occupied, o.small ? BUD_R_SMALL : BUD_R);
-        occupied.push([sx, sy]);
+        occupied.push([sx, sy], ...named(sx, sy));
         const point = nearestFree(...(lobe >= 0 ? coreOf(lobe) : STEM_TOP), (j) => lobes[j] === lobe);
         const [gx, gy] = point >= 0 ? world(pts[point]) : [sx, sy];
         const idx = cells.length;
@@ -650,9 +657,8 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
       for (const c of inBrain) if (Math.abs(c.x - x) < band) y = Math.max(y, c.y);
       return (y === -Infinity ? (y0 + y1) / 2 : y) + (o.small ? SOURCE_GAP_SMALL : SOURCE_GAP) * WORLD_SPACING;
     };
-    const [insetLeft, insetRight] = o.small ? SOURCE_INSET_SMALL : SOURCE_INSET;
-    const left = x0 + (x1 - x0) * insetLeft,
-      right = x1 - (x1 - x0) * insetRight;
+    const left = x0 + (x1 - x0) * SOURCE_INSET,
+      right = x1 - (x1 - x0) * SOURCE_INSET;
     const slots = new Map<number, number>();
     first.forEach((i, k) => slots.set(i, first.length > 1 ? Math.round((k * (count - 1)) / (first.length - 1)) : Math.floor((count - 1) / 2)));
     const used = new Set(slots.values());
