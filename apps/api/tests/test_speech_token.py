@@ -229,7 +229,10 @@ async def test_the_hourly_speech_budget_refuses_with_retry_after(
 async def test_no_speech_resource_answers_503_without_charging(
     client: httpx.AsyncClient, tenant: TenantFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(get_settings(), "speech_tokens_per_hour", 1)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "speech_tokens_per_hour", 1)
+    monkeypatch.setattr(settings, "speech_resource_id", None)
+    monkeypatch.setattr(settings, "speech_endpoint", None)
     reset_speech_token_client()
 
     first = await mint(client, tenant)
