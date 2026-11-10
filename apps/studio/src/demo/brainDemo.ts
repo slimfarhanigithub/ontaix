@@ -5,15 +5,17 @@
  *
  * A company that already holds concepts is the brain's starting point: its model stands as it
  * is, close up, then new concepts bud from its concepts one after another, and example data
- * sources appear under the model and map to its concepts one by one; then the root moves to the
- * top of the brain stem, every concept joins the lobe of its domain, the new concepts fly to
- * their lobes and the sources fade out while the camera pulls back, and the brain grows on from
- * them. A company with no
+ * sources appear under the model and map to its concepts one by one, information flowing along
+ * each mapping; then the root moves to the top of the brain stem, every concept joins the lobe of
+ * its domain, the new concepts fly to their lobes and the sources to a row under the brain while
+ * the camera pulls back, and the brain grows on from them, fed by the sources: a pulse of
+ * information leaves a source for each cell a moment before it buds. A company with no
  * concept yet stands alone at the top of the brain stem, close up, then three domains bud from its
  * root one after another, each with a few named concepts, their relations drawn one by one and a
- * few relations across the domains, while the camera stays close enough to read every name; then
- * the camera pulls back and the story cells fly to the cores of their lobes. Either way the rest
- * of the brain grows fast, faster and faster, every domain filling one lobe of a side view of a
+ * few relations across the domains, while the camera stays close enough to read every name, and
+ * the sources appear under the story and map to its concepts; then the camera pulls back and the
+ * story cells fly to the cores of their lobes. Either way the sources feed the rest of the brain
+ * as it grows fast, faster and faster, every domain filling one lobe of a side view of a
  * brain whose faint outline shows from the start of the pull-back. Once grown, the brain holds
  * still. Cells of other companies fade out and stay set aside until Stop.
  */
@@ -55,6 +57,13 @@ export interface BrainBind {
   at: number;
 }
 
+/** A pulse of information from a source to a brain cell: the source cell, the brain cell, and when it leaves the source. */
+export interface BrainFeed {
+  source: number;
+  to: number;
+  at: number;
+}
+
 export interface BrainCell {
   /** World position in the brain. */
   x: number;
@@ -91,6 +100,8 @@ export interface BrainDemo {
   links: BrainLink[];
   /** Mappings from the example sources to concepts, in the order they are drawn. */
   binds: BrainBind[];
+  /** Pulses from the sources to the brain cells they feed, in the order they leave. */
+  feeds: BrainFeed[];
   /** Cell radius and distance between neighbours in the brain, in world units. */
   radius: number;
   spacing: number;
@@ -107,6 +118,8 @@ export interface BrainDemo {
   duration: number;
   /** Bounds of the whole grown brain, the root included: x0, y0, x1, y1. */
   box: [number, number, number, number];
+  /** What the camera shows once pulled back: the brain and the row of sources under it. */
+  frame: [number, number, number, number];
   start: number;
   /** When the demo was turned on: the other real cells fade out from then. */
   began: number;
@@ -155,12 +168,23 @@ const BUD_GAP = 0.34;
 const SOURCE_COUNT = 4;
 const SOURCE_COUNT_SMALL = 3;
 const SOURCE_DROP = 200;
-const SOURCE_STEP = 230;
+const SOURCE_STEP = 190;
 const SOURCE_R = 16;
 const SOURCE_LEAD = 0.35;
 const BIND_GAP = 0.12;
 const SOURCE_TAIL = 0.25;
 const BINDS_MAX = 6;
+/**
+ * Feeding the brain: the sources' row under the grown brain and the room under the row, in
+ * neighbour distances, and the share of the brain's width the row spans. One brain cell in
+ * FEED_EVERY is fed by a pulse from the source nearest it, which leaves FEED_TRAVEL seconds before
+ * the cell buds and reaches it as it does.
+ */
+const SOURCE_BELOW = 5;
+const SOURCE_ROOM = 4;
+const SOURCE_SPREAD = 0.6;
+const FEED_EVERY = 6;
+export const FEED_TRAVEL = 0.9;
 /** First act: seconds the company stands alone. */
 export const ACT_ONE = 2.4;
 /** Second act: seconds before a domain's first concept, between its concepts, and after its last one. */
@@ -210,6 +234,8 @@ const CLEAR_NARROW: [number, number] = [180, 170];
 /** How far the camera may zoom out while the demo is on, and how close it comes to the story. */
 export const BRAIN_MIN_ZOOM = 0.05;
 const STORY_MIN_ZOOM = 0.3;
+/** World room the close-up camera keeps beside and under a source, for its name. */
+const SOURCE_ROOM_CLOSE: [number, number] = [120, 130];
 
 export interface BrainOptions {
   spacing?: number;
@@ -404,8 +430,7 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     clock += CROSS_GAP;
   }
 
-  // Second act on a model: new concepts bud from the company's own, close up, one after another,
-  // then example data sources appear under the model and map to its concepts one by one.
+  // Second act on a model: new concepts bud from the company's own, close up, one after another.
   const binds: BrainBind[] = [];
   if (joined.size) {
     const model = [...joined.keys()];
@@ -453,11 +478,19 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
         clock += BUD_GAP;
       }
     clock += DOMAIN_GAP;
+  }
 
-    // The sources stand in a row under the model; each maps to the concepts nearest it.
+  // Then example data sources stand in a row under the model or the story; each maps to the
+  // concepts nearest it, real and new (a domain maps to no source).
+  if (cells.length) {
+    const model = [...joined.keys()];
+    const occupied: [number, number][] = [
+      ...[...model, ...(root ? [root] : [])].map((n): [number, number] => [n.x, n.y]),
+      ...cells.map((c): [number, number] => [(c.story as StoryPlace).x, (c.story as StoryPlace).y]),
+    ];
     const targets: { to: number | Node; x: number; y: number }[] = [
       ...model.map((n) => ({ to: n, x: n.x, y: n.y })),
-      ...cells.map((c, i) => ({ to: i, x: (c.story as StoryPlace).x, y: (c.story as StoryPlace).y })),
+      ...cells.flatMap((c, i) => (c.story?.hub ? [] : [{ to: i, x: (c.story as StoryPlace).x, y: (c.story as StoryPlace).y }])),
     ];
     const xs0 = Math.min(...occupied.map((p) => p[0])),
       xs1 = Math.max(...occupied.map((p) => p[0])),
@@ -565,6 +598,28 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     y1 = Math.max(y1, c.y);
   }
 
+  // The sources take a row under the brain, in their order, and feed the cells nearest them.
+  const sourceCells = cells.flatMap((c, i) => (c.story?.source ? [i] : []));
+  const frame: [number, number, number, number] = [x0, y0, x1, y1];
+  const feeds: BrainFeed[] = [];
+  if (sourceCells.length) {
+    const rowY = y1 + SOURCE_BELOW * WORLD_SPACING;
+    const span = (x1 - x0) * SOURCE_SPREAD;
+    sourceCells.forEach((i, k) => {
+      const c = cells[i];
+      c.x = c.px = (x0 + x1) / 2 + (sourceCells.length > 1 ? (k / (sourceCells.length - 1) - 0.5) * span : 0);
+      c.y = c.py = rowY;
+    });
+    frame[3] = rowY + SOURCE_ROOM * WORLD_SPACING;
+    for (let i = stories, k = 0; i < cells.length; i++, k++) {
+      if (k % FEED_EVERY) continue;
+      const c = cells[i];
+      let src = sourceCells[0];
+      for (const j of sourceCells) if (Math.abs(cells[j].x - c.x) < Math.abs(cells[src].x - c.x)) src = j;
+      feeds.push({ source: src, to: i, at: c.born - FEED_TRAVEL });
+    }
+  }
+
   const duration = Math.max(act3 + (joined.size ? JOIN : MIGRATE), total ? g0 + GROW : act3);
   const instant = !!o.instant;
   const demo: BrainDemo = {
@@ -574,6 +629,7 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     storyDomains: story.length,
     links,
     binds,
+    feeds,
     radius: BRAIN_CELL,
     spacing: WORLD_SPACING,
     company: company?.name ?? null,
@@ -584,6 +640,7 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     growAt: g0,
     duration,
     box: [x0, y0, x1, y1],
+    frame,
     start: instant ? t - duration : t,
     began: instant ? t - VEIL_IN : t,
     ending: null,
@@ -826,7 +883,7 @@ export function brainStep(s: SceneState, v: View, t: number): void {
     const q = ease(clamp((e - d.act3) / ZOOM_OUT, 0, 1));
     const z0 = ts,
       zb = brainFitZoom(d, v);
-    const [bx0, by0, bx1, by1] = d.box;
+    const [bx0, by0, bx1, by1] = d.frame;
     // The zoom moves evenly in scale, so the pull-back neither lurches nor crawls, and the centre
     // moves as the view widens, so the story stays in view while the brain comes into it.
     ts = Math.exp(Math.log(z0) + (Math.log(zb) - Math.log(z0)) * q);
@@ -869,18 +926,20 @@ function storyView(d: BrainDemo, v: View, e: number): [number, number, number] {
   const upTo = e >= d.act3 ? d.stories : Math.min(d.stories, bornBy(d, e));
   for (let i = 0; i < upTo; i++) {
     const p = d.cells[i].story as StoryPlace;
-    x0 = Math.min(x0, p.x - 90);
+    // A source's name is wider and its row the lowest: it gets more room around it.
+    const [w, below] = p.source ? SOURCE_ROOM_CLOSE : [90, 70];
+    x0 = Math.min(x0, p.x - w);
     y0 = Math.min(y0, p.y - 60);
-    x1 = Math.max(x1, p.x + 90);
-    y1 = Math.max(y1, p.y + 70);
+    x1 = Math.max(x1, p.x + w);
+    y1 = Math.max(y1, p.y + below);
   }
   const ts = clamp(Math.min((v.W - panelW(v) - 80) / (x1 - x0), (v.H - top - bottom) / (y1 - y0)), STORY_MIN_ZOOM, 1);
   return [ts, (x0 + x1) / 2, (y0 + y1) / 2];
 }
 
-/** The zoom that shows the whole grown brain in the room the camera leaves free. */
+/** The zoom that shows the whole grown brain, and its sources, in the room the camera leaves free. */
 export function brainFitZoom(d: BrainDemo, v: View): number {
-  const [x0, y0, x1, y1] = d.box;
+  const [x0, y0, x1, y1] = d.frame;
   const pad = d.spacing * 2;
   const bw = x1 - x0 + 2 * pad,
     bh = y1 - y0 + 2 * pad;

@@ -17,6 +17,7 @@ import {
   brainPhase,
   brainStep,
   FADE_OUT,
+  FEED_TRAVEL,
   GROW,
   MIGRATE,
   SPACING_LARGE,
@@ -266,6 +267,58 @@ describe('the demo brain', () => {
     ]);
   });
 
+  it('moves the sources to a row under the brain, which they feed as it grows', () => {
+    const s = createScene();
+    northwindModel(s);
+    settleTweens(s);
+    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
+    const sources = d.cells.flatMap((c, i) => (c.story?.source ? [i] : []));
+    const [x0, , x1, y1] = d.box;
+    // One row under the brain, left to right in their order, inside the brain's width; the camera's frame holds it.
+    const row = sources.map((i) => d.cells[i]);
+    for (const c of row) {
+      expect(c.y).toBe(row[0].y);
+      expect(c.x).toBeGreaterThan(x0);
+      expect(c.x).toBeLessThan(x1);
+    }
+    expect(row[0].y).toBeGreaterThan(y1);
+    for (let k = 1; k < row.length; k++) expect(row[k].x).toBeGreaterThan(row[k - 1].x);
+    expect(d.frame.slice(0, 3)).toEqual(d.box.slice(0, 3));
+    expect(d.frame[3]).toBeGreaterThan(row[0].y);
+    // Pulses feed brain cells from the source nearest each, leaving in order and reaching each cell as it buds.
+    expect(d.feeds.length).toBeGreaterThan(100);
+    for (const [k, f] of d.feeds.entries()) {
+      expect(sources).toContain(f.source);
+      expect(f.to).toBeGreaterThanOrEqual(d.stories);
+      expect(f.at).toBeCloseTo(d.cells[f.to].born - FEED_TRAVEL);
+      if (k) expect(f.at).toBeGreaterThanOrEqual(d.feeds[k - 1].at);
+      const dx = Math.abs(d.cells[f.source].x - d.cells[f.to].x);
+      for (const j of sources) expect(dx).toBeLessThanOrEqual(Math.abs(d.cells[j].x - d.cells[f.to].x));
+    }
+    expect(Math.max(...d.feeds.map((f) => f.at + FEED_TRAVEL))).toBeLessThanOrEqual(d.duration);
+  });
+
+  it('maps the story to sources and feeds the brain from them when the company starts with no concept', () => {
+    const s = createScene();
+    companyAlone(s);
+    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
+    const story = d.cells.slice(0, d.stories);
+    const sources = story.filter((c) => c.story?.source);
+    expect(sources.map((c) => c.label)).toEqual(['ERP', 'CRM', 'Data warehouse', 'Manufacturing execution']);
+    // The sources come after the story's concepts and relations, and map to concepts only, never to a domain.
+    const lastConcept = Math.max(...story.filter((c) => !c.story?.source).map((c) => c.born));
+    for (const c of sources) expect(c.born).toBeGreaterThan(lastConcept);
+    expect(d.binds.length).toBeGreaterThan(sources.length);
+    for (const b of d.binds) {
+      expect(typeof b.to).toBe('number');
+      expect(d.cells[b.to as number].story?.hub).toBe(false);
+      expect(d.cells[b.to as number].story?.source).toBe(false);
+      expect(b.at).toBeLessThan(d.act3);
+    }
+    expect(d.feeds.length).toBeGreaterThan(100);
+    expect(d.frame[3]).toBeGreaterThan(d.box[3]);
+  });
+
   it('builds on the model at once when animations are skipped', () => {
     const s = createScene();
     northwindModel(s);
@@ -282,7 +335,7 @@ describe('the demo brain', () => {
     companyAlone(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
     expect(d.storyDomains).toBe(STORY_DOMAINS);
-    const story = d.cells.slice(0, d.stories);
+    const story = d.cells.slice(0, d.stories).filter((c) => !c.story?.source);
     const hubs = story.filter((c) => c.story?.hub);
     expect(hubs.map((c) => c.label)).toEqual(DOMAINS.slice(0, 3).map((x) => x.name));
     expect(story.length).toBe(3 * 7);
@@ -317,7 +370,7 @@ describe('the demo brain', () => {
     const grown = (e: number) => bornCount(d, grow0 + e) - d.stories;
     expect(grown(GROW / 2) - grown(GROW / 4)).toBeGreaterThan(grown(GROW / 4));
     expect(d.duration - d.act3).toBeLessThan(12);
-    expect(d.duration).toBeLessThan(30);
+    expect(d.duration).toBeLessThan(33);
     expect(brainGrown(d, d.duration - 0.5)).toBe(false);
     expect(brainGrown(d, d.duration)).toBe(true);
     expect(brainPhase(d, d.duration)).toBe('grown');
@@ -343,7 +396,7 @@ describe('the demo brain', () => {
     const s = createScene();
     companyAlone(s);
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL, small: true });
-    expect(d.stories).toBe(3 * 5);
+    expect(d.stories).toBe(3 * 5 + 3);
   });
 
   it('fills the brain with templates the tenant does not hold, after its shown domains', () => {

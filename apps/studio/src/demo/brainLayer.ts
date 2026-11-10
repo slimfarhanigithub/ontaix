@@ -6,7 +6,10 @@
  * canvas, with their names, and their relations reach from one cell to the next as they are
  * made. In the third act they fly into the cores of their lobes and shrink to brain cells.
  * Example data sources are drawn as the canvas draws a source, and their mappings reach from the
- * source to a concept one by one; both fade out as the story cells fly into the brain.
+ * source to a concept one by one, a pulse of information running along each. The mappings fade
+ * out as the story cells fly into the brain, while the sources move to their row under it, never
+ * smaller on screen than a canvas source, and feed it: each pulse runs from its source to a brain
+ * cell, brass at its tail and the cell's colour at its head, and reaches it as the cell buds.
  *
  * Thousands of cells stay smooth. A cell that has settled never moves again, so from afar
  * settled cells and their relations are painted once into a cached picture of the whole brain,
@@ -26,11 +29,20 @@ import { labelScale, roundRect } from '../canvas/labels';
 import { beginLayer, compositeLayer } from '../canvas/regions';
 import type { SceneState } from '../canvas/state';
 import { toWorld, type View } from '../canvas/view';
-import { brainAlpha, brainElapsed, brainFitZoom, bornBy, LINK_DRAW, linksBy, MIGRATE, migration, ZOOM_OUT, type BrainCell, type BrainDemo } from './brainDemo';
+import { brainAlpha, brainElapsed, brainFitZoom, bornBy, FEED_TRAVEL, LINK_DRAW, linksBy, MIGRATE, migration, ZOOM_OUT, type BrainCell, type BrainDemo } from './brainDemo';
 
 /** Opacity and world width of a source's mapping, as the canvas draws a binding. */
 const BIND_ALPHA = 0.5;
 const BIND_WIDTH = 1;
+/** Seconds a pulse takes along a mapping, its tail's length as a share of the way, and its head's, glow's and tail's size in CSS pixels. */
+const PULSE_PERIOD = 1.4;
+const PULSE_TAIL = 0.14;
+const PULSE_HEAD_PX = 2.4;
+const PULSE_GLOW_PX = 8;
+const PULSE_WIDTH_PX = 1.6;
+/** Smallest on-screen radius of a source, in CSS pixels, and the world radius its corners, edge and bars are drawn for. */
+const SOURCE_PX = 16;
+const SOURCE_R_CANVAS = 16;
 /** How long a new cell takes to bud to its place, and how long it glows. */
 const BUD = 0.7;
 const GLOW = 1.4;
@@ -136,17 +148,52 @@ const isSource = (c: BrainCell): boolean => !!c.story?.source;
 /** Draws an example data source centred on x, y as the canvas draws a source: a rounded tile with three bars. */
 function drawSourceTile(g: CanvasRenderingContext2D, color: string, chip: string, x: number, y: number, r: number, alpha: number): void {
   const col = themedColour(color);
+  const k = r / SOURCE_R_CANVAS;
   const fill = g.createLinearGradient(x - r, y - r, x + r, y + r);
   fill.addColorStop(0, hex(mix(col, MIX_WHITE, 0.2), 0.95 * alpha));
   fill.addColorStop(1, hex(mix(col, MIX_BLACK, 0.35), 0.95 * alpha));
-  roundRect(g, x - r, y - r, 2 * r, 2 * r, 7);
+  roundRect(g, x - r, y - r, 2 * r, 2 * r, 7 * k);
   g.fillStyle = fill;
   g.fill();
   g.strokeStyle = hex(mix(col, MIX_WHITE, 0.35), 0.5 * alpha);
-  g.lineWidth = 1;
+  g.lineWidth = k;
   g.stroke();
   g.fillStyle = `rgba(${chip},${0.55 * alpha})`;
-  for (let i = -1; i <= 1; i++) g.fillRect(x - r * 0.55, y + i * r * 0.36 - 1.1, r * 1.1, 2.2);
+  for (let i = -1; i <= 1; i++) g.fillRect(x - r * 0.55, y + i * r * 0.36 - 1.1 * k, r * 1.1, 2.2 * k);
+}
+
+/**
+ * Draws a pulse of information heading from ax, ay to bx, by, `q` of the way there: a fading tail
+ * in `tail` behind a glowing head in `head`, both stored colours, sized in CSS pixels at `zoom`.
+ */
+function drawPulse(g: CanvasRenderingContext2D, tail: string, head: string, ax: number, ay: number, bx: number, by: number, q: number, zoom: number, alpha: number): void {
+  const x = ax + (bx - ax) * q,
+    y = ay + (by - ay) * q;
+  const q0 = Math.max(0, q - PULSE_TAIL);
+  const tx = ax + (bx - ax) * q0,
+    ty = ay + (by - ay) * q0;
+  if (q > q0) {
+    const trail = g.createLinearGradient(tx, ty, x, y);
+    trail.addColorStop(0, hex(themedColour(tail), 0));
+    trail.addColorStop(1, hex(themedColour(tail), 0.8 * alpha));
+    g.strokeStyle = trail;
+    g.lineWidth = PULSE_WIDTH_PX / zoom;
+    g.beginPath();
+    g.moveTo(tx, ty);
+    g.lineTo(x, y);
+    g.stroke();
+  }
+  const img = glowSprite(head);
+  if (img) {
+    const R = PULSE_GLOW_PX / zoom;
+    g.globalAlpha = alpha;
+    g.drawImage(img, x - R, y - R, R * 2, R * 2);
+    g.globalAlpha = 1;
+  }
+  g.fillStyle = hex(mix(themedColour(head), MIX_WHITE, 0.25), alpha);
+  g.beginPath();
+  g.arc(x, y, PULSE_HEAD_PX / zoom, 0, 6.283);
+  g.fill();
 }
 
 /** The world rectangle on screen, grown by `m`. */
@@ -164,7 +211,8 @@ function restOf(d: BrainDemo, c: BrainCell, e: number): [number, number, number]
   const p = c.story;
   if (!p) return [c.x, c.y, d.radius];
   const m = d.reduced ? (migration(d, e) < 0.5 ? 0 : 1) : migration(d, e);
-  return [p.x + (c.x - p.x) * m, p.y + (c.y - p.y) * m, p.r + (d.radius - p.r) * m];
+  // A source keeps its size on its way to its row under the brain.
+  return [p.x + (c.x - p.x) * m, p.y + (c.y - p.y) * m, p.source ? p.r : p.r + (d.radius - p.r) * m];
 }
 
 /** Where a cell buds from after `e` seconds: its parent's resting place, the root's place, or null for a seed. */
@@ -475,15 +523,43 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
     ctx.stroke(p);
   }
 
-  // Mappings: each reaches from its source to its concept, and fades out as the brain forms.
+  // Mappings: each reaches from its source to its concept, a pulse of information running along
+  // it once drawn, and fades out as the brain forms.
   for (const b of d.binds) {
     if (b.at > e || m >= 1) break;
-    if (typeof b.to === 'number' && hidden.has(d.cells[b.to].domain)) continue;
+    const target = typeof b.to === 'number' ? d.cells[b.to] : null;
+    if (target && hidden.has(target.domain)) continue;
     const [sx, sy] = placeOf(b.source);
     const [tx, ty] = typeof b.to === 'number' ? placeOf(b.to) : [b.to.x, b.to.y];
     const q = d.reduced ? 1 : ease(clamp((e - b.at) / LINK_DRAW, 0, 1));
     const k = (d.reduced ? clamp((e - b.at) / LINK_DRAW, 0, 1) : 1) * (1 - m);
-    stroke(sx, sy, sx + (tx - sx) * q, sy + (ty - sy) * q, d.cells[b.source].color, BIND_ALPHA * k, Math.max(BIND_WIDTH, 0.9 / zoom));
+    const source = d.cells[b.source].color;
+    stroke(sx, sy, sx + (tx - sx) * q, sy + (ty - sy) * q, source, BIND_ALPHA * k, Math.max(BIND_WIDTH, 0.9 / zoom));
+    const run = e - b.at - LINK_DRAW;
+    if (!d.reduced && run > 0) {
+      const head = target ? target.color : typeof b.to === 'number' ? source : (b.to.domain?.color ?? source);
+      drawPulse(ctx, source, head, sx, sy, tx, ty, (run % PULSE_PERIOD) / PULSE_PERIOD, zoom, k * fade);
+    }
+  }
+
+  // Feeding: pulses run from the sources to the brain cells about to bud.
+  if (!d.reduced && d.feeds.length && e < d.duration) {
+    let lo = 0,
+      hi = d.feeds.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (d.feeds[mid].at <= e - FEED_TRAVEL) lo = mid + 1;
+      else hi = mid;
+    }
+    for (let k = lo; k < d.feeds.length && d.feeds[k].at <= e; k++) {
+      const f = d.feeds[k];
+      const c = d.cells[f.to];
+      if (hidden.has(c.domain)) continue;
+      const [sx, sy] = placeOf(f.source);
+      const [bx, by] = restOf(d, c, e);
+      if (!inRect(sx, sy) && !inRect(bx, by)) continue;
+      drawPulse(ctx, d.cells[f.source].color, c.color, sx, sy, bx, by, ease(clamp((e - f.at) / FEED_TRAVEL, 0, 1)), zoom, fade);
+    }
   }
 
   // Glows: new cells while they bud.
@@ -512,21 +588,27 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
     if (hidden.has(c.domain)) continue;
     const [x, y, r] = placeOf(i);
     if (!inRect(x, y)) continue;
+    if (isSource(c)) continue;
     const alpha = fade * cellAlpha(d, c, e);
-    if (isSource(c)) {
-      const left = alpha * (1 - m);
-      if (left <= 0.01) continue;
-      ctx.globalAlpha = 1;
-      drawSourceTile(ctx, c.color, TH.CHIP, x, y, r, left);
-      storyCells.push([c, x, y, r, left]);
-      continue;
-    }
     ctx.globalAlpha = alpha;
     drawSphere(ctx, c.color, x, y, r);
     if (c.story && m < 1) storyCells.push([c, x, y, r, alpha * (1 - m)]);
     else if (shownCells.length <= LABELS_MAX) shownCells.push([c, x, y, r, alpha]);
   }
   ctx.globalAlpha = 1;
+  // Sources, over the pulses they send: drawn whatever the cached picture holds, and never
+  // smaller on screen than a canvas source.
+  for (let i = 0; i < Math.min(n, d.stories); i++) {
+    const c = d.cells[i];
+    if (!isSource(c)) continue;
+    const [x, y, r] = placeOf(i);
+    if (!inRect(x, y)) continue;
+    const alpha = fade * cellAlpha(d, c, e);
+    if (alpha <= 0.01) continue;
+    const sr = Math.max(r, SOURCE_PX / zoom);
+    drawSourceTile(ctx, c.color, TH.CHIP, x, y, sr, alpha);
+    storyCells.push([c, x, y, sr, alpha]);
+  }
 
   ctx.textAlign = 'center';
   ctx.shadowColor = TH.shadow;
