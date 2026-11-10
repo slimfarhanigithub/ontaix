@@ -7,7 +7,8 @@
  * made. In the third act they fly into the cores of their lobes and shrink to brain cells.
  * Example data sources are drawn as the canvas draws a source, never smaller on screen than a
  * canvas source, and their mappings reach from the source to a concept one by one; the mappings
- * fade out as the story cells fly into the brain, while the sources move to their places over the
+ * stay, stretching with their sources and concepts as the story cells fly into the brain and the
+ * sources move to their places over the
  * brain, a little smaller on screen, their names over them. The rig (`brainRigLayer.ts`) draws
  * their connections into the brain, the brain firing once grown, and the agents; a source glows
  * while it sends.
@@ -495,15 +496,15 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
     ctx.stroke(p);
   }
 
-  // Mappings: each reaches from its source to its concept, and fades out as the brain forms.
+  // Mappings: each reaches from its source to its concept, and stays, following both as they move.
   for (const b of d.binds) {
-    if (b.at > e || m >= 1) break;
+    if (b.at > e) break;
     const target = typeof b.to === 'number' ? d.cells[b.to] : null;
     if (target && hidden.has(target.domain)) continue;
     const [sx, sy] = placeOf(b.source);
     const [tx, ty] = typeof b.to === 'number' ? placeOf(b.to) : [b.to.x, b.to.y];
     const q = d.reduced ? 1 : ease(clamp((e - b.at) / LINK_DRAW, 0, 1));
-    const k = (d.reduced ? clamp((e - b.at) / LINK_DRAW, 0, 1) : 1) * (1 - m);
+    const k = d.reduced ? clamp((e - b.at) / LINK_DRAW, 0, 1) : 1;
     stroke(sx, sy, sx + (tx - sx) * q, sy + (ty - sy) * q, d.cells[b.source].color, BIND_ALPHA * k, Math.max(BIND_WIDTH, 0.9 / zoom));
   }
 
