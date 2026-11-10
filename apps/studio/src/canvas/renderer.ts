@@ -9,7 +9,7 @@
 import { now } from '../runtime/clock';
 import { BRAIN_MIN_ZOOM, brainStep } from '../demo/brainDemo';
 import { drawBrain, drawBrainTint } from '../demo/brainLayer';
-import { drawCell } from './cells';
+import { cellInView, drawCell } from './cells';
 import { focusOnCell, focusOnDomain, hit, hitAt, hitChip } from './focus';
 import { hitDomain } from './hulls';
 import { drawLinks } from './links';
@@ -130,7 +130,7 @@ export function createRenderer(canvas: HTMLCanvasElement, s: SceneState, hooks: 
           Number(a === s.hover) - Number(b === s.hover) ||
           (b.split && !b.split.broken ? 1 : 0) - (a.split && !a.split.broken ? 1 : 0),
       );
-    for (const n of sorted) if (shown(n)) drawCell(s, v, n, t);
+    for (const n of sorted) if (shown(n) && cellInView(s, v, n)) drawCell(s, v, n, t);
   }
 
   function frame(): void {

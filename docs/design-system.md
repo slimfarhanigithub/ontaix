@@ -202,6 +202,7 @@ All animations use one of two eases: an **expressive out-curve** `cubic-bezier(0
 ## 8. Focus
 
 - **Global ring:** `:focus-visible { outline: 2.5px solid var(--link); outline-offset: 2px; border-radius: 4px; }` in `base.css`. No component draws an accent ring of its own.
+- **Buttons:** component buttons reset every property with `all: unset`, so `base.css` gives every `button` and `[role="button"]` the same outline and offset with `!important` (no radius: the ring follows the button's own corners). Menu items (`[role^="menuitem"]`) are excluded; they show focus with their background.
 - **Opt-out:** a control that draws its own focus affordance adds the attribute `data-focus-ring="none"` (an attribute, not a class, so a refactor can't sweep it up). It then **must** show focus another way, for example by lighting its container with `:focus-within`. Removing focus outright is an accessibility regression.
 
 ## 9. Accessibility Contract (WCAG AA)

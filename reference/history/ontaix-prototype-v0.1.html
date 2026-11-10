@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ontaix Prototype v0.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#04060e; --bg2:#0b1024;
+  --ink:#eef2fb; --ink-2:#aab4cc; --ink-3:#6f7b98;
+  --line:rgba(170,180,204,.16);
+  --customer:#37e0c8; --product:#ffb454; --place:#a78bfa; --channel:#ff8fb1; --agent:#7dd3fc; --conflict:#ff4d5e;
+  --font:'Sora',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#04060e; } }
+:root[data-theme="dark"]{ --bg:#04060e; }
+html{ scroll-padding-top:env(safe-area-inset-top,0px); height:100%; }
+*,*::before,*::after{ box-sizing:inherit; }
+body{ margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--ink); font-family:var(--font); font-weight:400; -webkit-font-smoothing:antialiased; }
+canvas#brain{ position:fixed; inset:0; width:100%; height:100%; display:block; }
+
+/* ---------- chrome ---------- */
+.hud{ position:fixed; z-index:2; pointer-events:none; }
+.hud > *{ pointer-events:auto; }
+
+header.hud{ top:calc(18px + env(safe-area-inset-top,0px)); left:22px; right:22px; display:flex; justify-content:space-between; align-items:flex-start; }
+.wordmark{ display:flex; align-items:center; gap:10px; font-weight:600; font-size:18px; letter-spacing:.01em; }
+.wordmark i{ width:9px; height:9px; border-radius:50%; background:var(--customer); box-shadow:0 0 14px var(--customer); animation:beat 2.4s ease-in-out infinite; }
+.wordmark small{ font-weight:300; color:var(--ink-2); font-size:13px; margin-left:4px; }
+@keyframes beat{ 0%,100%{ transform:scale(1); opacity:.9 } 50%{ transform:scale(1.35); opacity:1 } }
+.scene{ text-align:right; font-size:13px; color:var(--ink-2); }
+.scene b{ display:block; color:var(--ink); font-weight:500; font-size:15px; margin-top:2px; }
+.status{ display:inline-flex; align-items:center; gap:7px; margin-top:8px; padding:4px 10px 4px 8px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:var(--ink-2); opacity:0; transition:opacity .3s; }
+.status.on{ opacity:1; }
+.status i{ width:7px; height:7px; border-radius:50%; background:var(--conflict); box-shadow:0 0 10px var(--conflict); animation:beat 1s ease-in-out infinite; }
+
+aside.hud{ right:22px; top:50%; transform:translateY(-50%); width:220px; font-size:12.5px; color:var(--ink-2); line-height:1.45; }
+aside .row{ display:grid; grid-template-columns:34px 1fr; gap:10px; align-items:center; padding:9px 0; border-top:1px solid var(--line); }
+aside .row:first-child{ border-top:0; }
+aside .row b{ color:var(--ink); font-weight:500; }
+aside svg{ width:34px; height:28px; overflow:visible; }
+
+.caption{ position:fixed; z-index:2; left:50%; bottom:calc(112px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); width:min(760px,calc(100% - 44px)); text-align:center; pointer-events:none; }
+.caption small{ display:block; color:var(--ink-3); font-size:12px; margin-bottom:6px; letter-spacing:.02em; }
+.caption p{ margin:0; font-size:clamp(16px,2vw,22px); font-weight:300; line-height:1.4; color:var(--ink); min-height:1.4em; text-wrap:balance; }
+.caption p .cursor{ display:inline-block; width:2px; height:1em; background:var(--ink-2); vertical-align:-2px; margin-left:2px; animation:beat .9s steps(2) infinite; }
+
+form.bar{ position:fixed; z-index:3; left:50%; bottom:calc(30px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); width:min(760px,calc(100% - 44px)); display:flex; gap:8px; align-items:center; padding:8px 8px 8px 14px; border:1px solid var(--line); border-radius:999px; background:rgba(11,16,36,.66); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); box-shadow:0 20px 60px rgba(0,0,0,.45); }
+form.bar input{ flex:1; min-width:0; background:transparent; border:0; outline:0; color:var(--ink); font:inherit; font-size:15px; }
+form.bar input::placeholder{ color:var(--ink-3); }
+form.bar button{ font:inherit; font-size:13px; font-weight:500; border:0; border-radius:999px; height:38px; padding:0 14px; cursor:pointer; color:var(--ink); background:rgba(255,255,255,.06); transition:background .2s, transform .15s; white-space:nowrap; }
+form.bar button:hover{ background:rgba(255,255,255,.12); }
+form.bar button:active{ transform:scale(.97); }
+form.bar button:focus-visible, form.bar input:focus-visible{ outline:2px solid var(--customer); outline-offset:2px; }
+form.bar button.primary{ background:var(--ink); color:#0a0e1c; }
+form.bar button.primary:hover{ background:#fff; }
+form.bar button.mic{ width:38px; padding:0; display:grid; place-items:center; }
+form.bar button.mic.on{ background:rgba(255,77,94,.18); color:var(--conflict); box-shadow:inset 0 0 0 1px rgba(255,77,94,.5); }
+form.bar button.mic svg{ width:16px; height:16px; }
+
+.stepper{ position:fixed; z-index:2; left:22px; bottom:calc(30px + env(safe-area-inset-bottom,0px)); display:flex; flex-direction:column; gap:10px; }
+.stepper button{ all:unset; cursor:pointer; display:flex; align-items:center; gap:10px; font-size:12px; color:var(--ink-3); transition:color .2s; }
+.stepper button i{ width:6px; height:6px; border-radius:50%; background:var(--ink-3); transition:all .25s; }
+.stepper button.done i{ background:var(--ink-2); }
+.stepper button.current{ color:var(--ink); }
+.stepper button.current i{ background:var(--customer); box-shadow:0 0 10px var(--customer); transform:scale(1.5); }
+.stepper button span{ opacity:0; transform:translateX(-4px); transition:all .2s; }
+.stepper:hover button span, .stepper button.current span{ opacity:1; transform:none; }
+.hint{ position:fixed; z-index:2; right:22px; bottom:calc(30px + env(safe-area-inset-bottom,0px)); font-size:11.5px; color:var(--ink-3); text-align:right; line-height:1.6; }
+.hint kbd{ font:inherit; padding:1px 6px; border:1px solid var(--line); border-radius:5px; color:var(--ink-2); }
+
+.bubble{ position:fixed; z-index:2; pointer-events:none; max-width:280px; padding:10px 14px; border-radius:16px 16px 16px 4px; background:rgba(125,211,252,.12); border:1px solid rgba(125,211,252,.45); color:var(--ink); font-size:14px; line-height:1.4; opacity:0; transform:translate(-8px,-100%) scale(.96); transition:opacity .3s, transform .3s; }
+.bubble.on{ opacity:1; transform:translate(-8px,-100%) scale(1); }
+.bubble small{ display:block; color:var(--agent); font-size:11.5px; margin-bottom:3px; }
+
+@media (max-width:820px){
+  aside.hud{ display:none; }
+  .hint{ display:none; }
+  .stepper button span{ display:none; }
+  .caption{ bottom:calc(96px + env(safe-area-inset-bottom,0px)); }
+  form.bar{ bottom:calc(18px + env(safe-area-inset-bottom,0px)); padding-left:12px; }
+  form.bar button.next{ display:none; }
+}
+@media (prefers-reduced-motion: reduce){ .wordmark i, .status i, .cursor{ animation:none; } }
+</style>
+</head>
+<body>
+<canvas id="brain" aria-label="Living ontology visualisation"></canvas>
+
+<header class="hud">
+  <div>
+    <div class="wordmark"><i></i>Braix <small>living ontology</small></div>
+    <div class="status" id="status"><i></i><span>Listening</span></div>
+  </div>
+  <div class="scene"><span id="sceneNum">Scene 0 of 7</span><b id="sceneName">A business, before it knows itself</b></div>
+</header>
+
+<aside class="hud" aria-label="How to read the brain">
+  <div class="row">
+    <svg viewBox="0 0 34 28"><circle cx="12" cy="14" r="8" fill="none" stroke="#37e0c8" stroke-width="1.4"/><circle cx="26" cy="9" r="4" fill="#37e0c8" opacity=".9"/><path d="M19 11 L22 10" stroke="#37e0c8" stroke-width="1.2"/></svg>
+    <div><b>Buds</b><br>a new concept appears</div>
+  </div>
+  <div class="row">
+    <svg viewBox="0 0 34 28"><path d="M4 14 a8 8 0 1 1 13 6 a8 8 0 1 0 13 -6 a8 8 0 1 0 -13 -6 a8 8 0 1 1 -13 6z" fill="none" stroke="#a78bfa" stroke-width="1.4"/></svg>
+    <div><b>Divides</b><br>a specialisation that inherits its parent</div>
+  </div>
+  <div class="row">
+    <svg viewBox="0 0 34 28"><circle cx="6" cy="20" r="3.5" fill="#ffb454"/><circle cx="28" cy="8" r="3.5" fill="#ff8fb1"/><path d="M9 18 Q17 20 25 10" fill="none" stroke="#aab4cc" stroke-width="1.2" stroke-dasharray="2 3"/></svg>
+    <div><b>Fibres</b><br>a relation between two concepts</div>
+  </div>
+</aside>
+
+<div class="caption"><small id="captionKicker">Say what your business does</small><p id="captionText"></p></div>
+
+<form class="bar" id="bar" autocomplete="off">
+  <input id="say" type="text" placeholder="Teach the brain something, or press Next to follow the story" aria-label="Teach the brain">
+  <button type="button" class="mic" id="mic" aria-label="Speak" title="Speak">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+  </button>
+  <button type="submit" id="teach">Teach</button>
+  <button type="button" class="primary next" id="next">Next scene</button>
+</form>
+
+<nav class="stepper" id="stepper" aria-label="Scenes"></nav>
+<div class="hint"><kbd>Space</kbd> next scene &nbsp; <kbd>F</kbd> full screen &nbsp; <kbd>R</kbd> restart</div>
+<div class="bubble" id="bubble"><small id="bubbleWho"></small><span id="bubbleText"></span></div>
+
+<script>
+(() => {
+'use strict';
+/* ============================ setup ============================ */
+const canvas = document.getElementById('brain');
+const ctx = canvas.getContext('2d');
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MOTION = REDUCED ? 0.35 : 1;
+let W = 0, H = 0, DPR = 1;
+const now = () => performance.now() / 1000;
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+}
+addEventListener('resize', resize); resize();
+
+const C = {
+  root:'#dfe7ff', customer:'#37e0c8', product:'#ffb454', place:'#a78bfa', channel:'#ff8fb1',
+  rule:'#c8d3ff', attr:'#9fb0d8', conflict:'#ff4d5e', agent:'#7dd3fc', gold:'#ffe2a3'
+};
+function hex(c, a){ const n = parseInt(c.slice(1),16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`; }
+function mix(a, b, t){ const A=parseInt(a.slice(1),16), B=parseInt(b.slice(1),16); const ch=(s)=>Math.round(((A>>s&255)*(1-t))+((B>>s&255)*t)); return `#${((ch(16)<<16)|(ch(8)<<8)|ch(0)).toString(16).padStart(6,'0')}`; }
+const ease = t => t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ============================ model ============================ */
+const nodes = [], links = [];
+const cam = { s:1, ts:1, x:0, y:0 };
+let nid = 0;
+
+function addNode(o){
+  const n = Object.assign({
+    id: nid++, x:0, y:0, vx:0, vy:0, r:24, color:C.root, label:'', kind:'concept',
+    born: now(), alpha:0, parent:null, fixed:false, seed: Math.random()*100,
+    bound:null, count:0, countTarget:0, certified:false, conflict:false,
+    mitosis:null, orbit:null, variant:null
+  }, o);
+  nodes.push(n); return n;
+}
+function addLink(a, b, kind='rel', rest=150){
+  const l = { a, b, kind, rest, born: now(), pulses: [], seed: Math.random(), alpha:0 };
+  links.push(l); return l;
+}
+const find = label => nodes.find(n => n.label.toLowerCase() === label.toLowerCase());
+
+/* bud: a new concept grows out of its parent */
+function bud(parent, label, color, opts={}){
+  const ang = opts.angle ?? Math.random()*Math.PI*2;
+  const dist = opts.dist ?? (parent.r + 60);
+  const n = addNode({ label, color, r: opts.r ?? 22, parent,
+    x: parent.x + Math.cos(ang)*parent.r*0.6, y: parent.y + Math.sin(ang)*parent.r*0.6,
+    vx: Math.cos(ang)*140, vy: Math.sin(ang)*140, kind: opts.kind ?? 'concept' });
+  addLink(parent, n, opts.linkKind ?? 'rel', opts.rest ?? dist + 40);
+  return n;
+}
+/* divide: a specialisation splits off like a cell */
+function divide(parent, label, opts={}){
+  const ang = opts.angle ?? (Math.random()*Math.PI*2);
+  const d = addNode({ label, color: opts.color ?? parent.color, r: parent.r*0.3, parent,
+    x: parent.x + Math.cos(ang)*2, y: parent.y + Math.sin(ang)*2,
+    vx: Math.cos(ang)*40, vy: Math.sin(ang)*40,
+    mitosis: { from: parent, start: now(), dur: 2.2, targetR: parent.r*0.86, ang } });
+  addLink(parent, d, 'isa', opts.rest ?? 120);
+  return d;
+}
+function orbit(host, label, color=C.rule){
+  const n = addNode({ label, color, r:7, kind:'rule', parent: host, orbit:{ host, phase: Math.random()*6.28, radius: host.r*2.05, speed: 0.55 } });
+  return n;
+}
+
+/* ============================ physics ============================ */
+function step(dt){
+  const t = now();
+  for (const n of nodes){
+    if (n.orbit){ const h=n.orbit.host; const a=t*n.orbit.speed*MOTION + n.orbit.phase; n.x = h.x + Math.cos(a)*n.orbit.radius; n.y = h.y + Math.sin(a)*n.orbit.radius*0.72; continue; }
+    if (n.mitosis){
+      const m = n.mitosis, p = clamp((t - m.start)/m.dur, 0, 1);
+      n.r = m.from.r*0.3 + (m.targetR - m.from.r*0.3)*ease(p);
+      if (p >= 1) n.mitosis = null;
+    }
+  }
+  // repulsion
+  for (let i=0;i<nodes.length;i++){
+    const a = nodes[i]; if (a.orbit) continue;
+    for (let j=i+1;j<nodes.length;j++){
+      const b = nodes[j]; if (b.orbit) continue;
+      let dx=b.x-a.x, dy=b.y-a.y; let d2=dx*dx+dy*dy; if (d2<1){ dx=(Math.random()-.5); dy=(Math.random()-.5); d2=1; }
+      const d = Math.sqrt(d2);
+      const want = (a.r + b.r) * (a.kind==='attr'||b.kind==='attr' ? 2.2 : 3.2);
+      if (d < want){
+        const f = (want - d) / want * 900;
+        const fx = dx/d*f, fy = dy/d*f;
+        if (!a.fixed){ a.vx -= fx*dt; a.vy -= fy*dt; }
+        if (!b.fixed){ b.vx += fx*dt; b.vy += fy*dt; }
+      }
+    }
+  }
+  // springs
+  for (const l of links){
+    const a=l.a, b=l.b; if (a.orbit||b.orbit) continue;
+    const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1;
+    let rest = l.rest;
+    if (b.mitosis){ const p = clamp((t-b.mitosis.start)/b.mitosis.dur,0,1); rest = (a.r + b.r) * (0.2 + 1.9*ease(p)) + 20; }
+    const f = (d - rest) * 6;
+    const fx = dx/d*f, fy = dy/d*f;
+    if (!a.fixed){ a.vx += fx*dt; a.vy += fy*dt; }
+    if (!b.fixed){ b.vx -= fx*dt; b.vy -= fy*dt; }
+  }
+  // gravity, conflict jitter, integrate
+  for (const n of nodes){
+    if (n.orbit) continue;
+    if (n.fixed){ n.x=0; n.y=0; n.vx=n.vy=0; continue; }
+    n.vx -= n.x*0.9*dt; n.vy -= n.y*0.9*dt;
+    if (n.conflict){ n.vx += (Math.random()-.5)*380*dt; n.vy += (Math.random()-.5)*380*dt; }
+    n.vx *= 0.86; n.vy *= 0.86;
+    n.x += n.vx*dt; n.y += n.vy*dt;
+  }
+  // counters & fades
+  for (const n of nodes){
+    n.alpha = Math.min(1, n.alpha + dt*1.6);
+    if (n.count < n.countTarget) n.count = Math.min(n.countTarget, n.count + (n.countTarget - n.count)*dt*2.4 + 900*dt);
+  }
+  for (const l of links){
+    l.alpha = Math.min(1, l.alpha + dt*1.4);
+    if (Math.random() < dt*(l.kind==='data'?2.6:0.55)*MOTION) l.pulses.push({ t:0, v:0.45+Math.random()*0.35 });
+    for (const p of l.pulses) p.t += p.v*dt;
+    l.pulses = l.pulses.filter(p => p.t < 1);
+  }
+  cam.s += (cam.ts - cam.s) * Math.min(1, dt*2.2);
+}
+
+/* ============================ drawing ============================ */
+function membranePath(n, t, scale=1){
+  const steps = 30; ctx.beginPath();
+  for (let i=0;i<=steps;i++){
+    const a = i/steps*Math.PI*2;
+    const w = 1 + MOTION*(0.05*Math.sin(3*a + t*1.3 + n.seed) + 0.03*Math.sin(5*a - t*0.9 + n.seed*2));
+    const rr = n.r*scale*w;
+    const x = n.x + Math.cos(a)*rr, y = n.y + Math.sin(a)*rr;
+    i ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+  }
+  ctx.closePath();
+}
+function nebula(t){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle = '#04060e'; ctx.fillRect(0,0,W,H);
+  const g1 = ctx.createRadialGradient(W*0.32+Math.sin(t*0.07)*40, H*0.4, 0, W*0.32, H*0.4, Math.max(W,H)*0.7);
+  g1.addColorStop(0,'rgba(55,224,200,0.07)'); g1.addColorStop(0.5,'rgba(167,139,250,0.04)'); g1.addColorStop(1,'rgba(4,6,14,0)');
+  ctx.fillStyle = g1; ctx.fillRect(0,0,W,H);
+  const g2 = ctx.createRadialGradient(W*0.75, H*0.7+Math.cos(t*0.05)*30, 0, W*0.75, H*0.7, Math.max(W,H)*0.6);
+  g2.addColorStop(0,'rgba(255,143,177,0.05)'); g2.addColorStop(1,'rgba(4,6,14,0)');
+  ctx.fillStyle = g2; ctx.fillRect(0,0,W,H);
+  // dust
+  ctx.fillStyle = 'rgba(200,210,240,0.35)';
+  for (let i=0;i<70;i++){ const x=((i*971)%W + t*3*(i%3+1)) % W, y=(i*533)%H + Math.sin(t*0.3+i)*4; ctx.fillRect(x,y,1,1); }
+}
+function worldTransform(){ ctx.setTransform(DPR,0,0,DPR,0,0); ctx.translate(W/2, H/2); ctx.scale(cam.s, cam.s); ctx.translate(-cam.x, -cam.y); }
+function curve(l){ const mx=(l.a.x+l.b.x)/2, my=(l.a.y+l.b.y)/2; const dx=l.b.x-l.a.x, dy=l.b.y-l.a.y; const k=(l.seed-0.5)*0.35; return { cx: mx - dy*k, cy: my + dx*k }; }
+function drawLinks(t){
+  for (const l of links){
+    const {cx,cy} = curve(l);
+    const col = l.kind==='data' ? C.gold : (l.kind==='isa' ? l.b.color : C.attr);
+    const conflict = l.kind==='clash';
+    ctx.lineWidth = l.kind==='attr' ? 0.8 : 1.4;
+    ctx.strokeStyle = conflict ? hex(C.conflict, 0.7*l.alpha) : hex(col, (l.kind==='attr'?0.22:0.42)*l.alpha);
+    ctx.beginPath(); ctx.moveTo(l.a.x,l.a.y);
+    if (conflict){ const seg=12; for(let i=1;i<=seg;i++){ const u=i/seg; const x=l.a.x+(l.b.x-l.a.x)*u+(Math.random()-.5)*10*MOTION, y=l.a.y+(l.b.y-l.a.y)*u+(Math.random()-.5)*10*MOTION; ctx.lineTo(x,y);} }
+    else ctx.quadraticCurveTo(cx,cy,l.b.x,l.b.y);
+    ctx.stroke();
+    // travelling light
+    for (const p of l.pulses){
+      const u = p.t, x = (1-u)*(1-u)*l.a.x + 2*(1-u)*u*cx + u*u*l.b.x, y = (1-u)*(1-u)*l.a.y + 2*(1-u)*u*cy + u*u*l.b.y;
+      const g = ctx.createRadialGradient(x,y,0,x,y,9); g.addColorStop(0, hex(col,0.9)); g.addColorStop(1, hex(col,0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x,y,9,0,6.283); ctx.fill();
+    }
+  }
+}
+function drawNeck(n, t){
+  const m = n.mitosis, p = clamp((t-m.start)/m.dur,0,1); if (p>=0.98) return;
+  const a = m.from, b = n; const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1, ux=dx/d, uy=dy/d, nx=-uy, ny=ux;
+  const w = Math.min(a.r,b.r) * (1 - p) * 0.95, pinch = w * (0.25 + 0.75*(1-p));
+  const ax=a.x+ux*a.r*0.7, ay=a.y+uy*a.r*0.7, bx=b.x-ux*b.r*0.7, by=b.y-uy*b.r*0.7, mx=(ax+bx)/2, my=(ay+by)/2;
+  ctx.beginPath();
+  ctx.moveTo(ax+nx*w, ay+ny*w); ctx.quadraticCurveTo(mx+nx*pinch, my+ny*pinch, bx+nx*w, by+ny*w);
+  ctx.lineTo(bx-nx*w, by-ny*w); ctx.quadraticCurveTo(mx-nx*pinch, my-ny*pinch, ax-nx*w, ay-ny*w); ctx.closePath();
+  ctx.fillStyle = hex(a.color, 0.28); ctx.fill(); ctx.strokeStyle = hex(a.color, 0.6); ctx.lineWidth = 1; ctx.stroke();
+}
+function drawNode(n, t){
+  const col = n.conflict ? mix(n.color, C.conflict, 0.55 + 0.35*Math.sin(t*9)) : n.color;
+  const al = n.alpha;
+  if (n.kind==='rule' || n.kind==='attr'){
+    const g = ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,n.r*2.2); g.addColorStop(0,hex(col,0.5*al)); g.addColorStop(1,hex(col,0));
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(n.x,n.y,n.r*2.2,0,6.283); ctx.fill();
+    ctx.fillStyle = hex(col,0.95*al); ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,6.283); ctx.fill();
+    if (cam.s > 0.55){ ctx.fillStyle = hex(C.ink??'#eef2fb', 0.75*al); ctx.font = `300 ${n.kind==='rule'?11:10}px Sora, sans-serif`; ctx.textAlign='center'; ctx.fillText(n.label, n.x, n.y + n.r + 13); }
+    return;
+  }
+  // halo
+  const glow = n.bound ? 0.32 : 0.16;
+  const h = ctx.createRadialGradient(n.x,n.y,n.r*0.6,n.x,n.y,n.r*2.6); h.addColorStop(0,hex(col,glow*al)); h.addColorStop(1,hex(col,0));
+  ctx.fillStyle=h; ctx.beginPath(); ctx.arc(n.x,n.y,n.r*2.6,0,6.283); ctx.fill();
+  // membrane
+  membranePath(n,t);
+  const g = ctx.createRadialGradient(n.x - n.r*0.25, n.y - n.r*0.25, n.r*0.1, n.x, n.y, n.r*1.05);
+  g.addColorStop(0, hex(col, (n.bound?0.55:0.34)*al)); g.addColorStop(0.7, hex(col, 0.10*al)); g.addColorStop(1, hex(col, 0.16*al));
+  ctx.fillStyle = g; ctx.fill();
+  ctx.lineWidth = 1.3; ctx.strokeStyle = hex(col, 0.9*al); ctx.stroke();
+  // nucleus
+  const nr = n.r*(0.36 + 0.03*Math.sin(t*2+n.seed)*MOTION);
+  const ng = ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,nr); ng.addColorStop(0,`rgba(255,255,255,${0.95*al})`); ng.addColorStop(0.5,hex(col,0.9*al)); ng.addColorStop(1,hex(col,0));
+  ctx.fillStyle = ng; ctx.beginPath(); ctx.arc(n.x,n.y,nr,0,6.283); ctx.fill();
+  // certified ring
+  if (n.certified){ ctx.save(); ctx.translate(n.x,n.y); ctx.rotate(t*0.35*MOTION + n.seed); ctx.setLineDash([5,7]); ctx.strokeStyle = hex(C.gold,0.85*al); ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(0,0,n.r*1.4,0,6.283); ctx.stroke(); ctx.restore(); }
+  // data particles
+  if (n.bound){ for (let i=0;i<7;i++){ const a=t*0.9*MOTION + i*0.9 + n.seed; const rr=n.r*1.75 + Math.sin(t*2+i)*3; ctx.fillStyle=hex(C.gold,0.8*al); ctx.beginPath(); ctx.arc(n.x+Math.cos(a)*rr, n.y+Math.sin(a)*rr*0.8, 1.8,0,6.283); ctx.fill(); } }
+  // labels
+  if (cam.s > 0.45){
+    ctx.textAlign='center';
+    ctx.fillStyle = `rgba(238,242,251,${0.95*al})`; ctx.font = `500 ${n.kind==='root'?15:13}px Sora, sans-serif`;
+    ctx.fillText(n.label, n.x, n.y + n.r + 20);
+    if (n.variant){ ctx.fillStyle = hex(col,0.9*al); ctx.font='300 11px Sora, sans-serif'; ctx.fillText(n.variant, n.x, n.y + n.r + 35); }
+    if (n.bound){ ctx.fillStyle = hex(C.gold,0.95*al); ctx.font='400 11.5px Sora, sans-serif'; ctx.fillText(`${Math.round(n.count).toLocaleString('en-GB')} ${n.bound}`, n.x, n.y + n.r + (n.variant?50:35)); }
+  } else if (n.kind==='root'){
+    ctx.textAlign='center'; ctx.fillStyle=`rgba(238,242,251,${0.9*al})`; ctx.font=`500 ${Math.round(15/cam.s*0.35)}px Sora, sans-serif`; ctx.fillText(galaxyName, n.x, n.y + 320);
+  }
+}
+/* other brains, visible when zoomed out */
+const galaxyName = 'Harborline Retail';
+const galaxies = [
+  { name:'Meridian Capital', x:-2100, y:-950, hue:C.place, seed:3 },
+  { name:'Northwind Industries', x:2300, y:-700, hue:C.product, seed:7 },
+  { name:'Delta Logistics', x:600, y:1900, hue:C.channel, seed:11 },
+  { name:'Aster Health', x:-1700, y:1500, hue:C.customer, seed:5 },
+];
+function drawGalaxies(t){
+  if (cam.s > 0.6) return;
+  const al = clamp((0.6 - cam.s)/0.4, 0, 1);
+  for (const g of galaxies){
+    let s = g.seed; const rnd = () => (s = (s*9301+49297)%233280)/233280;
+    const pts = [];
+    for (let i=0;i<46;i++){ const a=rnd()*6.283, d=Math.pow(rnd(),0.6)*300; pts.push([g.x+Math.cos(a)*d, g.y+Math.sin(a)*d*0.8, 6+rnd()*16]); }
+    ctx.strokeStyle = hex(g.hue, 0.18*al); ctx.lineWidth = 1/cam.s;
+    for (let i=0;i<pts.length;i++){ const p=pts[i], q=pts[(i*7+3)%pts.length]; ctx.beginPath(); ctx.moveTo(p[0],p[1]); ctx.lineTo(q[0],q[1]); ctx.stroke(); }
+    for (const p of pts){ const rr = p[2]*(1+0.06*Math.sin(t*1.5+p[0])); const gr = ctx.createRadialGradient(p[0],p[1],0,p[0],p[1],rr*2); gr.addColorStop(0,hex(g.hue,0.55*al)); gr.addColorStop(1,hex(g.hue,0)); ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(p[0],p[1],rr*2,0,6.283); ctx.fill(); }
+    ctx.fillStyle = `rgba(238,242,251,${0.9*al})`; ctx.textAlign='center'; ctx.font = `500 ${Math.round(15/cam.s*0.35)}px Sora, sans-serif`; ctx.fillText(g.name, g.x, g.y+320);
+  }
+}
+/* the visiting agent */
+const agent = { on:false, x:0, y:0, tx:0, ty:0, alpha:0, phase:0 };
+function drawAgent(t){
+  if (!agent.on && agent.alpha<=0) return;
+  agent.alpha += ((agent.on?1:0) - agent.alpha) * 0.04;
+  agent.x += (agent.tx - agent.x)*0.035; agent.y += (agent.ty - agent.y)*0.035;
+  const a = agent.alpha; if (a<=0.01) return;
+  ctx.save(); ctx.translate(agent.x, agent.y); ctx.rotate(t*0.6*MOTION);
+  ctx.strokeStyle = hex(C.agent, 0.95*a); ctx.lineWidth = 1.6; ctx.beginPath();
+  for (let i=0;i<6;i++){ const an=i/6*6.283; const x=Math.cos(an)*18, y=Math.sin(an)*18; i?ctx.lineTo(x,y):ctx.moveTo(x,y); } ctx.closePath(); ctx.stroke();
+  ctx.rotate(-t*1.4*MOTION); ctx.beginPath(); for (let i=0;i<3;i++){ const an=i/3*6.283; const x=Math.cos(an)*9,y=Math.sin(an)*9; i?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.closePath(); ctx.fillStyle=hex(C.agent,0.9*a); ctx.fill();
+  ctx.restore();
+  const g = ctx.createRadialGradient(agent.x,agent.y,0,agent.x,agent.y,60); g.addColorStop(0,hex(C.agent,0.25*a)); g.addColorStop(1,hex(C.agent,0)); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(agent.x,agent.y,60,0,6.283); ctx.fill();
+  // bubble follows
+  const bx = W/2 + (agent.x - cam.x)*cam.s, by = H/2 + (agent.y - cam.y)*cam.s;
+  bubble.style.left = `${bx+26}px`; bubble.style.top = `${by-26}px`;
+}
+
+let last = now();
+function frame(){
+  const t = now(); let dt = Math.min(0.05, t - last); last = t;
+  step(dt);
+  nebula(t);
+  worldTransform();
+  drawGalaxies(t);
+  drawLinks(t);
+  for (const n of nodes) if (n.mitosis) drawNeck(n, t);
+  for (const n of nodes) drawNode(n, t);
+  drawAgent(t);
+  requestAnimationFrame(frame);
+}
+
+/* ============================ story ============================ */
+const $ = id => document.getElementById(id);
+const captionText = $('captionText'), captionKicker = $('captionKicker'), bubble = $('bubble');
+let typer = null;
+function caption(kicker, text){
+  captionKicker.textContent = kicker;
+  if (typer) clearInterval(typer);
+  captionText.innerHTML = '<span class="cursor"></span>'; let i = 0;
+  typer = setInterval(() => { i++; captionText.innerHTML = text.slice(0,i) + (i<text.length?'<span class="cursor"></span>':''); if (i>=text.length) clearInterval(typer); }, REDUCED?4:18);
+}
+function speakBubble(who, text, ms=5200){ $('bubbleWho').textContent = who; $('bubbleText').textContent = text; bubble.classList.add('on'); clearTimeout(bubble._t); bubble._t = setTimeout(()=>bubble.classList.remove('on'), ms); }
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+let root, customer, product, store, online, activeFin, activeMkt;
+function reset(){
+  nodes.length = 0; links.length = 0; agent.on=false; agent.alpha=0; cam.ts = 1; cam.s = 1; bubble.classList.remove('on');
+  root = addNode({ label:'Harborline', kind:'root', r:30, color:C.root, fixed:true, alpha:1 });
+  sceneIdx = 0; setScene(0);
+  caption('Say what your business does', 'One company. It exists, it trades, but nothing describes how it works.');
+}
+
+const scenes = [
+  { name:'A business, before it knows itself', match:null },
+  { name:'First words', say:'We sell products to customers, in our stores and online.', match:/sell|store|online/i,
+    run: async () => {
+      product = bud(root,'Product',C.product,{angle:-2.2, r:24}); await wait(420);
+      customer = bud(root,'Customer',C.customer,{angle:0.4, r:26}); await wait(420);
+      store = bud(root,'Store',C.place,{angle:2.1, r:22}); await wait(420);
+      online = bud(root,'Online channel',C.channel,{angle:-0.9, r:20}); await wait(700);
+      addLink(customer, product, 'rel', 190); await wait(300); addLink(store, product, 'rel', 200); addLink(online, product, 'rel', 200);
+      caption('The brain learned', 'Four concepts. Harborline sells Products to Customers, through Stores and an Online channel.');
+    }},
+  { name:'Specialisation', say:'A customer who bought in the last twelve months is an active customer.', match:/twelve|12|active/i,
+    run: async () => {
+      activeFin = divide(customer, 'Active customer', { angle: 0.9 });
+      await wait(1600); orbit(activeFin, 'bought ≤ 12 months');
+      caption('The brain learned', 'Customer divides. Active customer inherits everything a Customer is, plus one rule: a purchase in the last twelve months.');
+    }},
+  { name:'Two truths collide', say:'In marketing, an active customer is anyone who bought in the last eighteen months.', match:/eighteen|18|marketing/i,
+    run: async () => {
+      activeMkt = divide(customer, 'Active customer', { angle: 1.6 });
+      await wait(1500); orbit(activeMkt, 'bought ≤ 18 months');
+      await wait(300); activeFin.conflict = true; activeMkt.conflict = true; addLink(activeFin, activeMkt, 'clash', 90);
+      caption('The brain noticed', 'Two definitions want the same name. The brain does not crash and does not pick one: it flags the conflict and waits for the owner.');
+    }},
+  { name:'Resolution', say:'Keep twelve months for finance and eighteen for marketing. Certify both.', match:/keep|finance|certif|both/i,
+    run: async () => {
+      const i = links.findIndex(l => l.kind==='clash'); if (i>=0) links.splice(i,1);
+      activeFin.conflict = false; activeMkt.conflict = false;
+      activeFin.variant = 'finance'; activeMkt.variant = 'marketing'; await wait(500);
+      activeFin.certified = true; await wait(400); activeMkt.certified = true;
+      caption('The brain learned', 'One business, two certified truths, both explicit. Finance and marketing keep their own definition, and everyone can see which one is in use.');
+    }},
+  { name:'Wired to reality', say:'Connect customers to the CRM and products to the catalogue.', match:/connect|crm|catalog|bind/i,
+    run: async () => {
+      customer.bound = 'CRM records'; customer.countTarget = 1248310; addLink(customer, activeFin, 'data', 120); addLink(customer, activeMkt, 'data', 120);
+      await wait(900);
+      product.bound = 'catalogue SKUs'; product.countTarget = 84212;
+      await wait(700);
+      const attrs = [[customer,['email','segment','last purchase']],[product,['SKU','price','category']],[store,['city','format']],[online,['basket','device']]];
+      for (const [host, list] of attrs){ for (const a of list){ bud(host, a, host.color, { kind:'attr', r:5, rest:58, linkKind:'attr' }); await wait(160); } }
+      activeFin.bound = 'people'; activeFin.countTarget = 312406; activeMkt.bound = 'people'; activeMkt.countTarget = 418975;
+      caption('The brain learned', 'Concepts are not a drawing any more. Customer is 1.2 million CRM records, Product is 84 thousand catalogue entries, and every attribute the data exposes has grown in.');
+    }},
+  { name:'An agent asks', say:'An agent asks: how many active customers do we have?', match:/agent|how many/i,
+    run: async () => {
+      agent.x = -W*0.8; agent.y = H*0.6; agent.tx = customer.x - 170; agent.ty = customer.y - 90; agent.on = true;
+      await wait(1900); speakBubble('Sales agent', 'How many active customers do we have?');
+      await wait(2600);
+      speakBubble('Braix', 'Two certified answers: 312,406 (finance, ≤ 12 months) and 418,975 (marketing, ≤ 18 months). Which one do you need?', 7000);
+      caption('The brain answered', 'The agent did not guess. It read the certified model, got both definitions with their numbers, and left with an answer it can defend.');
+      await wait(5200); agent.tx = W*0.9; agent.ty = -H*0.7; await wait(1600); agent.on = false;
+    }},
+  { name:'Business as a product', say:'Zoom out.', match:/zoom|out|all/i,
+    run: async () => {
+      cam.ts = 0.17;
+      caption('This is', 'A business as a product. One living model per company, owned, versioned and consumed by people, applications and agents. Braix is where they all live.');
+    }},
+];
+let sceneIdx = 0, running = false;
+function setScene(i){
+  sceneIdx = i;
+  $('sceneNum').textContent = `Scene ${i} of ${scenes.length-1}`;
+  $('sceneName').textContent = scenes[i].name;
+  [...$('stepper').children].forEach((b, k) => { b.classList.toggle('current', k===i); b.classList.toggle('done', k<i); });
+}
+async function playScene(i){
+  if (running || !scenes[i] || !scenes[i].run) return;
+  running = true; setScene(i);
+  $('say').value = ''; $('say').placeholder = `“${scenes[i].say}”`;
+  try { await scenes[i].run(); } finally { running = false; }
+}
+function next(){ if (sceneIdx < scenes.length-1) playScene(sceneIdx+1); }
+
+/* stepper */
+scenes.forEach((s, i) => { const b = document.createElement('button'); b.type='button'; b.innerHTML = `<i></i><span>${s.name}</span>`; b.addEventListener('click', () => { if (i===0) reset(); else if (i > sceneIdx) playScene(i); }); $('stepper').appendChild(b); });
+
+/* ============================ free teaching ============================ */
+const STOP = new Set('a an the and or of to in on at for with by from we our your their my is are was were be been it its this that these those who which what how many much some any all every each new old have has had do does did sell sells buy buys make makes use uses also very more most less than into over under about through there here when where then them they you he she his her'.split(' '));
+const title = s => s.charAt(0).toUpperCase() + s.slice(1);
+function teach(text){
+  text = text.trim(); if (!text) return next();
+  // rehearsed line?
+  const upcoming = scenes[sceneIdx+1];
+  if (upcoming && upcoming.match && upcoming.match.test(text)) return playScene(sceneIdx+1);
+  const lower = text.toLowerCase();
+  let m;
+  if ((m = lower.match(/(?:a |an )?(.+?) (?:who|that|which) .+? is (?:a |an )?(.+)/))){
+    const host = nodes.find(n => n.kind==='concept' && lower.includes(n.label.toLowerCase())) || customer || root;
+    const d = divide(host, title(m[2].replace(/[.!?]$/,'')), {}); setTimeout(()=>orbit(d, m[0].match(/(?:who|that|which) (.+?) is/)?.[1] ?? 'rule'), 1500);
+    caption('The brain learned', `${host.label} divides. ${d.label} inherits everything ${host.label} is, plus the rule you just gave.`); return;
+  }
+  if ((m = lower.match(/connect (.+?) to (?:the )?(.+)/))){
+    const host = nodes.find(n => n.kind==='concept' && lower.includes(n.label.toLowerCase().split(' ')[0]));
+    if (host){ host.bound = m[2].replace(/[.!?]$/,''); host.countTarget = 20000 + Math.floor(Math.random()*900000); caption('The brain learned', `${host.label} is now wired to ${m[2]}. The model reads live data, not a drawing.`); return; }
+  }
+  const words = lower.replace(/[^a-z\s-]/g,' ').split(/\s+/).filter(w => w.length>3 && !STOP.has(w)).map(w => w.replace(/s$/,''));
+  const host = nodes.find(n => n.kind==='concept' && words.includes(n.label.toLowerCase())) || (nodes.filter(n=>n.kind==='concept').slice(-1)[0]) || root;
+  const fresh = [...new Set(words)].filter(w => !find(title(w))).slice(0, 4);
+  if (!fresh.length){ caption('The brain', 'It already knows those words. Tell it something new, or ask it to connect a concept to a system.'); return; }
+  const palette = [C.customer, C.product, C.place, C.channel];
+  fresh.forEach((w, i) => setTimeout(() => bud(host, title(w), palette[(nodes.length+i)%4], { r: 20 }), i*380));
+  caption('The brain learned', `${fresh.length} new ${fresh.length>1?'concepts':'concept'} grew out of ${host.label}: ${fresh.map(title).join(', ')}.`);
+}
+$('bar').addEventListener('submit', e => { e.preventDefault(); teach($('say').value); $('say').value=''; });
+$('next').addEventListener('click', next);
+addEventListener('keydown', e => {
+  if (e.target === $('say') && e.key !== 'Escape') return;
+  if (e.code === 'Space' || e.key === 'ArrowRight'){ e.preventDefault(); next(); }
+  if (e.key === 'r' || e.key === 'R') reset();
+  if (e.key === 'f' || e.key === 'F'){ document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
+});
+
+/* ============================ voice ============================ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const mic = $('mic'), status = $('status');
+let rec = null, listening = false;
+if (!SR){ mic.title = 'Voice input is not available in this browser'; mic.style.opacity = .4; }
+mic.addEventListener('click', () => {
+  if (!SR) return;
+  if (listening){ rec.stop(); return; }
+  rec = new SR(); rec.lang = /^fr/i.test(navigator.language) ? 'fr-FR' : 'en-GB'; rec.interimResults = true; rec.continuous = false;
+  rec.onstart = () => { listening = true; mic.classList.add('on'); status.classList.add('on'); };
+  rec.onresult = ev => { let s=''; for (const r of ev.results) s += r[0].transcript; $('say').value = s; if (ev.results[ev.results.length-1].isFinal){ teach(s); $('say').value=''; } };
+  rec.onerror = () => { $('say').placeholder = 'The microphone did not respond. Type instead, the show goes on.'; };
+  rec.onend = () => { listening = false; mic.classList.remove('on'); status.classList.remove('on'); };
+  rec.start();
+});
+
+reset();
+frame();
+})();
+</script>
+</body>
+</html>

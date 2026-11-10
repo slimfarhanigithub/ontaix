@@ -9,6 +9,7 @@ import { failed, fetchAll } from '../admin/adminData';
 import { List, type Column } from '../admin/List';
 import { api } from '../api/client';
 import type { Organization } from '../api/types';
+import { formatDate, t, useT } from '../i18n/i18n';
 import {
   createOrganizationDialog,
   disableOrganizationDialog,
@@ -23,11 +24,13 @@ import { RowActions } from '../admin/RowActions';
 
 const ACT = (w: number) => ({ width: `${w}px`, textAlign: 'center' as const });
 
-export const companiesText = (org: Pick<Organization, 'companyMode'>): string => (org.companyMode === 'single' ? 'One company' : 'Several companies');
-export const statusText = (org: Pick<Organization, 'status'>): string => (org.status === 'disabled' ? 'Disabled' : 'Active');
+export const companiesText = (org: Pick<Organization, 'companyMode'>): string =>
+  org.companyMode === 'single' ? t('platform.organizations.oneCompany') : t('platform.organizations.severalCompanies');
+export const statusText = (org: Pick<Organization, 'status'>): string =>
+  org.status === 'disabled' ? t('platform.organizations.disabled') : t('platform.organizations.active');
 
-/** `dd Mon yyyy` in en-GB, the way the reference dates its lists. */
-export const dateText = (iso: string): string => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+/** `dd Mon yyyy` in the portal language, the way the reference dates its lists. */
+export const dateText = (iso: string): string => formatDate(iso);
 
 interface OrgRow extends Record<string, unknown> {
   id: string;
@@ -49,7 +52,7 @@ function useOrganizations(rev: number): Organization[] | null {
         if (live) setOrgs(items);
       },
       (err: unknown) => {
-        failed(err, 'Unavailable');
+        failed(err, t('common.lead.unavailable'));
         if (live) setOrgs([]);
       },
     );
@@ -61,6 +64,7 @@ function useOrganizations(rev: number): Organization[] | null {
 }
 
 export function Organizations() {
+  const t = useT();
   const [rev, setRev] = useState(0);
   const refresh = useCallback(() => setRev((r) => r + 1), []);
   const orgs = useOrganizations(rev);
@@ -75,11 +79,11 @@ export function Organizations() {
     createdAt: org.createdAt,
   }));
   const columns: Column[] = [
-    { label: 'Name', key: 'name' },
-    { label: 'Companies', key: 'companies' },
-    { label: 'Users', key: 'users', num: true },
-    { label: 'Status', key: 'status' },
-    { label: 'Created', key: 'createdAt' },
+    { label: t('platform.organizations.column.name'), key: 'name' },
+    { label: t('platform.organizations.column.companies'), key: 'companies' },
+    { label: t('platform.organizations.column.users'), key: 'users', num: true },
+    { label: t('platform.organizations.column.status'), key: 'status' },
+    { label: t('platform.organizations.column.created'), key: 'createdAt' },
     // Five buttons (38, 36, 36, 52 and 50 wide plus 16 of padding and border each, the padding
     // narrowed for this list), four 6px gaps and the cell padding: 336px, which leaves the five
     // text columns their room at 1440 wide.
@@ -87,13 +91,11 @@ export function Organizations() {
   ];
   return (
     <>
-      <h2>Organizations</h2>
-      <p className="lead">
-        Each organization is its own instance: its users see only its data. Only a super admin creates organizations and their accounts.
-      </p>
+      <h2>{t('platform.organizations.heading')}</h2>
+      <p className="lead">{t('platform.organizations.lead')}</p>
       <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
         <button className="btn primary" data-act="newOrg" onClick={() => createOrganizationDialog(refresh)}>
-          + Create an organization
+          {t('platform.organizations.create')}
         </button>
       </div>
       <div className="lst-host" id="lstOrganizations" style={{ height: 'calc(100% - 120px)' }}>
@@ -126,22 +128,22 @@ export function Organizations() {
                     id={`org-${r.org.id}`}
                     primary={
                       <button data-fn="enter" style={ACT(50)} onClick={() => enterOrganizationDialog(r.org)}>
-                        Enter
+                        {t('platform.organizations.enter')}
                       </button>
                     }
                     items={[
-                      { label: 'Users', icon: 'people', group: 1, attrs: { 'data-fn': 'users' }, act: () => usersDialog(r.org, refresh) },
-                      { label: 'Open', icon: 'open', group: 1, attrs: { 'data-fn': 'open' }, act: () => openSupportDialog(r.org) },
-                      { label: 'Rename', icon: 'rename', group: 1, attrs: { 'data-fn': 'rename' }, act: () => renameOrganizationDialog(r.org, refresh) },
+                      { label: t('platform.organizations.users'), icon: 'people', group: 1, attrs: { 'data-fn': 'users' }, act: () => usersDialog(r.org, refresh) },
+                      { label: t('common.open'), icon: 'open', group: 1, attrs: { 'data-fn': 'open' }, act: () => openSupportDialog(r.org) },
+                      { label: t('common.rename'), icon: 'rename', group: 1, attrs: { 'data-fn': 'rename' }, act: () => renameOrganizationDialog(r.org, refresh) },
                       r.org.status === 'disabled'
-                        ? { label: 'Enable', icon: 'power', group: 2, attrs: { 'data-fn': 'enable' }, act: () => void enableOrganization(r.org, refresh) }
-                        : { label: 'Disable', icon: 'power', group: 2, danger: true, attrs: { 'data-fn': 'disable' }, act: () => disableOrganizationDialog(r.org, refresh) },
+                        ? { label: t('common.enable'), icon: 'power', group: 2, attrs: { 'data-fn': 'enable' }, act: () => void enableOrganization(r.org, refresh) }
+                        : { label: t('common.disable'), icon: 'power', group: 2, danger: true, attrs: { 'data-fn': 'disable' }, act: () => disableOrganizationDialog(r.org, refresh) },
                     ]}
                   />
                 </td>
               </>
             )}
-            footer={(l) => `${l.reduce((a, r) => a + r.users, 0)} users`}
+            footer={(l) => t('platform.organizations.footer', { n: l.reduce((a, r) => a + r.users, 0) })}
           />
         ) : null}
       </div>

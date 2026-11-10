@@ -4,9 +4,11 @@
 import { useEffect, useRef } from 'react';
 
 import { createRenderer } from '../canvas/renderer';
+import { useT } from '../i18n/i18n';
 import { store } from '../store/store';
 
 export function CanvasView() {
+  const t = useT();
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -26,5 +28,5 @@ export function CanvasView() {
     renderer.start();
     return () => renderer.stop();
   }, []);
-  return <canvas id="brain" aria-label="Living ontology visualisation" ref={ref}></canvas>;
+  return <canvas id="brain" aria-label={t('shell.canvas.label')} ref={ref}></canvas>;
 }

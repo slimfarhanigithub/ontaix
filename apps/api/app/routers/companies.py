@@ -1,4 +1,5 @@
-"""Companies: list, read, immediate creation, the removal proposal, and usage learning."""
+"""Companies: list, read, immediate creation, the model language, the removal proposal, and
+usage learning."""
 
 from __future__ import annotations
 
@@ -8,7 +9,7 @@ import uuid
 from fastapi import APIRouter, Request, Response, status
 
 from app.auth import CallerDependency, SessionDependency
-from app.models.api.company import Company, CompanyCreate, CompanyCreated
+from app.models.api.company import Company, CompanyCreate, CompanyCreated, CompanyLanguage
 from app.models.api.learning import (
     CompanyLearning,
     LearningReset,
@@ -51,6 +52,16 @@ async def propose_remove_company(
     company_id: uuid.UUID, session: SessionDependency, caller: CallerDependency
 ) -> Proposal:
     return await company_service.propose_remove_company(session, caller, company_id)
+
+
+@router.patch("/companies/{company_id}/language", response_model=Company)
+async def set_company_language(
+    company_id: uuid.UUID,
+    body: CompanyLanguage,
+    session: SessionDependency,
+    caller: CallerDependency,
+) -> Company:
+    return await company_service.set_language(session, caller, company_id, body)
 
 
 @router.get("/companies/{company_id}/learning", response_model=CompanyLearning)

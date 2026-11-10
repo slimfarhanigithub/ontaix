@@ -15,7 +15,9 @@ session's token and an allowed `Origin`; header callers skip it, since no cross-
 set that header.
 
 Authorisation never looks at the credential: members get the roles of their organization's own
-groups; a super admin gets nothing inside an organization except, during a support session,
+groups, in the organization their session is inside (a member of several organizations chooses
+one first; until then every organization request answers `403 organization_not_chosen`); a
+super admin gets nothing inside an organization except, during a support session,
 read-only `model.read`, `directory.read` and `audit.read`, or, after entering an organization
 (`acting_tenant_id` on the session), every tenant role through the directory user the entry
 created for him, every action then audited as platform access.
@@ -82,6 +84,7 @@ ACTING_GRANTS = tuple(
 PLATFORM_ISSUER = "platform"
 SUPPORT_READ_ONLY_DETAIL = "A support session is read-only"
 SUPER_ADMIN_ONLY_DETAIL = "Only a super admin can do this"
+ORGANIZATION_NOT_CHOSEN_DETAIL = "Choose an organization to continue"
 
 
 @dataclass(frozen=True)
@@ -219,7 +222,8 @@ async def _session_caller(
     if resolved.must_change_password:
         raise ProblemError(403, "password_change_required", PASSWORD_CHANGE_DETAIL)
     if not resolved.is_platform:
-        assert resolved.tenant_id is not None and resolved.user_id is not None
+        if resolved.tenant_id is None or resolved.user_id is None:
+            raise ProblemError(403, "organization_not_chosen", ORGANIZATION_NOT_CHOSEN_DETAIL)
         return await _member_caller(session, resolved.tenant_id, resolved.user_id)
     if resolved.acting_tenant_id is not None:
         return await _acting_caller(session, resolved.acting_tenant_id, resolved.account_id)

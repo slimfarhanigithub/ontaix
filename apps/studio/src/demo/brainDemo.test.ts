@@ -151,7 +151,7 @@ describe('the demo brain', () => {
     const concepts = s.nodes.filter((n) => n.company === northwind && n.kind === 'concept' && !n.dying);
     s.activeCompany = northwind;
     const d = startBrain(s, DOMAINS, 100, { spacing: SPACING_SMALL });
-    expect(d.stories).toBe(0);
+    expect(d.stories).toBeGreaterThan(0);
     expect(d.storyDomains).toBe(0);
     expect([...d.joined.keys()].sort((a, b) => a.id - b.id)).toEqual(concepts.sort((a, b) => a.id - b.id));
     for (const n of s.nodes.filter((x) => x.company === aurora)) expect(d.aside.has(n)).toBe(true);
@@ -204,7 +204,6 @@ describe('the demo brain', () => {
     t.activeCompany = home;
     const e = startBrain(t, DOMAINS, 0, { spacing: SPACING_SMALL });
     expect(e.company).toBe(added.name);
-    expect(e.stories).toBe(0);
     expect(e.joined.size).toBe(t.nodes.filter((n) => n.company === added && n.kind === 'concept').length);
     expect(e.aside.has(home.root as Node)).toBe(true);
   });
@@ -215,7 +214,7 @@ describe('the demo brain', () => {
     const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
     expect(brainPhase(d, 1)).toBe('company');
     expect(brainPhase(d, d.act3 + 0.1)).toBe('brain');
-    expect(bornCount(d, d.act3 + 1.2)).toBe(0);
+    expect(bornCount(d, d.act3 + 1.2)).toBe(d.stories);
     expect(d.growAt).toBeCloseTo(d.act3 + 1.3);
     expect(bornDomains(d, d.growAt)).toBe(9);
     expect(brainGrown(d, d.duration)).toBe(true);
@@ -223,8 +222,51 @@ describe('the demo brain', () => {
     // The first brain cells bud from the joined concepts and the root.
     const starts = new Set([...d.joined.values()].map((p) => `${p.x},${p.y}`));
     starts.add(`${d.rootAt?.x},${d.rootAt?.y}`);
-    const first = d.cells.slice(0, 40).filter((c) => starts.has(`${c.px},${c.py}`));
+    const first = d.cells.slice(d.stories, d.stories + 40).filter((c) => starts.has(`${c.px},${c.py}`));
     expect(first.length).toBeGreaterThan(0);
+  });
+
+  it('grows new concepts from the model close up, then maps example sources to its concepts', () => {
+    const s = createScene();
+    northwindModel(s);
+    settleTweens(s);
+    const d = startBrain(s, DOMAINS, 0, { spacing: SPACING_SMALL });
+    const story = d.cells.slice(0, d.stories);
+    const buds = story.filter((c) => !c.story?.source);
+    const sources = story.filter((c) => c.story?.source);
+    expect(buds.length).toBe(12);
+    expect(sources.length).toBe(4);
+    // Every new concept buds from one of the company's own concepts, in that concept's domain, with a name the model does not hold.
+    const realNames = new Set([...d.joined.keys()].map((n) => n.label));
+    for (const c of buds) {
+      const from = c.story?.from as Node;
+      expect(d.joined.has(from)).toBe(true);
+      expect(c.domain).toBe(from.domain?.key ?? 'core');
+      expect(realNames.has(c.label)).toBe(false);
+    }
+    // The model grows first, then the sources appear, all before the third act; the sources stand under the model.
+    expect(Math.min(...buds.map((c) => c.born))).toBe(ACT_ONE);
+    expect(Math.max(...buds.map((c) => c.born))).toBeLessThan(Math.min(...sources.map((c) => c.born)));
+    const lowest = Math.max(...[...d.joined.keys()].map((n) => n.y), ...buds.map((c) => c.story?.y ?? 0));
+    for (const c of sources) expect(c.y).toBeGreaterThan(lowest);
+    expect(brainPhase(d, ACT_ONE + 0.1)).toBe('domains');
+    // Each source maps to concepts, real and new, before the third act; none maps twice to the same concept.
+    expect(d.binds.length).toBeGreaterThan(sources.length);
+    for (const b of d.binds) {
+      expect(d.cells[b.source].story?.source).toBe(true);
+      expect(b.at).toBeLessThan(d.act3);
+    }
+    expect(new Set(d.binds.map((b) => b.to)).size).toBe(d.binds.length);
+    expect(d.binds.some((b) => typeof b.to !== 'number')).toBe(true);
+    expect(d.binds.some((b) => typeof b.to === 'number')).toBe(true);
+    // Sources have no place in the brain: its bounds hold the brain only.
+    const inBrain = [...d.cells.filter((c) => !c.story?.source), ...d.joined.values(), d.rootAt as { x: number; y: number }];
+    expect(d.box).toEqual([
+      Math.min(...inBrain.map((c) => c.x)),
+      Math.min(...inBrain.map((c) => c.y)),
+      Math.max(...inBrain.map((c) => c.x)),
+      Math.max(...inBrain.map((c) => c.y)),
+    ]);
   });
 
   it('replays from the model as it stood, and a paused demo holds its concepts back', () => {

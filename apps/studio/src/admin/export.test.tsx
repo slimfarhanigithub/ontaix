@@ -2,6 +2,7 @@ import { act, fireEvent, render } from '@testing-library/react';
 
 import { api, attachmentName } from '../api/client';
 import { ApiError } from '../api/types';
+import { t } from '../i18n/i18n';
 import { addCompany, addNode, domainOf } from '../canvas/state';
 import type { Domain } from '../canvas/types';
 import { Dialog } from '../shell/Dialog';
@@ -60,10 +61,10 @@ describe('Export in the admin portal', () => {
     expect(dlg.querySelector('.dh b')?.textContent).toBe('Export the ontology');
     expect(dlg.querySelector('.dh span')?.textContent).toBe('the approved model as OWL, SKOS or a Word document');
     const format = dlg.querySelector<HTMLSelectElement>('#exFormat') as HTMLSelectElement;
-    expect(Array.from(format.options).map((o) => o.textContent)).toEqual(EXPORT_FORMATS.map(([, label]) => label));
+    expect(Array.from(format.options).map((o) => o.textContent)).toEqual(EXPORT_FORMATS.map(([, label]) => t(label)));
     expect(format.value).toBe('owl');
     const scope = dlg.querySelector<HTMLSelectElement>('#exScope') as HTMLSelectElement;
-    expect(Array.from(scope.options).map((o) => o.textContent)).toEqual(EXPORT_SCOPES.map(([, label]) => label));
+    expect(Array.from(scope.options).map((o) => o.textContent)).toEqual(EXPORT_SCOPES.map(([, label]) => t(label)));
     expect(dlg.querySelector('#exCompany')).toBeNull();
     expect(Array.from(dlg.querySelectorAll('.df .btn')).map((b) => b.textContent)).toEqual(['Export']);
 

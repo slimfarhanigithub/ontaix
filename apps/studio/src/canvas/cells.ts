@@ -5,12 +5,20 @@
  */
 import { clamp, hex, mix } from './colour';
 import { MIX_BLACK, MIX_WHITE, themedColour } from '../design/tokens';
+import { formatNumber, t } from '../i18n/i18n';
 import { C } from './constants';
 import { dimOf } from './focus';
-import { drawCellLabels, drawSourceLabels, roundRect } from './labels';
+import { drawCellLabels, drawSourceLabels, labelScale, MAX_GLYPH_EM, roundRect } from './labels';
 import type { SceneState } from './state';
 import type { Node } from './types';
-import type { View } from './view';
+import { inView, type View } from './view';
+
+/** Screen pixels the 4 px label shadow can reach beyond the glyphs. */
+const SHADOW_REACH = 8;
+
+/** Sphere gradients by colour, opacity, fusion and radius: one gradient serves every cell drawn alike. */
+const spheres = new Map<string, CanvasGradient>();
+const SPHERES_MAX = 4096;
 
 export function drawSource(s: SceneState, v: View, n: Node, t: number): void {
   const { ctx, TH } = v;
@@ -100,12 +108,7 @@ export function drawCell(s: SceneState, v: View, n: Node, t: number): void {
   ctx.translate(n.x, n.y);
   ctx.rotate(rot);
   ctx.scale(sx, sy);
-  const cg = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r * 1.04);
-  cg.addColorStop(0, hex(mix(col, MIX_WHITE, 0.55), 0.98 * al));
-  cg.addColorStop(0.3, hex(mix(col, MIX_WHITE, 0.18), 0.98 * al));
-  cg.addColorStop(0.75, hex(col, 0.96 * al));
-  cg.addColorStop(1, hex(mix(col, MIX_BLACK, fused ? 0.38 : 0.42), 0.96 * al));
-  ctx.fillStyle = cg;
+  ctx.fillStyle = sphere(ctx, col, al, !!fused, r);
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, 6.283);
   ctx.fill();
@@ -119,4 +122,47 @@ export function drawCell(s: SceneState, v: View, n: Node, t: number): void {
   }
   ctx.restore();
   drawCellLabels(s, v, n, al, col, r, hot);
+}
+
+/**
+ * True when some pixel of the cell, its rim or the text under it can fall on the canvas. The
+ * bound is generous: the body may throb and recoil to 1.3 times its radius, every line of text
+ * is taken as wide as its longest possible glyphs, and the label shadow adds its reach. A
+ * source is always drawn.
+ */
+export function cellInView(s: SceneState, v: View, n: Node): boolean {
+  if (n.kind === 'source') return true;
+  const body = n.r * 1.3 + 3;
+  let half = body,
+    bottom = body;
+  if (s.cam.s > 0.3) {
+    const k = labelScale(s.cam.s);
+    let widest = n.label.length * (n.kind === 'root' ? 15 : 13) * k;
+    widest = Math.max(widest, (n.sub || t('canvas.cell.awaitingApproval')).length * 11 * k);
+    if (n.bound)
+      widest = Math.max(
+        widest,
+        t('canvas.cell.bound', { records: formatNumber(n.bound.records), source: n.bound.source.label, fresh: n.bound.fresh }).length * 10.5 * k,
+      );
+    else if (s.COVERAGE) widest = Math.max(widest, t('canvas.cell.noData').length * 10.5 * k);
+    half = Math.max(half, (widest * MAX_GLYPH_EM) / 2);
+    // Three baselines at most, 24, 39 and 53 label units under the body, plus a line of glyphs.
+    bottom = n.r + 72 * k;
+  }
+  return inView(v, n.x - half, n.y - body, n.x + half, n.y + bottom, SHADOW_REACH / s.cam.s + 4);
+}
+
+/** The matte sphere gradient of a cell of colour `col` at opacity `al`, in the cell's own coordinates. */
+function sphere(ctx: CanvasRenderingContext2D, col: string, al: number, fused: boolean, r: number): CanvasGradient {
+  const key = `${col}|${al}|${fused ? 1 : 0}|${r}`;
+  let g = spheres.get(key);
+  if (g) return g;
+  if (spheres.size >= SPHERES_MAX) spheres.clear();
+  g = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r * 1.04);
+  g.addColorStop(0, hex(mix(col, MIX_WHITE, 0.55), 0.98 * al));
+  g.addColorStop(0.3, hex(mix(col, MIX_WHITE, 0.18), 0.98 * al));
+  g.addColorStop(0.75, hex(col, 0.96 * al));
+  g.addColorStop(1, hex(mix(col, MIX_BLACK, fused ? 0.38 : 0.42), 0.96 * al));
+  spheres.set(key, g);
+  return g;
 }

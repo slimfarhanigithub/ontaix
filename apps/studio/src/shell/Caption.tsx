@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 import { REDUCED } from '../canvas/constants';
+import { useT } from '../i18n/i18n';
 import { useStore } from './dom';
 
 /** How long the chevron keeps the accent after a caption arrives cut short. */
@@ -24,9 +25,10 @@ interface CaptionProps {
 
 export function Caption({ expanded, onToggle, heard, buttonRef }: CaptionProps) {
   const st = useStore();
+  const t = useT();
   const latest = st.ui.history[st.ui.history.length - 1];
   const listening = st.ui.listening;
-  const kicker = listening ? 'Listening' : latest?.kicker ?? '';
+  const kicker = listening ? t('teach.bar.listening') : latest?.kicker ?? '';
   const text = listening ? heard : latest?.text ?? '';
   const seq = listening ? -1 : latest?.seq ?? 0;
   const ref = useRef<HTMLSpanElement>(null);
@@ -69,7 +71,7 @@ export function Caption({ expanded, onToggle, heard, buttonRef }: CaptionProps) 
       ref={buttonRef}
       aria-expanded={expanded}
       aria-controls="teachLog"
-      title={expanded ? 'Hide recent captions' : [kicker, text].filter(Boolean).join(' ')}
+      title={expanded ? t('teach.bar.hideRecent') : [kicker, text].filter(Boolean).join(' ')}
       onClick={onToggle}
     >
       <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -80,7 +82,7 @@ export function Caption({ expanded, onToggle, heard, buttonRef }: CaptionProps) 
         {kicker}
       </small>
       <span id="captionText" className="txt" ref={ref}></span>
-      <span className="hide">Hide</span>
+      <span className="hide">{t('teach.bar.hide')}</span>
     </button>
   );
 }

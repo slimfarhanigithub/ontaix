@@ -14,6 +14,7 @@ from pydantic import Field
 
 from app.models.api.base import ApiModel
 from app.models.api.organization import OrganizationRef
+from app.utilities.language import Language
 
 MAX_PRESENTED_PASSWORD = 1024
 
@@ -32,6 +33,14 @@ class SessionAccount(ApiModel):
     id: uuid.UUID
     email: str
     name: str
+    # The portal language the person chose; None follows the browser.
+    language: Language | None = None
+
+
+class SessionLanguage(ApiModel):
+    """`PUT /auth/session/language`: the portal language, or null to follow the browser."""
+
+    language: Language | None
 
 
 class SupportInfo(ApiModel):
@@ -46,10 +55,15 @@ class ActingInfo(ApiModel):
     until: datetime
 
 
+class OrganizationChoice(ApiModel):
+    organization_id: uuid.UUID
+
+
 class Session(ApiModel):
     kind: Literal["member", "platform"]
     account: SessionAccount
     organization: OrganizationRef | None = None
+    organizations: list[OrganizationRef] | None = None
     user_id: uuid.UUID | None = None
     platform_roles: list[Literal["super_admin"]] | None = None
     support: SupportInfo | None = None

@@ -20,6 +20,13 @@ Speech recognition also turns a term it does not know into other words that soun
 key: letters that spell one sound are written the same way, doubled letters and a silent
 trailing e are dropped, and the keys must share most of their letters in order. Short words
 never count: "a" tells nothing about "AI".
+
+Every test takes the company's language. The English sound key is the one above; the French key
+reads `eau`, `au` and `ô` as one sound, `ai` and `é` as one, `oi` as `wa`, `ç` as `s`, a silent
+`h` and the silent final consonants (`t`, `d`, `s`, `x`, `p`) as nothing, so "comptabilité"
+and "contabilité" meet; the German key reads `sch` as `sh`, `ei` as `ai`, `ie` as `i`, `eu` and
+`äu` as `oi`, `v` as `f`, `w` as `v`, `z` and `tz` as `ts`, `ß` as `s` and a final `d`, `g` or
+`b` as its voiceless twin, so "Lieferant" and "Liferant" meet.
 """
 
 from __future__ import annotations
@@ -28,7 +35,8 @@ import re
 from collections.abc import Collection
 from difflib import SequenceMatcher
 
-from app.utilities.teach_parser import singular
+from app.utilities.label_forms import singular_word, strip_accents
+from app.utilities.language import Language
 
 # Words shorter than this are never judged misheard: short names (XRG, Gas) differ by design.
 MIN_WORD_LETTERS = 5
@@ -72,9 +80,63 @@ _SOUND_KEY = (
 _SOFT_C = re.compile(r"c(?=[eiy])")
 _SOFT_G = re.compile(r"g(?=[eiy])")
 _DOUBLED = re.compile(r"(.)\1+")
+# French: spellings of one sound, applied in order after `ç` is read and before accents go.
+_SOUND_KEY_FR = (
+    ("tion", "sion"),
+    ("ph", "f"),
+    ("qu", "k"),
+    ("ç", "s"),
+    ("ch", "sh"),
+    ("gn", "ny"),
+    ("eau", "o"),
+    ("au", "o"),
+    ("ai", "e"),
+    ("ei", "e"),
+    ("ou", "u"),
+    ("oi", "wa"),
+    ("ill", "iy"),
+    ("œ", "e"),
+    ("eu", "e"),
+    ("x", "ks"),
+    ("z", "s"),
+    ("ck", "k"),
+    ("h", ""),
+    ("y", "i"),
+)
+_FRENCH_SILENT_END = re.compile(r"(?<=[aeiou])[tdsxp]$")
+# German: spellings of one sound, applied in order.
+_SOUND_KEY_DE = (
+    ("tsch", "ch"),
+    ("sch", "sh"),
+    ("ch", "kh"),
+    ("ck", "k"),
+    ("ph", "f"),
+    ("th", "t"),
+    ("qu", "kv"),
+    ("ß", "s"),
+    ("ie", "i"),
+    ("ei", "ai"),
+    ("ey", "ai"),
+    ("ay", "ai"),
+    ("eu", "oi"),
+    ("äu", "oi"),
+    ("ä", "e"),
+    ("ö", "o"),
+    ("ü", "u"),
+    ("v", "f"),
+    ("w", "v"),
+    ("tz", "ts"),
+    ("z", "ts"),
+    ("x", "ks"),
+    ("dt", "t"),
+    ("y", "i"),
+)
+_GERMAN_FINAL = {"d": "t", "g": "k", "b": "p"}
 
 
-def sounds_like_name(heard: str, known: str, *, company_names: Collection[str]) -> bool:
+def sounds_like_name(
+    heard: str, known: str, *, company_names: Collection[str], language: Language = "en"
+) -> bool:
     """True when `known` is a proper name and `heard` differs from it only by words that sound
     like its words. `company_names` are the names of the tenant's companies."""
     if not is_proper_name(known, company_names):
@@ -82,11 +144,15 @@ def sounds_like_name(heard: str, known: str, *, company_names: Collection[str]) 
     a, b = _word_list(heard), _word_list(known)
     if not a or len(a) != len(b):
         return False
-    differing = [(x, y) for x, y in zip(a, b, strict=True) if singular(x) != singular(y)]
-    return bool(differing) and all(_close(x, y) for x, y in differing)
+    differing = [
+        (x, y)
+        for x, y in zip(a, b, strict=True)
+        if singular_word(x, language) != singular_word(y, language)
+    ]
+    return bool(differing) and all(_close(x, y, language) for x, y in differing)
 
 
-def company_possessive_rest(heard: str, company_name: str) -> str | None:
+def company_possessive_rest(heard: str, company_name: str, language: Language = "en") -> str | None:
     """The words of `heard` after a leading run that sounds like, but is not spelled as,
     `company_name` ("sales" for "Inside sales" and Insight), keeping their spelling; None when
     `heard` does not start so or has no word after that run."""
@@ -97,29 +163,39 @@ def company_possessive_rest(heard: str, company_name: str) -> str | None:
     lead = _word_list(" ".join(words[: len(name)]))
     if len(lead) != len(name):
         return None
-    differing = [(x, y) for x, y in zip(lead, name, strict=True) if singular(x) != singular(y)]
-    if not differing or not all(_close(x, y) for x, y in differing):
+    differing = [
+        (x, y)
+        for x, y in zip(lead, name, strict=True)
+        if singular_word(x, language) != singular_word(y, language)
+    ]
+    if not differing or not all(_close(x, y, language) for x, y in differing):
         return None
     return " ".join(words[len(name) :])
 
 
-def sounds_like_word(heard: str, meant: str) -> bool:
+def sounds_like_word(heard: str, meant: str, language: Language = "en") -> bool:
     """True when one heard word sounds like `meant` but is not that word: both at least four
     letters, and their sound keys sharing at least seven tenths of their letters in order
     ("crowd" and "cloud"; never "sales" and "services")."""
     a, b = "".join(_word_list(heard)), "".join(_word_list(meant))
-    if len(a) < MIN_TERM_LETTERS or len(b) < MIN_TERM_LETTERS or singular(a) == singular(b):
+    if (
+        len(a) < MIN_TERM_LETTERS
+        or len(b) < MIN_TERM_LETTERS
+        or singular_word(a, language) == singular_word(b, language)
+    ):
         return False
     # A word that holds the other whole is a longer word, not a word misheard: a part of a
     # word never grounds ("report" and "reporting", a suffix split off by a format character).
     # Two spellings of one sound ("insite", "insight") have equal keys and do sound alike.
-    ka, kb = sound_key(a), sound_key(b)
+    ka, kb = sound_key(a, language), sound_key(b, language)
     if ka != kb and _contains(ka, kb):
         return False
-    return _sound_ratio(a, b) >= MIN_SOUND_RATIO
+    return _sound_ratio(a, b, language) >= MIN_SOUND_RATIO
 
 
-def sound_like_word_together(first: str, second: str, meant: str) -> bool:
+def sound_like_word_together(
+    first: str, second: str, meant: str, language: Language = "en"
+) -> bool:
     """True when two heard words run together sound like the one word `meant`, as when a
     leading unstressed syllable is heard as an article ("a jile" and "agile"): the first word
     has at most two letters, the two together at least four, and their sound keys share at
@@ -133,31 +209,60 @@ def sound_like_word_together(first: str, second: str, meant: str) -> bool:
         return False
     # The two words together may be the word itself ("a nalytics"); one holding the other
     # whole is a longer word.
-    ka, kb = sound_key(a), sound_key(b)
+    ka, kb = sound_key(a, language), sound_key(b, language)
     if ka != kb and _contains(ka, kb):
         return False
-    return _sound_ratio(a, b) >= MIN_JOINED_SOUND_RATIO
+    return _sound_ratio(a, b, language) >= MIN_JOINED_SOUND_RATIO
 
 
-def _sound_ratio(a: str, b: str) -> float:
-    return SequenceMatcher(None, sound_key(a), sound_key(b)).ratio()
+def _sound_ratio(a: str, b: str, language: Language) -> float:
+    return SequenceMatcher(None, sound_key(a, language), sound_key(b, language)).ratio()
 
 
 def _contains(a: str, b: str) -> bool:
     return a in b or b in a
 
 
-def sound_key(word: str) -> str:
-    """The letters of `word` as they sound: one spelling per sound ("ou" and "ow", "ee" and
-    "ea", "ph" and "f"), a soft c as s and a soft g as j, doubled letters once, no silent
-    trailing e ("solution" as "solushen", "pharmacists" and "farmacists" both as
-    "farmasists")."""
+def sound_key(word: str, language: Language = "en") -> str:
+    """The letters of `word` as they sound in `language`: one spelling per sound ("ou" and
+    "ow", "ee" and "ea", "ph" and "f" in English), a soft c as s and a soft g as j, doubled
+    letters once, no silent trailing e ("solution" as "solushen", "pharmacists" and
+    "farmacists" both as "farmasists")."""
+    if language == "fr":
+        return _french_sound_key(word)
+    if language == "de":
+        return _german_sound_key(word)
     key = _SILENT_GH.sub("", word.casefold())
     for spelled, sound in _SOUND_KEY:
         key = key.replace(spelled, sound)
     key = _SOFT_G.sub("j", _SOFT_C.sub("s", key)).replace("c", "k")
     key = _DOUBLED.sub(r"\1", key)
     return key[:-1] if len(key) > 2 and key.endswith("e") else key
+
+
+def _french_sound_key(word: str) -> str:
+    key = word.casefold()
+    for spelled, sound in _SOUND_KEY_FR:
+        key = key.replace(spelled, sound)
+    key = strip_accents(key)
+    key = _SOFT_G.sub("j", _SOFT_C.sub("s", key)).replace("c", "k")
+    key = _DOUBLED.sub(r"\1", key)
+    if len(key) > 2 and key.endswith("e"):
+        key = key[:-1]
+    if len(key) > 3:
+        key = _FRENCH_SILENT_END.sub("", key)
+    return key
+
+
+def _german_sound_key(word: str) -> str:
+    key = word.casefold()
+    for spelled, sound in _SOUND_KEY_DE:
+        key = key.replace(spelled, sound)
+    key = _SOFT_C.sub("ts", key).replace("c", "k")
+    key = _DOUBLED.sub(r"\1", key)
+    if len(key) > 2 and key[-1] in _GERMAN_FINAL:
+        key = key[:-1] + _GERMAN_FINAL[key[-1]]
+    return key
 
 
 def is_proper_name(label: str, company_names: Collection[str]) -> bool:
@@ -173,19 +278,22 @@ def _word_list(label: str) -> list[str]:
     return _LETTERS.findall(label.casefold())
 
 
-def _close(a: str, b: str) -> bool:
+def _close(a: str, b: str, language: Language) -> bool:
     if len(a) < MIN_WORD_LETTERS or len(b) < MIN_WORD_LETTERS:
         return False
-    skeletons = SequenceMatcher(None, _skeleton(a), _skeleton(b)).ratio()
+    skeletons = SequenceMatcher(None, _skeleton(a, language), _skeleton(b, language)).ratio()
     return (
         skeletons >= MIN_SKELETON_RATIO
         and SequenceMatcher(None, a, b).ratio() >= MIN_SPELLING_RATIO
     )
 
 
-def _skeleton(word: str) -> str:
+def _skeleton(word: str, language: Language) -> str:
     """The word's first letter, then its consonants, with spellings of one sound merged and
-    doubled letters collapsed; a "gh" after a vowel is silent ("insight" as "insit")."""
+    doubled letters collapsed; a "gh" after a vowel is silent ("insight" as "insit"). A French
+    or German word is read through its sound key first."""
+    if language != "en":
+        word = sound_key(word, language) or word
     word = _SILENT_GH.sub("", word)
     for spelled, sound in _SOUNDS:
         word = word.replace(spelled, sound)

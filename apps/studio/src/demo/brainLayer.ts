@@ -5,6 +5,8 @@
  * Beside the company, the story cells of the second act are drawn as large as concepts on the
  * canvas, with their names, and their relations reach from one cell to the next as they are
  * made. In the third act they fly into the cores of their lobes and shrink to brain cells.
+ * Example data sources are drawn as the canvas draws a source, and their mappings reach from the
+ * source to a concept one by one; both fade out as the story cells fly into the brain.
  *
  * Thousands of cells stay smooth. A cell that has settled never moves again, so from afar
  * settled cells and their relations are painted once into a cached picture of the whole brain,
@@ -20,12 +22,15 @@
  */
 import { FONT_SANS, MIX_BLACK, MIX_WHITE, themedColour } from '../design/tokens';
 import { clamp, ease, hex, mix } from '../canvas/colour';
-import { labelScale } from '../canvas/labels';
+import { labelScale, roundRect } from '../canvas/labels';
 import { beginLayer, compositeLayer } from '../canvas/regions';
 import type { SceneState } from '../canvas/state';
 import { toWorld, type View } from '../canvas/view';
 import { brainAlpha, brainElapsed, brainFitZoom, bornBy, LINK_DRAW, linksBy, MIGRATE, migration, ZOOM_OUT, type BrainCell, type BrainDemo } from './brainDemo';
 
+/** Opacity and world width of a source's mapping, as the canvas draws a binding. */
+const BIND_ALPHA = 0.5;
+const BIND_WIDTH = 1;
 /** How long a new cell takes to bud to its place, and how long it glows. */
 const BUD = 0.7;
 const GLOW = 1.4;
@@ -125,6 +130,25 @@ function drawSphere(g: CanvasRenderingContext2D, color: string, x: number, y: nu
   g.fill();
 }
 
+/** True for an example data source, which has no place in the brain. */
+const isSource = (c: BrainCell): boolean => !!c.story?.source;
+
+/** Draws an example data source centred on x, y as the canvas draws a source: a rounded tile with three bars. */
+function drawSourceTile(g: CanvasRenderingContext2D, color: string, chip: string, x: number, y: number, r: number, alpha: number): void {
+  const col = themedColour(color);
+  const fill = g.createLinearGradient(x - r, y - r, x + r, y + r);
+  fill.addColorStop(0, hex(mix(col, MIX_WHITE, 0.2), 0.95 * alpha));
+  fill.addColorStop(1, hex(mix(col, MIX_BLACK, 0.35), 0.95 * alpha));
+  roundRect(g, x - r, y - r, 2 * r, 2 * r, 7);
+  g.fillStyle = fill;
+  g.fill();
+  g.strokeStyle = hex(mix(col, MIX_WHITE, 0.35), 0.5 * alpha);
+  g.lineWidth = 1;
+  g.stroke();
+  g.fillStyle = `rgba(${chip},${0.55 * alpha})`;
+  for (let i = -1; i <= 1; i++) g.fillRect(x - r * 0.55, y + i * r * 0.36 - 1.1, r * 1.1, 2.2);
+}
+
 /** The world rectangle on screen, grown by `m`. */
 function viewRect(s: SceneState, v: View, m: number): [number, number, number, number] {
   const [x0, y0] = toWorld(v, s.cam, 0, 0);
@@ -148,6 +172,7 @@ function budOf(d: BrainDemo, c: BrainCell, e: number): [number, number] | null {
   if (!c.linked) return null;
   const p = c.story;
   if (!p) return [c.px, c.py];
+  if (p.from) return [p.from.x, p.from.y];
   if (p.parent >= 0) {
     const [x, y] = restOf(d, d.cells[p.parent], e);
     return [x, y];
@@ -178,7 +203,7 @@ function cellAlpha(d: BrainDemo, c: BrainCell, e: number): number {
  * the story cells fly into it.
  */
 const besideOnly = (a: BrainCell, b?: BrainCell): boolean =>
-  b ? !!a.story && !!b.story && a.domain !== b.domain : !!a.story && a.story.parent < 0;
+  b ? !!a.story && !!b.story && a.domain !== b.domain : !!a.story && a.story.parent < 0 && !a.story.from;
 
 /** Domain keys whose domain is hidden in every company: their lobes are not drawn. */
 function hiddenKeys(s: SceneState): Set<string> {
@@ -233,7 +258,7 @@ function newCache(d: BrainDemo, v: View, hidden: string): Cache | null {
   if (!cells || !tint || !ghost) return null;
   const hiddenKeys = new Set(hidden.split(','));
   for (const c of d.cells) {
-    if (hiddenKeys.has(c.domain)) continue;
+    if (hiddenKeys.has(c.domain) || isSource(c)) continue;
     ghost.fillStyle = themedColour(c.color);
     ghost.beginPath();
     ghost.arc(c.x, c.y, d.radius * GHOST_R, 0, 6.283);
@@ -301,7 +326,7 @@ function cacheFor(d: BrainDemo, v: View, e: number, hidden: Set<string>): Cache 
   g.globalCompositeOperation = 'source-over';
   for (let i = c.upTo; i < settled; i++) {
     const cell = d.cells[i];
-    if (hidden.has(cell.domain)) continue;
+    if (hidden.has(cell.domain) || isSource(cell)) continue;
     drawSphere(g, cell.color, cell.x, cell.y, d.radius);
     c.tint.fillStyle = themedColour(cell.color);
     c.tint.beginPath();
@@ -353,6 +378,7 @@ export function drawBrainTint(s: SceneState, v: View, t: number): void {
   const r = d.spacing * TINT_R;
   for (let i = m < 0.5 ? d.stories : 0; i < n; i++) {
     const c = d.cells[i];
+    if (isSource(c)) continue;
     const [x, y] = restOf(d, c, e);
     if (hidden.has(c.domain) || x < x0 || x > x1 || y < y0 || y > y1) continue;
     if (e - c.born < BUD * 0.5) continue;
@@ -449,6 +475,17 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
     ctx.stroke(p);
   }
 
+  // Mappings: each reaches from its source to its concept, and fades out as the brain forms.
+  for (const b of d.binds) {
+    if (b.at > e || m >= 1) break;
+    if (typeof b.to === 'number' && hidden.has(d.cells[b.to].domain)) continue;
+    const [sx, sy] = placeOf(b.source);
+    const [tx, ty] = typeof b.to === 'number' ? placeOf(b.to) : [b.to.x, b.to.y];
+    const q = d.reduced ? 1 : ease(clamp((e - b.at) / LINK_DRAW, 0, 1));
+    const k = (d.reduced ? clamp((e - b.at) / LINK_DRAW, 0, 1) : 1) * (1 - m);
+    stroke(sx, sy, sx + (tx - sx) * q, sy + (ty - sy) * q, d.cells[b.source].color, BIND_ALPHA * k, Math.max(BIND_WIDTH, 0.9 / zoom));
+  }
+
   // Glows: new cells while they bud.
   if (!d.reduced) {
     for (let i = n - 1; i >= 0; i--) {
@@ -476,6 +513,14 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
     const [x, y, r] = placeOf(i);
     if (!inRect(x, y)) continue;
     const alpha = fade * cellAlpha(d, c, e);
+    if (isSource(c)) {
+      const left = alpha * (1 - m);
+      if (left <= 0.01) continue;
+      ctx.globalAlpha = 1;
+      drawSourceTile(ctx, c.color, TH.CHIP, x, y, r, left);
+      storyCells.push([c, x, y, r, left]);
+      continue;
+    }
     ctx.globalAlpha = alpha;
     drawSphere(ctx, c.color, x, y, r);
     if (c.story && m < 1) storyCells.push([c, x, y, r, alpha * (1 - m)]);

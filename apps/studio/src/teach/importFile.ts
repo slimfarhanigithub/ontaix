@@ -6,6 +6,7 @@
  */
 import { api } from '../api/client';
 import { ApiError } from '../api/types';
+import { t } from '../i18n/i18n';
 import { store } from '../store/store';
 import { detectedReading, type ImportReading } from './importReading';
 import { importOntology } from './ontology';
@@ -21,7 +22,7 @@ export async function importFile(file: File | null | undefined): Promise<void> {
     detection = await api.detectImport(file);
   } catch (err) {
     const reason = err instanceof ApiError ? err.problem.detail || err.problem.title : (err as Error).message;
-    store.caption('Import failed', `${file.name} could not be read (${reason}).`);
+    store.caption(t('teach.import.failed'), t('teach.import.unreadable', { file: file.name, reason }));
     return;
   } finally {
     store.ui.importing = false;

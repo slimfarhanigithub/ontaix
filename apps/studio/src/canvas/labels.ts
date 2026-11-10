@@ -4,6 +4,7 @@
  * `drawCell` (lines 462-466) and `drawSource` (line 450).
  */
 import { FONT_SANS, themedColour } from '../design/tokens';
+import { formatNumber, t } from '../i18n/i18n';
 import { hex } from './colour';
 import type { SceneState } from './state';
 import type { Node } from './types';
@@ -14,6 +15,9 @@ import type { View } from './view';
  * percent of its size on screen: 1 at zoom 0.7 and above, 1/zoom times 0.7 below.
  */
 export const labelScale = (zoom: number): number => Math.max(1, 0.7 / zoom);
+
+/** No glyph of the UI face is wider than this many em, so a line of text is at most its length times its size times this. */
+export const MAX_GLYPH_EM = 1.1;
 
 export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
@@ -47,21 +51,17 @@ export function drawCellLabels(s: SceneState, v: View, n: Node, al: number, col:
   } else if (n.pending && !n.split) {
     ctx.fillStyle = `rgba(${TH.INK2},${0.8 * la})`;
     ctx.font = `300 ${Math.round(10.5 * k)}px ${FONT_SANS}`;
-    ctx.fillText('awaiting approval', n.x, yy);
+    ctx.fillText(t('canvas.cell.awaitingApproval'), n.x, yy);
     yy += 14 * k;
   }
   if (n.bound) {
     ctx.fillStyle = `rgba(${TH.INK2},${0.95 * la})`;
     ctx.font = `400 ${Math.round(10.5 * k)}px ${FONT_SANS}`;
-    ctx.fillText(
-      `${n.bound.records.toLocaleString('en-GB')} records · ${n.bound.source.label} · fresh ${n.bound.fresh}`,
-      n.x,
-      yy,
-    );
+    ctx.fillText(t('canvas.cell.bound', { records: formatNumber(n.bound.records), source: n.bound.source.label, fresh: n.bound.fresh }), n.x, yy);
   } else if (s.COVERAGE && n.kind === 'concept') {
     ctx.fillStyle = `rgba(${TH.INK2},${0.7 * la})`;
     ctx.font = `300 ${Math.round(10.5 * k)}px ${FONT_SANS}`;
-    ctx.fillText('no data behind it', n.x, yy);
+    ctx.fillText(t('canvas.cell.noData'), n.x, yy);
   }
 }
 
@@ -81,7 +81,7 @@ export function drawSourceLabels(s: SceneState, v: View, n: Node, al: number, r:
   ctx.font = `300 ${Math.round(10.5 * k)}px ${FONT_SANS}`;
   const bound = s.links.filter((l) => l.kind === 'bind' && l.a === n && !l.pending).length;
   ctx.fillText(
-    `${n.sub}${bound ? ` · ${bound} concept${bound === 1 ? '' : 's'}` : ''}${n.pending ? ' · awaiting approval' : ''}`,
+    `${n.sub}${bound ? t('canvas.source.concepts', { n: bound }) : ''}${n.pending ? t('canvas.source.awaitingApproval') : ''}`,
     n.x,
     n.y + r + 37 * k,
   );

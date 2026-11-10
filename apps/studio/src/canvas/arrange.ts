@@ -10,6 +10,7 @@
  * right of everything else, and the camera fits it. `fitTo`, `tw` and `stageOrigin` are ported
  * from reference/ontaix-studio-reference.html lines 506-511.
  */
+import { t as text } from '../i18n/i18n';
 import { now } from '../runtime/clock';
 import { clamp } from './colour';
 import { DOMAIN_R } from './constants';
@@ -146,10 +147,7 @@ export function arrangeLineage(s: SceneState, v: View, n: Node, measure: Measure
   parent.delete(top.id);
   stageBlock(s, set, parent, { root: top.id, sides: 'right' }, measure, t);
   fitTo(s, v, set);
-  s.effects.caption(
-    `Lineage of ${n.label}, arranged`,
-    `Moved to a clear area: ancestors on the left, descendants to the right, siblings one under another. The rest of the model is untouched and out of the way.`,
-  );
+  s.effects.caption(text('canvas.arrange.lineageTitle', { label: n.label }), text('canvas.arrange.lineageText'));
 }
 
 /** The domain's members as their own trees, each related cell of another domain beside the member it touches. */
@@ -177,8 +175,8 @@ export function arrangeDomain(s: SceneState, v: View, d: Domain, measure: Measur
   focusOnDomain(s, d);
   fitTo(s, v, set);
   s.effects.caption(
-    `${d.name}, arranged`,
-    `Moved to a clear area: ${members.length} concepts of ${d.name} from left to right, the ${via.size} concept${via.size === 1 ? '' : 's'} it relates to beside what they touch. Press Arrange with nothing selected to put everything back.`,
+    text('canvas.arrange.domainTitle', { name: d.name }),
+    text('canvas.arrange.domainText', { members: members.length, name: d.name, n: via.size }),
   );
 }
 
@@ -199,10 +197,7 @@ export function arrangeCell(s: SceneState, v: View, n: Node, measure: Measure = 
   }
   stageBlock(s, set, parent, { root: n.id, sides: 'both', side }, measure, t);
   fitTo(s, v, set);
-  s.effects.caption(
-    `${n.label} and its relations, arranged`,
-    `Moved to a clear area: ${n.label} in the middle, its ${nb.length} linked concept${nb.length === 1 ? '' : 's'} around it, what points to it on the left and what it points to on the right, grouped by domain product. Press Arrange with nothing selected to put everything back.`,
-  );
+  s.effects.caption(text('canvas.arrange.cellTitle', { label: n.label }), text('canvas.arrange.cellText', { label: n.label, n: nb.length }));
 }
 
 /** Zoom under which the renderer stops drawing action chips; cell labels go at 0.45. */

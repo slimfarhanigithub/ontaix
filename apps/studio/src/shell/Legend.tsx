@@ -7,12 +7,14 @@
  */
 import type { ReactNode } from 'react';
 
+import { useT, type MessageKey } from '../i18n/i18n';
 import { useStore } from './dom';
 
 interface LegendEntry {
   key: string;
-  label: string;
-  detail: string;
+  /** The dictionary keys of the one-word label and of the full explanation. */
+  label: MessageKey;
+  detail: MessageKey;
   icon: ReactNode;
 }
 
@@ -20,8 +22,8 @@ interface LegendEntry {
 export const LEGEND: LegendEntry[] = [
   {
     key: 'rel',
-    label: 'Relation',
-    detail: 'A continuous line, brighter toward the target, with the action written on it',
+    label: 'shell.legend.relation',
+    detail: 'shell.legend.relationDetail',
     icon: (
       <>
         <path d="M2 11 Q14 3 30 7" stroke="var(--text-2)" strokeWidth="1.8" fill="none" strokeLinecap="round" />
@@ -31,8 +33,8 @@ export const LEGEND: LegendEntry[] = [
   },
   {
     key: 'isa',
-    label: 'Is a',
-    detail: 'A dashed line pointing to the parent it inherits from',
+    label: 'shell.legend.isa',
+    detail: 'shell.legend.isaDetail',
     icon: (
       <>
         <path d="M2 7 H24" stroke="var(--link)" strokeWidth="1.8" strokeDasharray="5 3.5" fill="none" />
@@ -42,8 +44,8 @@ export const LEGEND: LegendEntry[] = [
   },
   {
     key: 'eq',
-    label: 'Equivalent',
-    detail: 'A dotted line with arrows at both ends, between concepts of different companies',
+    label: 'shell.legend.equivalent',
+    detail: 'shell.legend.equivalentDetail',
     icon: (
       <>
         <path d="M9 7 H27" className="ink" strokeWidth="1.8" strokeDasharray="1.5 3.5" strokeLinecap="round" fill="none" />
@@ -53,14 +55,14 @@ export const LEGEND: LegendEntry[] = [
   },
   {
     key: 'conflict',
-    label: 'Conflict',
-    detail: 'A zigzag line: two definitions share one name',
+    label: 'shell.legend.conflict',
+    detail: 'shell.legend.conflictDetail',
     icon: <path d="M2 7 l4 -4 l5 8 l5 -8 l5 8 l5 -8 l5 8 l3 -4" stroke="var(--danger)" strokeWidth="1.8" strokeLinejoin="round" fill="none" />,
   },
   {
     key: 'pending',
-    label: 'Pending',
-    detail: 'Drawn lighter until you approve it',
+    label: 'shell.legend.pending',
+    detail: 'shell.legend.pendingDetail',
     icon: (
       <>
         <path d="M2 11 Q14 3 30 7" stroke="var(--text-2)" strokeOpacity=".4" strokeWidth="1.8" fill="none" strokeLinecap="round" />
@@ -72,6 +74,7 @@ export const LEGEND: LegendEntry[] = [
 
 export function Legend() {
   const st = useStore();
+  const t = useT();
   const settings = st.ui.settings;
   const off = st.ui.legendOff;
 
@@ -82,22 +85,22 @@ export function Legend() {
         id="legendToggle"
         aria-expanded={!off}
         aria-controls="legend"
-        title="Show or hide the legend (L)"
+        title={t('shell.legend.toggleTitle')}
         style={{ display: settings && !settings.legend ? 'none' : undefined }}
         onClick={() => st.toggleLegend()}
       >
-        {off ? 'Show legend' : 'Hide legend'}
+        {off ? t('shell.legend.show') : t('shell.legend.hide')}
       </button>
-      <aside className={`legend${off ? ' off' : ''}`} id="legend" aria-label="How to read the lines">
-        <div className="title">Relationships</div>
+      <aside className={`legend${off ? ' off' : ''}`} id="legend" aria-label={t('shell.legend.label')}>
+        <div className="title">{t('shell.legend.title')}</div>
         <ul>
           {LEGEND.map((e) => (
-            <li className="row" key={e.key} data-k={e.key} title={e.detail}>
+            <li className="row" key={e.key} data-k={e.key} title={t(e.detail)}>
               <svg viewBox="0 0 36 14" aria-hidden="true">
                 {e.icon}
               </svg>
-              <b>{e.label}</b>
-              <span className="sr">{`: ${e.detail}`}</span>
+              <b>{t(e.label)}</b>
+              <span className="sr">{`: ${t(e.detail)}`}</span>
             </li>
           ))}
         </ul>

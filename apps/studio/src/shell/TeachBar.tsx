@@ -25,6 +25,7 @@ import { ApiError } from '../api/types';
 import { speechPhrases, startAzureSpeech } from '../teach/azureSpeech';
 import { speechStream, teach } from '../teach/teach';
 import { Caption } from './Caption';
+import { useT } from '../i18n/i18n';
 import { useStore } from './dom';
 import { readExpanded, writeExpanded } from './teachBarState';
 import { TeachLog } from './TeachLog';
@@ -66,6 +67,7 @@ const SR: SpeechRecognitionCtor | undefined =
 
 export function TeachBar() {
   const st = useStore();
+  const t = useT();
   const { say, sayPlaceholder, settings, listening } = st.ui;
   const companies = st.s.companies;
   const recording = useRef<Recording | null>(null);
@@ -133,13 +135,14 @@ export function TeachBar() {
     };
   }, []);
 
+  const noVoiceTitle = t('teach.bar.noVoice');
   useEffect(() => {
     const el = mic.current;
     if (el && !SR) {
-      el.title = 'Voice input is not available in this browser';
+      el.title = noVoiceTitle;
       el.style.opacity = '.4';
     }
-  }, []);
+  }, [noVoiceTitle]);
 
   /**
    * The microphone is a toggle. The first press starts listening; the second stops the recogniser
@@ -310,7 +313,7 @@ export function TeachBar() {
       silence.current = setTimeout(() => rec.end(), SILENCE_MS);
     };
     r.onerror = () => {
-      setErrorPlaceholder('The microphone did not respond. Type instead, the show goes on.');
+      setErrorPlaceholder(t('teach.bar.micFailed'));
     };
     r.onend = () => {
       ended = true;
@@ -350,13 +353,13 @@ export function TeachBar() {
   };
 
   const liveTeaching = !settings || settings.liveTeaching;
-  const placeholder = !liveTeaching ? 'Live teaching is disabled in the admin portal' : errorPlaceholder || sayPlaceholder;
+  const placeholder = !liveTeaching ? t('teach.bar.disabled') : errorPlaceholder || sayPlaceholder;
 
   const fieldProps = {
     id: 'say',
     ref: field,
     placeholder,
-    'aria-label': 'Teach the model',
+    'aria-label': t('teach.bar.field'),
     value: say,
     disabled: !liveTeaching,
     onChange: (e: { target: { value: string } }) => st.setSay(e.target.value),
@@ -378,8 +381,8 @@ export function TeachBar() {
       <span className="sep" aria-hidden="true"></span>
       <select
         id="companySel"
-        aria-label="Company being taught"
-        title="Which company you are teaching"
+        aria-label={t('teach.bar.company')}
+        title={t('teach.bar.companyTitle')}
         style={{ display: companies.length > 1 ? undefined : 'none' }}
         value={st.s.activeCompany?.key ?? ''}
         onChange={(e) => st.selectCompany(e.target.value)}
@@ -409,9 +412,9 @@ export function TeachBar() {
         type="button"
         className={`mic${listening ? ' on' : ''}`}
         id="mic"
-        aria-label="Speak"
+        aria-label={t('teach.bar.speak')}
         aria-pressed={listening}
-        title={listening ? 'Stop listening and teach what was heard' : 'Speak: press again to stop and teach'}
+        title={listening ? t('teach.bar.micListening') : t('teach.bar.micIdle')}
         ref={mic}
         style={{ display: settings && !settings.voice ? 'none' : undefined }}
         onClick={speak}
@@ -428,7 +431,7 @@ export function TeachBar() {
         )}
       </button>
       <button type="submit" id="teach">
-        Teach
+        {t('teach.bar.teach')}
       </button>
       <TeachLog expanded={expanded} />
     </form>

@@ -17,7 +17,11 @@ async def get_by_identity(session: AsyncSession, issuer: str, subject: str) -> A
 
 
 async def list_for_tenant(session: AsyncSession, tenant_id: uuid.UUID) -> list[AppUser]:
-    result = await session.scalars(select(AppUser).where(AppUser.tenant_id == tenant_id))
+    result = await session.scalars(
+        select(AppUser)
+        .where(AppUser.tenant_id == tenant_id)
+        .execution_options(populate_existing=True)
+    )
     return list(result)
 
 

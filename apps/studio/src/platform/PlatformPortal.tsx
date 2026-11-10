@@ -6,6 +6,7 @@
 import { useState } from 'react';
 
 import { AccountControls } from '../auth/AccountControls';
+import { useT, type MessageKey } from '../i18n/i18n';
 import { Dialog } from '../shell/Dialog';
 import { useTableCellLabels } from '../shell/tableCellLabels';
 import { Toasts } from '../shell/Toasts';
@@ -14,12 +15,13 @@ import { PlatformAudit } from './PlatformAudit';
 
 type PlatformPage = 'organizations' | 'audit';
 
-const NAV: [PlatformPage, string][] = [
-  ['organizations', 'Organizations'],
-  ['audit', 'Platform audit log'],
+const NAV: [PlatformPage, MessageKey][] = [
+  ['organizations', 'platform.nav.organizations'],
+  ['audit', 'platform.nav.audit'],
 ];
 
 export function PlatformPortal() {
+  const t = useT();
   const [page, setPage] = useState<PlatformPage>('organizations');
   useTableCellLabels();
   return (
@@ -28,14 +30,14 @@ export function PlatformPortal() {
       <div className="admin on" id="platform" aria-labelledby="platformTitle">
         <div className="win">
           <div className="head">
-            <div id="platformTitle">Ontology Builder platform</div>
+            <div id="platformTitle">{t('platform.title')}</div>
             <AccountControls />
           </div>
           <nav id="platformNav">
-            <div className="grp">Platform</div>
+            <div className="grp">{t('platform.nav.group')}</div>
             {NAV.map(([key, label]) => (
               <button key={key} data-page={key} className={page === key ? 'on' : ''} onClick={() => setPage(key)}>
-                {label}
+                {t(label)}
               </button>
             ))}
           </nav>

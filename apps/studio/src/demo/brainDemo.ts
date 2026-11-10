@@ -4,8 +4,11 @@
  * Stop brings the real model back where it was.
  *
  * A company that already holds concepts is the brain's starting point: its model stands as it
- * is, close up, then the root moves to the top of the brain stem and every concept joins the lobe
- * of its domain while the camera pulls back, and the brain grows on from them. A company with no
+ * is, close up, then new concepts bud from its concepts one after another, and example data
+ * sources appear under the model and map to its concepts one by one; then the root moves to the
+ * top of the brain stem, every concept joins the lobe of its domain, the new concepts fly to
+ * their lobes and the sources fade out while the camera pulls back, and the brain grows on from
+ * them. A company with no
  * concept yet stands alone at the top of the brain stem, close up, then three domains bud from its
  * root one after another, each with a few named concepts, their relations drawn one by one and a
  * few relations across the domains, while the camera stays close enough to read every name; then
@@ -20,7 +23,7 @@ import type { SceneState } from '../canvas/state';
 import type { Company, Node } from '../canvas/types';
 import { panelW, type View } from '../canvas/view';
 import { brainPoints, growthOrder, LOBE_CENTRES, lobesOf, neighboursOf, seeded, STEM_TOP, type BrainPoint } from './brainShape';
-import { CORE_KEY, namesFor } from './brainVocabulary';
+import { CORE_KEY, namesFor, SOURCE_KEY, SOURCES } from './brainVocabulary';
 
 /** A domain the brain gives a lobe to. */
 export interface BrainDomain {
@@ -35,10 +38,21 @@ export interface StoryPlace {
   x: number;
   y: number;
   r: number;
-  /** Index of the story cell it buds from, or -1 for the company's root. */
+  /** Index of the story cell it buds from, or -1 for the company's root or a real concept. */
   parent: number;
   /** True for a domain, false for one of its concepts. */
   hub: boolean;
+  /** The company's own concept it buds from, or null. */
+  from: Node | null;
+  /** True for an example data source: it maps to concepts beside the company and has no place in the brain. */
+  source: boolean;
+}
+
+/** A source's mapping to a concept: the source cell, the concept (a story cell's index or a real concept), and when it is drawn. */
+export interface BrainBind {
+  source: number;
+  to: number | Node;
+  at: number;
 }
 
 export interface BrainCell {
@@ -75,6 +89,8 @@ export interface BrainDemo {
   storyDomains: number;
   /** Further relations, in the order they are drawn. */
   links: BrainLink[];
+  /** Mappings from the example sources to concepts, in the order they are drawn. */
+  binds: BrainBind[];
   /** Cell radius and distance between neighbours in the brain, in world units. */
   radius: number;
   spacing: number;
@@ -121,6 +137,32 @@ const MIN_LOBES = DOMAIN_TEMPLATES.length;
 /** Concepts each story domain grows: fewer on a phone, so the names stay readable. */
 const STORY_CONCEPTS = 6;
 const STORY_CONCEPTS_SMALL = 4;
+/**
+ * Building on a model: how many of its concepts new ones bud from, how many new concepts bud in
+ * all (fewer on a phone), at most per concept, their distance from it, and seconds between them.
+ */
+const BUD_PARENTS = 6;
+const BUD_PARENTS_SMALL = 4;
+const BUD_TOTAL = 12;
+const BUD_TOTAL_SMALL = 8;
+const BUD_MAX = 4;
+const BUD_R = 140;
+const BUD_R_SMALL = 115;
+const BUD_GAP = 0.34;
+/**
+ * Example data sources: how many (fewer on a phone), their row's distance under the model and
+ * least distance between them, their radius (a canvas source's), seconds before a source's first
+ * mapping, between its mappings and after its last, and mappings per source at most.
+ */
+const SOURCE_COUNT = 4;
+const SOURCE_COUNT_SMALL = 3;
+const SOURCE_DROP = 200;
+const SOURCE_STEP = 230;
+const SOURCE_R = 16;
+const SOURCE_LEAD = 0.35;
+const BIND_GAP = 0.12;
+const SOURCE_TAIL = 0.25;
+const BINDS_MAX = 6;
 /** First act: seconds the company stands alone. */
 export const ACT_ONE = 2.4;
 /** Second act: seconds before a domain's first concept, between its concepts, and after its last one. */
@@ -251,8 +293,7 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
   // than its children. A concept of no domain joins the stem; one whose domain has no lobe (a
   // hidden domain) is set aside.
   const joined = new Map<Node, { x: number; y: number }>();
-  const joinedPoints: number[] = [];
-  const apart = (j: number) => joinedPoints.every((k) => Math.hypot(pts[j].x - pts[k].x, pts[j].y - pts[k].y) >= spacing * JOIN_GAP);
+  const places = joinPlaces(pts, lobes, taken, spacing * JOIN_GAP);
   for (const n of own.slice().sort((a, b) => a.born - b.born || a.id - b.id)) {
     const lobe = n.domain ? domains.findIndex((x) => x.key === n.domain?.key) : -1;
     if (n.domain && lobe < 0) {
@@ -260,14 +301,11 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
       continue;
     }
     const [ux, uy] = lobe >= 0 ? coreOf(lobe) : STEM_TOP;
-    const inLobe = (j: number) => lobes[j] === lobe;
-    let i = nearestFree(ux, uy, (j) => inLobe(j) && apart(j));
-    if (i < 0) i = nearestFree(ux, uy, inLobe);
+    const i = places.take(lobe, ux, uy);
     if (i < 0) {
       aside.add(n);
       continue;
     }
-    joinedPoints.push(i);
     const [x, y] = world(pts[i]);
     joined.set(n, { x, y });
   }
@@ -317,7 +355,7 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
       domain: d.key,
       label: d.name,
       born: clock,
-      story: { x: hx, y: hy, r: STORY_HUB, parent: -1, hub: true },
+      story: { x: hx, y: hy, r: STORY_HUB, parent: -1, hub: true, from: null, source: false },
     });
     clock += HUB_GAP;
     const mine: number[] = [];
@@ -337,7 +375,7 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
         domain: d.key,
         label: nameOf(d.key, d.name),
         born: clock,
-        story: { x: hx + Math.cos(a) * conceptR, y: hy + Math.sin(a) * conceptR * tall, r: STORY_CONCEPT, parent: hub, hub: false },
+        story: { x: hx + Math.cos(a) * conceptR, y: hy + Math.sin(a) * conceptR * tall, r: STORY_CONCEPT, parent: hub, hub: false, from: null, source: false },
       });
       // Every second concept is related to the one before it.
       if (i % 2 === 1) links.push([idx - 1, idx, clock + 0.35]);
@@ -366,6 +404,100 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
       }
     links.push([best[0], best[1], clock]);
     clock += CROSS_GAP;
+  }
+
+  // Second act on a model: new concepts bud from the company's own, close up, one after another,
+  // then example data sources appear under the model and map to its concepts one by one.
+  const binds: BrainBind[] = [];
+  if (joined.size) {
+    const model = [...joined.keys()];
+    const k = Math.min(model.length, o.small ? BUD_PARENTS_SMALL : BUD_PARENTS);
+    const parents = Array.from({ length: k }, (_, i) => model[Math.floor((i * model.length) / k)]);
+    const per = clamp(Math.ceil((o.small ? BUD_TOTAL_SMALL : BUD_TOTAL) / k), 1, BUD_MAX);
+    const occupied: [number, number][] = [...model, ...(root ? [root] : [])].map((n) => [n.x, n.y]);
+    const mid: [number, number] = [
+      occupied.reduce((a, p) => a + p[0], 0) / occupied.length,
+      occupied.reduce((a, p) => a + p[1], 0) / occupied.length,
+    ];
+    const realNames = new Set(model.map((n) => n.label));
+    const freshName = (key: string, label: string) => {
+      let name = nameOf(key, label);
+      for (let i = 0; i < 40 && realNames.has(name); i++) name = nameOf(key, label);
+      return name;
+    };
+    const last = new Map<Node, number>();
+    for (let round = 0; round < per; round++)
+      for (const p of parents) {
+        const lobe = p.domain ? domains.findIndex((x) => x.key === p.domain?.key) : -1;
+        const d = lobe >= 0 ? domains[lobe] : null;
+        const [sx, sy] = budPlace([p.x, p.y], mid, occupied, o.small ? BUD_R_SMALL : BUD_R);
+        occupied.push([sx, sy]);
+        const point = nearestFree(...(lobe >= 0 ? coreOf(lobe) : STEM_TOP), (j) => lobes[j] === lobe);
+        const [gx, gy] = point >= 0 ? world(pts[point]) : [sx, sy];
+        const idx = cells.length;
+        if (point >= 0) pointOf.set(point, idx);
+        cells.push({
+          x: gx,
+          y: gy,
+          px: p.x,
+          py: p.y,
+          linked: true,
+          color: d ? d.color : C.root,
+          domain: d ? d.key : CORE_KEY,
+          label: freshName(d ? d.key : CORE_KEY, d ? d.name : 'Company'),
+          born: clock,
+          story: { x: sx, y: sy, r: STORY_CONCEPT, parent: -1, hub: false, from: p, source: false },
+        });
+        // Every second concept budding from the same concept is related to its elder sibling.
+        const before = last.get(p);
+        if (round % 2 === 1 && before !== undefined) links.push([before, idx, clock + 0.35]);
+        last.set(p, idx);
+        clock += BUD_GAP;
+      }
+    clock += DOMAIN_GAP;
+
+    // The sources stand in a row under the model; each maps to the concepts nearest it.
+    const targets: { to: number | Node; x: number; y: number }[] = [
+      ...model.map((n) => ({ to: n, x: n.x, y: n.y })),
+      ...cells.map((c, i) => ({ to: i, x: (c.story as StoryPlace).x, y: (c.story as StoryPlace).y })),
+    ];
+    const xs0 = Math.min(...occupied.map((p) => p[0])),
+      xs1 = Math.max(...occupied.map((p) => p[0])),
+      ys1 = Math.max(...occupied.map((p) => p[1]));
+    const count = Math.min(o.small ? SOURCE_COUNT_SMALL : SOURCE_COUNT, SOURCES.length);
+    const step = Math.max(SOURCE_STEP, (xs1 - xs0) / Math.max(1, count - 1));
+    const spots = Array.from({ length: count }, (_, i): [number, number] => [(xs0 + xs1) / 2 + (i - (count - 1) / 2) * step, ys1 + SOURCE_DROP]);
+    const mine = spots.map((): typeof targets => []);
+    for (const g of targets) {
+      let best = 0;
+      spots.forEach(([x, y], i) => {
+        if (Math.hypot(g.x - x, g.y - y) < Math.hypot(g.x - spots[best][0], g.y - spots[best][1])) best = i;
+      });
+      mine[best].push(g);
+    }
+    spots.forEach(([x, y], i) => {
+      const src = cells.length;
+      cells.push({
+        x,
+        y,
+        px: x,
+        py: y,
+        linked: false,
+        color: s.BRASS,
+        domain: SOURCE_KEY,
+        label: SOURCES[i],
+        born: clock,
+        story: { x, y, r: SOURCE_R, parent: -1, hub: false, from: null, source: true },
+      });
+      clock += SOURCE_LEAD;
+      const nearest = mine[i].sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y)).slice(0, BINDS_MAX);
+      for (const g of nearest) {
+        binds.push({ source: src, to: g.to, at: clock });
+        clock += BIND_GAP;
+      }
+      clock += SOURCE_TAIL;
+    });
+    clock += LINK_DRAW;
   }
   const stories = cells.length;
   const act3 = stories ? clock + HOLD : ACT_ONE;
@@ -428,7 +560,7 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     y0 = ry,
     x1 = rx,
     y1 = ry;
-  for (const c of [...cells, ...joined.values()]) {
+  for (const c of [...cells.filter((x) => !x.story?.source), ...joined.values()]) {
     x0 = Math.min(x0, c.x);
     y0 = Math.min(y0, c.y);
     x1 = Math.max(x1, c.x);
@@ -443,6 +575,7 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
     lobes: domains.length,
     storyDomains: story.length,
     links,
+    binds,
     radius: BRAIN_CELL,
     spacing: WORLD_SPACING,
     company: company?.name ?? null,
@@ -500,6 +633,85 @@ function moveIntoBrain(d: BrainDemo): void {
     n.y = from.y;
     n.tween = { fx: from.x, fy: from.y, tx: to.x, ty: to.y, start: leave, pin: true };
   }
+}
+
+/**
+ * Where a new concept stands beside the concept at `p`, `r` away: the direction around it that
+ * keeps farthest from every place in `occupied`, leaning away from the model's middle `mid`.
+ */
+export function budPlace(p: [number, number], mid: [number, number], occupied: [number, number][], r: number): [number, number] {
+  const out = Math.hypot(p[0] - mid[0], p[1] - mid[1]) < 1 ? -Math.PI / 2 : Math.atan2(p[1] - mid[1], p[0] - mid[0]);
+  let best: [number, number] = [p[0] + Math.cos(out) * r, p[1] + Math.sin(out) * r],
+    score = -Infinity;
+  for (let i = 0; i < 24; i++) {
+    const turn = Math.ceil(i / 2) * (i % 2 ? 1 : -1);
+    const a = out + (turn * Math.PI) / 12;
+    const x = p[0] + Math.cos(a) * r,
+      y = p[1] + Math.sin(a) * r;
+    let room = Infinity;
+    for (const [ox, oy] of occupied) room = Math.min(room, Math.hypot(x - ox, y - oy));
+    const sc = Math.min(room, r * 1.2) - (Math.abs(turn) * r) / 24;
+    if (sc > score) {
+      score = sc;
+      best = [x, y];
+    }
+  }
+  return best;
+}
+
+/**
+ * The free points of the brain, lobe by lobe, for the company's concepts to take. `take` gives
+ * the point of the lobe nearest its core (the lowest index among equals) that is not taken and
+ * stands at least `gap` from every point taken here, or failing that the nearest not taken. A
+ * lobe's points are ordered once, nearest first, and scanned once in all: a point passed over
+ * for being taken or too close never qualifies again. A grid of the points taken here holds the
+ * gap test to the points one cell around.
+ */
+export function joinPlaces(pts: BrainPoint[], lobes: number[], taken: Set<number>, gap: number): { take(lobe: number, ux: number, uy: number): number } {
+  const byLobe = new Map<number, number[]>();
+  pts.forEach((_, i) => {
+    const list = byLobe.get(lobes[i]);
+    if (list) list.push(i);
+    else byLobe.set(lobes[i], [i]);
+  });
+  const ordered = new Map<number, { list: number[]; next: number }>();
+  const grid = new Map<string, number[]>();
+  const cellOf = (x: number, y: number) => `${Math.floor(x / gap)},${Math.floor(y / gap)}`;
+  const apart = (j: number): boolean => {
+    const p = pts[j];
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++) {
+        const near = grid.get(cellOf(p.x + dx * gap, p.y + dy * gap));
+        if (near) for (const k of near) if (Math.hypot(p.x - pts[k].x, p.y - pts[k].y) < gap) return false;
+      }
+    return true;
+  };
+  return {
+    take(lobe: number, ux: number, uy: number): number {
+      let o = ordered.get(lobe);
+      if (!o) {
+        const dist = (i: number) => Math.hypot(pts[i].x - ux, pts[i].y - uy);
+        o = { list: (byLobe.get(lobe) ?? []).slice().sort((a, b) => dist(a) - dist(b) || a - b), next: 0 };
+        ordered.set(lobe, o);
+      }
+      let i = -1;
+      while (o.next < o.list.length) {
+        const j = o.list[o.next++];
+        if (!taken.has(j) && apart(j)) {
+          i = j;
+          break;
+        }
+      }
+      if (i < 0) i = o.list.find((j) => !taken.has(j)) ?? -1;
+      if (i < 0) return -1;
+      taken.add(i);
+      const key = cellOf(pts[i].x, pts[i].y);
+      const cell = grid.get(key);
+      if (cell) cell.push(i);
+      else grid.set(key, [i]);
+      return i;
+    },
+  };
 }
 
 /** Seconds of the demo so far: the time since the start, less the time paused. */
@@ -663,11 +875,11 @@ export function brainStep(s: SceneState, v: View, t: number): void {
  */
 function storyView(d: BrainDemo, v: View, e: number): [number, number, number] {
   const [top, bottom] = v.W > 900 ? CLEAR_WIDE : CLEAR_NARROW;
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity;
   if (d.joined.size) {
-    let x0 = Infinity,
-      y0 = Infinity,
-      x1 = -Infinity,
-      y1 = -Infinity;
     for (const n of [...d.joined.keys(), ...(d.root ? [d.root] : [])]) {
       const at = d.saved.get(n) ?? n;
       x0 = Math.min(x0, at.x - 120);
@@ -675,15 +887,14 @@ function storyView(d: BrainDemo, v: View, e: number): [number, number, number] {
       x1 = Math.max(x1, at.x + 120);
       y1 = Math.max(y1, at.y + 100);
     }
-    const ts = clamp(Math.min((v.W - panelW(v) - 80) / (x1 - x0), (v.H - top - bottom) / (y1 - y0)), STORY_MIN_ZOOM, 1);
-    return [ts, (x0 + x1) / 2, (y0 + y1) / 2];
-  }
-  const rx = d.rootAt ? d.rootAt.x : (d.box[0] + d.box[2]) / 2;
-  const ry = d.rootAt ? d.rootAt.y : (d.box[1] + d.box[3]) / 2;
-  let x0 = rx - 120,
-    y0 = ry - 120,
-    x1 = rx + 120,
+  } else {
+    const rx = d.rootAt ? d.rootAt.x : (d.box[0] + d.box[2]) / 2;
+    const ry = d.rootAt ? d.rootAt.y : (d.box[1] + d.box[3]) / 2;
+    x0 = rx - 120;
+    y0 = ry - 120;
+    x1 = rx + 120;
     y1 = ry + 120;
+  }
   const upTo = e >= d.act3 ? d.stories : Math.min(d.stories, bornBy(d, e));
   for (let i = 0; i < upTo; i++) {
     const p = d.cells[i].story as StoryPlace;

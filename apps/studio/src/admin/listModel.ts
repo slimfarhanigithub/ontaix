@@ -3,6 +3,8 @@
  * reference's `renderList`, line 921). Pure: rows in, one visible page out.
  */
 
+import { formatNumber, t } from '../i18n/i18n';
+
 export type Row = Record<string, unknown>;
 
 export interface ListQuery {
@@ -68,9 +70,9 @@ export function toggleSort(query: ListQuery, key: string | undefined): ListQuery
   return { ...query, sortKey: key, sortDir: 1 };
 }
 
-/** Counts in en-GB, the reference's `toLocaleString('en-GB')`. */
-export const en = (n: number): string => n.toLocaleString('en-GB');
+/** Counts with the portal language's grouping (`1,234` in English). */
+export const num = (n: number): string => formatNumber(n);
 
 /** `N of M`, the start of every list footer. */
 export const countText = (shown: number, total: number, footer: string | null): string =>
-  `${en(shown)} of ${en(total)}${footer !== null ? ' · ' + footer : ''}`;
+  `${t('admin.list.count', { shown: num(shown), total: num(total) })}${footer !== null ? ' · ' + footer : ''}`;

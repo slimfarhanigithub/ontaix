@@ -1,4 +1,4 @@
-"""`/admin/organizations/{organizationId}/users`: an organization's accounts, super admin only."""
+"""`/admin/organizations/{organizationId}/users`: an organization's members, super admin only."""
 
 from __future__ import annotations
 
@@ -69,6 +69,17 @@ async def update_user(
     return await organization_user_service.update_user(
         session, admin, organization_id, user_id, body
     )
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_user(
+    organization_id: uuid.UUID,
+    user_id: uuid.UUID,
+    session: PlatformSessionDependency,
+    admin: PlatformAdminDependency,
+) -> Response:
+    await organization_user_service.remove_user(session, admin, organization_id, user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{user_id}/disable", response_model=OrganizationUser)

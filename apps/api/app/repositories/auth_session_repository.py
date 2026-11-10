@@ -15,7 +15,6 @@ from sqlalchemy import Row, and_, func, literal, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.storage.account import Account
 from app.models.storage.auth_session import AuthSession
 from app.models.storage.base import SessionEndReason
 
@@ -129,15 +128,17 @@ async def create(
     client_ip: str | None,
     user_agent: str | None,
     absolute_expires_at: datetime | None = None,
+    tenant_id: uuid.UUID | None = None,
     support_tenant_id: uuid.UUID | None = None,
     acting_tenant_id: uuid.UUID | None = None,
     acting_until: datetime | None = None,
 ) -> AuthSession:
-    """A new live session. Without `absolute_expires_at` it ends 12 hours from now; a rotated
-    session passes its predecessor's, so rotation never extends a session. A support session
-    lasts 60 minutes, never past the absolute expiry. An acting session (a super admin inside
-    `acting_tenant_id`) lasts 60 minutes too, or until `acting_until` when a rotated session
-    passes its predecessor's, never past the absolute expiry."""
+    """A new live session, inside the organization `tenant_id` for a member. Without
+    `absolute_expires_at` it ends 12 hours from now; a rotated session passes its predecessor's,
+    so rotation never extends a session. A support session lasts 60 minutes, never past the
+    absolute expiry. An acting session (a super admin inside `acting_tenant_id`) lasts 60
+    minutes too, or until `acting_until` when a rotated session passes its predecessor's, never
+    past the absolute expiry."""
     assert support_tenant_id is None or acting_tenant_id is None
     absolute = (
         func.now() + text(f"interval '{ABSOLUTE_TIMEOUT}'")
@@ -164,6 +165,7 @@ async def create(
             token_hash=token_hash,
             csrf_token=csrf_token,
             account_id=account_id,
+            tenant_id=tenant_id,
             support_tenant_id=support_tenant_id,
             support_until=support_until,
             acting_tenant_id=acting_tenant_id,
@@ -212,15 +214,33 @@ async def end_for_account(
     return [EndedSession(*row) for row in result.all()]
 
 
+async def end_for_membership(
+    session: AsyncSession, account_id: uuid.UUID, tenant_id: uuid.UUID, reason: SessionEndReason
+) -> int:
+    """End every live session of the account inside the organization; how many ended. The
+    account's sessions inside its other organizations, and those inside none, stay."""
+    result = await session.execute(
+        update(AuthSession)
+        .where(
+            AuthSession.account_id == account_id,
+            AuthSession.tenant_id == tenant_id,
+            AuthSession.ended_at.is_(None),
+        )
+        .values(ended_at=func.now(), end_reason=reason)
+        .returning(AuthSession.id)
+        .execution_options(synchronize_session=False)
+    )
+    return len(result.all())
+
+
 async def end_for_tenant(session: AsyncSession, tenant_id: uuid.UUID) -> list[EndedSession]:
-    """End every live session of the organization's accounts, every support session in it and
+    """End every member session inside the organization, every support session in it and
     every super admin session acting inside it; the sessions ended."""
-    member_accounts = select(Account.id).where(Account.tenant_id == tenant_id)
     result = await session.execute(
         update(AuthSession)
         .where(
             AuthSession.ended_at.is_(None),
-            AuthSession.account_id.in_(member_accounts)
+            (AuthSession.tenant_id == tenant_id)
             | (AuthSession.support_tenant_id == tenant_id)
             | (AuthSession.acting_tenant_id == tenant_id),
         )

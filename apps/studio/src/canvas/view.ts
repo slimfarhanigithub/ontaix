@@ -8,6 +8,9 @@ import type { CanvasTheme } from './themes';
 import { canvasTheme } from './themes';
 import type { Cam } from './types';
 
+/** A rectangle in world units: left, top, right, bottom. */
+export type WorldRect = [number, number, number, number];
+
 export interface View {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -17,6 +20,8 @@ export interface View {
   H: number;
   DPR: number;
   TH: CanvasTheme;
+  /** The world rectangle the whole canvas shows under the last world transform. */
+  world: WorldRect;
   /** True while the changes panel is hidden (`body.panel-off`). */
   panelOff: () => boolean;
   /** Viewport size in CSS pixels. */
@@ -37,6 +42,7 @@ export function createView(canvas: HTMLCanvasElement): View {
     H: 0,
     DPR: 1,
     TH: canvasTheme(),
+    world: [0, 0, 0, 0],
     panelOff: () => document.body.classList.contains('panel-off'),
     viewport: () => [innerWidth, innerHeight],
   };
@@ -59,15 +65,36 @@ export const panelW = (v: View): number => (v.W > 900 && !v.panelOff() ? 320 : 0
 /** Horizontal centre of the free canvas area. */
 export const CX = (v: View): number => (v.W - panelW(v)) / 2;
 
+/**
+ * The camera eases toward its target without ever quite reaching it, and the cells it fits
+ * settle the same way, so the camera keeps changing by amounts far below a pixel. The transform
+ * is set on a grid of this step, in zoom and in world units, so that a camera within the step of
+ * where it was draws with exactly the same transform: the browser then reuses every glyph and
+ * every text shape it rasterised for the last frame instead of drawing them all again. The step
+ * moves nothing by more than a few thousandths of a pixel.
+ */
+const TRANSFORM_STEP = 1e-6;
+const onStep = (value: number): number => Math.round(value / TRANSFORM_STEP) * TRANSFORM_STEP;
+
 export function worldTransform(v: View, cam: Cam): void {
   const { ctx } = v;
+  const s = onStep(cam.s),
+    x = onStep(cam.x),
+    y = onStep(cam.y);
   ctx.setTransform(v.DPR, 0, 0, v.DPR, 0, 0);
   ctx.translate(CX(v), v.H / 2);
-  ctx.scale(cam.s, cam.s);
-  ctx.translate(-cam.x, -cam.y);
+  ctx.scale(s, s);
+  ctx.translate(-x, -y);
+  const [x0, y0] = toWorld(v, cam, 0, 0),
+    [x1, y1] = toWorld(v, cam, v.W, v.H);
+  v.world = [x0, y0, x1, y1];
 }
 
 export const toWorld = (v: View, cam: Cam, sx: number, sy: number): [number, number] => [
   (sx - CX(v)) / cam.s + cam.x,
   (sy - v.H / 2) / cam.s + cam.y,
 ];
+
+/** True when a box in world units, grown by `pad` on every side, reaches the canvas. */
+export const inView = (v: View, x0: number, y0: number, x1: number, y1: number, pad: number): boolean =>
+  x1 + pad >= v.world[0] && x0 - pad <= v.world[2] && y1 + pad >= v.world[1] && y0 - pad <= v.world[3];

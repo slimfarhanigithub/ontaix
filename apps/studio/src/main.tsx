@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 
 import { API_BASE } from './api/client';
 import { App } from './App';
+import { t } from './i18n/i18n';
+import { languageStore, startLanguage } from './i18n/language';
 import '@fontsource-variable/hanken-grotesk';
 import '@fontsource-variable/source-serif-4';
 import '@fontsource/ibm-plex-mono/400.css';
@@ -25,7 +27,15 @@ import './styles/admin-rows.css';
  */
 const TEST_HOOKS = import.meta.env.DEV || import.meta.env.VITE_ONTAIX_TEST_HOOKS === 'true';
 
+/** The tab title follows the portal language; `index.html` holds its English. */
+function followTitle(): void {
+  document.title = t('common.pageTitle');
+}
+
 async function start(): Promise<void> {
+  startLanguage();
+  languageStore.subscribe(followTitle);
+  followTitle();
   let mock = false;
   if (TEST_HOOKS) {
     const params = new URLSearchParams(location.search);

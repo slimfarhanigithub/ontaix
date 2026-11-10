@@ -250,6 +250,76 @@ def test_upgrade_to_0012_moves_tenants_on_the_old_defaults_to_the_light_design_s
     assert colours[(custom, "sales")] == "#abcdef"
 
 
+def test_upgrade_to_0014_moves_member_accounts_into_memberships(
+    scratch_databases: tuple[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A member account at 0013 becomes a membership of its organization carrying the account's
+    disabled state, its directory user's subject names the organization, its live session is
+    placed inside the organization, and a platform account stays platform with no membership."""
+    migrated_url, _ = scratch_databases
+    monkeypatch.setenv("ONTAIX_SCHEMA_SQL", str(OLD_SCHEMA))
+    _upgrade(migrated_url, "0001")
+    monkeypatch.delenv("ONTAIX_SCHEMA_SQL")
+    _upgrade(migrated_url, "0013")
+    with psycopg.connect(migrated_url, autocommit=True) as conn:
+        conn.execute("SET search_path TO ontaix, public")
+        tenant_id = conn.execute(
+            "INSERT INTO tenant (slug, name) VALUES ('old', 'Old') RETURNING id"
+        ).fetchone()[0]
+        account_id = uuid.uuid4()
+        user_id = conn.execute(
+            "INSERT INTO app_user (tenant_id, issuer, subject, email, name)"
+            " VALUES (%s, 'local', %s, 'member@old.test', 'Member') RETURNING id",
+            (tenant_id, str(account_id)),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO account (id, email, name, tenant_id, user_id, disabled_at)"
+            " VALUES (%s, 'member@old.test', 'Member', %s, %s, now())",
+            (account_id, tenant_id, user_id),
+        )
+        root_id = conn.execute(
+            "INSERT INTO account (email, name) VALUES ('root@old.test', 'Root') RETURNING id"
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO platform_role_assignment (account_id, role) VALUES (%s, 'super_admin')",
+            (root_id,),
+        )
+        conn.execute(
+            "INSERT INTO auth_session (token_hash, csrf_token, account_id, idle_expires_at,"
+            " absolute_expires_at) VALUES (sha256('t'::bytea), repeat('c', 43), %s,"
+            " now() + interval '30 minutes', now() + interval '12 hours')",
+            (account_id,),
+        )
+    _upgrade(migrated_url, "head")
+    with psycopg.connect(migrated_url) as conn:
+        conn.execute("SET search_path TO ontaix, public")
+        memberships = conn.execute(
+            "SELECT account_id, tenant_id, user_id, disabled_at IS NOT NULL, removed_at"
+            " FROM account_membership"
+        ).fetchall()
+        accounts = conn.execute(
+            "SELECT email, is_platform, disabled_at FROM account ORDER BY email"
+        ).fetchall()
+        subject = conn.execute("SELECT subject FROM app_user WHERE id = %s", (user_id,)).fetchone()[
+            0
+        ]
+        session_tenant = conn.execute(
+            "SELECT tenant_id FROM auth_session WHERE account_id = %s", (account_id,)
+        ).fetchone()[0]
+        columns = conn.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_schema = 'ontaix'"
+            " AND table_name = 'account' AND column_name IN ('tenant_id', 'user_id')"
+        ).fetchall()
+        role = conn.execute(
+            "SELECT count(*) FROM platform_role_assignment WHERE account_id = %s", (root_id,)
+        ).fetchone()[0]
+    assert memberships == [(account_id, tenant_id, user_id, True, None)]
+    assert accounts == [("member@old.test", False, None), ("root@old.test", True, None)]
+    assert subject == f"{account_id}:{tenant_id}"
+    assert session_tenant == tenant_id
+    assert columns == [] and role == 1
+
+
 def _upgrade(url: str, target: str) -> None:
     config = Config(str(API_ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(API_ROOT / "app" / "migrations"))

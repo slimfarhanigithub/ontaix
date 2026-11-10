@@ -7,6 +7,7 @@
 import { deleteNodeDialog, moveDialog, renameDialog } from '../admin/actions';
 import { canDeleteFromDrawer } from '../admin/conceptDeletion';
 import type { Node } from '../canvas/types';
+import { t, useT } from '../i18n/i18n';
 import type { store } from '../store/store';
 import { useStore } from './dom';
 import { canExpandFromDrawer, openExpandDialog } from './ExpandDialog';
@@ -20,7 +21,7 @@ export function moreMenuItems(st: typeof store, n: Node, expanding: boolean): Mo
   if (n.kind !== 'source')
     items.push({
       id: 'drGrow',
-      label: 'Grow a concept from it',
+      label: t('shell.drawer.grow'),
       icon: 'grow',
       group: 1,
       act: () => {
@@ -28,18 +29,19 @@ export function moreMenuItems(st: typeof store, n: Node, expanding: boolean): Mo
         st.openNewBox(n, (v ? v.W : innerWidth) * 0.35, (v ? v.H : innerHeight) * 0.4);
       },
     });
-  if (n.kind === 'concept') items.push({ id: 'drLineage', label: 'Lineage', icon: 'lineage', group: 1, checked: st.s.lineageNode === n, act: () => st.toggleLineage() });
-  if (canExpandFromDrawer(n)) items.push({ id: 'drExpand', label: 'Expand…', icon: 'expand', group: 1, waiting: expanding, act: () => openExpandDialog(n) });
+  if (n.kind === 'concept') items.push({ id: 'drLineage', label: t('shell.drawer.lineage'), icon: 'lineage', group: 1, checked: st.s.lineageNode === n, act: () => st.toggleLineage() });
+  if (canExpandFromDrawer(n)) items.push({ id: 'drExpand', label: t('shell.drawer.expand'), icon: 'expand', group: 1, waiting: expanding, act: () => openExpandDialog(n) });
   if (canDeleteFromDrawer(n)) {
-    items.push({ id: 'drRename', label: 'Rename…', icon: 'rename', group: 2, act: () => renameDialog(n) });
-    items.push({ id: 'drMove', label: 'Move to domain…', icon: 'move', group: 2, act: () => moveDialog(n) });
-    items.push({ id: 'drDelete', label: 'Delete', icon: 'delete', group: 3, danger: true, act: () => deleteNodeDialog(n) });
+    items.push({ id: 'drRename', label: t('shell.drawer.rename'), icon: 'rename', group: 2, act: () => renameDialog(n) });
+    items.push({ id: 'drMove', label: t('shell.drawer.move'), icon: 'move', group: 2, act: () => moveDialog(n) });
+    items.push({ id: 'drDelete', label: t('common.delete'), icon: 'delete', group: 3, danger: true, act: () => deleteNodeDialog(n) });
   }
   return items;
 }
 
 export function DrawerMoreMenu({ node, expanding }: { node: Node; expanding: boolean }) {
   const st = useStore();
+  const t = useT();
   const items = moreMenuItems(st, node, expanding);
-  return <MoreMenu id="drMore" menuId="drMoreMenu" label="More actions" items={items} oxNew waiting={expanding} skipAnimation={() => st.s.SKIP} />;
+  return <MoreMenu id="drMore" menuId="drMoreMenu" label={t('common.moreActions')} items={items} oxNew waiting={expanding} skipAnimation={() => st.s.SKIP} />;
 }

@@ -987,11 +987,27 @@ export interface OrganizationRef {
   slug: string;
 }
 
-/** `GET /auth/session`: the browser's live session; a member names its organization, a platform account none. */
+/**
+ * `GET /auth/session`: the browser's live session. A member names the organization it acts in,
+ * null until one of several is chosen; a platform account names none.
+ */
+/** The portal languages an account may choose. */
+export type PortalLanguage = 'en' | 'fr' | 'de';
+
+/** The signed-in account; `language` is its portal language, null until it chooses one. */
+export interface SessionAccount {
+  id: string;
+  email: string;
+  name: string;
+  language?: PortalLanguage | null;
+}
+
 export interface Session {
   kind: 'member' | 'platform';
-  account: { id: string; email: string; name: string };
+  account: SessionAccount;
   organization?: OrganizationRef | null;
+  /** The account's active memberships in enabled organizations; null or absent for a platform account. */
+  organizations?: OrganizationRef[] | null;
   userId?: string | null;
   platformRoles?: 'super_admin'[];
   /** The open read-only support session of a super admin, else null. */
@@ -1008,6 +1024,16 @@ export interface Session {
 export interface SignInRequest {
   email: string;
   password: string;
+}
+
+/** `PUT /auth/session/organization`: the organization a member session of several enters. */
+export interface OrganizationChoice {
+  organizationId: string;
+}
+
+/** `PUT /auth/session/language`: the account's portal language; null returns it to the browser's. */
+export interface LanguageChoice {
+  language: PortalLanguage | null;
 }
 
 export interface PasswordChange {
@@ -1074,6 +1100,12 @@ export interface OrganizationUserUpdate {
   groupIds?: string[];
 }
 
+/** `POST /admin/organizations/{organizationId}/memberships`: an existing account joins the organization. */
+export interface MembershipCreate {
+  email: string;
+  groupIds: string[];
+}
+
 export interface SupportSessionStart {
   reason: string;
 }
@@ -1091,6 +1123,9 @@ export type PlatformAuditAction =
   | 'account_updated'
   | 'account_disabled'
   | 'account_enabled'
+  | 'membership_added'
+  | 'membership_removed'
+  | 'organization_chosen'
   | 'organization_created'
   | 'organization_renamed'
   | 'organization_company_mode'

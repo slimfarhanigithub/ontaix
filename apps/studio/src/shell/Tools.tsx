@@ -10,6 +10,7 @@
 import { useEffect, useRef } from 'react';
 
 import { BrainButton } from '../demo/BrainControls';
+import { useT } from '../i18n/i18n';
 import { importFile } from '../teach/importFile';
 import { openAddCompany } from './AddCompany';
 import { useDelayed } from './busy';
@@ -18,6 +19,7 @@ import { useStore } from './dom';
 
 export function Tools() {
   const st = useStore();
+  const t = useT();
   const settings = st.ui.settings;
   const file = useRef<HTMLInputElement>(null);
   const importWait = useDelayed(st.ui.importing);
@@ -42,19 +44,19 @@ export function Tools() {
       <button
         type="button"
         id="addCo"
-        title="Add another company to the same view"
+        title={t('shell.tools.addCompanyTitle')}
         style={{ display: settings && (!settings.multiCompany || settings.companyCreation === false) ? 'none' : undefined }}
         onClick={openAddCompany}
       >
         <svg viewBox="0 0 16 16">
           <path d="M8 3v10M3 8h10" />
         </svg>
-        Company
+        {t('shell.tools.company')}
       </button>
       <button
         type="button"
         id="importBtn"
-        title="Import a document and detect concepts and relations (I)"
+        title={t('shell.tools.importTitle')}
         style={{ display: settings && !settings.importDocs ? 'none' : undefined }}
         disabled={st.ui.importing}
         aria-busy={importWait ? 'true' : undefined}
@@ -67,7 +69,7 @@ export function Tools() {
             <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10" />
           </svg>
         )}
-        {st.ui.importing ? 'Importing…' : 'Import'}
+        {st.ui.importing ? t('shell.tools.importing') : t('shell.tools.import')}
       </button>
       <input
         type="file"
@@ -89,7 +91,7 @@ export function Tools() {
           <circle cx="13" cy="12" r="1.6" />
           <path d="M8 4.6v3M8 7.6 4 10.6M8 7.6l4 3" />
         </svg>
-        Arrange
+        {t('shell.tools.arrange')}
       </button>
       <BrainButton />
     </div>

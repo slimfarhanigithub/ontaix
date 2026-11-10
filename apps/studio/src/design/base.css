@@ -35,6 +35,15 @@ body {
 }
 [data-focus-ring='none']:focus-visible { outline: none; }
 
+/*
+ * Component buttons reset every property with `all: unset`, which would also drop the ring, so
+ * buttons get it with `!important`. Menu items show focus with their background instead.
+ */
+:is(button, [role='button']):not([data-focus-ring='none'], [role^='menuitem']):focus-visible {
+  outline: 2.5px solid var(--link) !important;
+  outline-offset: 2px !important;
+}
+
 ::selection {
   background: var(--accent-soft);
   color: var(--accent-text);

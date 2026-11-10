@@ -1,18 +1,22 @@
-"""Sign-in, sign-out, the current session and password change (platform role).
+"""Sign-in, sign-out, the current session, the choice of an organization, the portal language
+and password change (platform role).
 
 Sign-in checks, in order: the client IP's and the email's throttle (`429 sign_in_locked`), then
 the argon2id verification. An unknown email is verified against a dummy hash and a disabled
 account or organization is verified like any other, so a wrong password, an unknown email and a
 disabled account or organization answer the same `401 invalid_credentials` after the same work.
 Five failures within 15 minutes lock that email key and that IP key for 15 minutes, whether or
-not an account has the email. Every attempt is audited; no entry names an email that matches no
-account.
+not an account has the email. After the password check a member enters its one active
+organization directly, gets a session inside none when it has several (it then chooses one),
+and is refused with `403 no_organization` when it belongs to none. Every attempt is audited; no
+entry names an email that matches no account.
 """
 
 from __future__ import annotations
 
 import logging
 import math
+import uuid
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,13 +24,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.api.session import Session as SessionDto
 from app.models.storage.account import Account
 from app.models.storage.base import PasswordSetReason, SessionEndReason, ThrottleKeyKind
+from app.models.storage.tenant import Tenant
 from app.repositories import (
+    account_membership_repository,
     account_repository,
     app_user_repository,
     auth_session_repository,
     password_credential_repository,
     sign_in_throttle_repository,
-    tenant_repository,
 )
 from app.services import (
     organization_access_audit_service,
@@ -37,13 +42,19 @@ from app.services import (
 )
 from app.services.platform_audit_service import OrganizationCopy, member_actor
 from app.services.session_service import IssuedSession, LiveSession
-from app.utilities.problems import ProblemError
+from app.utilities.language import LANGUAGE_NAMES, Language
+from app.utilities.problems import ProblemError, conflict, forbidden
 from app.utilities.session_tokens import is_well_formed, key_digest, normalize_email, token_digest
 
 logger = logging.getLogger(__name__)
 
 INVALID_CREDENTIALS = "Email or password is incorrect."
 CURRENT_PASSWORD_INCORRECT = "Current password is incorrect."
+NO_ORGANIZATION = "Your account belongs to no organization. Ask your administrator."
+NOT_YOUR_ORGANIZATION = "Choose one of your organizations"
+PLATFORM_HAS_NO_ORGANIZATION = "A platform account enters an organization from the platform portal"
+SESSION_CHANGED_DETAIL = "The session changed while the request ran; reload the page and try again"
+ORGANIZATION_CHOSEN = "organization_chosen"
 
 
 @dataclass(frozen=True)
@@ -61,7 +72,8 @@ async def sign_in(
     attempt: Attempt,
     presented_token: str | None,
 ) -> IssuedSession:
-    """A new session for valid credentials; the presented session, if any, ends."""
+    """A new session for valid credentials; the presented session, if any, ends. A member's
+    session is inside its one active organization, or inside none when it has several."""
     normalized = normalize_email(email)
     email_key = key_digest(normalized)
     ip_key = key_digest(attempt.client_ip) if attempt.client_ip else None
@@ -75,7 +87,13 @@ async def sign_in(
     verified = await password_hash_service.verify_password(
         credential.hash if credential else None, password
     )
-    if not verified or account is None or not await _may_sign_in(session, account):
+    tenants = await _active_tenants(session, account) if account is not None else []
+    if (
+        not verified
+        or account is None
+        or account.disabled_at is not None
+        or (not account.is_platform and not tenants and await _has_membership(session, account))
+    ):
         now_locked = await _record_failure(session, email_key, ip_key)
         await _audit_attempt(session, "sign_in_failed", account, attempt, "Sign-in failed")
         if now_locked:
@@ -84,6 +102,12 @@ async def sign_in(
             )
         await session.commit()
         raise ProblemError(401, "invalid_credentials", INVALID_CREDENTIALS)
+    if not account.is_platform and not tenants:
+        await _audit_attempt(
+            session, "sign_in_failed", account, attempt, "Sign-in refused: no organization"
+        )
+        await session.commit()
+        raise ProblemError(403, "no_organization", NO_ORGANIZATION)
     assert credential is not None
     await sign_in_throttle_repository.clear(session, ThrottleKeyKind.EMAIL, email_key)
     if password_hash_service.needs_rehash(credential.hash):
@@ -91,13 +115,58 @@ async def sign_in(
             session, account.id, await password_hash_service.hash_password(password)
         )
     await _end_presented(session, presented_token)
+    tenant_id = tenants[0].id if len(tenants) == 1 else None
     issued = await session_service.issue(
-        session, account, client_ip=attempt.client_ip, user_agent=attempt.user_agent
+        session,
+        account,
+        client_ip=attempt.client_ip,
+        user_agent=attempt.user_agent,
+        tenant_id=tenant_id,
     )
     await account_repository.touch_sign_in(session, account.id)
-    if account.tenant_id is not None and account.user_id is not None:
-        await app_user_repository.touch_login(session, account.tenant_id, account.user_id)
-    await _audit_attempt(session, "sign_in", account, attempt, "Signed in", ok=True)
+    if tenant_id is not None:
+        await _touch_login(session, account, tenant_id)
+    await _audit_attempt(
+        session, "sign_in", account, attempt, "Signed in", ok=True, tenant_id=tenant_id
+    )
+    return issued
+
+
+async def choose_organization(
+    session: AsyncSession,
+    live: LiveSession,
+    tenant_id: uuid.UUID,
+    attempt: Attempt,
+) -> IssuedSession:
+    """A new token inside one of the member's organizations, chosen after a sign-in with
+    several or to switch from the one the session is inside; the presented session ends."""
+    account = live.account
+    if account.is_platform:
+        raise forbidden(PLATFORM_HAS_NO_ORGANIZATION)
+    tenant = next((t for t in await _active_tenants(session, account) if t.id == tenant_id), None)
+    if tenant is None:
+        raise forbidden(NOT_YOUR_ORGANIZATION)
+    ended = await auth_session_repository.end(session, live.row.id, SessionEndReason.ACCESS_CHANGED)
+    if not ended:
+        raise conflict("session_changed", SESSION_CHANGED_DETAIL)
+    issued = await session_service.issue(
+        session,
+        account,
+        client_ip=attempt.client_ip,
+        user_agent=attempt.user_agent,
+        rotates=live.row,
+        tenant_id=tenant.id,
+    )
+    await _touch_login(session, account, tenant.id)
+    await _audit_attempt(
+        session,
+        ORGANIZATION_CHOSEN,
+        account,
+        attempt,
+        f"Entered {tenant.name}",
+        ok=True,
+        tenant_id=tenant.id,
+    )
     return issued
 
 
@@ -106,7 +175,15 @@ async def sign_out(session: AsyncSession, live: LiveSession | None, attempt: Att
     if live is None:
         return
     await auth_session_repository.end(session, live.row.id, SessionEndReason.SIGN_OUT)
-    await _audit_attempt(session, "sign_out", live.account, attempt, "Signed out", ok=True)
+    await _audit_attempt(
+        session,
+        "sign_out",
+        live.account,
+        attempt,
+        "Signed out",
+        ok=True,
+        tenant_id=live.row.tenant_id,
+    )
     if live.resolved.acting_tenant_id is not None:
         await organization_access_audit_service.audit_exit(
             session,
@@ -134,7 +211,9 @@ async def record_expired(session: AsyncSession, token: str | None, attempt: Atte
         return False
     account = await account_repository.get(session, row.account_id)
     if account is not None:
-        await _audit_attempt(session, "session_expired", account, attempt, "Session expired")
+        await _audit_attempt(
+            session, "session_expired", account, attempt, "Session expired", tenant_id=row.tenant_id
+        )
         if row.acting_tenant_id is not None:
             await organization_access_audit_service.audit_exit(
                 session,
@@ -158,6 +237,7 @@ async def change_password(
     """Change the signed-in account's own password. Every other session ends and this one gets
     a new token; the forced change, if any, is lifted."""
     account = live.account
+    tenant_id = live.row.tenant_id
     email_key = key_digest(account.email)
     locked = await sign_in_throttle_repository.seconds_locked(
         session, ThrottleKeyKind.EMAIL, email_key
@@ -175,6 +255,7 @@ async def change_password(
             account,
             attempt,
             "Password change refused: current password incorrect",
+            tenant_id=tenant_id,
         )
         await session.commit()
         raise ProblemError(
@@ -186,7 +267,12 @@ async def change_password(
     refusal = await password_policy_service.refusal(new_password, account.email, credential.hash)
     if refusal is not None:
         await _audit_attempt(
-            session, "password_change_failed", account, attempt, "Password change refused: policy"
+            session,
+            "password_change_failed",
+            account,
+            attempt,
+            "Password change refused: policy",
+            tenant_id=tenant_id,
         )
         await session.commit()
         raise password_rejected(refusal, "newPassword")
@@ -217,12 +303,41 @@ async def change_password(
         client_ip=attempt.client_ip,
         user_agent=attempt.user_agent,
         rotates=live.row,
+        tenant_id=tenant_id,
         support_tenant_id=live.resolved.support_tenant_id,
         acting_tenant_id=acting_tenant_id,
         acting_until=live.row.acting_until if acting_tenant_id is not None else None,
     )
-    await _audit_attempt(session, "password_changed", account, attempt, "Password changed", ok=True)
+    await _audit_attempt(
+        session,
+        "password_changed",
+        account,
+        attempt,
+        "Password changed",
+        ok=True,
+        tenant_id=tenant_id,
+    )
     return issued
+
+
+async def set_language(
+    session: AsyncSession, live: LiveSession, language: Language | None, attempt: Attempt
+) -> SessionDto:
+    """The signed-in account's own portal language, or None to follow the browser; the session
+    keeps its token. Audited as `account_updated`."""
+    account = live.account
+    await account_repository.set_language(session, account.id, language)
+    updated = await account_repository.get(session, account.id)
+    assert updated is not None
+    what = (
+        f"Language set to {LANGUAGE_NAMES[language]}"
+        if language is not None
+        else "Language follows the browser"
+    )
+    await _audit_attempt(
+        session, "account_updated", updated, attempt, what, ok=True, tenant_id=live.row.tenant_id
+    )
+    return await session_service.describe(session, live.row, updated)
 
 
 def password_rejected(detail: str, field: str) -> ProblemError:
@@ -231,13 +346,23 @@ def password_rejected(detail: str, field: str) -> ProblemError:
     )
 
 
-async def _may_sign_in(session: AsyncSession, account: Account) -> bool:
-    if account.disabled_at is not None:
-        return False
-    if account.tenant_id is None:
-        return True
-    tenant = await tenant_repository.get(session, account.tenant_id)
-    return tenant is not None and tenant.disabled_at is None
+async def _active_tenants(session: AsyncSession, account: Account) -> list[Tenant]:
+    """The enabled organizations the member may enter; none for a platform account."""
+    if account.is_platform:
+        return []
+    return await account_membership_repository.active_tenants(session, account.id)
+
+
+async def _has_membership(session: AsyncSession, account: Account) -> bool:
+    """Whether the account belongs to any organization, its memberships there disabled or its
+    organizations disabled or not; a removed membership does not count."""
+    return bool(await account_membership_repository.list_for_account(session, account.id))
+
+
+async def _touch_login(session: AsyncSession, account: Account, tenant_id: uuid.UUID) -> None:
+    membership = await account_membership_repository.get(session, account.id, tenant_id)
+    if membership is not None:
+        await app_user_repository.touch_login(session, tenant_id, membership.user_id)
 
 
 async def _seconds_locked(session: AsyncSession, email_key: bytes, ip_key: bytes | None) -> int:
@@ -293,16 +418,12 @@ async def _audit_attempt(
     what: str,
     *,
     ok: bool = False,
+    tenant_id: uuid.UUID | None = None,
 ) -> None:
-    """One platform entry, plus the organization's `auth` entry for a member's account. An
-    attempt with an email no account has names no one."""
-    copy = None
-    if account is not None and account.tenant_id is not None and account.user_id is not None:
-        copy = OrganizationCopy(
-            tenant_id=account.tenant_id,
-            actor=member_actor(account.user_id, account.name),
-            kind="auth",
-        )
+    """One platform entry, plus the organization's `auth` entry for a member's account: in the
+    organization the session is inside (`tenant_id`) when there is one, else in every
+    organization the member belongs to. An attempt with an email no account has names no one."""
+    copies = await _organization_copies(session, account, tenant_id)
     await platform_audit_service.record(
         session,
         action,
@@ -310,7 +431,24 @@ async def _audit_attempt(
         what,
         actor_account_id=account.id if account is not None else None,
         target_account_id=account.id if account is not None else None,
-        target_tenant_id=account.tenant_id if account is not None else None,
+        target_tenant_id=tenant_id,
         client_ip=attempt.client_ip,
-        organization=copy,
     )
+    for copy in copies:
+        await platform_audit_service.mirror(session, copy, what, ok)
+
+
+async def _organization_copies(
+    session: AsyncSession, account: Account | None, tenant_id: uuid.UUID | None
+) -> list[OrganizationCopy]:
+    if account is None or account.is_platform:
+        return []
+    return [
+        OrganizationCopy(
+            tenant_id=membership.tenant_id, actor=member_actor(user.id, user.name), kind="auth"
+        )
+        for membership, user in await account_membership_repository.list_users_for_account(
+            session, account.id
+        )
+        if tenant_id is None or membership.tenant_id == tenant_id
+    ]

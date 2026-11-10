@@ -1,10 +1,16 @@
-"""An organization's accounts for the platform portal: list, create, edit, disable, enable and
-reset a password (platform role, super admin only).
+"""An organization's members for the platform portal: list, create, add an existing account,
+edit, remove, disable, enable and reset a password (platform role, super admin only).
 
-An account is created with its directory user (issuer `local`, subject the account id) and an
-initial password the user must change at first sign-in. The password is never returned, logged
-or audited. Group memberships are changed like the Groups page does: immediately, and audited
-as kind `groups` in the organization's log.
+A member is an account's membership of the organization, through the organization's directory
+user (issuer `local`, subject `<account id>:<tenant id>`). Add user creates the account, the
+user and the membership with an initial password the holder must change at first sign-in; Add
+existing account adds a membership for an account that already exists, and gives back the same
+directory user to an account removed from the organization earlier. Remove keeps the directory
+user for history, drops the groups and ends the account's sessions inside this organization.
+Disable and enable act on the membership alone; a password reset is for the account, so for
+every organization of it. The password is never returned, logged or audited. Group memberships
+are changed like the Groups page does: immediately, and audited as kind `groups` in the
+organization's log.
 """
 
 from __future__ import annotations
@@ -20,16 +26,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import PlatformAdmin
 from app.models.api.organization_user import (
     GroupRef,
+    MembershipCreate,
     OrganizationUser,
     OrganizationUserCreate,
     OrganizationUserUpdate,
 )
 from app.models.api.page import PageOf
 from app.models.storage.account import Account
+from app.models.storage.account_membership import AccountMembership
 from app.models.storage.app_user import AppUser
 from app.models.storage.base import PasswordSetReason, SessionEndReason, ThrottleKeyKind
+from app.models.storage.tenant import Tenant
 from app.models.storage.user_group import UserGroup
 from app.repositories import (
+    account_membership_repository,
     account_repository,
     app_user_repository,
     auth_session_repository,
@@ -59,9 +69,16 @@ SORTABLE = ("name", "email", "lastSignInAt")
 LOCAL_ISSUER = "local"
 EMAIL_SHAPE = re.compile(r"^[^@\s]+@[^@\s]+$")
 
-DUPLICATE_EMAIL = "An account with this email already exists"
+EMAIL_TAKEN = (
+    "An account with this email already exists; add it to the organization with Add existing"
+    " account"
+)
+DUPLICATE_EMAIL = "A user of the organization already has this email"
+ACCOUNT_NOT_FOUND = "No member account has this email"
+ALREADY_MEMBER = "This account is already a member of the organization"
 ORGANIZATION_DISABLED = "The organization is disabled; enable it first"
 FOREIGN_GROUP = "Choose groups of this organization only"
+NO_SUCH_MEMBER = "No such member in this organization"
 
 
 async def list_users(
@@ -102,15 +119,14 @@ async def get_user(
     for user in await _users(session, tenant_id):
         if user.id == user_id:
             return user
-    raise ProblemError(404, "not_found", "No such account in this organization")
+    raise ProblemError(404, "not_found", NO_SUCH_MEMBER)
 
 
 async def create_user(
     session: AsyncSession, admin: PlatformAdmin, tenant_id: uuid.UUID, body: OrganizationUserCreate
 ) -> OrganizationUser:
-    tenant = await require(session, tenant_id)
-    if tenant.disabled_at is not None:
-        raise conflict("organization_disabled", ORGANIZATION_DISABLED)
+    """A new account with its first membership, directory user and initial password."""
+    tenant = await _enabled(session, tenant_id)
     email = normalize_email(body.email)
     if not EMAIL_SHAPE.match(email):
         raise ProblemError(
@@ -124,33 +140,23 @@ async def create_user(
     refusal = await password_policy_service.refusal(body.password, email)
     if refusal is not None:
         raise password_rejected(refusal, "password")
-    if await account_repository.get_by_email(
-        session, email
-    ) is not None or await app_user_repository.email_taken(session, tenant_id, email):
+    if await account_repository.get_by_email(session, email) is not None:
+        raise conflict("email_taken", EMAIL_TAKEN)
+    if await app_user_repository.email_taken(session, tenant_id, email):
         raise conflict("duplicate_email", DUPLICATE_EMAIL)
     password_hash = await password_hash_service.hash_password(body.password)
     account_id = uuid.uuid4()
     try:
         async with session.begin_nested():
-            user = await app_user_repository.create(
-                session,
-                tenant_id=tenant_id,
-                issuer=LOCAL_ISSUER,
-                subject=str(account_id),
-                email=email,
-                name=name,
-                department=_department(body.department),
-                company_id=None,
-            )
             account = await account_repository.create(
                 session,
                 account_id=account_id,
                 email=email,
                 name=name,
-                tenant_id=tenant_id,
-                user_id=user.id,
+                is_platform=False,
                 created_by=admin.account_id,
             )
+            user = await _join(session, account, tenant, name, _department(body.department))
     except IntegrityError as exc:
         raise conflict("duplicate_email", DUPLICATE_EMAIL) from exc
     await password_credential_repository.put(
@@ -172,6 +178,80 @@ async def create_user(
     return await get_user(session, tenant_id, user.id)
 
 
+async def add_membership(
+    session: AsyncSession, admin: PlatformAdmin, tenant_id: uuid.UUID, body: MembershipCreate
+) -> OrganizationUser:
+    """A membership of the organization for an existing member account. An account removed
+    from the organization earlier gets its membership and directory user back, with the groups
+    chosen now."""
+    tenant = await _enabled(session, tenant_id)
+    email = normalize_email(body.email)
+    groups = await _groups_of(session, tenant_id, body.group_ids)
+    account = await account_repository.get_by_email(session, email)
+    if account is None or account.is_platform:
+        raise ProblemError(404, "account_not_found", ACCOUNT_NOT_FOUND)
+    membership = await account_membership_repository.get(session, account.id, tenant_id)
+    if membership is not None and membership.removed_at is None:
+        raise conflict("already_member", ALREADY_MEMBER)
+    if membership is not None:
+        await account_membership_repository.restore(session, account.id, tenant_id)
+        user = await app_user_repository.get(session, tenant_id, membership.user_id)
+        assert user is not None
+    else:
+        if await app_user_repository.email_taken(session, tenant_id, email):
+            raise conflict("duplicate_email", DUPLICATE_EMAIL)
+        try:
+            async with session.begin_nested():
+                user = await _join(session, account, tenant, account.name, None)
+        except IntegrityError as exc:
+            raise conflict("duplicate_email", DUPLICATE_EMAIL) from exc
+    for group in groups:
+        await group_member_repository.add(session, tenant_id, group.id, user.id)
+        await _audit_membership(session, admin, tenant_id, user, group, added=True)
+    await platform_audit_service.record(
+        session,
+        "membership_added",
+        True,
+        f"Account {email} added to the organization",
+        actor_account_id=admin.account_id,
+        target_account_id=account.id,
+        client_ip=admin.client_ip,
+        organization=_copy(admin, tenant_id),
+    )
+    return await get_user(session, tenant_id, user.id)
+
+
+async def remove_user(
+    session: AsyncSession, admin: PlatformAdmin, tenant_id: uuid.UUID, user_id: uuid.UUID
+) -> None:
+    """Remove the member from the organization: the membership is marked removed, its groups
+    go, and the account's sessions inside this organization end. The directory user, the
+    account and its other memberships stay."""
+    await require(session, tenant_id)
+    membership, account, user = await _member(session, tenant_id, user_id)
+    await account_membership_repository.remove(session, account.id, tenant_id)
+    groups = {g.id: g for g in await user_group_repository.list_for_tenant(session, tenant_id)}
+    for m in await group_member_repository.list_for_tenant(session, tenant_id):
+        if m.user_id == user_id and m.group_id in groups:
+            await group_member_repository.remove(session, tenant_id, m.group_id, user_id)
+            await _audit_membership(
+                session, admin, tenant_id, user, groups[m.group_id], added=False
+            )
+    await auth_session_repository.end_for_membership(
+        session, account.id, tenant_id, SessionEndReason.MEMBERSHIP_REMOVED
+    )
+    await platform_audit_service.record(
+        session,
+        "membership_removed",
+        True,
+        f"Account {account.email} removed from the organization",
+        actor_account_id=admin.account_id,
+        target_account_id=account.id,
+        client_ip=admin.client_ip,
+        organization=_copy(admin, tenant_id),
+    )
+
+
 async def update_user(
     session: AsyncSession,
     admin: PlatformAdmin,
@@ -179,15 +259,16 @@ async def update_user(
     user_id: uuid.UUID,
     body: OrganizationUserUpdate,
 ) -> OrganizationUser:
+    """Rename the directory user (the name is per organization), change its department or
+    replace its groups."""
     await require(session, tenant_id)
-    account, user = await _account(session, tenant_id, user_id)
+    _, account, user = await _member(session, tenant_id, user_id)
     fields = body.model_fields_set
     if not fields:
         raise ProblemError(422, "validation_failed", "Change at least one field")
     profile: dict[str, str | None] = {}
     if "name" in fields and body.name is not None:
         profile["name"] = body.name.strip()
-        await account_repository.rename(session, account.id, body.name.strip())
     if "department" in fields:
         profile["department"] = _department(body.department)
     if profile:
@@ -226,26 +307,20 @@ async def set_disabled(
     user_id: uuid.UUID,
     disabled: bool,
 ) -> OrganizationUser:
-    """Disable (every session of the account ends) or enable; idempotent, audited on change."""
+    """Disable the membership (the account's sessions inside this organization end; its other
+    organizations are untouched) or enable it; idempotent, audited on change."""
     await require(session, tenant_id)
-    account, _ = await _account(session, tenant_id, user_id)
-    if await account_repository.set_disabled(session, account.id, disabled):
+    _, account, _ = await _member(session, tenant_id, user_id)
+    if await account_membership_repository.set_disabled(session, account.id, tenant_id, disabled):
         if disabled:
-            ended = await auth_session_repository.end_for_account(
-                session, account.id, SessionEndReason.ACCOUNT_DISABLED
-            )
-            await organization_access_audit_service.audit_ended(
-                session,
-                ended,
-                organization_access_audit_service.ACCOUNT_DISABLED_WHAT,
-                admin.actor,
-                client_ip=admin.client_ip,
+            await auth_session_repository.end_for_membership(
+                session, account.id, tenant_id, SessionEndReason.ACCOUNT_DISABLED
             )
         await platform_audit_service.record(
             session,
             "account_disabled" if disabled else "account_enabled",
             True,
-            f"Account {account.email} {'disabled' if disabled else 'enabled'}",
+            f"Account {account.email} {'disabled' if disabled else 'enabled'} in the organization",
             actor_account_id=admin.account_id,
             target_account_id=account.id,
             client_ip=admin.client_ip,
@@ -261,10 +336,10 @@ async def reset_password(
     user_id: uuid.UUID,
     new_password: str,
 ) -> None:
-    """Set a password the user must change at next sign-in; every session of theirs ends and
-    the lock on their email clears."""
+    """Set the account's one password, for every organization of it, which the holder must
+    change at next sign-in; every session of theirs ends and the lock on their email clears."""
     await require(session, tenant_id)
-    account, _ = await _account(session, tenant_id, user_id)
+    _, account, _ = await _member(session, tenant_id, user_id)
     credential = await password_credential_repository.get(session, account.id)
     refusal = await password_policy_service.refusal(
         new_password, account.email, credential.hash if credential else None
@@ -303,53 +378,98 @@ async def reset_password(
     )
 
 
+def local_subject(account_id: uuid.UUID, tenant_id: uuid.UUID) -> str:
+    """The subject of a member's directory user: one per account and organization, unique
+    across every issuer."""
+    return f"{account_id}:{tenant_id}"
+
+
 async def _users(session: AsyncSession, tenant_id: uuid.UUID) -> list[OrganizationUser]:
-    accounts = await account_repository.list_for_tenant(session, tenant_id)
+    """The organization's members that are not removed, disabled ones included."""
+    memberships = await account_membership_repository.list_for_tenant(session, tenant_id)
+    accounts = {
+        a.id: a
+        for a in await account_repository.list_by_ids(session, {m.account_id for m in memberships})
+    }
     credentials = await password_credential_repository.list_for_accounts(
-        session, {a.id for a in accounts}
+        session, set(accounts.keys())
     )
     locked = await sign_in_throttle_repository.locked_keys(
-        session, ThrottleKeyKind.EMAIL, {key_digest(a.email) for a in accounts}
+        session, ThrottleKeyKind.EMAIL, {key_digest(a.email) for a in accounts.values()}
     )
     groups = {g.id: g for g in await user_group_repository.list_for_tenant(session, tenant_id)}
-    memberships: dict[uuid.UUID, list[GroupRef]] = {}
+    group_refs: dict[uuid.UUID, list[GroupRef]] = {}
     for m in await group_member_repository.list_for_tenant(session, tenant_id):
         if m.group_id in groups:
-            memberships.setdefault(m.user_id, []).append(
+            group_refs.setdefault(m.user_id, []).append(
                 GroupRef(id=m.group_id, name=groups[m.group_id].name)
             )
     users = {u.id: u for u in await app_user_repository.list_for_tenant(session, tenant_id)}
     result = []
-    for account in accounts:
-        assert account.user_id is not None
-        user = users.get(account.user_id)
+    for membership in memberships:
+        account = accounts.get(membership.account_id)
+        user = users.get(membership.user_id)
+        if account is None or user is None:
+            continue
         credential = credentials.get(account.id)
         result.append(
             OrganizationUser(
-                id=account.user_id,
+                id=user.id,
                 account_id=account.id,
                 email=account.email,
-                name=account.name,
-                department=user.department if user else None,
-                status="disabled" if account.disabled_at is not None else "active",
+                name=user.name,
+                department=user.department,
+                status="disabled" if membership.disabled_at is not None else "active",
                 must_change_password=bool(credential and credential.must_change),
                 locked=key_digest(account.email) in locked,
-                groups=sorted(memberships.get(account.user_id, []), key=lambda g: g.name),
-                created_at=account.created_at,
-                last_sign_in_at=account.last_sign_in_at,
+                groups=sorted(group_refs.get(user.id, []), key=lambda g: g.name),
+                created_at=membership.created_at,
+                last_sign_in_at=user.last_login_at,
             )
         )
     return result
 
 
-async def _account(
+async def _member(
     session: AsyncSession, tenant_id: uuid.UUID, user_id: uuid.UUID
-) -> tuple[Account, AppUser]:
-    account = await account_repository.get_member(session, tenant_id, user_id)
+) -> tuple[AccountMembership, Account, AppUser]:
+    """The membership behind the organization's directory user, with its account; 404 for a
+    user who is no member, or one removed from the organization."""
+    membership = await account_membership_repository.get_by_user(session, tenant_id, user_id)
+    if membership is None or membership.removed_at is not None:
+        raise ProblemError(404, "not_found", NO_SUCH_MEMBER)
+    account = await account_repository.get(session, membership.account_id)
     user = await app_user_repository.get(session, tenant_id, user_id)
     if account is None or user is None:
-        raise ProblemError(404, "not_found", "No such account in this organization")
-    return account, user
+        raise ProblemError(404, "not_found", NO_SUCH_MEMBER)
+    return membership, account, user
+
+
+async def _enabled(session: AsyncSession, tenant_id: uuid.UUID) -> Tenant:
+    tenant = await require(session, tenant_id)
+    if tenant.disabled_at is not None:
+        raise conflict("organization_disabled", ORGANIZATION_DISABLED)
+    return tenant
+
+
+async def _join(
+    session: AsyncSession, account: Account, tenant: Tenant, name: str, department: str | None
+) -> AppUser:
+    """The account's directory user of the organization and its membership."""
+    user = await app_user_repository.create(
+        session,
+        tenant_id=tenant.id,
+        issuer=LOCAL_ISSUER,
+        subject=local_subject(account.id, tenant.id),
+        email=account.email,
+        name=name,
+        department=department,
+        company_id=None,
+    )
+    await account_membership_repository.create(
+        session, account_id=account.id, tenant_id=tenant.id, user_id=user.id
+    )
+    return user
 
 
 async def _groups_of(

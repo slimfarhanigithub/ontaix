@@ -12,7 +12,8 @@ import type { Scene } from '../api/types';
 import { actingText, minutesLeft, PlatformAccessBanner } from '../auth/PlatformAccessBanner';
 import { AuditLog } from '../admin/pages/GovernancePages';
 import { directory } from '../admin/adminData';
-import { ADD_USER_NOTE, RESET_NOTE, userStatus } from './OrganizationUsers';
+import { applyLanguage } from '../i18n/language';
+import { addExistingNote, addUserNote, emailTaken, removeText, resetNote, userStatus, userStatusText } from './OrganizationUsers';
 import { PlatformPortal } from './PlatformPortal';
 
 // The portal renders lists and dialogs, which jsdom lays out slowly under a full run.
@@ -136,6 +137,7 @@ async function openUsers(): Promise<FetchStub> {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  act(() => applyLanguage('en'));
   store.ui.dialogs = [];
   store.ui.toasts = [];
 });
@@ -150,7 +152,19 @@ describe('the platform portal', () => {
     expect([...win.querySelectorAll('nav button')].map((b) => b.textContent)).toEqual(['Organizations', 'Platform audit log']);
     const account = win.querySelector('.head #adminAccount') as HTMLElement;
     expect(account.querySelector('span')?.textContent).toBe('admin@platform.example');
-    expect([...account.querySelectorAll('.btn')].map((b) => b.textContent)).toEqual(['Change password', 'Sign out']);
+    expect([...account.querySelectorAll('.btn')].map((b) => b.textContent)).toEqual(['Language', 'Change password', 'Sign out']);
+  });
+
+  it('reads in French once the portal language is French', async () => {
+    await openPortal();
+    act(() => applyLanguage('fr'));
+    const win = document.querySelector('#platform.admin.on .win') as HTMLElement;
+    expect(win.querySelector('.head #platformTitle')?.textContent).toBe('Plateforme Ontology Builder');
+    expect([...win.querySelectorAll('nav button')].map((b) => b.textContent)).toEqual(['Organisations', 'Journal d’audit de la plateforme']);
+    expect(screen.getByRole('button', { name: '+ Créer une organisation' })).toBeInTheDocument();
+    expect([...document.querySelectorAll('.tbl th')].map((th) => th.textContent)).toEqual(['Nom', 'Entreprises', 'Utilisateurs', 'Statut', 'Créée le', '']);
+    expect([...rowOf('Acme').querySelectorAll('td')].slice(1, 5).map((td) => td.textContent)).toEqual(['Plusieurs entreprises', '3', 'Active', '01 sept. 2026']);
+    expect(rowActionLabels('Acme')).toEqual(['Entrer', 'Utilisateurs', 'Ouvrir', 'Renommer', 'Désactiver']);
   });
 
   it('lists the organizations with their companies, users, status and created date', async () => {
@@ -244,10 +258,10 @@ describe('the platform portal', () => {
 
 describe('the users of an organization', () => {
   it('maps the status texts', () => {
-    expect(userStatus(user())).toBe('Active');
-    expect(userStatus(user({ status: 'disabled', locked: true }))).toBe('Disabled');
-    expect(userStatus(user({ locked: true, mustChangePassword: true }))).toBe('Locked');
-    expect(userStatus(user({ mustChangePassword: true }))).toBe('Must change password');
+    expect(userStatusText(userStatus(user()))).toBe('Active');
+    expect(userStatusText(userStatus(user({ status: 'disabled', locked: true })))).toBe('Disabled');
+    expect(userStatusText(userStatus(user({ locked: true, mustChangePassword: true })))).toBe('Locked');
+    expect(userStatusText(userStatus(user({ mustChangePassword: true })))).toBe('Must change password');
   });
 
   it('lists them with groups and status and the row actions', async () => {
@@ -258,9 +272,100 @@ describe('the users of an organization', () => {
     expect([...rowOf('Ana').querySelectorAll('td')].slice(0, 4).map((td) => td.textContent)).toEqual(['Ana', 'ana@acme.example', 'Administrators', 'Active']);
     expect([...rowOf('Bo').querySelectorAll('td')].slice(2, 4).map((td) => td.textContent)).toEqual(['—', 'Disabled']);
     expect([...rowOf('Cy').querySelectorAll('td')][3].textContent).toBe('Must change password');
-    expect(rowActionLabels('Ana')).toEqual(['Edit', 'Reset password', 'Disable']);
-    expect(rowActionLabels('Bo')).toEqual(['Edit', 'Reset password', 'Enable']);
-    expect(footerButton('+ Add a user')).toBeInTheDocument();
+    expect(rowActionLabels('Ana')).toEqual(['Edit', 'Reset password', 'Disable', 'Remove from organization']);
+    expect(rowActionLabels('Bo')).toEqual(['Edit', 'Reset password', 'Enable', 'Remove from organization']);
+    expect([...(topDialog().querySelector('.df') as HTMLElement).querySelectorAll('.btn')].map((b) => b.textContent)).toEqual(['+ Add a user', 'Add existing account']);
+    expect(footerButton('+ Add a user').className).toContain('primary');
+    expect(footerButton('Add existing account').className).not.toContain('primary');
+  });
+
+  it('points an email that already has an account to Add existing account', async () => {
+    const stub = await openUsers();
+    fireEvent.click(footerButton('+ Add a user'));
+    await flush();
+    fireEvent.change(input('auName'), { target: { value: 'Ana' } });
+    fireEvent.change(input('auEmail'), { target: { value: 'ana@beta.example' } });
+    fireEvent.change(input('auPassword'), { target: { value: fresh(7) } });
+    stub.on('POST /admin/organizations/org-1/users', problem(409, 'email_taken', 'An account with this email exists'));
+    fireEvent.click(footerButton('Add user'));
+    await flush();
+    expect(dialogTitle()).toBe('Add a user');
+    expect(dialogMsg()?.textContent).toBe(emailTaken());
+    expect(dialogMsg()?.style.color).toBe('var(--conflict)');
+    expect(input('auPassword').value).toBe('');
+  });
+
+  it('adds an existing account by email with the groups ticked, showing a refusal in .msg', async () => {
+    const stub = await openUsers();
+    fireEvent.click(footerButton('Add existing account'));
+    await flush();
+    expect(dialogTitle()).toBe('Add an existing account');
+    expect(topDialog().querySelector('.dh span')?.textContent).toBe('to Acme');
+    const dlg = topDialog();
+    expect([...dlg.querySelectorAll('.form > label')].map((l) => l.textContent)).toEqual(['Email', 'Groups']);
+    expect(screen.getByLabelText('Email')).toBe(input('aeEmail'));
+    expect(input('aeEmail').type).toBe('email');
+    expect(dlg.querySelector('input[type=password]')).toBeNull();
+    expect(dialogMsg()?.textContent).toBe(addExistingNote());
+    expect([...dlg.querySelectorAll('.chk b')].map((b) => b.textContent)).toEqual(['Administrators', 'Builders']);
+    fireEvent.click(dlg.querySelectorAll<HTMLInputElement>('.chk input[type=checkbox]')[1]);
+    fireEvent.change(input('aeEmail'), { target: { value: ' dee@beta.example ' } });
+
+    stub.on('POST /admin/organizations/org-1/memberships', problem(404, 'account_not_found', 'No account has this email'));
+    fireEvent.click(footerButton('Add account'));
+    await flush();
+    expect(dialogTitle()).toBe('Add an existing account');
+    expect(dialogMsg()?.textContent).toBe('No account has this email');
+    stub.on('POST /admin/organizations/org-1/memberships', problem(409, 'already_member', 'Already a member of Acme'));
+    fireEvent.click(footerButton('Add account'));
+    await flush();
+    expect(dialogMsg()?.textContent).toBe('Already a member of Acme');
+
+    const dee = user({ id: 'u-4', accountId: 'acc-4', name: 'Dee', email: 'dee@beta.example', groups: [{ id: 'g-2', name: 'Builders' }] });
+    stub.on('POST /admin/organizations/org-1/memberships', json(201, dee));
+    stub.on('GET /admin/organizations/org-1/users', paged([...USERS, dee]));
+    fireEvent.click(footerButton('Add account'));
+    await flush();
+    const calls = stub.to('POST /admin/organizations/org-1/memberships');
+    expect(calls).toHaveLength(3);
+    expect(calls[2].body).toEqual({ email: 'dee@beta.example', groupIds: ['g-2'] });
+    expect(calls[2].headers['x-csrf-token']).toBe(CSRF);
+    expect(dialogTitle()).toBe('Users of Acme');
+    expect(rowOf('Dee')).not.toBeNull();
+    expect(store.ui.toasts.map((t) => t.text)).toContain('Dee');
+  });
+
+  it('asks before removing a user from the organization, with the danger button and the exact body', async () => {
+    const stub = await openUsers();
+    stub.on('DELETE /admin/organizations/org-1/users/u-1', noContent());
+    fireEvent.click(rowAction('Ana', 'Remove from organization'));
+    expect(dialogTitle()).toBe('Remove Ana from Acme?');
+    expect(topDialog().querySelector('.db')?.textContent).toBe(removeText('Acme'));
+    expect(removeText('Acme')).toBe(
+      'They lose access to Acme at once: their groups here are dropped and their sessions in it end. Their account and their other organizations stay, and their history here is kept.',
+    );
+    const remove = footerButton('Remove');
+    expect(remove.className).toContain('danger');
+    expect(footerButton('Cancel')).toBeInTheDocument();
+    expect(stub.to('DELETE /admin/organizations/org-1/users/u-1')).toHaveLength(0);
+    stub.on('GET /admin/organizations/org-1/users', paged(USERS.filter((u) => u.id !== 'u-1')));
+    fireEvent.click(remove);
+    await flush();
+    const [call] = stub.to('DELETE /admin/organizations/org-1/users/u-1');
+    expect(call.headers['x-csrf-token']).toBe(CSRF);
+    expect(dialogTitle()).toBe('Users of Acme');
+    expect(screen.queryByText('ana@acme.example')).toBeNull();
+    expect(store.ui.toasts.map((t) => t.text)).toContain('Ana');
+  });
+
+  it('shows a refused removal as a toast and keeps the user', async () => {
+    const stub = await openUsers();
+    stub.on('DELETE /admin/organizations/org-1/users/u-1', problem(403, 'forbidden', 'Not allowed'));
+    fireEvent.click(rowAction('Ana', 'Remove from organization'));
+    fireEvent.click(footerButton('Remove'));
+    await flush();
+    expect(store.ui.toasts.map((t) => t.text)).toContain('Not allowed');
+    expect(rowOf('Ana')).not.toBeNull();
   });
 
   it('adds a user with an initial password and the groups ticked, then clears the password', async () => {
@@ -272,7 +377,7 @@ describe('the users of an organization', () => {
     expect([...dlg.querySelectorAll('.form > label')].map((l) => l.textContent)).toEqual(['Name', 'Email', 'Department (optional)', 'Initial password', 'Groups']);
     expect(input('auPassword').type).toBe('password');
     expect(input('auPassword').autocomplete).toBe('new-password');
-    expect(dialogMsg()?.textContent).toBe(ADD_USER_NOTE);
+    expect(dialogMsg()?.textContent).toBe(addUserNote());
     const checks = dlg.querySelectorAll<HTMLInputElement>('.chk input[type=checkbox]');
     expect([...dlg.querySelectorAll('.chk b')].map((b) => b.textContent)).toEqual(['Administrators', 'Builders']);
     fireEvent.click(checks[1]);
@@ -305,7 +410,8 @@ describe('the users of an organization', () => {
     expect(dialogTitle()).toBe('Reset password for Ana');
     expect(screen.getByLabelText('New password')).toBe(input('rpPassword'));
     expect(input('rpPassword').autocomplete).toBe('new-password');
-    expect(dialogMsg()?.textContent).toBe(RESET_NOTE);
+    expect(dialogMsg()?.textContent).toBe(resetNote());
+    expect(resetNote()).toContain('The password applies to every organization of the account.');
     fireEvent.change(input('rpPassword'), { target: { value: fresh(6) } });
     fireEvent.click(footerButton('Reset password'));
     await flush();

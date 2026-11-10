@@ -8,104 +8,97 @@
  */
 import { DEFAULT_COLORS, DOMAIN_TEMPLATES } from '../../canvas/constants';
 import { DEFAULT_ACCENT } from '../../design/tokens';
+import { t, useT, type MessageKey } from '../../i18n/i18n';
 import { BusyButton } from '../../shell/busy';
 import { useStore } from '../../shell/dom';
 import { changeColour, renderAdmin, resetColours } from '../actions';
-import { ADDED_DESCRIPTIONS, SKIP_ANIMATION_ROW } from '../rowText';
-import { SetRow, Tg } from '../Toggle';
+import { SetRow, Tg, type SettingKey } from '../Toggle';
 
 export function Overview() {
   const st = useStore();
+  const t = useT();
   const { nodes, links, companies } = st.s;
   const concepts = nodes.filter((n) => n.kind === 'concept' && !n.dying).length,
     pending = nodes.filter((n) => n.kind === 'concept' && n.pending && !n.dying).length,
     relations = links.filter((l) => l.kind !== 'bind' && !l.dying).length;
   return (
     <>
-      <h2>Overview</h2>
-      <p className="lead">What this tenant holds and what is switched on. Everything here is the same model you see on the canvas.</p>
+      <h2>{t('admin.nav.overview')}</h2>
+      <p className="lead">{t('admin.overview.lead')}</p>
       <div className="kpis">
         <div>
           <b>{companies.length}</b>
-          <span>{`compan${companies.length === 1 ? 'y' : 'ies'}`}</span>
+          <span>{t('admin.overview.companies', { n: companies.length })}</span>
         </div>
         <div>
           <b>{concepts}</b>
-          <span>{`concepts · ${pending} pending`}</span>
+          <span>{t('admin.overview.concepts', { pending })}</span>
         </div>
         <div>
           <b>{relations}</b>
-          <span>relations</span>
+          <span>{t('admin.overview.relations')}</span>
         </div>
         <div>
           <b>{st.ui.proposals.length}</b>
-          <span>proposals awaiting approval</span>
+          <span>{t('admin.overview.proposals')}</span>
         </div>
       </div>
-      <h3>Enabled</h3>
+      <h3>{t('admin.overview.enabled')}</h3>
       <SetRow
         k="approvalRequired"
-        title="Approval on every change"
-        desc="Nothing enters the model without an owner’s approval. This is the product’s contract and cannot be switched off."
+        title={t('admin.overview.approval.title')}
+        desc={t('admin.overview.approval.desc')}
         locked
       />
-      <SetRow k="voice" title="Voice capture" desc="Microphone input in the teaching bar." />
-      <SetRow k="importDocs" title="Document import" desc="Text, Markdown, CSV, Word and PDF, read in the browser." />
-      <SetRow k="multiCompany" title="Portfolio mode" desc="Several companies in one view." />
-      <SetRow k="crossCompany" title="Companies may interact" desc="Relations and equivalences between companies." />
+      <SetRow k="voice" title={t('admin.overview.voice.title')} desc={t('admin.overview.voice.desc')} />
+      <SetRow k="importDocs" title={t('admin.overview.importDocs.title')} desc={t('admin.overview.importDocs.desc')} />
+      <SetRow k="multiCompany" title={t('admin.overview.multiCompany.title')} desc={t('admin.overview.multiCompany.desc')} />
+      <SetRow k="crossCompany" title={t('admin.overview.crossCompany.title')} desc={t('admin.overview.crossCompany.desc')} />
     </>
   );
 }
 
+/** A Tenant settings row, its title and description read from the `admin.settings.<k>` keys. */
+function SettingRow({ k, locked, ox }: { k: SettingKey; locked?: boolean; ox?: boolean }) {
+  return <SetRow k={k} title={t(`admin.settings.${k}.title` as MessageKey)} desc={t(`admin.settings.${k}.desc` as MessageKey)} locked={locked} ox={ox} />;
+}
+
 export function TenantSettings() {
+  const t = useT();
   return (
     <>
-      <h2>Tenant settings</h2>
-      <p className="lead">Switch capabilities on or off for everyone in this tenant. Changes apply immediately and are written to the audit log.</p>
-      <h3>Capture and teaching</h3>
-      <SetRow k="liveTeaching" title="Live teaching" desc="Typing or speaking a sentence proposes concepts and relations." />
-      <SetRow k="voice" title="Voice input" desc="Use the browser microphone for live teaching." />
-      <SetRow k="importDocs" title="Document import" desc="Read documents into proposals." />
-      <SetRow k="everyoneTeaches" title="Members can teach" desc="When off, only Builders and Owners can propose; Members can only read." />
-      <h3>Governance</h3>
-      <SetRow
-        k="approvalRequired"
-        title="Approval required for every change"
-        desc={ADDED_DESCRIPTIONS['Approval required for every change']}
-        locked
-      />
-      <SetRow
-        k="twoApprovers"
-        title="Two approvers for changes"
-        desc="Renames, deletions and conflict resolutions need an Owner and a Governor. A second click is required in the proposals panel."
-      />
-      <SetRow k="notifyOwners" title="Notify domain owners" desc="Owners are notified when a proposal lands in their domain product." />
-      <h3>Portfolio</h3>
-      <SetRow k="multiCompany" title="Several companies in one view" desc={ADDED_DESCRIPTIONS['Several companies in one view']} />
-      <SetRow ox k="companyCreation" title="Company creation" desc="Allow adding companies." />
-      <SetRow
-        k="crossCompany"
-        title="Companies may interact"
-        desc="Allow relations and equivalences between companies. Disabling removes every existing cross-company relationship; each company keeps its own model intact."
-      />
-      <h3>Display</h3>
-      <SetRow k="animations" title="Animations" desc="Cell division and line tracing. Off makes changes instant." />
-      <SetRow k="legend" title="Show the relationship legend" desc={ADDED_DESCRIPTIONS['Show the relationship legend']} />
+      <h2>{t('admin.nav.settings')}</h2>
+      <p className="lead">{t('admin.settings.lead')}</p>
+      <h3>{t('admin.settings.capture')}</h3>
+      <SettingRow k="liveTeaching" />
+      <SettingRow k="voice" />
+      <SettingRow k="importDocs" />
+      <SettingRow k="everyoneTeaches" />
+      <h3>{t('admin.settings.governance')}</h3>
+      <SettingRow k="approvalRequired" locked />
+      <SettingRow k="twoApprovers" />
+      <SettingRow k="notifyOwners" />
+      <h3>{t('admin.settings.portfolio')}</h3>
+      <SettingRow k="multiCompany" />
+      <SettingRow ox k="companyCreation" />
+      <SettingRow k="crossCompany" />
+      <h3>{t('admin.settings.display')}</h3>
+      <SettingRow k="animations" />
+      <SettingRow k="legend" />
     </>
   );
 }
 
 export function Appearance() {
   const st = useStore();
+  const t = useT();
   const ap = st.ui.appearance;
   const colour = (key: string) => ap?.colors[key] || DEFAULT_COLORS[key];
   return (
     <>
-      <h2>Appearance</h2>
-      <p className="lead">
-        Colours apply to every company in the tenant: a domain product keeps the same colour wherever it appears, so companies compare at a glance.
-      </p>
-      <h3>Domain products</h3>
+      <h2>{t('admin.nav.appearance')}</h2>
+      <p className="lead">{t('admin.appearance.lead')}</p>
+      <h3>{t('admin.nav.domains')}</h3>
       <div className="colors">
         {DOMAIN_TEMPLATES.map((t) => (
           <label className="col" key={t.key}>
@@ -128,9 +121,9 @@ export function Appearance() {
             </label>
           ))}
       </div>
-      <h3>{SKIP_ANIMATION_ROW.heading}</h3>
+      <h3>{t('admin.appearance.motion')}</h3>
       <div className="set">
-        <b>{SKIP_ANIMATION_ROW.title}</b>
+        <b>{t('admin.appearance.skip.title')}</b>
         <Tg
           on={st.ui.skipAnimation}
           data-act="skipAnimation"
@@ -139,21 +132,21 @@ export function Appearance() {
             renderAdmin();
           }}
         />
-        <p>{SKIP_ANIMATION_ROW.desc}</p>
+        <p>{t('admin.appearance.skip.desc')}</p>
       </div>
-      <h3>Interface</h3>
+      <h3>{t('admin.appearance.interface')}</h3>
       <div className="colors">
         <label className="col">
           <input type="color" value={ap?.accent || DEFAULT_ACCENT} data-col="__accent" onChange={(e) => changeColour('__accent', e.target.value)} />
           <span>
-            <b>Accent</b>
-            <small>buttons, focus, approvals</small>
+            <b>{t('admin.appearance.accent')}</b>
+            <small>{t('admin.appearance.accentDesc')}</small>
           </span>
         </label>
       </div>
       <div style={{ marginTop: '16px' }}>
         <BusyButton className="btn" data-act="resetColors" onClick={resetColours}>
-          Reset to defaults
+          {t('admin.appearance.reset')}
         </BusyButton>
       </div>
     </>

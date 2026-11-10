@@ -264,6 +264,16 @@ channels:
     messages:
       companyCreated:
         $ref: '#/components/messages/CompanyCreated'
+  companyUpdated:
+    address: ontaix.{tenantId}.company.updated
+    x-ontaix-visibility: model.read
+    x-ontaix-audience: companies
+    parameters:
+      tenantId:
+        $ref: '#/components/parameters/tenantId'
+    messages:
+      companyUpdated:
+        $ref: '#/components/messages/CompanyUpdated'
   companyRemoved:
     address: ontaix.{tenantId}.company.removed
     x-ontaix-visibility: model.read
@@ -470,6 +480,10 @@ operations:
     action: send
     channel:
       $ref: '#/channels/companyCreated'
+  publishCompanyUpdated:
+    action: send
+    channel:
+      $ref: '#/channels/companyUpdated'
   publishCompanyRemoved:
     action: send
     channel:
@@ -924,6 +938,23 @@ components:
             $ref: '#/components/schemas/Company'
           root:
             $ref: '#/components/schemas/Concept'
+    CompanyUpdated:
+      name: CompanyUpdated
+      traits:
+        - $ref: '#/components/messageTraits/Audience'
+      title: company.updated
+      summary: A company setting changed, such as its model language; `fields` names what.
+      payload:
+        type: object
+        required: [company, fields]
+        properties:
+          company:
+            $ref: '#/components/schemas/Company'
+          fields:
+            type: array
+            items:
+              type: string
+              enum: [language]
     CompanyRemoved:
       name: CompanyRemoved
       traits:
@@ -1194,6 +1225,7 @@ components:
             - attribute.changed
             - domain_product.changed
             - company.created
+            - company.updated
             - company.removed
             - extraction.changed
             - settings.changed
@@ -1652,7 +1684,7 @@ components:
     Company:
       type: object
       description: Same shape as `Company` in contracts/openapi.yaml.
-      required: [id, key, name, sub, position, isHome, rootId, domainProducts]
+      required: [id, key, name, sub, position, isHome, rootId, language, domainProducts]
       properties:
         id:
           type: string
@@ -1670,6 +1702,10 @@ components:
         rootId:
           type: string
           format: uuid
+        language:
+          type: string
+          enum: [en, fr, de]
+          description: The company's model language.
         domainProducts:
           type: array
           items:

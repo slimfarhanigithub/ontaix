@@ -57,13 +57,26 @@ async def create(
     sub: str,
     position: int,
     is_home: bool,
+    language: str = "en",
 ) -> Company:
     company = Company(
-        tenant_id=tenant_id, key=key, name=name, sub=sub, position=position, is_home=is_home
+        tenant_id=tenant_id,
+        key=key,
+        name=name,
+        sub=sub,
+        position=position,
+        is_home=is_home,
+        language=language,
     )
     session.add(company)
     await session.flush()
     return company
+
+
+async def set_language(session: AsyncSession, company: Company, language: str) -> None:
+    """The company's model language."""
+    company.language = language
+    await session.flush()
 
 
 async def delete(session: AsyncSession, company: Company) -> None:

@@ -3,6 +3,7 @@
  * password fields and `Save password`. A refusal keeps the dialog open with its message; success
  * closes it with the toast `Password changed`.
  */
+import { useT } from '../i18n/i18n';
 import { store } from '../store/store';
 import { DialogFrame } from '../shell/Dialog';
 import { useBusyAction } from '../shell/busy';
@@ -14,6 +15,7 @@ export function openChangePassword(): void {
 }
 
 function ChangePasswordDialog({ close }: { close: () => void }) {
+  const t = useT();
   const change = usePasswordChange();
   const { shown, run } = useBusyAction();
   const save = () =>
@@ -22,16 +24,16 @@ function ChangePasswordDialog({ close }: { close: () => void }) {
       if (!session) return;
       auth.replaceSession(session);
       close();
-      store.toast2('Password changed', '');
+      store.toast2(t('auth.changePassword.changed'), '');
     });
   return (
     <DialogFrame
-      title="Change password"
+      title={t('auth.account.changePassword')}
       onClose={close}
       footer={
         <button className="btn primary" data-i="0" disabled={shown} aria-busy={shown ? 'true' : undefined} onClick={save}>
           {shown ? <span className="spin"></span> : null}
-          Save password
+          {t('auth.choosePassword.save')}
         </button>
       }
     >

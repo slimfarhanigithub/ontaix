@@ -11,6 +11,7 @@
  * `403 password_change_required` that the password must be changed first; both are raised as
  * auth signals for the shell before the error reaches the caller.
  */
+import { t } from '../i18n/i18n';
 import { contractDraft } from './drafts';
 import { authSignals, currentCsrfToken, forgetSession, rememberSession } from './session';
 import {
@@ -21,6 +22,8 @@ import {
   type CostSummary,
   type CrossCompanyDisabled,
   type Organization,
+  type LanguageChoice,
+  type OrganizationChoice,
   type OrganizationCreate,
   type OrganizationUpdate,
   type OrganizationUser,
@@ -49,6 +52,7 @@ import {
   type ImportDetection,
   type ImportMediaType,
   type ImportResult,
+  type MembershipCreate,
   type OntologyImportRequest,
   type OntologyImportResult,
   type Page,
@@ -120,12 +124,12 @@ async function answered(method: string, path: string, body?: unknown): Promise<R
 }
 
 /** A stream that ends without its result line: nothing was lost on the server, so the sentence is taught again. */
-const UNFINISHED: Problem = {
-  title: 'Unavailable',
+const unfinished = (): Problem => ({
+  title: t('common.lead.unavailable'),
   status: 503,
   code: 'unavailable',
-  detail: 'The sentence could not be read to the end; teach it again.',
-};
+  detail: t('teach.stream.unfinished'),
+});
 
 /**
  * `POST /teach/parse/stream`: hands each draft and retract line to `listen` as it arrives and
@@ -163,7 +167,10 @@ async function teachParseStream(body: TeachRequest, listen: TeachStreamListener)
     }
     take(rest);
   }
-  if (!result) throw new ApiError(UNFINISHED.status, UNFINISHED);
+  if (!result) {
+    const problem = unfinished();
+    throw new ApiError(problem.status, problem);
+  }
   return result;
 }
 
@@ -335,6 +342,10 @@ export const api = {
   signOut: () => call<void>('POST', '/auth/sign-out').finally(forgetSession),
   getSession: () => call<Session>('GET', '/auth/session').then(rememberSession),
   changePassword: (body: PasswordChange) => call<Session>('PUT', '/auth/password', body).then(rememberSession),
+  /** Binds a member session of several organizations to one; the token rotates with the session returned. */
+  chooseOrganization: (body: OrganizationChoice) => call<Session>('PUT', '/auth/session/organization', body).then(rememberSession),
+  /** Saves the account's portal language; the session answered carries it. */
+  chooseLanguage: (body: LanguageChoice) => call<Session>('PUT', '/auth/session/language', body).then(rememberSession),
 
   listOrganizations: (p?: ListParams) => call<Paged<Organization>>('GET', `/admin/organizations${listQuery(p)}`),
   createOrganization: (body: OrganizationCreate) => call<Organization>('POST', '/admin/organizations', body),
@@ -356,6 +367,9 @@ export const api = {
     call<OrganizationUser>('POST', `/admin/organizations/${id}/users/${userId}/enable`),
   resetOrganizationUserPassword: (id: string, userId: string, newPassword: string) =>
     call<void>('PUT', `/admin/organizations/${id}/users/${userId}/password`, { newPassword }),
+  addOrganizationMembership: (id: string, body: MembershipCreate) =>
+    call<OrganizationUser>('POST', `/admin/organizations/${id}/memberships`, body),
+  removeOrganizationUser: (id: string, userId: string) => call<void>('DELETE', `/admin/organizations/${id}/users/${userId}`),
   startSupportSession: (id: string, reason: string) =>
     call<Session>('POST', `/admin/organizations/${id}/support-session`, { reason }).then(rememberSession),
   endSupportSession: () => call<Session>('DELETE', '/admin/support-session').then(rememberSession),

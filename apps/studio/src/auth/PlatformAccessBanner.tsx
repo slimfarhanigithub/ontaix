@@ -9,13 +9,14 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { failed } from '../admin/adminData';
+import { t, useT } from '../i18n/i18n';
 import { BusyButton } from '../shell/busy';
 import { auth, useAuth } from './authStore';
 
 /** How often the remaining minutes are recounted. */
 const TICK_MS = 30_000;
 
-export const actingText = (organization: string, minutesLeft: number): string => `Acting in ${organization} as platform super admin · ${minutesLeft} min left`;
+export const actingText = (organization: string, minutesLeft: number): string => t('auth.banner.acting', { organization, minutes: minutesLeft });
 
 /** Whole minutes until `until`, rounded up, never below zero. */
 export function minutesLeft(until: string, now: number = Date.now()): number {
@@ -23,6 +24,7 @@ export function minutesLeft(until: string, now: number = Date.now()): number {
 }
 
 export function PlatformAccessBanner() {
+  const t = useT();
   const { session } = useAuth();
   const acting = session?.acting ?? null;
   const until = acting?.until ?? null;
@@ -45,7 +47,7 @@ export function PlatformAccessBanner() {
       <i></i>
       <span>{actingText(acting.organization.name, minutesLeft(until, now))}</span>
       <BusyButton className="btn" id="exitOrganization" onClick={() => auth.exitOrganization().catch(failed)}>
-        Exit
+        {t('auth.banner.exit')}
       </BusyButton>
     </div>
   );

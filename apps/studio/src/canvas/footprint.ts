@@ -3,6 +3,7 @@
  * label lines under a cell or a source (`labels.ts`) and the chip at the middle of a link
  * (`links.ts`). Arrange reserves this room so that nothing it places covers anything else.
  */
+import { formatNumber, t } from '../i18n/i18n';
 import type { Link, Node } from './types';
 
 /** Width in pixels of `text` drawn in the CSS `font`. */
@@ -52,19 +53,14 @@ export function cellFootprint(n: Node, measure: Measure): Footprint {
     widths.push(measure(n.sub, '300 11px Sora, sans-serif'));
     lines++;
   } else if (n.pending) {
-    widths.push(measure('awaiting approval', '300 10.5px Sora, sans-serif'));
+    widths.push(measure(t('canvas.cell.awaitingApproval'), '300 10.5px Sora, sans-serif'));
     lines++;
   }
   if (n.bound) {
-    widths.push(
-      measure(
-        `${n.bound.records.toLocaleString('en-GB')} records · ${n.bound.source.label} · fresh ${n.bound.fresh}`,
-        '400 10.5px Sora, sans-serif',
-      ),
-    );
+    widths.push(measure(t('canvas.cell.bound', { records: formatNumber(n.bound.records), source: n.bound.source.label, fresh: n.bound.fresh }), '400 10.5px Sora, sans-serif'));
     lines++;
   } else if (n.kind === 'concept') {
-    widths.push(measure('no data behind it', '300 10.5px Sora, sans-serif'));
+    widths.push(measure(t('canvas.cell.noData'), '300 10.5px Sora, sans-serif'));
     lines++;
   }
   return {

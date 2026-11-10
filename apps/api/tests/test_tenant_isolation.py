@@ -51,6 +51,8 @@ PLATFORM_NAMES = {"platform_session", "get_platform_session_factory", "platform_
 LEARNING_TABLES = ("teach_parse", "proposal_learning_source", "learning_example", "company_alias")
 # The tenant domain tables, scoped by tenant_id like the others.
 DOMAIN_TABLES = ("tenant_domain", "tenant_domain_revision")
+# Sign-in tables that carry a tenant_id: the application role holds no privilege on them.
+SIGN_IN_TABLES = ("account_membership", "auth_session")
 
 
 @dataclass(frozen=True)
@@ -304,6 +306,7 @@ async def test_row_level_security_confines_the_application_role_to_one_organizat
     "statement",
     [
         "SELECT count(*) FROM ontaix.account",
+        "SELECT count(*) FROM ontaix.account_membership",
         "SELECT count(*) FROM ontaix.auth_session",
         "SELECT count(*) FROM ontaix.password_credential",
         "SELECT count(*) FROM ontaix.sign_in_throttle",
@@ -462,14 +465,15 @@ def test_no_module_opens_an_unbound_application_session() -> None:
 
 
 async def _tenant_tables() -> list[str]:
+    """Every organization table: the ones with a tenant_id the application role may touch."""
     async with db_client.platform_session() as s:
         rows = await s.execute(
             text(
                 "SELECT c.relname FROM pg_class c"
                 " JOIN pg_namespace n ON n.oid = c.relnamespace"
                 " JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'tenant_id'"
-                " WHERE n.nspname = 'ontaix' AND c.relkind = 'r' AND c.relname <> 'account'"
+                " WHERE n.nspname = 'ontaix' AND c.relkind = 'r'"
                 " ORDER BY 1"
             )
         )
-        return list(rows.scalars())
+        return [name for name in rows.scalars() if name not in SIGN_IN_TABLES]

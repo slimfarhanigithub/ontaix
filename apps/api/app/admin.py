@@ -36,8 +36,9 @@ from app.config import Settings, get_settings
 from app.migrations.api_login import ApiLoginError, ensure_api_login
 from app.migrations.role_grants import RoleGrantError, grant_database_roles
 
-# `account` has a foreign key to `tenant`; its mapping must be registered before the first
-# flush, and nothing on this path imports it otherwise.
+# `account_membership` and the organization audit entries `set-password` writes have foreign
+# keys to `tenant`; its mapping must be registered before the first flush, and nothing on this
+# path imports it otherwise.
 from app.models.storage import tenant as _tenant_mapping  # noqa: F401
 from app.services import super_admin_service
 from app.services.super_admin_service import SuperAdminError

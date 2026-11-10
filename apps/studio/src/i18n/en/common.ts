@@ -1,0 +1,23 @@
+/** English source strings shared across areas: button words, toast leads and the account menu. */
+export const common = {
+  'common.cancel': 'Cancel',
+  'common.close': 'Close',
+  'common.save': 'Save',
+  'common.delete': 'Delete',
+  'common.edit': 'Edit',
+  'common.rename': 'Rename',
+  'common.open': 'Open',
+  'common.enable': 'Enable',
+  'common.disable': 'Disable',
+  'common.moreActions': 'More actions',
+  'common.search': 'Search',
+  'common.none': '—',
+  'common.lead.refused': 'Refused',
+  'common.lead.unavailable': 'Unavailable',
+  'common.lead.approved': 'Approved',
+  'common.lead.rejected': 'Rejected',
+  'common.lead.proposed': 'Proposed',
+  'common.lead.notAllowed': 'Not allowed',
+  'common.pageTitle': 'Ontology Builder — the living ontology',
+  'common.language': 'Language',
+};

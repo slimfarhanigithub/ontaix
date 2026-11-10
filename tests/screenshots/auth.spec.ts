@@ -1,8 +1,9 @@
 /**
- * Studio-only baselines of the screens the reference does not have (ADR 0017 section 9): the
- * sign-in page, the "Choose a new password" page, and the platform portal's Organizations and
- * Platform audit log pages. Each is captured at 1440x900 and 1920x1080 and compared with a
- * stored baseline under tests/screenshots/baselines at 0.1 percent tolerance.
+ * Studio-only baselines of the screens the reference does not have (ADR 0017 section 9):
+ * the sign-in page, the "Choose a new password" page, the "Choose an organization" page,
+ * the platform portal's Organizations and Platform audit log pages, and its Add an existing
+ * account and Remove from organization dialogs. Each is captured at 1440x900 and 1920x1080 and
+ * compared with a stored baseline under tests/screenshots/baselines at 0.1 percent tolerance.
  *
  * The Studio is opened with `?api=real`, so its calls reach the network, where this spec answers
  * the session and platform routes with fixtures. No fixture holds a credential.
@@ -22,10 +23,15 @@ const problem = (status: number, code: string, detail: string) => ({
 const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
 const paged = (items: unknown[]) => json({ items, page: 1, pageSize: 200, total: items.length });
 
+const NORTHWIND = { id: 'org-1', name: 'Northwind Industries', slug: 'northwind' };
+const AURORA = { id: 'org-2', name: 'Aurora Valves', slug: 'aurora-valves' };
+const CONTOSO = { id: 'org-3', name: 'Contoso Logistics', slug: 'contoso-logistics' };
+
 const member = (mustChangePassword: boolean) => ({
   kind: 'member',
   account: { id: 'acc-1', email: 'ana@northwind.example', name: 'Ana Ruiz' },
-  organization: { id: 'org-1', name: 'Northwind Industries', slug: 'northwind' },
+  organization: NORTHWIND,
+  organizations: [NORTHWIND],
   userId: 'u-1',
   support: null,
   csrfToken: CSRF,
@@ -34,10 +40,14 @@ const member = (mustChangePassword: boolean) => ({
   absoluteExpiresAt: '2026-09-28T21:00:00Z',
 });
 
+/** A member of three organizations, none chosen yet. */
+const unchosen = { ...member(false), organization: null, organizations: [NORTHWIND, AURORA, CONTOSO], userId: null };
+
 const platform = {
   kind: 'platform',
   account: { id: 'acc-sa', email: 'admin@platform.example', name: 'Platform admin' },
   organization: null,
+  organizations: [],
   userId: null,
   platformRoles: ['super_admin'],
   support: null,
@@ -63,6 +73,32 @@ const ORGANIZATIONS = [
   org('org-1', 'Northwind Industries', 'northwind', 'multiple', 'active', 2, 9, '2026-09-01T09:00:00Z'),
   org('org-2', 'Aurora Valves', 'aurora-valves', 'single', 'active', 1, 4, '2026-09-12T14:20:00Z'),
   org('org-3', 'Contoso Logistics', 'contoso-logistics', 'multiple', 'disabled', 3, 12, '2026-08-19T08:05:00Z'),
+];
+
+const user = (id: string, accountId: string, name: string, email: string, department: string, groups: { id: string; name: string }[], createdAt: string, status = 'active') => ({
+  id,
+  accountId,
+  email,
+  name,
+  department,
+  status,
+  mustChangePassword: false,
+  locked: false,
+  groups,
+  createdAt,
+  lastSignInAt: null,
+});
+
+const GROUPS = [
+  { id: 'g-1', name: 'Administrators', description: 'Administrator at tenant scope', memberCount: 1, roles: [] },
+  { id: 'g-2', name: 'Builders', description: 'Builder at tenant scope', memberCount: 2, roles: [] },
+  { id: 'g-3', name: 'Governors', description: 'Governor at tenant scope', memberCount: 1, roles: [] },
+];
+
+const USERS = [
+  user('u-1', 'acc-1', 'Ana Ruiz', 'ana@northwind.example', 'Sales', [{ id: 'g-1', name: 'Administrators' }], '2026-09-02T09:00:00Z'),
+  user('u-2', 'acc-2', 'Ben Okafor', 'ben@northwind.example', 'Logistics', [{ id: 'g-2', name: 'Builders' }], '2026-09-05T10:30:00Z'),
+  user('u-3', 'acc-3', 'Mia Chen', 'mia@northwind.example', 'Finance', [{ id: 'g-2', name: 'Builders' }, { id: 'g-3', name: 'Governors' }], '2026-09-12T14:20:00Z', 'disabled'),
 ];
 
 const AUDIT = [
@@ -95,6 +131,21 @@ interface Screen {
   drive?: (page: Page) => Promise<void>;
 }
 
+/** The platform routes behind the users dialog of Northwind Industries. */
+const USERS_ROUTES: Record<string, Answer> = {
+  'GET /auth/session': json(platform),
+  'GET /admin/organizations': paged(ORGANIZATIONS),
+  'GET /admin/organizations/org-1/users': paged(USERS),
+  'GET /admin/organizations/org-1/groups': json(GROUPS),
+};
+
+/** Opens the users dialog of the first organization listed through its row's More actions menu. */
+async function openUsers(page: Page): Promise<void> {
+  await page.click('#lstOrganizations .tbl tbody tr:first-child button.more');
+  await page.click('.dr-menu [role="menuitem"][data-fn="users"]');
+  await page.waitForSelector('.dlg.lg .tbl tbody tr');
+}
+
 const SCREENS: Screen[] = [
   {
     name: 'sign-in',
@@ -105,6 +156,33 @@ const SCREENS: Screen[] = [
     name: 'choose-password',
     routes: { 'GET /auth/session': json(member(true)) },
     ready: 'form.dlg.sm #cp-confirm',
+  },
+  {
+    name: 'choose-organization',
+    routes: { 'GET /auth/session': json(unchosen) },
+    ready: 'form.dlg.sm #orgChoice button',
+  },
+  {
+    name: 'platform-add-existing-account',
+    routes: USERS_ROUTES,
+    ready: '.dlg #aeEmail',
+    mounted: '#lstOrganizations .tbl tbody tr',
+    drive: async (page) => {
+      await openUsers(page);
+      await page.click('.dlg.lg .df button[data-act="addExisting"]');
+      await page.waitForSelector('.dlg .chk input[type="checkbox"]');
+    },
+  },
+  {
+    name: 'platform-remove-user',
+    routes: USERS_ROUTES,
+    ready: '.dlg.sm .df .btn.danger',
+    mounted: '#lstOrganizations .tbl tbody tr',
+    drive: async (page) => {
+      await openUsers(page);
+      await page.click('.dlg.lg .tbl tbody tr:first-child button.more');
+      await page.click('.dr-menu [role="menuitem"][data-fn="remove"]');
+    },
   },
   {
     name: 'platform-organizations',

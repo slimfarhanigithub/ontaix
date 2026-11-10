@@ -5,7 +5,7 @@
 import { useEffect } from 'react';
 
 import { PlatformAccessBanner } from './auth/PlatformAccessBanner';
-import { BrainBar } from './demo/BrainControls';
+import { BrainStatus } from './demo/BrainControls';
 import { AdminOverlay } from './shell/AdminOverlay';
 import { NewBox, LinkBox } from './shell/Boxes';
 import { CanvasView } from './shell/CanvasView';
@@ -38,7 +38,7 @@ export function App() {
       <Toasts />
       <AdminOverlay />
       <Tools />
-      <BrainBar />
+      <BrainStatus />
       <SelectionBar />
       <TeachBar />
       <Panel />

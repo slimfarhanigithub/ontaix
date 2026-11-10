@@ -166,7 +166,8 @@ async def test_accounts_created_edited_disabled_and_reset_by_the_super_admin(
             "groupIds": [],
         },
     )
-    assert duplicate.status_code == 409 and duplicate.json()["code"] == "duplicate_email"
+    assert duplicate.status_code == 409 and duplicate.json()["code"] == "email_taken"
+    assert "Add existing account" in duplicate.json()["detail"]
     foreign_org = await create_organization(admin)
     foreign = await group_ids(admin, foreign_org["id"], "Builders")
     refused = await admin.call(

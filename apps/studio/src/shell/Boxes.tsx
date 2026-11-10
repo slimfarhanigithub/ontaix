@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { DomainKey } from '../api/types';
 import { domainOf, find } from '../canvas/state';
+import { useT } from '../i18n/i18n';
 import { withSeed } from '../teach/teach';
 import { suggestAction } from '../nl/suggest';
 import { refStyle, titleCase, useStore } from './dom';
@@ -20,6 +21,7 @@ const SUGGEST_ICON = (
 
 export function NewBox() {
   const st = useStore();
+  const t = useT();
   const s = st.s;
   const box = st.ui.newBox;
   const host = box?.host ?? null;
@@ -52,7 +54,7 @@ export function NewBox() {
     const dom = domain;
     st.closeNewBox();
     if (find(s, nm, host.company)) {
-      st.caption('Already there', `${nm} is already in the model. Drop ${host.label} onto it to relate them instead.`);
+      st.caption(t('shell.box.alreadyThere'), t('shell.box.alreadyInModel', { name: nm, host: host.label }));
       return;
     }
     const domName = domainOf(s, dom, host.company)?.name ?? dom;
@@ -65,10 +67,10 @@ export function NewBox() {
           label: nm,
           rule: act || '',
           domainKey: dom as DomainKey,
-          caption: `${host.label} divides: ${nm} inherits everything ${host.label} is.`,
+          caption: t('shell.box.specCaption', { host: host.label, name: nm }),
         }),
       );
-      st.caption('One proposal', `${nm}, a specialisation of ${host.label}, is waiting for your approval.`);
+      st.caption(t('shell.box.oneProposal'), t('shell.box.specWaiting', { name: nm, host: host.label }));
     } else {
       void st.propose(
         withSeed({
@@ -78,10 +80,10 @@ export function NewBox() {
           label: nm,
           domainKey: dom as DomainKey,
           action: act || 'relates to',
-          caption: `${nm} is kept in ${domName}.`,
+          caption: t('shell.box.conceptCaption', { name: nm, domain: domName }),
         }),
       );
-      st.caption('One proposal', `${host.label} ${act || 'relates to'} ${nm}, in ${domName}, is waiting for your approval.`);
+      st.caption(t('shell.box.oneProposal'), t('shell.box.conceptWaiting', { host: host.label, action: act || 'relates to', name: nm, domain: domName }));
     }
   };
 
@@ -101,18 +103,18 @@ export function NewBox() {
       id="newbox"
       style={box ? { left: `${box.left}px`, top: `${box.top}px` } : undefined}
     >
-      <button className="x" id="nbCancel" aria-label="Close" onClick={() => st.closeNewBox()}>
+      <button className="x" id="nbCancel" aria-label={t('common.close')} onClick={() => st.closeNewBox()}>
         ×
       </button>
       <div className="pair">
         <b id="nbFrom">{host?.label ?? ''}</b>
-        <i>divides into</i>
+        <i>{t('shell.box.dividesInto')}</i>
         <b id="nbPreview">{name.trim() || '…'}</b>
       </div>
       <div className="row">
         <input
           id="nbName"
-          placeholder="new concept, e.g. Batch"
+          placeholder={t('shell.box.namePlaceholder')}
           ref={nameRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -122,7 +124,7 @@ export function NewBox() {
       <div className="row" ref={refStyle('margin-top:6px')}>
         <input
           id="nbAction"
-          placeholder="action from the parent, e.g. produced in"
+          placeholder={t('shell.box.actionPlaceholder')}
           ref={actionRef}
           value={action}
           onChange={(e) => setAction(e.target.value)}
@@ -132,12 +134,12 @@ export function NewBox() {
           type="button"
           className="ico"
           id="nbSuggest"
-          title="Suggest an action (you can still edit it)"
+          title={t('shell.box.suggestTitle')}
           onClick={() => {
             if (!host) return;
             const nm = name.trim();
             if (!nm) {
-              st.toast2('Name first', 'the suggestion depends on the new concept’s name');
+              st.toast2(t('shell.box.nameFirst'), t('shell.box.nameFirstText'));
               nameRef.current?.focus();
               return;
             }
@@ -150,7 +152,7 @@ export function NewBox() {
         >
           {SUGGEST_ICON}
         </button>
-        <select id="nbDomain" aria-label="Domain product" value={domain} onChange={(e) => setDomain(e.target.value)}>
+        <select id="nbDomain" aria-label={t('shell.box.domain')} value={domain} onChange={(e) => setDomain(e.target.value)}>
           {domains.map((d) => (
             <option key={`${d.company.key}:${d.key}`} value={d.key}>
               {d.name}
@@ -160,10 +162,10 @@ export function NewBox() {
       </div>
       <div className="row" ref={refStyle('margin-top:6px')}>
         <button id="nbGo" onClick={() => submit(false)}>
-          Propose
+          {t('shell.box.propose')}
         </button>
-        <button className="cancel" id="nbSpec" title="The new cell inherits everything the parent is" onClick={() => submit(true)}>
-          Specialisation
+        <button className="cancel" id="nbSpec" title={t('shell.box.specialisationTitle')} onClick={() => submit(true)}>
+          {t('shell.box.specialisation')}
         </button>
       </div>
     </div>
@@ -172,6 +174,7 @@ export function NewBox() {
 
 export function LinkBox() {
   const st = useStore();
+  const t = useT();
   const s = st.s;
   const box = st.ui.linkBox;
   const [action, setAction] = useState('');
@@ -198,7 +201,7 @@ export function LinkBox() {
     const { a, b } = box;
     st.closeLinkBox();
     if (!link && a.company !== b.company && st.ui.settings && !st.ui.settings.crossCompany) {
-      st.toast2('Not allowed', 'companies may not interact · enable it in the admin portal');
+      st.toast2(t('common.lead.notAllowed'), t('shell.link.notAllowedText'));
       return;
     }
     if (link) {
@@ -210,13 +213,13 @@ export function LinkBox() {
           type: 'change',
           changeKind: 'edit_relation',
           payload: { relationId: link.sid, action: v, reverse },
-          caption: `The relation now reads ${from.label} ${v} ${to.label}.`,
+          caption: t('shell.link.nowReads', { from: from.label, action: v, to: to.label }),
         });
-      st.caption('One proposal', `Changing “${link.label}” to “${v}”${reverse ? ' and reversing the direction' : ''} is waiting for your approval.`);
+      st.caption(t('shell.box.oneProposal'), t('shell.link.changeWaiting', { old: link.label, new: v, reversing: reverse ? t('shell.link.reversing') : '' }));
       return;
     }
     if (s.links.some((l) => l.a === a && l.b === b && l.label === v)) {
-      st.caption('Already there', `${a.label} ${v} ${b.label} is already in the model.`);
+      st.caption(t('shell.box.alreadyThere'), t('shell.link.alreadyInModel', { a: a.label, action: v, b: b.label }));
       return;
     }
     const from = reverse ? b : a,
@@ -232,11 +235,11 @@ export function LinkBox() {
           action: v,
           caption:
             from.company !== to.company
-              ? `${from.label} (${from.company?.name}) ${v} ${to.label} (${to.company?.name}): a relation across two companies.`
-              : `${from.label} ${v} ${to.label}${from.domain !== to.domain ? ': a relation across two domain products' : ''}.`,
+              ? t('shell.link.acrossCompanies', { from: from.label, fromCompany: from.company?.name ?? '', action: v, to: to.label, toCompany: to.company?.name ?? '' })
+              : t('shell.link.caption', { from: from.label, action: v, to: to.label, across: from.domain !== to.domain ? t('shell.link.acrossDomains') : '' }),
         }),
       );
-    st.caption('One proposal', `${from.label} ${v} ${to.label} is waiting for your approval.`);
+    st.caption(t('shell.box.oneProposal'), t('shell.link.waiting', { from: from.label, action: v, to: to.label }));
   };
 
   const deleteLink = () => {
@@ -244,7 +247,7 @@ export function LinkBox() {
     const { a, b } = box;
     st.closeLinkBox();
     if (link.sid) void st.propose({ type: 'change', changeKind: 'remove_relation', payload: { relationId: link.sid } });
-    st.caption('One proposal', `Removing “${a.label} ${link.label} ${b.label}” is waiting for your approval.`);
+    st.caption(t('shell.box.oneProposal'), t('shell.link.removing', { a: a.label, action: link.label, b: b.label }));
   };
 
   const from = box ? (box.reverse ? box.b : box.a) : null,
@@ -255,7 +258,7 @@ export function LinkBox() {
       id="linkbox"
       style={box ? { left: `${box.left}px`, top: `${box.top}px` } : undefined}
     >
-      <button className="x" id="lbCancel" aria-label="Close" onClick={() => st.closeLinkBox()}>
+      <button className="x" id="lbCancel" aria-label={t('common.close')} onClick={() => st.closeLinkBox()}>
         ×
       </button>
       <div className="pair">
@@ -264,7 +267,7 @@ export function LinkBox() {
           type="button"
           className={`ico${box?.reverse ? ' on' : ''}`}
           id="lbReverse"
-          title={link && link.kind === 'isa' ? 'Reverse: make the other one the parent' : 'Reverse direction'}
+          title={link && link.kind === 'isa' ? t('shell.link.reverseParent') : t('shell.link.reverse')}
           style={{ display: link && link.kind === 'same' ? 'none' : undefined }}
           onClick={() => {
             st.reverseLinkBox();
@@ -280,7 +283,7 @@ export function LinkBox() {
       <div className="row">
         <input
           id="lbAction"
-          placeholder="action, e.g. uses, produces, belongs to"
+          placeholder={t('shell.link.actionPlaceholder')}
           ref={input}
           value={action}
           readOnly={structural}
@@ -298,7 +301,7 @@ export function LinkBox() {
           type="button"
           className="ico"
           id="lbSuggest"
-          title="Suggest an action (you can still edit it)"
+          title={t('shell.box.suggestTitle')}
           style={{ display: structural ? 'none' : undefined }}
           onClick={() => {
             if (!from || !to) return;
@@ -315,7 +318,7 @@ export function LinkBox() {
           type="button"
           className="ico go"
           id="lbGo"
-          title={link ? 'Propose change' : 'Propose'}
+          title={link ? t('shell.link.proposeChange') : t('shell.box.propose')}
           style={{ display: structural ? 'none' : undefined }}
           onClick={() => submitLink()}
         >
@@ -326,7 +329,7 @@ export function LinkBox() {
       </div>
       <div className="row" id="lbDanger" style={{ marginTop: 8, display: link ? 'flex' : 'none' }}>
         <button type="button" className="cancel" id="lbDelete" style={{ color: 'var(--conflict)' }} onClick={deleteLink}>
-          Delete this relation
+          {t('shell.link.deleteRelation')}
         </button>
       </div>
     </div>

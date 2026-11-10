@@ -1,9 +1,11 @@
 """`POST /speech/token`: a short-lived Azure AI Speech token for the teach bar microphone.
 
 The caller must be allowed to teach the company (`proposal.create` in its scope) with the
-`voice` setting on. Each call spends one unit of the caller's hourly `speech` budget, and each
-issued token writes one audit entry that never holds the token. The token is the Speech
-resource's own STS token, exchanged server-side from an Entra token that never leaves the API.
+`voice` setting on. The token names the recognition locale of the company's model language
+(`en-GB` or `en-US` for English, `fr-FR`, `de-DE`). Each call spends one unit of the caller's
+hourly `speech` budget, and each issued token writes one audit entry that never holds the
+token. The token is the Speech resource's own STS token, exchanged server-side from an Entra
+token that never leaves the API.
 When no Speech resource or credential is configured, or the exchange fails, the answer is
 `503 unavailable` and the Studio uses the browser's own recogniser.
 """
@@ -25,6 +27,7 @@ from app.services import audit_service
 from app.services.ontology_view_service import load_view
 from app.services.rate_limit_service import Budget, charge
 from app.utilities.channels import ensure_speech_allowed
+from app.utilities.language import language_of, speech_locale
 from app.utilities.permissions import Scope, can_propose, can_read
 from app.utilities.problems import ProblemError, forbidden, not_found
 
@@ -64,7 +67,7 @@ async def mint(session: AsyncSession, caller: Caller, body: SpeechTokenRequest) 
         token=access.token,
         region=settings.speech_region,
         expires_at=datetime.fromtimestamp(access.expires_on, UTC),
-        language=settings.speech_language,
+        language=speech_locale(language_of(company.language), settings.speech_language),
     )
 
 

@@ -132,6 +132,7 @@ class SessionEndReason(enum.StrEnum):
     SESSION_LIMIT = "session_limit"
     SUPPORT_CHANGED = "support_changed"
     ACCESS_CHANGED = "access_changed"
+    MEMBERSHIP_REMOVED = "membership_removed"
 
 
 class ThrottleKeyKind(enum.StrEnum):

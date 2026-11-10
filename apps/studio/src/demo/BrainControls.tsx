@@ -1,36 +1,17 @@
 /**
  * The demo brain's controls: the small brain button at the end of the tool row, which starts the
- * demo and stops it, and the demo bar shown while it runs, with what has grown so far, a
- * progress bar, Pause or Resume (Replay once grown) and Stop. Escape stops it too. A screen
- * reader hears when the brain has finished growing.
+ * demo and stops it; Escape stops it too. Nothing else shows while it grows, so the brain grows on
+ * the canvas as a real model would; a screen reader hears when it has finished growing.
  */
 import { useEffect, useState } from 'react';
 
+import { formatNumber, useT } from '../i18n/i18n';
 import { now } from '../runtime/clock';
 import { useStore } from '../shell/dom';
-import { bornCount, bornDomains, bornLinks, brainPhase, type BrainDemo } from './brainDemo';
+import { brainGrown } from './brainDemo';
 
-/** How often the demo bar reads the growth, in milliseconds. */
+/** How often the status reads the growth, in milliseconds. */
 const TICK_MS = 250;
-
-const number = (n: number): string => n.toLocaleString('en-GB');
-
-const COUNT_WORDS = ['no', 'one', 'two', 'three'];
-
-/** The demo bar's title for what the demo shows at `t`. */
-export function brainTitle(d: BrainDemo, t: number): string {
-  if (d.pausedAt !== null) return 'Demo brain paused';
-  switch (brainPhase(d, t)) {
-    case 'company':
-      return d.company ? `Starting from ${d.company}` : 'Starting a demo brain';
-    case 'domains':
-      return `Growing ${COUNT_WORDS[d.storyDomains] ?? d.storyDomains} domain${d.storyDomains === 1 ? '' : 's'}`;
-    case 'brain':
-      return 'Growing a demo brain';
-    default:
-      return 'Demo brain grown';
-  }
-}
 
 /** The brain icon: two hemispheres with a fold in each. */
 export function BrainIcon() {
@@ -49,14 +30,15 @@ export const brainRunning = (st: ReturnType<typeof useStore>): boolean => !!st.s
 /** The tool row's brain button. */
 export function BrainButton() {
   const st = useStore();
+  const t = useT();
   const on = brainRunning(st);
   return (
     <button
       type="button"
       id="brainDemo"
       className="icon"
-      title={on ? 'Stop the demo brain (Esc)' : 'Grow a demo brain: a large example ontology drawn on the canvas, never saved'}
-      aria-label="Grow a demo brain"
+      title={on ? t('demo.button.stop') : t('demo.button.start')}
+      aria-label={t('demo.button.label')}
       aria-pressed={on}
       onClick={() => (on ? st.stopBrain() : st.startBrain())}
     >
@@ -65,9 +47,10 @@ export function BrainButton() {
   );
 }
 
-/** The demo bar, shown while the demo brain is on. */
-export function BrainBar() {
+/** A polite live region, present while the demo brain is on, that says when it has grown. Nothing shows on screen. */
+export function BrainStatus() {
   const st = useStore();
+  const t = useT();
   const d = st.s.brain;
   const on = brainRunning(st);
   const [, setTick] = useState(0);
@@ -77,57 +60,11 @@ export function BrainBar() {
     return () => window.clearInterval(id);
   }, [on]);
   if (!d || !on) return null;
-  const t = now();
-  const born = bornCount(d, t);
-  const total = d.cells.length;
-  const grown = brainPhase(d, t) === 'grown';
-  const paused = d.pausedAt !== null;
-  const concepts = born;
-  const domains = bornDomains(d, t);
-  const pct = total ? Math.round((born / total) * 100) : 100;
-  const title = brainTitle(d, t);
+  const grown = brainGrown(d, now());
+  const concepts = grown ? d.cells.filter((c) => !c.story?.source).length : 0;
   return (
-    <div className="brainbar" id="brainBar" role="region" aria-label="Demo brain">
-      <span className="bb-icon">
-        <BrainIcon />
-      </span>
-      <div className="bb-text">
-        <b>{title}</b>
-        <span>
-          {number(concepts)} concepts · {number(bornLinks(d, t))} relations · {domains} domain product{domains === 1 ? '' : 's'} · not saved
-        </span>
-        <div className="bb-progress" role="progressbar" aria-label="Growth" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
-          <i style={{ width: `${pct}%` }}></i>
-        </div>
-      </div>
-      {grown ? (
-        <button type="button" id="brainReplay" className="bb-btn" title="Grow it again" aria-label="Grow the demo brain again" onClick={() => st.replayBrain()}>
-          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-            <path d="M3 8a5 5 0 1 0 1.6-3.7M3 2.5v2.8h2.8" />
-          </svg>
-        </button>
-      ) : (
-        <button
-          type="button"
-          id="brainPause"
-          className="bb-btn"
-          title={paused ? 'Let it grow on' : 'Pause the growth'}
-          aria-label={paused ? 'Resume the demo brain' : 'Pause the demo brain'}
-          onClick={() => st.toggleBrainPause()}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-            {paused ? <path d="M5 3.5v9l7.5-4.5z" /> : <path d="M5.5 3.5v9M10.5 3.5v9" />}
-          </svg>
-        </button>
-      )}
-      <button type="button" id="brainStop" className="bb-btn" title="Stop the demo (Esc)" aria-label="Stop the demo brain" onClick={() => st.stopBrain()}>
-        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-          <path d="M4 4l8 8M12 4l-8 8" />
-        </svg>
-      </button>
-      <span className="sr" aria-live="polite">
-        {grown ? `The demo brain has grown: ${number(concepts)} concepts.` : ''}
-      </span>
-    </div>
+    <span className="sr" id="brainStatus" aria-live="polite">
+      {grown ? t('demo.bar.grown', { n: formatNumber(concepts) }) : ''}
+    </span>
   );
 }
