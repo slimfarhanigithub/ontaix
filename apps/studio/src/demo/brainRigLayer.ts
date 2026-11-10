@@ -1,49 +1,47 @@
 /**
- * Draws the demo brain's rig (`brainRig.ts`).
+ * Draws the demo brain's rig (`brainRig.ts`) over the brain: the sources' connections, the brain
+ * firing, and the agents.
  *
- * Cores are drawn in world units, so they stay in proportion with the brain from afar: a dark
- * tower in the source colour with four lit slots and a port on top, its name under it. A story
- * source grows into its core as it flies to its place under the brain; a joining core slides up
- * into place. Its cable, three strands side by side around a lit line, reaches up from the port
- * and plugs into the brain's underside, where its connector flashes once and stays lit.
+ * Connections are drawn as the canvas draws a binding, the source colour at 0.5 opacity, each
+ * reaching from its source to its cell in 0.5 s.
  *
- * The data run: sparks run up the cables carrying a lobe, enter the lobe and spread through it,
- * each cell flashing as the light reaches it, then glowing softly; then every cable carries light
- * at once and the finale's wave lights the whole brain (`brainLayer.ts`).
+ * Firing: light comes down from a source as a spark onto the lobe's landing cell, then fires
+ * along the brain's relations and between neighbours, a short bright streak running to the next cell,
+ * which flashes (a brighter copy of its sphere and a halo) and falls back. In the cascade every
+ * source sends down all its connections at once. Once every cell has fired, one cell in three
+ * twinkles now and then, each at its own pace, so the brain looks alive.
  *
  * Agents are drawn in the machine colour (`--link`), a proposal in gold until a person approves it
  * (`--human`), an approval in green (`--good`). An agent is a disc with a spark glyph and its name
  * over it; a spark runs from it along its route, each concept it reaches ringed and named. Agent
- * marks, names, bubbles and chips keep their size on screen. With reduced motion no spark runs:
- * the concepts light up in turn; with Skip animation every agent stands at its route at once.
+ * marks, names, bubbles and chips keep their size on screen. With reduced motion no spark runs or
+ * twinkles: the cells light and fade in the same order, the concepts light up in turn; with Skip
+ * animation the brain stands still and every agent stands with its route drawn.
  */
-import { FONT_SANS, LIGHT_FALLBACK, MIX_BLACK, MIX_WHITE, themedColour, token } from '../design/tokens';
-import { clamp, ease, hex, mix } from '../canvas/colour';
+import { FONT_SANS, LIGHT_FALLBACK, themedColour, token } from '../design/tokens';
+import { clamp, ease, hex } from '../canvas/colour';
 import { roundRect } from '../canvas/labels';
 import type { CanvasTheme } from '../canvas/themes';
-import { migration, type BrainDemo } from './brainDemo';
-import { AGENT_IN, CABLE_RUN, CABLE_SHARE, HOP, HOP_TRAVEL, PLUG, PROPOSE_DRAW, RETURN, SLIDE, WAVE, type BrainCore, type BrainRig, type BrainRoute, type RouteStop } from './brainRig';
+import { LINK_DRAW, type BrainDemo } from './brainDemo';
+import { AGENT_IN, CASCADE_HOP, DOWN, FIRE_HOP, HOP, HOP_TRAVEL, PROPOSE_DRAW, RETURN, type BrainRig, type BrainRoute, type RouteStop } from './brainRig';
 import { drawGlow, drawSphere, Pulses } from './brainSprites';
 
 /** The machine colour of agents and their sparks, as a stored (light) colour. */
 const AGENT = LIGHT_FALLBACK['--link'];
-/** A story source's radius beside the company, and its smallest radius on screen in CSS pixels. */
-const TILE_PX = 16;
-/** A core's name: its size in core widths, at least NAME_PX on screen. */
-const NAME_SHARE = 0.17;
-const NAME_PX = 11;
-/** How long a plugged connector flashes, and its steady glow. */
-const PLUG_FLASH = 0.7;
-const PLUG_GLOW = 0.35;
-/** A lit cell: seconds it takes to light, then to dim to its rest, its rest, its halo in cell radii, and how long it flashes over its sphere. */
-const LIT_RISE = 0.2;
-const LIT_FALL = 1.0;
-const LIT_REST = 0.4;
-const LIT_R = 4;
-const LIT_FLASH = 0.9;
-/** Sparks per cable while every cable carries light, and how long their stream lasts in cable runs. */
-const ALL_SPARKS = 5;
-const ALL_STREAM = 2;
+/** Opacity and least width of a connection, as the canvas draws a binding. */
+const LINK_ALPHA = 0.5;
+const LINK_WIDTH = 1;
+/** A firing cell: seconds it flashes, a firing streak's head and tail, its halo in cell radii, and how far ahead of its flash a streak starts, in relations. */
+const FLASH = 0.7;
+const FLASH_R = 3;
+const STREAK_LEAD = 1.5;
+/** Twinkling: one cell in TWINKLE_EVERY twinkles, how sharply (a higher power is a shorter twinkle), and its slowest and fastest pace in radians per second. */
+const TWINKLE_EVERY = 3;
+const TWINKLE_POWER = 18;
+const TWINKLE_SLOW = 0.9;
+const TWINKLE_FAST = 2.2;
+/** Sparks a source sends down a connection in the cascade, one after another. */
+const CASCADE_SPARKS = 3;
 /** An agent's radius, a route's spark and line width, a ring's least radius and its line, in CSS pixels. */
 const AGENT_PX = 12;
 const SPARK_PX = 8;
@@ -62,25 +60,6 @@ const PAD_PX = 9;
 /** Seconds an approval's burst runs, and a hand-off chip shows. */
 const BURST = 0.6;
 const HANDOFF_SHOW = 1.6;
-
-/** The point `q` of the way along a polyline, by its points. */
-function pointAt(line: [number, number][], q: number): [number, number] {
-  const f = clamp(q, 0, 1) * (line.length - 1);
-  const k = Math.min(line.length - 2, Math.floor(f));
-  const u = f - k;
-  return [line[k][0] + (line[k + 1][0] - line[k][0]) * u, line[k][1] + (line[k + 1][1] - line[k][1]) * u];
-}
-
-/** Strokes the first `q` of a polyline. */
-function strokePart(ctx: CanvasRenderingContext2D, line: [number, number][], q: number): void {
-  const f = clamp(q, 0, 1) * (line.length - 1);
-  ctx.beginPath();
-  ctx.moveTo(line[0][0], line[0][1]);
-  for (let k = 1; k <= Math.floor(f); k++) ctx.lineTo(line[k][0], line[k][1]);
-  const [x, y] = pointAt(line, q);
-  ctx.lineTo(x, y);
-  ctx.stroke();
-}
 
 /** Words of `text` in lines no wider than `max`, at the context's font. */
 function wrap(ctx: CanvasRenderingContext2D, text: string, max: number): string[] {
@@ -113,145 +92,115 @@ function pill(ctx: CanvasRenderingContext2D, text: string, x: number, y: number,
   return box;
 }
 
-/** Where a core stands after `e` seconds, its width, height and opacity, or null before it shows. */
-function corePlace(d: BrainDemo, core: BrainCore, e: number, zoom: number): [number, number, number, number, number] | null {
-  const c = d.cells[core.source];
-  if (e < c.born) return null;
-  if (core.joins) {
-    const q = d.reduced ? 1 : ease(clamp((e - c.born) / SLIDE, 0, 1));
-    const a = clamp((e - c.born) / SLIDE, 0, 1);
-    return [core.x, core.top + (1 - q) * core.h * 0.8, core.w, core.h, a];
-  }
-  const m = migration(d, e);
-  if (m <= 0) return null;
-  const p = c.story;
-  const k = d.reduced ? (m < 0.5 ? 0 : 1) : m;
-  if (d.reduced && k === 0) return null;
-  const x = p ? p.x + (core.x - p.x) * k : core.x;
-  const cy = p ? p.y + (core.top + core.h / 2 - p.y) * k : core.top + core.h / 2;
-  const tile = Math.max(p ? p.r : TILE_PX, TILE_PX / zoom) * 2;
-  const w = tile + (core.w - tile) * k,
-    h = w * (core.h / core.w);
-  return [x, cy - h / 2, w, h, d.reduced ? 1 : clamp(m * 2, 0, 1)];
-}
-
-/** Draws a core: a dark tower in its colour, four slots lit by `led`, a port on top. */
-function drawCore(ctx: CanvasRenderingContext2D, color: string, x: number, top: number, w: number, h: number, alpha: number, led: number, e: number): void {
-  const col = themedColour(color);
-  const body = ctx.createLinearGradient(x - w / 2, top, x + w / 2, top + h);
-  body.addColorStop(0, hex(mix(col, MIX_BLACK, 0.4), alpha));
-  body.addColorStop(1, hex(mix(col, MIX_BLACK, 0.68), alpha));
-  roundRect(ctx, x - w * 0.2, top - w * 0.07, w * 0.4, w * 0.14, w * 0.04);
-  ctx.fillStyle = hex(mix(col, MIX_BLACK, 0.25), alpha);
-  ctx.fill();
-  roundRect(ctx, x - w / 2, top, w, h, w * 0.12);
-  ctx.fillStyle = body;
-  ctx.fill();
-  ctx.strokeStyle = hex(mix(col, MIX_WHITE, 0.3), 0.8 * alpha);
-  ctx.lineWidth = w * 0.03;
-  ctx.stroke();
-  for (let k = 0; k < 4; k++) {
-    const shimmer = 0.75 + 0.25 * Math.sin(e * 4.2 + k * 1.9 + x * 0.01);
-    roundRect(ctx, x - w * 0.32, top + h * (0.2 + k * 0.17), w * 0.64, h * 0.065, h * 0.03);
-    ctx.fillStyle = hex(mix(col, MIX_WHITE, 0.6), alpha * (0.22 + 0.78 * led * shimmer));
-    ctx.fill();
-  }
-}
-
-/** How strongly the data run sends through a core after `e` seconds, 0 to 1. */
-function sendOf(rig: BrainRig, j: number, e: number): number {
-  let k = 0;
-  for (const r of rig.runs) if (r.cores.includes(j)) k = Math.max(k, 1 - Math.abs(e - r.at - CABLE_RUN / 2) / CABLE_RUN);
-  const all = e - rig.allAt;
-  if (all >= 0) k = Math.max(k, all < CABLE_RUN * (ALL_STREAM + 1) ? 1 : 0);
-  return clamp(k, 0, 1);
-}
-
-/** The cores, their cables and names: under the brain's cells. */
-export function drawCores(ctx: CanvasRenderingContext2D, TH: CanvasTheme, d: BrainDemo, e: number, fade: number, zoom: number): void {
+/** The sources' connections into the brain: under the brain's cells. */
+export function drawLinks(ctx: CanvasRenderingContext2D, d: BrainDemo, e: number, fade: number, zoom: number, hidden: Set<string>): void {
   const rig = d.rig;
   if (!rig) return;
-  const cw0 = (w: number) => w * CABLE_SHARE;
   ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  rig.cores.forEach((core, j) => {
-    const place = corePlace(d, core, e, zoom);
-    if (!place) return;
-    const [x, top, w, h, a] = place;
-    const alpha = a * fade;
-    const color = d.cells[core.source].color;
-    const col = themedColour(color);
-    const plugged = e >= core.plugAt;
-    const send = sendOf(rig, j, e);
-    // The cable reaches up from the port and plugs in.
-    if (e >= core.reachAt) {
-      const q = d.reduced ? 1 : ease(clamp((e - core.reachAt) / PLUG, 0, 1));
-      const k = d.reduced ? clamp((e - core.reachAt) / PLUG, 0, 1) : 1;
-      const cw = cw0(core.w);
-      for (const strand of core.strands) {
-        ctx.strokeStyle = hex(mix(col, MIX_BLACK, 0.5), 0.95 * alpha * k);
-        ctx.lineWidth = cw * 0.3;
-        strokePart(ctx, strand, q);
-        ctx.strokeStyle = hex(mix(col, MIX_WHITE, 0.4), (0.45 + 0.4 * send) * alpha * k);
-        ctx.lineWidth = cw * 0.09;
-        strokePart(ctx, strand, q);
-      }
-      if (plugged) {
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = hex(mix(col, MIX_WHITE, 0.7), (0.35 + 0.5 * send) * alpha);
-        ctx.lineWidth = cw * 0.16;
-        strokePart(ctx, core.cable, 1);
-        ctx.globalCompositeOperation = 'source-over';
-      }
-      if (plugged) {
-        const flash = d.reduced ? 0 : Math.max(0, 1 - (e - core.plugAt) / PLUG_FLASH);
-        drawGlow(ctx, color, core.sx, core.sy, cw * 3.2, (PLUG_GLOW + 0.65 * Math.max(flash, send)) * fade);
-        roundRect(ctx, core.sx - cw * 0.8, core.sy - cw * 0.1, cw * 1.6, cw * 0.9, cw * 0.25);
-        ctx.fillStyle = hex(mix(col, MIX_BLACK, 0.3), alpha);
-        ctx.fill();
-        ctx.strokeStyle = hex(mix(col, MIX_WHITE, 0.55 + 0.45 * flash), alpha);
-        ctx.lineWidth = cw * 0.12;
-        ctx.stroke();
-      }
-    }
-    const led = plugged ? 0.65 + 0.35 * send : 0.15;
-    if (plugged) drawGlow(ctx, color, x, top + h / 2, w * 1.25, (0.3 + 0.5 * send) * fade);
-    drawCore(ctx, color, x, top, w, h, alpha, led, d.reduced || d.instant ? 0 : e);
-    // Its name, once it is more core than tile.
-    if (w < core.w * 0.5) return;
-    const size = Math.max(core.w * NAME_SHARE, NAME_PX / zoom);
-    ctx.font = `600 ${Math.round(size * 100) / 100}px ${FONT_SANS}`;
-    ctx.textAlign = 'center';
-    ctx.shadowColor = TH.shadow;
-    ctx.shadowBlur = 4;
-    ctx.fillStyle = `rgba(${TH.INK},${0.88 * alpha})`;
-    wrap(ctx, d.cells[core.source].label, core.pitch * 1.8).forEach((line, k) => ctx.fillText(line, x, top + h + size * (1.3 + k * 1.2)));
-    ctx.shadowBlur = 0;
-  });
-}
-
-/** How brightly the data run has lit a cell `a` seconds after the light reached it. */
-const litOf = (a: number): number => (a < 0 ? 0 : a < LIT_RISE ? a / LIT_RISE : LIT_REST + (1 - LIT_REST) * Math.max(0, 1 - (a - LIT_RISE) / LIT_FALL));
-
-/** How much of the lit cells' glow is left as the finale's wave takes over. */
-const litLeft = (rig: BrainRig, e: number): number => 1 - clamp((e - rig.allAt - CABLE_RUN) / WAVE, 0, 1);
-
-/** The halos of the cells the data run has lit: under the cells. */
-export function drawRunGlow(ctx: CanvasRenderingContext2D, d: BrainDemo, e: number, fade: number, hidden: Set<string>, inRect: (x: number, y: number) => boolean): void {
-  const rig = d.rig;
-  if (!rig || !rig.runs.length || e < rig.runs[0].at) return;
-  const left = litLeft(rig, e) * fade;
-  if (left <= 0.01) return;
-  const R = d.radius * LIT_R;
-  for (const run of rig.runs) {
-    if (e < run.at + CABLE_RUN || hidden.has(run.domain)) continue;
-    for (const i of run.cells) {
-      const g = litOf(e - rig.litAt[i]);
-      if (g <= 0.01) continue;
-      const c = d.cells[i];
-      if (inRect(c.x, c.y)) drawGlow(ctx, c.color, c.x, c.y, R, g * left);
+  ctx.lineWidth = Math.max(LINK_WIDTH, 0.9 / zoom);
+  for (const s of rig.sources) {
+    const src = d.cells[s.source];
+    if (e < src.born) continue;
+    const col = themedColour(src.color);
+    for (const l of s.links) {
+      if (e < l.at) break;
+      const c = d.cells[l.cell];
+      if (hidden.has(c.domain)) continue;
+      const t = clamp((e - l.at) / LINK_DRAW, 0, 1);
+      const q = d.reduced ? 1 : ease(t);
+      ctx.strokeStyle = hex(col, LINK_ALPHA * fade * (d.reduced ? t : 1));
+      ctx.beginPath();
+      ctx.moveTo(src.x, src.y);
+      ctx.lineTo(src.x + (c.x - src.x) * q, src.y + (c.y - src.y) * q);
+      ctx.stroke();
     }
   }
+}
+
+/** How strongly a source sends after `e` seconds, 0 to 1: while its light comes down for a lobe or the cascade. */
+export function sendingOf(rig: BrainRig, k: number, e: number): number {
+  let v = 0;
+  const bump = (t: number) => (t >= 0 && t <= DOWN * 2 ? 1 - Math.abs(t - DOWN) / DOWN : 0);
+  for (const r of rig.runs) if (r.source === k) v = Math.max(v, bump(e - r.at + DOWN * 0.5));
+  return Math.max(v, bump(e - rig.allAt + DOWN * 0.5));
+}
+
+/** The firing cell `i` of `at`/`from` adds to a frame `a` seconds after it fires: its streak along the relation it fires from, and its flash. */
+function fire(ctx: CanvasRenderingContext2D, d: BrainDemo, pulses: Pulses, i: number, a: number, from: number, hop: number, fade: number, still: boolean): void {
+  const c = d.cells[i];
+  if (!still && from >= 0 && a < 0 && a >= -hop * STREAK_LEAD) {
+    const p = d.cells[from];
+    const q = 1 + a / (hop * STREAK_LEAD);
+    pulses.add(c.color, c.color, p.x, p.y, c.x, c.y, q, fade);
+  }
+  if (a < 0 || a >= FLASH) return;
+  const k = 1 - a / FLASH;
+  drawGlow(ctx, c.color, c.x, c.y, d.radius * FLASH_R, k * fade);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = Math.pow(k, 1.5) * fade;
+  drawSphere(ctx, c.color, c.x, c.y, d.radius);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/** A cell's twinkle after `e` seconds, 0 to 1, each twinkling cell at its own pace. */
+function twinkleOf(i: number, e: number): number {
+  if (i % TWINKLE_EVERY) return 0;
+  const h1 = ((i * 2654435761) >>> 0) / 4294967296,
+    h2 = ((i * 40503 + 977) % 1009) / 1009;
+  const v = Math.sin(e * (TWINKLE_SLOW + (TWINKLE_FAST - TWINKLE_SLOW) * h1) + h2 * 6.283);
+  return v > 0 ? Math.pow(v, TWINKLE_POWER) : 0;
+}
+
+/** The brain firing and twinkling, over its cells. */
+export function drawFiring(ctx: CanvasRenderingContext2D, d: BrainDemo, e: number, fade: number, zoom: number, hidden: Set<string>, inRect: (x: number, y: number) => boolean): void {
+  const rig = d.rig;
+  if (!rig || !rig.runs.length || e < rig.runs[0].at || fade <= 0) return;
+  const still = d.reduced || d.instant;
+  const pulses = new Pulses();
+  // Light comes down from a source onto a lobe's landing cell, and in the cascade down every connection.
+  if (!still) {
+    for (const r of rig.runs) {
+      const q = (e - r.at) / DOWN;
+      if (q <= 0 || q >= 1 || hidden.has(r.domain)) continue;
+      const s = d.cells[rig.sources[r.source].source],
+        c = d.cells[r.landing];
+      pulses.add(s.color, c.color, s.x, s.y, c.x, c.y, ease(q), fade, (SPARK_PX * 1.2) / zoom);
+    }
+    for (const src of rig.sources) {
+      const s = d.cells[src.source];
+      for (const l of src.links) {
+        const c = d.cells[l.cell];
+        if (hidden.has(c.domain)) continue;
+        for (let k = 0; k < CASCADE_SPARKS; k++) {
+          const q = (e - rig.allAt) / DOWN - k * 0.3;
+          if (q > 0 && q < 1) pulses.add(s.color, c.color, s.x, s.y, c.x, c.y, ease(q), fade);
+        }
+      }
+    }
+  }
+  const lobes = e < rig.allAt + DOWN;
+  const cascade = e >= rig.allAt && e < rig.settledAt + FLASH;
+  const twinkle = !still && e >= rig.allAt + DOWN;
+  for (let i = 0; i < d.cells.length; i++) {
+    const c = d.cells[i];
+    if (c.story?.source || hidden.has(c.domain) || !inRect(c.x, c.y)) continue;
+    if (lobes && Number.isFinite(rig.fireAt[i])) fire(ctx, d, pulses, i, e - rig.fireAt[i], rig.fireFrom[i], FIRE_HOP, fade, still);
+    if (cascade) fire(ctx, d, pulses, i, e - rig.cascadeAt[i], rig.cascadeFrom[i], CASCADE_HOP, fade, still);
+    if (twinkle && e >= rig.cascadeAt[i] + FLASH) {
+      const k = twinkleOf(i, e);
+      if (k > 0.04) {
+        drawGlow(ctx, c.color, c.x, c.y, d.radius * FLASH_R, 0.7 * k * fade);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.6 * k * fade;
+        drawSphere(ctx, c.color, c.x, c.y, d.radius);
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+  }
+  pulses.drawStreaks(ctx, zoom);
+  pulses.drawSparks(ctx, zoom);
 }
 
 /** The points of a route: its agent, its concepts, and the agent it hands over to. */
@@ -278,8 +227,8 @@ function sinceStop(r: BrainRoute, e: number, j: number): number | null {
   return p[1] > 0 ? a + r.period : null;
 }
 
-/** Everything over the brain's cells: the data run's sparks and flashes, the agents, their routes and the proposal. */
-export function drawRigOver(
+/** The agents over the brain's cells: their routes, sparks, rings and names, the first agent's bubble and its proposal. */
+export function drawAgents(
   ctx: CanvasRenderingContext2D,
   TH: CanvasTheme,
   d: BrainDemo,
@@ -293,56 +242,6 @@ export function drawRigOver(
   if (!rig || fade <= 0) return;
   const still = d.reduced || d.instant;
   const pulses = new Pulses();
-
-  // The data run: sparks up the cables and into the lobe, a flash on each cell the light reaches.
-  if (!still && rig.runs.length && e >= rig.runs[0].at && e < rig.allAt + CABLE_RUN * (ALL_STREAM + 2)) {
-    for (const run of rig.runs) {
-      const t = e - run.at;
-      if (t < 0 || t > CABLE_RUN + 2 || hidden.has(run.domain)) continue;
-      const head = d.cells[run.cells[0]].color;
-      for (const j of run.cores) {
-        const core = rig.cores[j];
-        const cw = core.w * CABLE_SHARE;
-        for (let k = 0; k < 3; k++) {
-          const q = t / CABLE_RUN - k * 0.18;
-          if (q <= 0 || q >= 1) continue;
-          const [x0, y0] = pointAt(core.cable, q - 0.12),
-            [x1, y1] = pointAt(core.cable, q);
-          pulses.segment(d.cells[core.source].color, head, x0, y0, x1, y1, fade, cw * 0.6, cw * 0.25);
-        }
-      }
-      const [ex, ey] = run.entry;
-      for (const i of run.sparks) {
-        const c = d.cells[i];
-        const leave = run.at + CABLE_RUN,
-          arrive = rig.litAt[i];
-        const q = (e - leave) / Math.max(0.05, arrive - leave);
-        if (q > 0 && q < 1) pulses.add(head, c.color, ex, ey, c.x, c.y, ease(q), fade);
-      }
-      ctx.globalCompositeOperation = 'lighter';
-      for (const i of run.cells) {
-        const a = e - rig.litAt[i];
-        if (a < 0 || a > LIT_FLASH) continue;
-        const c = d.cells[i];
-        ctx.globalAlpha = 0.7 * (1 - a / LIT_FLASH) * fade;
-        drawSphere(ctx, c.color, c.x, c.y, d.radius);
-      }
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = 1;
-    }
-    const t = e - rig.allAt;
-    if (t >= 0)
-      for (const core of rig.cores) {
-        const cw = core.w * CABLE_SHARE;
-        for (let k = 0; k < ALL_SPARKS; k++) {
-          const q = t / CABLE_RUN - (k * ALL_STREAM) / ALL_SPARKS;
-          if (q <= 0 || q >= 1) continue;
-          const [x0, y0] = pointAt(core.cable, q - 0.12),
-            [x1, y1] = pointAt(core.cable, q);
-          pulses.segment(d.cells[core.source].color, d.cells[core.source].color, x0, y0, x1, y1, fade, cw * 0.7, cw * 0.25);
-        }
-      }
-  }
 
   const ink = (a: number) => `rgba(${TH.INK},${a})`;
   const surface = (a: number) => `rgba(${TH.CHIP},${a})`;

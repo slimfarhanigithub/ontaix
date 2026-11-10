@@ -1,61 +1,48 @@
 /**
- * The demo brain's rig, planned once the brain is: the data cores that stand under the brain and
- * the cables that plug them into it, the data run that lights the grown brain, and the agents that
- * work on it at the end. `brainRigLayer.ts` draws it.
+ * The demo brain's rig, planned once the brain is: the sources over the brain and their
+ * connections into it, the brain firing once grown, and the agents that work on it at the end.
+ * `brainRigLayer.ts` draws it.
  *
- * Cores: every example data source becomes a core in a row under the brain, sized to the brain
- * so it stays in proportion from afar. Its cable reaches up from its top and plugs into a socket
- * on the brain's underside. The first cores plug in as the camera pulls back, before the brain
- * grows; the others slide in from below while it grows and plug in one by one.
+ * Sources: once the camera pulls back, the example data sources stand in a row over the brain,
+ * every second one a little higher so names never meet. Each connects to the brain cells nearest
+ * it with thin mapping lines, one after another, each drawn once its cell has budded. The first
+ * sources take their places as the camera pulls back; the others join the row while the brain
+ * grows and connect the same way.
  *
- * Data run: once the brain has grown, light runs up the cables into one lobe after another; it
- * enters the lobe where the cable plugs in and spreads through it, each cell lighting up as it is
- * reached, then dimming to a soft glow. Then every cable carries light at once and the whole brain
- * lights up.
+ * Firing: once the brain has grown, light comes down from a source into one lobe after another
+ * and fires through the lobe along the brain's relations and between neighbouring cells, each cell flashing as
+ * it fires. Then every source sends at once and the whole brain fires in a cascade, from every
+ * cell the sources connect to; then it twinkles, a few cells at a time glowing and fading.
  *
  * Agents: one agent asks a question; its path lights up concept by concept across the domains,
  * through the company's own concepts where they carry the names it looks for, and the answer
- * comes back. It proposes a new concept, drawn dashed in gold until a person
- * approves it and it turns solid. Then the camera pulls back and more agents work on the brain at
- * the same time, two of them meeting on a shared concept where one hands over to the other.
+ * comes back. It proposes a new concept, drawn dashed in gold until a person approves it and it
+ * turns solid. Then the camera pulls back and more agents work on the brain at the same time, two
+ * of them meeting on a shared concept where one hands over to the other.
  */
 import type { Node } from '../canvas/types';
-import type { BrainCell } from './brainDemo';
+import type { BrainCell, BrainLink } from './brainDemo';
 import { CORE_KEY } from './brainVocabulary';
 
-export interface BrainCore {
-  /** The source cell it carries. */
+/** A source's place over the brain and its connections into it. */
+export interface BrainSource {
+  /** The source cell. */
   source: number;
-  /** Its centre x, top y, width and height, and the room between two cores, in world units. */
-  x: number;
-  top: number;
-  w: number;
-  h: number;
-  pitch: number;
-  /** Where its cable plugs into the brain's underside. */
-  sx: number;
-  sy: number;
-  /** Points along its cable, from the core's top to the socket, and its three strands. */
-  cable: [number, number][];
-  strands: [number, number][][];
-  /** When its cable starts reaching up and when it plugs in. */
-  reachAt: number;
-  plugAt: number;
-  /** True for a core that slides in while the brain grows. */
+  /** The brain cells it connects to, and when each connection starts to draw. */
+  links: { cell: number; at: number }[];
+  /** The widest its name may stand over it, in world units: two sources' room, its neighbours in its row being two sources away. */
+  nameWidth: number;
+  /** True for a source that joins while the brain grows. */
   joins: boolean;
 }
 
-/** The data run's pass through one lobe. */
+/** One lobe's turn to fire: the source the light comes down from, and the cell it lands on. */
 export interface BrainRun {
   domain: string;
-  /** When light leaves the cores for it. */
+  /** When the light leaves the source. */
   at: number;
-  /** The cores whose cables carry it, and where the light enters the lobe. */
-  cores: number[];
-  entry: [number, number];
-  /** The lobe's cells, and those a spark runs to from the entry. */
-  cells: number[];
-  sparks: number[];
+  source: number;
+  landing: number;
 }
 
 export interface BrainAgent {
@@ -113,13 +100,17 @@ export interface BrainProposal {
 }
 
 export interface BrainRig {
-  cores: BrainCore[];
-  /** For each cell, when the data run lights it; Infinity for none. */
-  litAt: Float64Array;
+  sources: BrainSource[];
+  /** For each cell: when its lobe's turn fires it and the cell the firing comes from (-1 for the landing cell or none); Infinity when it never fires. */
+  fireAt: Float64Array;
+  fireFrom: Int32Array;
   runs: BrainRun[];
-  /** When every cable carries light at once, and where the wave of light starts: the sockets' middle. */
+  /** When every source sends at once, and for each cell when the cascade fires it and the cell it comes from. */
   allAt: number;
-  origin: [number, number];
+  cascadeAt: Float64Array;
+  cascadeFrom: Int32Array;
+  /** When the cascade has fired every cell: the brain twinkles from then. */
+  settledAt: number;
   agents: BrainAgent[];
   routes: BrainRoute[];
   question: BrainQuestion | null;
@@ -130,46 +121,40 @@ export interface BrainRig {
   backAt: number;
   /** What the camera shows while the first agent works. */
   focus: [number, number, number, number];
-  /** What the camera shows once pulled back: the brain, its cores and the agents. */
+  /** What the camera shows once pulled back: the brain, the sources over it and the agents. */
   frame: [number, number, number, number];
   /** When the whole rig has played. */
   end: number;
 }
 
 /**
- * Cores: share of the brain's width each is wide (at most CORE_FILL of the room between two),
- * height to width, distance under the brain in neighbour distances, and how much lower every
- * second one stands, in core heights plus the room for a name, so names never meet.
+ * Sources over the brain: share of the brain's width kept free at each end of their row, their
+ * distance over the brain's highest cell, how much higher every second one stands, and the room
+ * kept over each for its name, in neighbour distances.
  */
-const CORE_SHARE = 0.085;
-const CORE_FILL = 0.75;
-const CORE_TALL = 1.35;
-const CORE_DROP = 3;
-const CORE_STAGGER = 1.1;
-/** Share of the brain's width kept free at each end of the row of cores. */
-const CORE_INSET = 0.06;
-/** How far the sockets lean in toward the middle, as a share of the core's distance from it, and the half-width of the strip the brain's underside is read from, in neighbour distances. */
-const SOCKET_PULL = 0.85;
-const SOCKET_BAND = 2.5;
-/** A cable's width as a share of its core's, and the room under a core kept for its name, in core widths and at least in neighbour distances. */
-export const CABLE_SHARE = 0.3;
-const NAME_ROOM = 0.6;
-const NAME_ROOM_MIN = 5;
-/** Seconds a joining core takes to slide in, and a cable to reach up and plug in. */
-export const SLIDE = 0.6;
-export const PLUG = 0.7;
-/** Data run: seconds after the brain has grown before it starts, between two lobes, for light to run up a cable, and to spread through a lobe; sparks into each lobe. */
-const RUN_DELAY = 0.8;
+const SOURCE_INSET = 0.06;
+const SOURCE_ABOVE = 6;
+const SOURCE_STAGGER = 3;
+const SOURCE_STAGGER_SMALL = 8;
+const SOURCE_NAME_ROOM = 4;
+/** Connections each source makes, seconds after a source is in place before its first one and between two, and the least time after its cell buds. */
+const SOURCE_LINKS = 6;
+export const LINK_LEAD = 0.35;
+const LINK_GAP = 0.12;
+const LINK_AFTER_BUD = 0.2;
+/** Firing: seconds after the brain has grown before it starts, between two lobes, for the light to come down from its source, and between two cells it fires along a relation; the same for the cascade. */
+const FIRE_DELAY = 0.8;
 const LOBE_STEP = 0.5;
-export const CABLE_RUN = 0.55;
-const SPREAD = 0.7;
-const RUN_SPARKS = 16;
-/** Seconds after the last lobe before every cable carries light, the wave of light's run, and the pause before the agents. */
-const ALL_GAP = 0.4;
-export const WAVE = 1.8;
-const AGENT_GAP = 0.6;
-/** Agents: their distance outside the brain, the room the camera keeps around each, and on a phone how much higher every second one stands, in neighbour distances. */
-const AGENT_OUT = 3.5;
+export const DOWN = 0.5;
+export const FIRE_HOP = 0.07;
+const CASCADE_GAP = 0.6;
+export const CASCADE_HOP = 0.045;
+/** Cells this close, in neighbour distances, are neighbours firing can run between. */
+const NEIGHBOUR = 1.8;
+/** Seconds after the cascade before the first agent appears. */
+const AGENT_GAP = 0.8;
+/** Agents: their distance outside the brain, the room the camera keeps around each, and on a phone how much lower every second one stands, in neighbour distances. */
+const AGENT_OUT = 4.5;
 const AGENT_ROOM = 4;
 const AGENT_STAGGER_SMALL = 9;
 /** Seconds an agent takes to appear, and from appearing to its first spark. */
@@ -185,8 +170,11 @@ const ANSWER_HOLD = 1.4;
 export const PROPOSE_DRAW = 0.5;
 const APPROVE_AFTER = 1.6;
 const APPROVED_HOLD = 1.4;
-/** The proposal's distance outside the brain, in neighbour distances. */
-const PROPOSAL_OUT = 2;
+/** The proposal's distance outside the brain, in neighbour distances, and how far above level its way out may lean, in degrees, so it never stands among the sources. */
+const PROPOSAL_OUT = 2.5;
+const PROPOSAL_UP = 10;
+/** The half-width of the strip along its way out read for the brain's edge, in neighbour distances, so a groove does not count as outside. */
+const PROPOSAL_CLEAR = 1.6;
 /** Seconds the camera takes to close in and to pull back, the gap between two agents appearing, a loop's pause, and the time held at the end. */
 export const FOCUS_IN = 1.4;
 export const BACK = 1.6;
@@ -208,7 +196,7 @@ const QUESTION = 'Which suppliers delay our deliveries to customers?';
 const ANSWER = '3 suppliers · 41 late deliveries · 12 customers affected';
 const PROPOSAL = 'Supplier risk score';
 
-/** The agents, the first one asking the question; a route with a hand-off ends at the next agent. Its angle around the brain, in degrees. */
+/** The agents, the first one asking the question; a route with a hand-off ends at the next agent. Its angle around the brain, in degrees, clockwise from the right: they stand beside and under it, the sources being over it. */
 interface AgentSpec {
   name: string;
   angle: number;
@@ -216,61 +204,86 @@ interface AgentSpec {
   handoff?: number;
 }
 const AGENTS: AgentSpec[] = [
-  { name: 'Procurement agent', angle: -170, route: QUESTION_ROUTE },
-  { name: 'Planning agent', angle: -132, route: [['production', 'Work order'], ['production', 'Production line'], ['production', 'Bill of materials']] },
-  { name: 'Quality agent', angle: -92, route: [['quality', 'Inspection'], ['quality', 'Defect'], ['quality', 'Corrective action']] },
+  { name: 'Procurement agent', angle: 180, route: QUESTION_ROUTE },
+  { name: 'Planning agent', angle: 148, route: [['production', 'Work order'], ['production', 'Production line'], ['production', 'Bill of materials']] },
+  { name: 'Quality agent', angle: 118, route: [['quality', 'Inspection'], ['quality', 'Defect'], ['quality', 'Corrective action']] },
   {
     name: 'Sales agent',
-    angle: -52,
+    angle: 62,
     route: [['sales', 'Opportunity'], ['sales', 'Sales order'], ['sales', 'Customer'], ['maintenance', 'Service visit'], ['maintenance', 'Installed base']],
     handoff: 2,
   },
-  { name: 'Service agent', angle: -12, route: [] },
-  { name: 'Finance agent', angle: 24, route: [['finance', 'Invoice'], ['finance', 'Payment'], ['finance', 'Margin']] },
+  { name: 'Service agent', angle: 30, route: [] },
+  { name: 'Finance agent', angle: 0, route: [['finance', 'Invoice'], ['finance', 'Payment'], ['finance', 'Margin']] },
 ];
-/** On a phone four agents stand in a row over the brain, where the screen has room. */
+/** On a phone four agents stand in a row under the brain, where the screen has room. */
 const AGENTS_SMALL: AgentSpec[] = [AGENTS[0], AGENTS[2], AGENTS[3], AGENTS[4]];
 
 export interface RigPlan {
   cells: BrainCell[];
+  links: BrainLink[];
   /** The company's own concepts in the brain, each with its place. */
   joined: Map<Node, { x: number; y: number }>;
   /** Domain keys in lobe order. */
   domains: string[];
   box: [number, number, number, number];
   spacing: number;
-  radius: number;
   small: boolean;
-  /** When the first cores reach their places under the brain, and when the brain has grown. */
+  /** When the first sources reach their places over the brain, and when the brain has grown. */
   arrive: number;
   grown: number;
 }
 
-/** The world points of a cubic curve from a to d, `n` steps. */
-function curve(a: [number, number], b: [number, number], c: [number, number], d: [number, number], n: number): [number, number][] {
-  const out: [number, number][] = [];
-  for (let i = 0; i <= n; i++) {
-    const t = i / n,
-      u = 1 - t;
-    out.push([
-      u * u * u * a[0] + 3 * u * u * t * b[0] + 3 * u * t * t * c[0] + t * t * t * d[0],
-      u * u * u * a[1] + 3 * u * u * t * b[1] + 3 * u * t * t * c[1] + t * t * t * d[1],
-    ]);
+/**
+ * When each cell fires, spreading from `starts` along `near` one relation every `hop` seconds,
+ * only through cells `ok` lets in, and the cell each fires from. Cells no relation reaches fire by
+ * their distance from the nearest start, as if the firing ran on at its pace.
+ */
+function spread(
+  cells: BrainCell[],
+  near: number[][],
+  starts: [number, number][],
+  hop: number,
+  ok: (i: number) => boolean,
+  at: Float64Array,
+  from: Int32Array,
+  spacing: number,
+): number {
+  let queue: number[] = [];
+  for (const [i, t] of starts)
+    if (t < at[i]) {
+      at[i] = t;
+      from[i] = -1;
+      queue.push(i);
+    }
+  queue.sort((a, b) => at[a] - at[b]);
+  let last = 0;
+  while (queue.length) {
+    const next: number[] = [];
+    for (const i of queue) {
+      last = Math.max(last, at[i]);
+      for (const j of near[i]) {
+        if (!ok(j) || at[j] <= at[i] + hop) continue;
+        at[j] = at[i] + hop;
+        from[j] = i;
+        next.push(j);
+      }
+    }
+    queue = next;
   }
-  return out;
-}
-
-/** The line `off` to the side of a polyline, side by side with it all the way. */
-function beside(line: [number, number][], off: number): [number, number][] {
-  return line.map(([x, y], i) => {
-    const [ax, ay] = line[Math.max(0, i - 1)],
-      [bx, by] = line[Math.min(line.length - 1, i + 1)];
-    const l = Math.hypot(bx - ax, by - ay) || 1;
-    return [x + ((ay - by) / l) * off, y + ((bx - ax) / l) * off];
+  // A cell no relation reaches fires as the firing would reach it across the gap.
+  cells.forEach((c, i) => {
+    if (!ok(i) || Number.isFinite(at[i])) return;
+    let best = Infinity;
+    for (const [s, t] of starts) best = Math.min(best, t + (hop * Math.hypot(c.x - cells[s].x, c.y - cells[s].y)) / spacing);
+    at[i] = best;
+    from[i] = -1;
+    last = Math.max(last, best);
   });
+  return last;
 }
 
-/** Plans the rig of a brain whose cells are in birth order; sets the sources' places under the brain. */
+/** Plans the rig of a brain whose cells are in birth order; sets the sources' places over the brain. */
 export function planRig(p: RigPlan): BrainRig {
   const { cells, spacing, box } = p;
   const [x0, y0, x1, y1] = box;
@@ -278,7 +291,7 @@ export function planRig(p: RigPlan): BrainRig {
     bh = y1 - y0,
     cx = (x0 + x1) / 2,
     cy = (y0 + y1) / 2;
-  const sources = cells.flatMap((c, i) => (c.story?.source ? [i] : []));
+  const sourceIdx = cells.flatMap((c, i) => (c.story?.source ? [i] : []));
   const brain = cells.flatMap((c, i) => (c.story?.source ? [] : [i]));
   const frame: [number, number, number, number] = [x0, y0, x1, y1];
   const grow = (x: number, y: number, rx: number, ry: number) => {
@@ -288,55 +301,77 @@ export function planRig(p: RigPlan): BrainRig {
     frame[3] = Math.max(frame[3], y + ry);
   };
 
-  // Cores: the first ones spread among the rest across the brain's width.
-  const n = sources.length;
-  const first = sources.filter((i) => cells[i].born < p.arrive);
+  // Sources: the first ones spread among the rest across the brain's width, over it.
+  const n = sourceIdx.length;
+  const first = sourceIdx.filter((i) => cells[i].born < p.arrive);
   const slots = new Map<number, number>();
   first.forEach((i, k) => slots.set(i, first.length > 1 ? Math.round((k * (n - 1)) / (first.length - 1)) : Math.floor((n - 1) / 2)));
   const used = new Set(slots.values());
   let free = 0;
-  for (const i of sources) {
+  for (const i of sourceIdx) {
     if (slots.has(i)) continue;
     while (used.has(free)) free++;
     slots.set(i, free);
     used.add(free);
   }
-  const left = x0 + bw * CORE_INSET,
-    right = x1 - bw * CORE_INSET;
+  const left = x0 + bw * SOURCE_INSET,
+    right = x1 - bw * SOURCE_INSET;
   const pitch = n > 1 ? (right - left) / (n - 1) : bw;
-  const w = Math.min(bw * CORE_SHARE, pitch * CORE_FILL),
-    h = w * CORE_TALL,
-    cw = w * CABLE_SHARE;
-  const nameRoom = Math.max(w * NAME_ROOM, spacing * NAME_ROOM_MIN);
-  const band = spacing * SOCKET_BAND;
-  const underside = (x: number): number => {
-    let y = -Infinity;
-    for (const i of brain) if (Math.abs(cells[i].x - x) < band) y = Math.max(y, cells[i].y);
-    return y === -Infinity ? cy : y + p.radius * 0.4;
-  };
-  const cores: BrainCore[] = sources.map((i) => {
+  const sources: BrainSource[] = sourceIdx.map((i) => {
     const j = slots.get(i) as number;
     const c = cells[i];
-    const x = n > 1 ? left + pitch * j : cx;
-    const top = y1 + spacing * CORE_DROP + (j % 2 ? h * CORE_STAGGER + nameRoom : 0);
-    const sx = cx + (x - cx) * SOCKET_PULL,
-      sy = underside(sx);
-    const lift = top - sy;
-    const cable = curve([x, top], [x, top - lift * 0.45], [sx, sy + lift * 0.45], [sx, sy], 28);
+    c.x = c.px = n > 1 ? left + pitch * j : cx;
+    c.y = c.py = y0 - spacing * (SOURCE_ABOVE + (j % 2) * (p.small ? SOURCE_STAGGER_SMALL : SOURCE_STAGGER));
     const joins = !first.includes(i);
-    const reachAt = joins ? c.born + SLIDE : p.arrive;
-    c.x = c.px = x;
-    c.y = c.py = top + h / 2;
     if (joins && c.story) Object.assign(c.story, { x: c.x, y: c.y });
-    grow(x, top + h, Math.max(w, pitch), nameRoom);
-    return { source: i, x, top, w, h, pitch, sx, sy, cable, strands: [-1, 0, 1].map((k) => beside(cable, k * cw * 0.32)), reachAt, plugAt: reachAt + PLUG, joins };
+    grow(c.x, c.y, pitch / 2, spacing * SOURCE_NAME_ROOM);
+    // Its connections: the brain cells nearest it, each once it has budded.
+    const ready = (joins ? c.born : p.arrive) + LINK_LEAD;
+    const nearest = brain
+      .map((k) => [k, Math.hypot(cells[k].x - c.x, cells[k].y - c.y)] as const)
+      .sort((a, b) => a[1] - b[1])
+      .slice(0, SOURCE_LINKS)
+      .map(([k]) => k);
+    const links = nearest.map((k, m) => ({ cell: k, at: Math.max(ready + m * LINK_GAP, cells[k].born + LINK_AFTER_BUD) }));
+    return { source: i, links: links.sort((a, b) => a.at - b.at), nameWidth: pitch * 1.8, joins };
   });
-  const origin: [number, number] = cores.length
-    ? [cores.reduce((a, c) => a + c.sx, 0) / cores.length, cores.reduce((a, c) => a + c.sy, 0) / cores.length]
-    : [cx, y1];
 
-  // The data run: one lobe after another, the brain stem last.
-  const litAt = new Float64Array(cells.length).fill(Infinity);
+  // The ways firing runs, both ways: each cell's birth link to the cell it budded from, the further
+  // relations, and the brain's neighbouring cells, so every lobe holds together.
+  const at = new Map<string, number>();
+  for (const i of brain) at.set(`${cells[i].x},${cells[i].y}`, i);
+  const near: number[][] = cells.map(() => []);
+  const join = (a: number, b: number) => {
+    near[a].push(b);
+    near[b].push(a);
+  };
+  for (const i of brain) {
+    if (!cells[i].linked) continue;
+    const parent = at.get(`${cells[i].px},${cells[i].py}`);
+    if (parent !== undefined && parent !== i) join(i, parent);
+  }
+  for (const [a, b] of p.links) if (!cells[a].story?.source && !cells[b].story?.source) join(a, b);
+  const reach = spacing * NEIGHBOUR;
+  const grid = new Map<string, number[]>();
+  const key = (x: number, y: number) => `${Math.floor(x / reach)},${Math.floor(y / reach)}`;
+  for (const i of brain) {
+    const k = key(cells[i].x, cells[i].y);
+    const list = grid.get(k);
+    if (list) list.push(i);
+    else grid.set(k, [i]);
+  }
+  for (const i of brain) {
+    const gx = Math.floor(cells[i].x / reach),
+      gy = Math.floor(cells[i].y / reach);
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++)
+        for (const j of grid.get(`${gx + dx},${gy + dy}`) ?? [])
+          if (j > i && Math.hypot(cells[j].x - cells[i].x, cells[j].y - cells[i].y) <= reach) join(i, j);
+  }
+
+  // Firing: one lobe after another, the brain stem last, each from the cell of the lobe nearest a source.
+  const fireAt = new Float64Array(cells.length).fill(Infinity);
+  const fireFrom = new Int32Array(cells.length).fill(-1);
   const groups = new Map<string, number[]>();
   for (const i of brain) {
     const list = groups.get(cells[i].domain);
@@ -344,35 +379,44 @@ export function planRig(p: RigPlan): BrainRig {
     else groups.set(cells[i].domain, [i]);
   }
   const order = [...p.domains.filter((k) => groups.has(k)), ...(groups.has(CORE_KEY) ? [CORE_KEY] : [])];
-  const runAt = p.grown + RUN_DELAY;
-  const runs: BrainRun[] = order.map((key, k) => {
-    const list = groups.get(key) as number[];
-    const mx = list.reduce((a, i) => a + cells[i].x, 0) / list.length,
-      my = list.reduce((a, i) => a + cells[i].y, 0) / list.length;
-    const near = cores
-      .map((c, j) => [j, Math.hypot(c.sx - mx, c.sy - my)] as const)
-      .sort((a, b) => a[1] - b[1])
-      .map(([j]) => j)
-      .slice(0, 2);
-    const entry: [number, number] = near.length ? [cores[near[0]].sx, cores[near[0]].sy] : origin;
-    const at = runAt + k * LOBE_STEP;
-    const dist = list.map((i) => Math.hypot(cells[i].x - entry[0], cells[i].y - entry[1]));
-    const far = Math.max(1, ...dist);
-    list.forEach((i, m) => (litAt[i] = at + CABLE_RUN + (SPREAD * dist[m]) / far));
-    const byDist = list.slice().sort((a, b) => litAt[a] - litAt[b]);
-    const count = Math.min(RUN_SPARKS, byDist.length);
-    const sparks = Array.from({ length: count }, (_, m) => byDist[Math.floor(((m + 0.5) * byDist.length) / count)]);
-    return { domain: key, at, cores: near, entry, cells: list, sparks };
-  });
-  const allAt = runAt + order.length * LOBE_STEP + ALL_GAP;
-  const agentAt = allAt + CABLE_RUN + WAVE + AGENT_GAP;
+  const fireStart = p.grown + FIRE_DELAY;
+  let fired = fireStart;
+  const runs: BrainRun[] = sources.length
+    ? order.map((key, k) => {
+        const list = groups.get(key) as number[];
+        let landing = list[0],
+          source = 0,
+          bd = Infinity;
+        for (const i of list)
+          sources.forEach((s, j) => {
+            const dd = Math.hypot(cells[i].x - cells[s.source].x, cells[i].y - cells[s.source].y);
+            if (dd < bd) {
+              bd = dd;
+              landing = i;
+              source = j;
+            }
+          });
+        const t = fireStart + k * LOBE_STEP;
+        fired = Math.max(fired, spread(cells, near, [[landing, t + DOWN]], FIRE_HOP, (i) => cells[i].domain === key, fireAt, fireFrom, spacing));
+        return { domain: key, at: t, source, landing };
+      })
+    : [];
 
-  // Agents stand around the brain. Each route's stops are the concepts it names: a demo cell or one
-  // of the company's own concepts of that name, or failing that a cell of the same domain, or any.
+  // The cascade: every source sends at once, the whole brain fires from every cell they connect to.
+  const allAt = fired + CASCADE_GAP;
+  const cascadeAt = new Float64Array(cells.length).fill(Infinity);
+  const cascadeFrom = new Int32Array(cells.length).fill(-1);
+  const starts: [number, number][] = sources.flatMap((s) => s.links.map((l): [number, number] => [l.cell, allAt + DOWN]));
+  const settledAt = starts.length ? spread(cells, near, starts, CASCADE_HOP, (i) => !cells[i].story?.source, cascadeAt, cascadeFrom, spacing) : allAt;
+  const agentAt = settledAt + AGENT_GAP;
+
+  // Agents stand beside and under the brain. Each route's stops are the concepts it names: a demo
+  // cell or one of the company's own concepts of that name, or failing that a cell of the same
+  // domain, or any.
   const norm = (t: string) => t.trim().toLowerCase().replace(/s$/, '');
   const ofCell = (i: number): RouteStop => ({ x: cells[i].x, y: cells[i].y, label: cells[i].label, color: cells[i].color, domain: cells[i].domain, cell: i });
   const own = [...p.joined].map(
-    ([n, at]): RouteStop => ({ x: at.x, y: at.y, label: n.label, color: n.domain?.color ?? cells[brain[0]]?.color ?? '', domain: n.domain?.key ?? CORE_KEY, cell: -1 }),
+    ([node, place]): RouteStop => ({ x: place.x, y: place.y, label: node.label, color: node.domain?.color ?? cells[brain[0]]?.color ?? '', domain: node.domain?.key ?? CORE_KEY, cell: -1 }),
   );
   const pick = (stops: Stop[]): { stops: RouteStop[]; exact: boolean } => {
     const out: RouteStop[] = [];
@@ -405,7 +449,7 @@ export function planRig(p: RigPlan): BrainRig {
   if (brain.length) {
     specs.forEach((sp, k) => {
       const [x, y] = p.small
-        ? [x0 + (bw * (k + 0.5)) / specs.length, y0 - spacing * (AGENT_OUT + (k % 2 ? 0 : AGENT_STAGGER_SMALL))]
+        ? [x0 + (bw * (k + 0.5)) / specs.length, y1 + spacing * (AGENT_OUT + (k % 2 ? AGENT_STAGGER_SMALL : 0))]
         : [cx + Math.cos((sp.angle * Math.PI) / 180) * rx, cy + Math.sin((sp.angle * Math.PI) / 180) * ry];
       agents.push({ name: sp.name, x, y, at: agentAt });
     });
@@ -417,34 +461,42 @@ export function planRig(p: RigPlan): BrainRig {
     const beamAt = agentAt + ASK;
     const returnAt = beamAt + q.stops.length * HOP;
     const answerAt = returnAt + RETURN;
-    const first = q.stops[0];
+    const firstStop = q.stops[0];
     routes.push({ from: 0, to: -1, stops: q.stops, handoff: -1, at: beamAt, period: 0 });
     question = {
       route: 0,
-      ask: q.exact ? QUESTION : `How does ${first.label} affect ${q.stops[q.stops.length - 1].label}?`,
+      ask: q.exact ? QUESTION : `How does ${firstStop.label} affect ${q.stops[q.stops.length - 1].label}?`,
       answer: q.exact ? ANSWER : `${q.stops.length} concepts across ${new Set(q.stops.map((o) => o.domain)).size} domains connect them`,
       askAt,
       returnAt,
       answerAt,
     };
 
-    // It proposes a new concept just outside the brain, beside the concept it started from.
+    // It proposes a new concept just outside the brain, beside the concept it started from: out
+    // the shortest way across the brain's edge that does not lead up among the sources.
     const propAt = answerAt + ANSWER_HOLD;
-    let ux = first.x - cx,
-      uy = first.y - cy;
-    const ul = Math.hypot(ux, uy) || 1;
-    ux /= ul;
-    uy /= ul;
-    let px = first.x,
-      py = first.y;
-    for (let k = 0; k < 120 && brain.some((i) => Math.hypot(cells[i].x - px, cells[i].y - py) < spacing * 1.2); k++) {
-      px += ux * spacing * 0.5;
-      py += uy * spacing * 0.5;
+    let px = firstStop.x,
+      py = firstStop.y,
+      best = Infinity;
+    for (let deg = -PROPOSAL_UP; deg <= 180 + PROPOSAL_UP; deg += 10) {
+      const ux = Math.cos((deg * Math.PI) / 180),
+        uy = Math.sin((deg * Math.PI) / 180);
+      // How far along this way the brain reaches.
+      let reach = 0;
+      for (const i of brain) {
+        const vx = cells[i].x - firstStop.x,
+          vy = cells[i].y - firstStop.y;
+        const along = vx * ux + vy * uy;
+        if (along > reach && Math.abs(vx * uy - vy * ux) < spacing * PROPOSAL_CLEAR) reach = along;
+      }
+      if (reach < best) {
+        best = reach;
+        px = firstStop.x + ux * (reach + spacing * PROPOSAL_OUT);
+        py = firstStop.y + uy * (reach + spacing * PROPOSAL_OUT);
+      }
     }
-    px += ux * spacing * PROPOSAL_OUT;
-    py += uy * spacing * PROPOSAL_OUT;
     const approveAt = propAt + PROPOSE_DRAW + APPROVE_AFTER;
-    proposal = { from: first, x: px, y: py, label: q.exact ? PROPOSAL : `${first.label} risk score`, color: first.color, at: propAt, approveAt };
+    proposal = { from: firstStop, x: px, y: py, label: q.exact ? PROPOSAL : `${firstStop.label} risk score`, color: firstStop.color, at: propAt, approveAt };
     grow(px, py, spacing * AGENT_ROOM, spacing * AGENT_ROOM);
     backAt = approveAt + APPROVED_HOLD;
 
@@ -481,11 +533,14 @@ export function planRig(p: RigPlan): BrainRig {
   } else focus.splice(0, 4, ...frame);
 
   return {
-    cores,
-    litAt,
+    sources,
+    fireAt,
+    fireFrom,
     runs,
     allAt,
-    origin,
+    cascadeAt,
+    cascadeFrom,
+    settledAt,
     agents,
     routes,
     question,
@@ -495,6 +550,6 @@ export function planRig(p: RigPlan): BrainRig {
     backAt,
     focus,
     frame,
-    end: agents.length ? backAt + BACK + END_HOLD : allAt + CABLE_RUN + WAVE,
+    end: agents.length ? backAt + BACK + END_HOLD : settledAt,
   };
 }

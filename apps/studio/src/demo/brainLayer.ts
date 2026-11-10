@@ -7,13 +7,14 @@
  * made. In the third act they fly into the cores of their lobes and shrink to brain cells.
  * Example data sources are drawn as the canvas draws a source, never smaller on screen than a
  * canvas source, and their mappings reach from the source to a concept one by one; the mappings
- * fade out as the story cells fly into the brain, and the sources grow into the data cores of the
- * rig (`brainRigLayer.ts`), which draws them from then on, with their cables, the data run and
- * the agents.
+ * fade out as the story cells fly into the brain, while the sources move to their places over the
+ * brain, a little smaller on screen, their names over them. The rig (`brainRigLayer.ts`) draws
+ * their connections into the brain, the brain firing once grown, and the agents; a source glows
+ * while it sends.
  *
- * When every cable carries light at once, a wave of light runs out from the sockets through the
- * brain, a flash at its front lightening the cells it passes, and leaves every cell in a soft,
- * steady halo of its colour.
+ * With no source, a wave of light runs out from the top of the brain stem through the grown brain,
+ * a flash at its front lightening the cells it passes, and leaves every cell in a soft, steady
+ * halo of its colour.
  *
  * Thousands of cells stay smooth. A cell that has settled never moves again, so from afar
  * settled cells and their relations are painted once into a cached picture of the whole brain,
@@ -33,20 +34,20 @@ import { labelScale, roundRect } from '../canvas/labels';
 import { beginLayer, compositeLayer } from '../canvas/regions';
 import type { SceneState } from '../canvas/state';
 import { toWorld, type View } from '../canvas/view';
-import { brainAlpha, brainElapsed, brainFitZoom, bornBy, LINK_DRAW, linksBy, MIGRATE, migration, ZOOM_OUT, type BrainCell, type BrainDemo } from './brainDemo';
-import { CABLE_RUN, WAVE } from './brainRig';
-import { drawCores, drawRigOver, drawRunGlow } from './brainRigLayer';
+import { brainAlpha, brainElapsed, brainFitZoom, brainFocus, bornBy, LINK_DRAW, linksBy, MIGRATE, migration, ZOOM_OUT, type BrainCell, type BrainDemo } from './brainDemo';
+import { drawAgents, drawFiring, drawLinks, sendingOf } from './brainRigLayer';
 import { drawSphere, glowSprite } from './brainSprites';
 
 /** Opacity and world width of a source's mapping, as the canvas draws a binding. */
 const BIND_ALPHA = 0.5;
 const BIND_WIDTH = 1;
 /**
- * The finale: with no rig, seconds before the brain has grown that the wave of light starts; its
+ * The finale with no source: seconds before the brain has grown that the wave of light starts, how long it runs; its
  * crest's width as a share of its reach, the halo's opacity once lit and at the crest, how
  * strongly the crest lightens the cells, and each cell's halo radius in cell radii.
  */
 const SHINE_START = 0.3;
+const SHINE_WAVE = 1.8;
 const SHINE_CREST = 0.12;
 const SHINE_ALPHA = 0.5;
 const SHINE_CREST_ALPHA = 0.6;
@@ -54,6 +55,9 @@ const SHINE_FLASH = 0.85;
 const SHINE_R = 4.5;
 /** Smallest on-screen radius of a story source, in CSS pixels, the world radius its corners, edge and bars are drawn for, and its glow's radius in source radii as it lights up. */
 const SOURCE_PX = 16;
+/** Smallest on-screen radius of a source over the brain, in CSS pixels, and the size of its name there. */
+const SOURCE_PX_FAR = 12;
+const SOURCE_NAME_PX = 12;
 const SOURCE_R_CANVAS = 16;
 const SOURCE_GLOW = 2.6;
 /** How long a new cell takes to bud to its place, and how long it glows. */
@@ -105,16 +109,17 @@ function drawSourceTile(g: CanvasRenderingContext2D, color: string, chip: string
 }
 
 /**
- * The finale after `e` seconds: how far the wave of light has run, 0 to 1, and the halo's
- * strength. It starts as every cable's light reaches the brain. With reduced motion there is no
- * wave: the halo fades in. Skipping animations, the brain stands lit at once.
+ * The finale of a brain with no source after `e` seconds: how far the wave of light has run, 0 to
+ * 1, and the halo's strength; none when sources feed the brain, which fires instead. With reduced
+ * motion there is no wave: the halo fades in. Skipping animations, the brain stands lit at once.
  */
 function shineOf(d: BrainDemo, e: number): [number, number] {
+  if (d.rig) return [0, 0];
   if (d.instant) return e >= d.duration ? [1, 1] : [0, 0];
-  const t = e - (d.rig ? d.rig.allAt + CABLE_RUN : d.duration - SHINE_START);
+  const t = e - (d.duration - SHINE_START);
   if (t <= 0) return [0, 0];
-  if (d.reduced) return [1, clamp(t / WAVE, 0, 1)];
-  return [ease(clamp(t / WAVE, 0, 1)), 1];
+  if (d.reduced) return [1, clamp(t / SHINE_WAVE, 0, 1)];
+  return [ease(clamp(t / SHINE_WAVE, 0, 1)), 1];
 }
 
 /** The world rectangle on screen, grown by `m`. */
@@ -256,7 +261,7 @@ function newCache(d: BrainDemo, v: View, hidden: string): Cache | null {
   };
 }
 
-/** Draws the finale's halo, lit out to `wave` of the way from the sockets (the top of the stem with no rig), its front lightening the cells by `flash`. */
+/** Draws the finale's halo, lit out to `wave` of the way from the top of the stem, its front lightening the cells by `flash`. */
 function drawShine(ctx: CanvasRenderingContext2D, c: Cache, d: BrainDemo, wave: number, alpha: number, flash: number): void {
   if (!c.shone) {
     const hidden = new Set(c.hidden.split(','));
@@ -269,7 +274,7 @@ function drawShine(ctx: CanvasRenderingContext2D, c: Cache, d: BrainDemo, wave: 
     c.shone = true;
   }
   const [bx0, by0, bx1, by1] = d.box;
-  const [ox, oy] = d.rig ? d.rig.origin : d.rootAt ? [d.rootAt.x, d.rootAt.y] : [(bx0 + bx1) / 2, (by0 + by1) / 2];
+  const [ox, oy] = d.rootAt ? [d.rootAt.x, d.rootAt.y] : [(bx0 + bx1) / 2, (by0 + by1) / 2];
   const reach = Math.max(...[bx0, bx1].flatMap((x) => [by0, by1].map((y) => Math.hypot(x - ox, y - oy)))) + d.radius * SHINE_R;
   const r = reach * wave;
   ctx.save();
@@ -422,11 +427,10 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
   const zoom = s.cam.s;
   const [x0, y0, x1, y1] = viewRect(s, v, d.spacing * 2);
   const inRect = (x: number, y: number) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
-  // The cores and their cables stand under the brain's cells.
-  drawCores(ctx, TH, d, e, fade, zoom);
+  // The sources' connections run under the brain's cells.
+  drawLinks(ctx, d, e, fade, zoom, hidden);
   // The halo shows at any zoom; the crest's flash lightens the cached cells, so only from afar.
   if (cache && wave > 0) drawShine(ctx, cache, d, wave, shine * fade, cached ? SHINE_FLASH : 0);
-  drawRunGlow(ctx, d, e, fade, hidden, inRect);
   if (cached) drawCached(ctx, cache, cache.cells, fade);
   const width = cached ? cache.lineWidth : Math.max(1.2, 0.9 / zoom);
   const m = migration(d, e);
@@ -537,18 +541,24 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
     else if (shownCells.length <= LABELS_MAX) shownCells.push([c, x, y, r, alpha]);
   }
   ctx.globalAlpha = 1;
-  // Story sources beside the company, drawn whatever the cached picture holds, never smaller on
-  // screen than a canvas source, glowing as they light up; they give way to their cores as they
-  // fly to their places under the brain.
-  for (let i = 0; i < d.stories; i++) {
+  // The brain firing once grown, over its cells.
+  drawFiring(ctx, d, e, fade, zoom, hidden, inRect);
+  // Sources, drawn whatever the cached picture holds, never smaller on screen than a canvas source
+  // beside the company and a little smaller over the brain, glowing as they light up and while
+  // they send; beside the company their names are under them, over the brain over them.
+  const far: [BrainCell, number, number, number, number][] = [];
+  for (let i = 0; i < n; i++) {
     const c = d.cells[i];
-    if (!isSource(c) || i >= n || m >= 1) continue;
+    if (!isSource(c)) continue;
     const [x, y, r] = placeOf(i);
     if (!inRect(x, y)) continue;
-    const alpha = fade * cellAlpha(d, c, e) * (1 - m);
+    const alpha = fade * cellAlpha(d, c, e);
     if (alpha <= 0.01) continue;
-    const sr = Math.max(r, SOURCE_PX / zoom);
-    const lit = d.reduced ? 0 : 1 - (e - c.born) / GLOW;
+    const beside = !!c.story && i < d.stories && m < 0.5;
+    const px = i < d.stories ? SOURCE_PX + (SOURCE_PX_FAR - SOURCE_PX) * m : SOURCE_PX_FAR;
+    const sr = Math.max(r, px / zoom);
+    const k = d.rig ? d.rig.sources.findIndex((src) => src.source === i) : -1;
+    const lit = d.reduced ? 0 : Math.max(1 - (e - c.born) / GLOW, d.rig && k >= 0 ? sendingOf(d.rig, k, e) : 0);
     const img = lit > 0.01 ? glowSprite(c.color) : null;
     if (img) {
       const R = sr * SOURCE_GLOW;
@@ -557,7 +567,8 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
       ctx.globalAlpha = 1;
     }
     drawSourceTile(ctx, c.color, TH.CHIP, x, y, sr, alpha);
-    if (m < 0.5) storyCells.push([c, x, y, sr, alpha]);
+    if (beside) storyCells.push([c, x, y, sr, alpha]);
+    else far.push([c, x, y, sr, alpha]);
   }
 
   ctx.textAlign = 'center';
@@ -602,7 +613,23 @@ export function drawBrain(s: SceneState, v: View, t: number): void {
       ctx.fillText(c.label, x, y + r + 15 * k);
     }
   }
+  // Source names over the brain, over their sources, wrapped to the room they have; they step
+  // aside while the camera is close on the first agent.
+  const size = SOURCE_NAME_PX / zoom;
+  const names = 1 - brainFocus(d, e);
+  ctx.font = `600 ${size}px ${FONT_SANS}`;
+  for (const [c, x, y, r, alpha] of far) {
+    const room = d.rig?.sources.find((src) => d.cells[src.source] === c)?.nameWidth ?? Infinity;
+    const lines: string[] = [];
+    for (const word of c.label.split(' ')) {
+      const last = lines[lines.length - 1];
+      if (last && ctx.measureText(`${last} ${word}`).width <= room) lines[lines.length - 1] = `${last} ${word}`;
+      else lines.push(word);
+    }
+    ctx.fillStyle = `rgba(${TH.INK},${0.88 * alpha * names})`;
+    lines.forEach((l, k) => ctx.fillText(l, x, y - r - 6 / zoom - (lines.length - 1 - k) * size * 1.15));
+  }
   ctx.shadowBlur = 0;
-  // The data run's sparks, the agents, their routes and the proposal, over everything.
-  drawRigOver(ctx, TH, d, e, fade, zoom, hidden, [x0, y0, x1, y1]);
+  // The agents, their routes and the proposal, over everything.
+  drawAgents(ctx, TH, d, e, fade, zoom, hidden, [x0, y0, x1, y1]);
 }

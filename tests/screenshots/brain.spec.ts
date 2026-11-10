@@ -3,11 +3,11 @@
  * canvas scenes, compared with its stored baseline at 0.1 percent tolerance.
  *
  * Scenes, each a moment of the demo's own plan: the new concepts mapped to the sources close up
- * (1.8 s after the first one buds); the brain growing, its cores plugged in (3 s into the growth);
- * the data run lighting the third lobe; the first agent's question, its route lit; its proposal
- * just approved; every agent at work (1 s after the demo has played). The growing brain and the
- * agents at work run at 1440x900 and on a phone (390x844, touch); the mapping too; the others at
- * 1440x900.
+ * (1.8 s after the first one buds); the brain growing, the sources over it connected to it (7 s
+ * into the growth); the third lobe firing; the whole brain firing in the cascade; the first
+ * agent's question, its route lit; its proposal just approved; every agent at work (1 s after the
+ * demo has played). The mapping, the growing brain and the agents at work run at 1440x900 and on
+ * a phone (390x844, touch); the others at 1440x900.
  *
  * The first model is taught with Skip animation on, as every canvas scene is; the scene turns it
  * off with `S` before starting the demo, so the demo plays.
@@ -22,8 +22,9 @@ const PHONE: Viewport = { width: 390, height: 844 };
 
 interface Plan {
   mapping: number;
-  plugged: number;
-  run: number;
+  connected: number;
+  firing: number;
+  cascade: number;
   question: number;
   approved: number;
   agents: number;
@@ -38,8 +39,9 @@ interface BrainScene {
 
 const scenes: BrainScene[] = [
   { name: 'brain-mapping', at: (p) => p.mapping, viewports: [DESKTOP, PHONE] },
-  { name: 'brain-plugged', at: (p) => p.plugged, viewports: [DESKTOP, PHONE] },
-  { name: 'brain-run', at: (p) => p.run, viewports: [DESKTOP] },
+  { name: 'brain-connected', at: (p) => p.connected, viewports: [DESKTOP, PHONE] },
+  { name: 'brain-firing', at: (p) => p.firing, viewports: [DESKTOP] },
+  { name: 'brain-cascade', at: (p) => p.cascade, viewports: [DESKTOP] },
   { name: 'brain-question', at: (p) => p.question, viewports: [DESKTOP] },
   { name: 'brain-approved', at: (p) => p.approved, viewports: [DESKTOP] },
   { name: 'brain-agents', at: (p) => p.agents, viewports: [DESKTOP, PHONE] },
@@ -62,15 +64,16 @@ async function startDemo(page: Page, phone: boolean): Promise<Plan> {
       growAt: number;
       duration: number;
       cells: { born: number; story: { source: boolean } | null }[];
-      rig: { runs: { at: number }[]; question: { answerAt: number }; proposal: { approveAt: number } };
+      rig: { runs: { at: number }[]; allAt: number; question: { answerAt: number }; proposal: { approveAt: number } };
     };
     const d = (window as unknown as { __ontaix: { store: { s: { brain: Demo } } } }).__ontaix.store.s.brain;
     const mapped = d.cells.slice(0, d.stories).filter((c) => !c.story?.source);
     const firstMapped = Math.min(...mapped.map((c) => c.born));
     return {
       mapping: firstMapped + 1.8,
-      plugged: d.growAt + 3,
-      run: d.rig.runs[2].at + 0.9,
+      connected: d.growAt + 7,
+      firing: d.rig.runs[2].at + 1.1,
+      cascade: d.rig.allAt + 1,
       question: d.rig.question.answerAt - 0.7,
       approved: d.rig.proposal.approveAt + 0.3,
       agents: d.duration + 1,
