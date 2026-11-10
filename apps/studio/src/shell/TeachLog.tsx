@@ -5,10 +5,12 @@
  */
 import { useEffect, useRef } from 'react';
 
+import { useT } from '../i18n/i18n';
 import { useStore } from './dom';
 
 export function TeachLog({ expanded }: { expanded: boolean }) {
   const st = useStore();
+  const t = useT();
   const history = st.ui.history;
   const ref = useRef<HTMLDivElement>(null);
   const newest = history[history.length - 1]?.seq ?? 0;
@@ -17,8 +19,8 @@ export function TeachLog({ expanded }: { expanded: boolean }) {
     if (el && expanded) el.scrollTop = el.scrollHeight;
   }, [expanded, newest]);
   return (
-    <div className="hist" id="teachLog" role="log" aria-label="Recent captions" tabIndex={0} hidden={!expanded} ref={ref}>
-      <h3>Recent</h3>
+    <div className="hist" id="teachLog" role="log" aria-label={t('teach.bar.recentCaptions')} tabIndex={0} hidden={!expanded} ref={ref}>
+      <h3>{t('teach.bar.recent')}</h3>
       {history.map((h) => (
         <div key={h.seq} className={h.refused ? 'refused' : undefined}>
           <b>{h.kicker}</b>

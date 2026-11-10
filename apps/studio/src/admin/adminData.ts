@@ -5,6 +5,7 @@
  */
 import { api, type ListParams } from '../api/client';
 import { ApiError, type AuditEntry, type Page } from '../api/types';
+import { t } from '../i18n/i18n';
 import { store } from '../store/store';
 
 /** The audit page shows the newest 120 entries. */
@@ -34,7 +35,7 @@ export async function fetchAll<T>(get: (p: ListParams) => Promise<Page & { items
 }
 
 /** A failed call as the reference's toast; anything that is not an API refusal is logged. */
-export function failed(err: unknown, lead = 'Refused'): void {
+export function failed(err: unknown, lead = t('common.lead.refused')): void {
   if (err instanceof ApiError) store.toast2(lead, err.problem.detail || err.problem.title);
   else console.error('admin call failed', err);
 }
@@ -63,7 +64,7 @@ export async function loadDirectory(): Promise<void> {
     audit = await api.listAudit({ page: 1, pageSize: AUDIT_SHOWN });
   } catch (err) {
     if (seq !== loadSeq) return;
-    failed(err, 'Unavailable');
+    failed(err, t('common.lead.unavailable'));
   }
   if (seq !== loadSeq) return;
   directory.audit = audit ? audit.items : [];

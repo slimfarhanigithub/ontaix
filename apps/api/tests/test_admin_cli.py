@@ -50,14 +50,20 @@ async def test_create_super_admin_then_sign_in(
     assert "Super admin created." in out.out
     assert password not in out.out + out.err + caplog.text
     rows = await platform_rows(
-        "SELECT a.tenant_id, r.role::text, c.must_change, c.set_reason::text, c.hash"
+        "SELECT a.is_platform, r.role::text, c.must_change, c.set_reason::text, c.hash"
         " FROM ontaix.account a JOIN ontaix.platform_role_assignment r ON r.account_id = a.id"
         " JOIN ontaix.password_credential c ON c.account_id = a.id WHERE a.email = :e",
         e=email,
     )
     assert len(rows) == 1
-    tenant_id, role, must_change, reason, phc = rows[0]
-    assert (tenant_id, role, must_change, reason) == (None, "super_admin", False, "bootstrap")
+    is_platform, role, must_change, reason, phc = rows[0]
+    assert (is_platform, role, must_change, reason) == (True, "super_admin", False, "bootstrap")
+    memberships = await platform_rows(
+        "SELECT count(*) FROM ontaix.account_membership m JOIN ontaix.account a"
+        " ON a.id = m.account_id WHERE a.email = :e",
+        e=email,
+    )
+    assert memberships == [(0,)]
     assert phc.startswith("$argon2id$") and password not in phc
     session = await browsers().sign_in(email, password)
     assert session.status_code == 200 and session.json()["platformRoles"] == ["super_admin"]
@@ -118,17 +124,19 @@ def test_the_password_is_never_an_argument() -> None:
 
 
 def test_the_cli_registers_the_mappings_it_flushes() -> None:
-    """In a terminal only `app.admin` is imported, so the `tenant` mapping that `account`
-    references must be registered by the CLI itself, not by the API's entry point."""
+    """In a terminal only `app.admin` is imported, so the `tenant` mapping that
+    `account_membership` and the audit entries reference must be registered by the CLI itself,
+    not by the API's entry point."""
     check = (
         "import app.admin\n"
-        "from app.models.storage.account import Account\n"
-        "fk = next(f for f in Account.__table__.foreign_keys if f.parent.name == 'tenant_id')\n"
-        "print(fk.column.table.fullname)\n"
+        "from app.models.storage.account_membership import AccountMembership\n"
+        "targets = sorted(f.column.table.fullname for f in AccountMembership.__table__.foreign_keys"
+        " if f.parent.name == 'tenant_id')\n"
+        "print(' '.join(targets))\n"
     )
     run = subprocess.run([sys.executable, "-c", check], capture_output=True, text=True, check=False)
     assert run.returncode == 0, run.stderr
-    assert run.stdout.strip() == "ontaix.tenant"
+    assert run.stdout.strip() == "ontaix.app_user ontaix.tenant"
 
 
 async def _in_thread(argv: list[str]) -> int:

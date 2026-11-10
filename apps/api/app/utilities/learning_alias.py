@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Collection
 
+from app.utilities.language import Language
 from app.utilities.learning_structure import fold
 from app.utilities.sound_alike import sounds_like_name
 
@@ -25,15 +26,17 @@ _REFUSED = frozenset(
 )
 
 
-def is_alias(heard: str, meant: str, *, company_names: Collection[str]) -> bool:
+def is_alias(
+    heard: str, meant: str, *, company_names: Collection[str], language: Language = "en"
+) -> bool:
     """True when `meant` is what a person meant by the misheard `heard`: two different labels
-    close in spelling, or `meant` a proper name `heard` sounds like."""
+    close in spelling, or `meant` a proper name `heard` sounds like in `language`."""
     a, b = fold(heard), fold(meant)
     if not a or not b or a == b or not storable(heard) or not storable(meant):
         return False
     if edit_distance(a, b) * 3 <= max(len(a), len(b)):
         return True
-    return sounds_like_name(heard, meant, company_names=company_names)
+    return sounds_like_name(heard, meant, company_names=company_names, language=language)
 
 
 def storable(label: str) -> bool:

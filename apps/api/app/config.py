@@ -41,8 +41,13 @@ LLM_PROFILES: tuple[LlmProfile, ...] = ("live", "deep")
 # What `python -m app.seed` loads into the demo tenant: only its directory, or the directory
 # with the Northwind and Aurora example companies.
 SeedMode = Literal["empty", "fixture"]
-# Speech recognition is English only; the Studio passes the language to the Speech SDK.
+# The locale of English speech recognition. A company whose model language is French or German
+# is recognised in `fr-FR` or `de-DE` whatever this setting; the Studio passes the locale of
+# `POST /speech/token` to the Speech SDK.
 SpeechLanguage = Literal["en-GB", "en-US"]
+# Every locale a speech token may carry: the English choice above, or a French or German
+# company's own.
+SpeechLocale = Literal["en-GB", "en-US", "fr-FR", "de-DE"]
 SpeechRegion = Literal["francecentral"]
 
 

@@ -7,7 +7,7 @@ from datetime import datetime
 
 from pydantic import Field
 
-from app.config import SpeechLanguage, SpeechRegion
+from app.config import SpeechLocale, SpeechRegion
 from app.models.api.base import ApiModel
 
 
@@ -22,4 +22,5 @@ class SpeechToken(ApiModel):
     token: str = Field(min_length=1, max_length=8192, repr=False)
     region: SpeechRegion
     expires_at: datetime
-    language: SpeechLanguage
+    # The recognition locale of the requested company's model language.
+    language: SpeechLocale

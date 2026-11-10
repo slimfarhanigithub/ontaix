@@ -58,15 +58,23 @@ async def record(
         client_ip=client_ip,
     )
     if organization is not None:
-        await audit_service.record(
-            session,
-            organization.tenant_id,
-            organization.actor,
-            organization.kind,
-            what,
-            ok,
-            company_ids=[],
-        )
+        await mirror(session, organization, what, ok)
+
+
+async def mirror(
+    session: AsyncSession, organization: OrganizationCopy, what: str, ok: bool
+) -> None:
+    """The organization's own entry for a platform event already recorded; used for an event
+    about a member of several organizations, which is mirrored into each."""
+    await audit_service.record(
+        session,
+        organization.tenant_id,
+        organization.actor,
+        organization.kind,
+        what,
+        ok,
+        company_ids=[],
+    )
 
 
 def platform_actor(account_id: uuid.UUID, name: str) -> Actor:

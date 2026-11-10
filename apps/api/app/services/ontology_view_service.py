@@ -53,6 +53,7 @@ from app.repositories import (
     tenant_domain_repository,
     tenant_settings_repository,
 )
+from app.utilities.language import language_of
 from app.utilities.layout import ROOT_COLOR
 from app.utilities.permissions import Scope
 from app.utilities.proposal_relations import own_relation_ids
@@ -346,6 +347,7 @@ class OntologyView:
             position=company.position,
             is_home=company.is_home,
             root_id=root.id if root else uuid.UUID(int=0),
+            language=language_of(company.language),
             domain_products=[
                 self.domain_product_dto(p) for p in self.company_domain_products(company.id)
             ],

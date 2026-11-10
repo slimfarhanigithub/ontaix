@@ -26,6 +26,8 @@ export interface MoreMenuItem {
   group: number;
   /** A toggle, showing a check mark while on. */
   checked?: boolean;
+  /** One choice among the items of its group (`menuitemradio`), `checked` while it is the chosen one. */
+  radio?: boolean;
   /** Rendered in red. */
   danger?: boolean;
   /** Disabled, showing the waiting ring in place of its icon. */
@@ -102,9 +104,11 @@ export interface MoreMenuProps {
   waiting?: boolean;
   /** Whether the menu opens without its entrance animation, read when it opens. */
   skipAnimation?: () => boolean;
+  /** What the button shows in place of the dots, such as a text label. */
+  content?: ReactNode;
 }
 
-export function MoreMenu({ id, menuId, label, items, className = 'more', oxNew, waiting, skipAnimation }: MoreMenuProps) {
+export function MoreMenu({ id, menuId, label, items, className = 'more', oxNew, waiting, skipAnimation, content }: MoreMenuProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<MenuPosition>({ top: 0, left: 0, below: true });
   const btn = useRef<HTMLButtonElement>(null);
@@ -206,7 +210,7 @@ export function MoreMenu({ id, menuId, label, items, className = 'more', oxNew, 
         }}
         onKeyDown={onButtonKey}
       >
-        {waiting ? <span className="spin"></span> : <span aria-hidden="true">⋯</span>}
+        {waiting ? <span className="spin"></span> : (content ?? <span aria-hidden="true">⋯</span>)}
       </button>
       {open
         ? createPortal(
@@ -226,7 +230,7 @@ export function MoreMenu({ id, menuId, label, items, className = 'more', oxNew, 
                   {i > 0 && it.group !== items[i - 1].group ? <div className="sep" role="separator"></div> : null}
                   <button
                     type="button"
-                    role={it.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+                    role={it.radio ? 'menuitemradio' : it.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
                     id={it.id}
                     className={it.danger ? 'danger' : undefined}
                     tabIndex={-1}

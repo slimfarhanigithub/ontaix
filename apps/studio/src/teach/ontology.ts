@@ -7,6 +7,7 @@
  */
 import { api } from '../api/client';
 import { ApiError, type OntologyFormat } from '../api/types';
+import { t } from '../i18n/i18n';
 import { store } from '../store/store';
 import { beginProcessing } from './processing';
 
@@ -31,7 +32,7 @@ export async function importOntology(file: File | null | undefined, format?: Ont
   if (!file || store.ui.importing || !company?.sid) return;
   store.ui.importing = true;
   const end = beginProcessing();
-  const kicker = `Mapping ${file.name}`;
+  const kicker = t('teach.import.mapping', { file: file.name });
   try {
     store.caption(kicker, '');
     const mapped = await api.importOntology(file, {
@@ -43,7 +44,7 @@ export async function importOntology(file: File | null | undefined, format?: Ont
     const indexes = mapped.drafts.map((_, i) => i);
     const created = indexes.length ? await api.proposeOntologyImport(mapped.ontologyImportId, indexes) : [];
     await store.refreshProposals();
-    store.caption(kicker, `${created.length} proposals from ${file.name} · ${mapped.skipped.length} skipped`);
+    store.caption(kicker, t('teach.import.mapped', { n: created.length, file: file.name, skipped: mapped.skipped.length }));
   } catch (err) {
     if (!(err instanceof ApiError)) throw err;
     store.refused(err);

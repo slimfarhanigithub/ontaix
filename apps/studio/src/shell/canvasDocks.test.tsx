@@ -3,6 +3,8 @@ import { act, fireEvent, render } from '@testing-library/react';
 import { Appearance, TenantSettings } from '../admin/pages/PortalPages';
 import { ADDED_DESCRIPTIONS, SKIP_ANIMATION_ROW } from '../admin/rowText';
 import type { Settings } from '../api/types';
+import { t } from '../i18n/i18n';
+import { applyLanguage } from '../i18n/language';
 import { store } from '../store/store';
 import { SKIP_ANIMATION_KEY } from '../store/skipAnimation';
 import { DomainsCard } from './DomainsCard';
@@ -56,10 +58,25 @@ describe('the relationship legend', () => {
     for (const [i, row] of rows.entries()) {
       const label = row.querySelector('b')?.textContent ?? '';
       expect(label.split(' ').length).toBeLessThanOrEqual(2);
-      expect(row.getAttribute('title')).toBe(LEGEND[i].detail);
-      expect(row.querySelector('.sr')?.textContent).toBe(`: ${LEGEND[i].detail}`);
+      expect(row.getAttribute('title')).toBe(t(LEGEND[i].detail));
+      expect(row.querySelector('.sr')?.textContent).toBe(`: ${t(LEGEND[i].detail)}`);
       expect(row.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
       expect(row.querySelector('svg text')).toBeNull();
+    }
+  });
+
+  it('reads in the portal language, with the lines kept by their key', () => {
+    act(() => applyLanguage('de'));
+    try {
+      const { container } = render(<Legend />);
+      expect(container.querySelector('#legend .title')?.textContent).toBe('Beziehungen');
+      const rows = [...container.querySelectorAll('#legend li.row')];
+      expect(rows.map((r) => r.getAttribute('data-k'))).toEqual(['rel', 'isa', 'eq', 'conflict', 'pending']);
+      expect(rows[0].querySelector('b')?.textContent).toBe('Beziehung');
+      expect(rows[4].getAttribute('title')).toBe('Heller gezeichnet, bis Sie es genehmigen');
+      expect(container.querySelector('#legendToggle')?.textContent).toBe('Legende ausblenden');
+    } finally {
+      act(() => applyLanguage('en'));
     }
   });
 

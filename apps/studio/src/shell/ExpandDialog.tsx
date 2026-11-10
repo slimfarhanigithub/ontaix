@@ -8,12 +8,14 @@ import { useState } from 'react';
 import { api } from '../api/client';
 import { ApiError, type ExpansionDraft, type ExpansionOutcome, type ExpansionResult } from '../api/types';
 import type { Node } from '../canvas/types';
+import { t, useT } from '../i18n/i18n';
 import { store } from '../store/store';
 import { teachSessionId } from '../teach/teach';
 import { BusyButton, useBusyAction } from './busy';
 import { DialogFrame } from './Dialog';
 
-export const EXPAND_SUB = 'The model suggests concepts to grow from it; each one is a proposal';
+/** The dialog's sub line before the model answers. */
+export const expandSub = (): string => t('shell.expand.sub');
 const DEPTHS = ['1', '2', '3', '4', '5'];
 const FOCUS_MAX = 200;
 
@@ -26,13 +28,13 @@ export function noSuggestionsText(outcome: ExpansionOutcome): string {
   switch (outcome) {
     case 'rate_limited':
     case 'budget_exhausted':
-      return 'The model budget is spent';
+      return t('shell.expand.budgetSpent');
     case 'refused':
-      return 'The model declined this request';
+      return t('shell.expand.declined');
     case 'used':
-      return 'Everything suggested is already in the model';
+      return t('shell.expand.allUsed');
     default:
-      return 'The model is not available';
+      return t('shell.expand.notAvailable');
   }
 }
 
@@ -79,12 +81,13 @@ export function draftColumns(
   expanded: Node,
 ): { verb: string; confidence: string; note: string } {
   const confidence = `${Math.round(note.confidence * 100)}%`;
-  if (d.type !== 'concept') return { verb: 'relation', confidence, note: note.rationale };
+  if (d.type !== 'concept') return { verb: t('shell.expand.relation'), confidence, note: note.rationale };
   const parent = d.parentId && d.parentId === expanded.sid ? expanded.label : d.parentLabel || expanded.label;
-  return { verb: `${d.action} ${parent}`, confidence, note: `level ${note.depth ?? 1} · ${note.rationale}` };
+  return { verb: `${d.action} ${parent}`, confidence, note: t('shell.expand.level', { depth: note.depth ?? 1, rationale: note.rationale }) };
 }
 
 function ExpandDialog({ node, close }: { node: Node; close: () => void }) {
+  const t = useT();
   const [depth, setDepth] = useState('');
   const [focus, setFocus] = useState('');
   const suggesting = useBusyAction();
@@ -106,7 +109,7 @@ function ExpandDialog({ node, close }: { node: Node; close: () => void }) {
       });
       if (!res.drafts.length || !res.expansionId) {
         close();
-        store.toast2('No suggestions', noSuggestionsText(res.llmOutcome));
+        store.toast2(t('shell.expand.noSuggestions'), noSuggestionsText(res.llmOutcome));
         return;
       }
       setResult(res);
@@ -139,13 +142,13 @@ function ExpandDialog({ node, close }: { node: Node; close: () => void }) {
   if (!result) {
     return (
       <DialogFrame
-        title={`Expand ${node.label}`}
-        sub={EXPAND_SUB}
+        title={t('shell.expand.title', { label: node.label })}
+        sub={expandSub()}
         onClose={close}
         footer={
           <>
             <button className="btn" onClick={close}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               className="btn primary"
@@ -154,31 +157,34 @@ function ExpandDialog({ node, close }: { node: Node; close: () => void }) {
               onClick={() => suggesting.run(suggest)}
             >
               {suggesting.shown ? <span className="spin"></span> : null}
-              Suggest
+              {t('shell.expand.suggest')}
             </button>
           </>
         }
       >
         {suggesting.shown ? (
           <div id="exWait">
-            <span className="spin"></span>Expanding <b>{node.label}</b>…
+            <span className="spin"></span>
+            {t('shell.expand.expandingBefore')}
+            <b>{node.label}</b>
+            {t('shell.expand.expandingAfter')}
           </div>
         ) : (
           <div className="form">
-            <label>Depth</label>
+            <label>{t('shell.expand.depth')}</label>
             <select id="exDepth" value={depth} onChange={(e) => setDepth(e.currentTarget.value)}>
-              <option value="">Any depth</option>
+              <option value="">{t('shell.expand.anyDepth')}</option>
               {DEPTHS.map((d) => (
                 <option key={d} value={d}>
                   {d}
                 </option>
               ))}
             </select>
-            <label>Focus (optional)</label>
+            <label>{t('shell.expand.focus')}</label>
             <input
               id="exFocus"
               maxLength={FOCUS_MAX}
-              placeholder="e.g. after-sales services"
+              placeholder={t('shell.expand.focusPlaceholder')}
               value={focus}
               onChange={(e) => setFocus(e.currentTarget.value)}
             />
@@ -191,26 +197,26 @@ function ExpandDialog({ node, close }: { node: Node; close: () => void }) {
   const requires = result.notes.map((n) => n.requires);
   return (
     <DialogFrame
-      title={`Expand ${node.label}`}
-      sub={`${result.drafts.length} suggestions · ${result.skipped.length} skipped`}
+      title={t('shell.expand.title', { label: node.label })}
+      sub={t('shell.expand.resultSub', { n: result.drafts.length, skipped: result.skipped.length })}
       onClose={close}
       footer={
         <>
           <button className="btn" onClick={close}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <BusyButton className="btn primary" disabled={!checked.size} onClick={propose}>
-            {`Propose ${checked.size}`}
+            {t('shell.expand.propose', { n: checked.size })}
           </BusyButton>
         </>
       }
     >
-      <div className="ex-list" role="group" aria-label={`Suggestions to grow from ${node.label}`}>
+      <div className="ex-list" role="group" aria-label={t('shell.expand.groupLabel', { label: node.label })}>
         <div className="ex-head" aria-hidden="true">
           <span></span>
-          <span>Suggestion</span>
-          <span>Link</span>
-          <span>Confidence</span>
+          <span>{t('shell.expand.colSuggestion')}</span>
+          <span>{t('shell.expand.colLink')}</span>
+          <span>{t('shell.expand.colConfidence')}</span>
         </div>
         {result.drafts.map((d, i) => {
           const col = draftColumns(d, result.notes[i], node);

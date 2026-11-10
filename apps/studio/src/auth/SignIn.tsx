@@ -6,20 +6,22 @@
  */
 import { useRef, useState } from 'react';
 
+import { t, useT } from '../i18n/i18n';
 import { useBusyAction } from '../shell/busy';
 import { auth, useAuth } from './authStore';
 import { AuthPage, FormMessage } from './AuthPage';
 
-export const SIGN_IN_NOTE = 'No account? Ask your administrator. Forgot your password? Ask your administrator to reset it.';
+export const signInNote = (): string => t('auth.signIn.note');
 
 export function SignIn() {
+  const t = useT();
   const { notice, error: bootError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const passwordField = useRef<HTMLInputElement>(null);
   const { shown, run } = useBusyAction();
-  const message = error || bootError || notice || SIGN_IN_NOTE;
+  const message = error || bootError || notice || signInNote();
   const submit = () =>
     void run(async () => {
       const failure = await auth.signIn(email.trim(), password);
@@ -30,20 +32,20 @@ export function SignIn() {
     });
   return (
     <AuthPage
-      title="Sign in"
-      sub="Use the account your administrator gave you"
+      title={t('auth.signIn.title')}
+      sub={t('auth.signIn.sub')}
       onSubmit={submit}
       footer={
         <button className="btn primary" type="submit" disabled={shown} aria-busy={shown ? 'true' : undefined}>
           {shown ? <span className="spin"></span> : null}
-          Sign in
+          {t('auth.signIn.title')}
         </button>
       }
     >
       <div className="form">
-        <label htmlFor="siEmail">Email</label>
+        <label htmlFor="siEmail">{t('auth.signIn.email')}</label>
         <input id="siEmail" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <label htmlFor="siPassword">Password</label>
+        <label htmlFor="siPassword">{t('auth.signIn.password')}</label>
         <input
           id="siPassword"
           ref={passwordField}

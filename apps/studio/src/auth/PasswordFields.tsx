@@ -8,8 +8,9 @@ import { useRef, useState, type RefObject } from 'react';
 
 import { api } from '../api/client';
 import type { Session } from '../api/types';
+import { useT } from '../i18n/i18n';
 import { FormMessage } from './AuthPage';
-import { newPasswordProblem, PASSWORD_HINT, passwordErrorText } from './password';
+import { newPasswordProblem, passwordErrorText, passwordHint } from './password';
 
 export interface PasswordDraft {
   current: string;
@@ -54,6 +55,7 @@ export function usePasswordChange(): PasswordChangeState {
 }
 
 export function PasswordFields({ state, prefix }: { state: PasswordChangeState; prefix: string }) {
+  const t = useT();
   const { draft, setDraft, error, first } = state;
   const field = (key: keyof PasswordDraft, label: string, autoComplete: string, ref?: RefObject<HTMLInputElement | null>) => (
     <>
@@ -70,10 +72,10 @@ export function PasswordFields({ state, prefix }: { state: PasswordChangeState; 
   );
   return (
     <div className="form">
-      {field('current', 'Current password', 'current-password', first)}
-      {field('next', 'New password', 'new-password')}
-      {field('confirm', 'Confirm new password', 'new-password')}
-      <FormMessage text={error || PASSWORD_HINT} error={!!error} />
+      {field('current', t('auth.passwordFields.current'), 'current-password', first)}
+      {field('next', t('auth.passwordFields.next'), 'new-password')}
+      {field('confirm', t('auth.passwordFields.confirm'), 'new-password')}
+      <FormMessage text={error || passwordHint()} error={!!error} />
     </div>
   );
 }

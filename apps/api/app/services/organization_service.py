@@ -21,7 +21,7 @@ from app.models.api.page import PageOf
 from app.models.storage.base import CompanyMode, RoleName, ScopeKind
 from app.models.storage.tenant import Tenant
 from app.repositories import (
-    account_repository,
+    account_membership_repository,
     auth_session_repository,
     company_repository,
     group_member_repository,
@@ -278,7 +278,7 @@ async def _set_company_mode(
 
 async def _organizations(session: AsyncSession) -> list[Organization]:
     tenants = await tenant_repository.list_all(session)
-    users = await account_repository.count_by_tenant(session)
+    users = await account_membership_repository.count_by_tenant(session)
     companies = await company_repository.count_by_tenant(session)
     modes = await organization_settings_repository.modes(session)
     return [
@@ -288,7 +288,7 @@ async def _organizations(session: AsyncSession) -> list[Organization]:
 
 
 async def _organization(session: AsyncSession, tenant: Tenant) -> Organization:
-    users = await account_repository.count_by_tenant(session)
+    users = await account_membership_repository.count_by_tenant(session)
     companies = await company_repository.count_by_tenant(session)
     mode = await organization_settings_repository.company_mode(session, tenant.id)
     return _dto(tenant, mode, companies.get(tenant.id, 0), users.get(tenant.id, 0))

@@ -11,16 +11,16 @@ import { useEffect, useRef } from 'react';
 import { AdminMain, AdminNav } from '../admin/AdminPortal';
 import { AccountControls } from '../auth/AccountControls';
 import { useAuth } from '../auth/authStore';
+import { useT } from '../i18n/i18n';
 import { trapTab, useFocusReturn } from './Dialog';
 import { refStyle, useStore } from './dom';
 
 export function AdminOverlay() {
   const st = useStore();
   const { session } = useAuth();
+  const t = useT();
   const { adminOpen, proposals } = st.ui;
-  const sub =
-    st.s.companies.map((c) => c.name).join(' · ') +
-    (proposals.length ? ` · ${proposals.length} proposal${proposals.length === 1 ? '' : 's'} waiting on the canvas` : '');
+  const sub = st.s.companies.map((c) => c.name).join(' · ') + (proposals.length ? t('shell.admin.waiting', { n: proposals.length }) : '');
   const win = useRef<HTMLDivElement>(null);
   useFocusReturn(adminOpen, win);
   useEffect(() => {
@@ -45,9 +45,9 @@ export function AdminOverlay() {
     >
       <div className="win" ref={win}>
         <div className="head">
-          <div id="adminTitle">Ontology Builder admin portal</div> <span id="adminSub">{sub}</span>
+          <div id="adminTitle">{t('shell.admin.title')}</div> <span id="adminSub">{sub}</span>
           <AccountControls />
-          <button className="x" id="adminClose" aria-label="Close" ref={refStyle(`margin-left:${session ? '8px' : 'auto'}`)} onClick={() => st.closeAdmin()}>
+          <button className="x" id="adminClose" aria-label={t('common.close')} ref={refStyle(`margin-left:${session ? '8px' : 'auto'}`)} onClick={() => st.closeAdmin()}>
             ×
           </button>
         </div>

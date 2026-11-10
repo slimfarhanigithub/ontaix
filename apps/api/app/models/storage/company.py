@@ -25,6 +25,8 @@ class Company(Base):
     position: Mapped[int] = mapped_column(Integer)
     is_home: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     learning: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    # The model language (`en`, `fr`, `de`): speech, extraction, expansion, drafts and export.
+    language: Mapped[str] = mapped_column(server_default=text("'en'"))
     dying_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")

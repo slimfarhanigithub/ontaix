@@ -1,4 +1,5 @@
-"""`/auth`: sign-in, sign-out, the current session and password change. No sign-up exists."""
+"""`/auth`: sign-in, sign-out, the current session, the choice of an organization, the portal
+language and password change. No sign-up exists."""
 
 from __future__ import annotations
 
@@ -7,6 +8,7 @@ import logging
 from fastapi import APIRouter, Request, Response, status
 
 from app.auth import (
+    PASSWORD_CHANGE_DETAIL,
     SESSION_COOKIE,
     SIGN_IN_REQUIRED,
     PlatformSessionDependency,
@@ -16,7 +18,13 @@ from app.auth import (
     require_csrf,
     set_session_cookie,
 )
-from app.models.api.session import PasswordChange, Session, SignInRequest
+from app.models.api.session import (
+    OrganizationChoice,
+    PasswordChange,
+    Session,
+    SessionLanguage,
+    SignInRequest,
+)
 from app.services import auth_service, session_service
 from app.services.auth_service import Attempt
 from app.utilities.problems import ProblemError, unauthorized
@@ -61,6 +69,39 @@ async def get_session(request: Request, session: PlatformSessionDependency) -> S
         await session.commit()
         raise _session_ended(clear_cookie=expired or token is not None)
     return await auth_service.current(session, live)
+
+
+@router.put("/session/organization", response_model=Session)
+async def choose_organization(
+    body: OrganizationChoice,
+    request: Request,
+    response: Response,
+    session: PlatformSessionDependency,
+) -> Session:
+    live = await session_service.find_live(session, request.cookies.get(SESSION_COOKIE))
+    if live is None:
+        raise unauthorized(SIGN_IN_REQUIRED)
+    require_csrf(request, live.row.csrf_token)
+    if live.resolved.must_change_password:
+        raise ProblemError(403, "password_change_required", PASSWORD_CHANGE_DETAIL)
+    issued = await auth_service.choose_organization(
+        session, live, body.organization_id, _attempt(request)
+    )
+    set_session_cookie(response, issued.token)
+    return issued.session
+
+
+@router.put("/session/language", response_model=Session)
+async def set_session_language(
+    body: SessionLanguage, request: Request, session: PlatformSessionDependency
+) -> Session:
+    live = await session_service.find_live(session, request.cookies.get(SESSION_COOKIE))
+    if live is None:
+        raise unauthorized(SIGN_IN_REQUIRED)
+    require_csrf(request, live.row.csrf_token)
+    if live.resolved.must_change_password:
+        raise ProblemError(403, "password_change_required", PASSWORD_CHANGE_DETAIL)
+    return await auth_service.set_language(session, live, body.language, _attempt(request))
 
 
 @router.put("/password", response_model=Session)

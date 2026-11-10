@@ -8,6 +8,7 @@
  */
 import { useState, type ReactNode } from 'react';
 
+import { useT } from '../i18n/i18n';
 import { MoreMenu, type MoreMenuItem } from '../shell/MoreMenu';
 
 export interface RowAction extends Omit<MoreMenuItem, 'act'> {
@@ -26,6 +27,7 @@ export interface RowActionsProps {
 }
 
 export function RowActions({ id, primary, items, oxNew }: RowActionsProps) {
+  const t = useT();
   const [waiting, setWaiting] = useState(false);
   const menuItems: MoreMenuItem[] = items.map((it) => ({
     ...it,
@@ -40,7 +42,7 @@ export function RowActions({ id, primary, items, oxNew }: RowActionsProps) {
   return (
     <>
       {primary}
-      {items.length ? <MoreMenu id={`${id}More`} menuId={`${id}Menu`} label="More actions" items={menuItems} oxNew={oxNew} waiting={waiting} /> : null}
+      {items.length ? <MoreMenu id={`${id}More`} menuId={`${id}Menu`} label={t('common.moreActions')} items={menuItems} oxNew={oxNew} waiting={waiting} /> : null}
     </>
   );
 }

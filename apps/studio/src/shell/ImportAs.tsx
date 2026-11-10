@@ -5,6 +5,7 @@
  * `dialog()` with a `.form` select of every reading, as the reference's Bind dialog does, and
  * `Import again` imports the same file read the chosen way.
  */
+import { t, useT } from '../i18n/i18n';
 import { store } from '../store/store';
 import { importAgain } from '../teach/importFile';
 import { detectedReading, READINGS, readingLabel, type ImportReading } from '../teach/importReading';
@@ -16,13 +17,14 @@ export const IMPORT_ACCEPT =
 
 export function ImportAsPill({ hidden }: { hidden: boolean }) {
   const st = useStore();
+  const t = useT();
   const last = st.ui.lastImport;
   if (!last) return null;
   return (
     <button
       type="button"
       id="imAs"
-      title={`Read ${last.file.name} another way`}
+      title={t('shell.importAs.pillTitle', { file: last.file.name })}
       style={{ display: hidden ? 'none' : undefined }}
       disabled={st.ui.importing}
       onClick={openImportAs}
@@ -30,7 +32,7 @@ export function ImportAsPill({ hidden }: { hidden: boolean }) {
       <svg viewBox="0 0 16 16">
         <path d="M3 4h10M3 8h10M3 12h6" />
       </svg>
-      Read as: {readingLabel(last.reading)}
+      {t('shell.importAs.readAs', { reading: readingLabel(last.reading) })}
     </button>
   );
 }
@@ -39,11 +41,11 @@ export function openImportAs(): void {
   const last = store.ui.lastImport;
   if (!last) return;
   store.openDialog({
-    title: `Read ${last.file.name} as`,
+    title: t('shell.importAs.title', { file: last.file.name }),
     small: true,
     body: (
       <div className="form" ref={refStyle('grid-template-columns:90px 1fr')}>
-        <label>Read as</label>
+        <label>{t('shell.importAs.label')}</label>
         <select id="imAsRead" defaultValue={last.reading}>
           {READINGS.map((r) => (
             <option key={r.reading} value={r.reading}>
@@ -53,14 +55,14 @@ export function openImportAs(): void {
         </select>
         <label></label>
         <small ref={refStyle('color:var(--ink-3)')}>
-          {`Detected as ${readingLabel(detectedReading(last.detection))}. The file is imported again, read the way chosen.`}
+          {t('shell.importAs.detected', { reading: readingLabel(detectedReading(last.detection)) })}
         </small>
       </div>
     ),
     buttons: [
-      { label: 'Cancel' },
+      { label: t('common.cancel') },
       {
-        label: 'Import again',
+        label: t('shell.importAs.importAgain'),
         cls: 'primary',
         onClick: (bk) => {
           const chosen = bk.querySelector<HTMLSelectElement>('#imAsRead')?.value as ImportReading | undefined;

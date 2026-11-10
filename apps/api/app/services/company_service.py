@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import Caller
 from app.models.api.actor import Actor
 from app.models.api.company import Company as CompanyDto
-from app.models.api.company import CompanyCreate, CompanyCreated
+from app.models.api.company import CompanyCreate, CompanyCreated, CompanyLanguage
 from app.models.api.drafts import ChangeDraft, ChangePayload, ConceptDraft
 from app.models.api.proposal import Proposal as ProposalDto
 from app.models.storage.base import NodeKind
@@ -29,6 +29,7 @@ from app.services.rate_limit_service import charge_proposals
 from app.utilities.artefact_visibility import readable_proposal
 from app.utilities.clock import get_clock
 from app.utilities.company_creation import COMPANY_LIMIT_DETAIL, company_creation_allowed
+from app.utilities.language import LANGUAGE_NAMES, Language
 from app.utilities.layout import company_centre
 from app.utilities.permissions import can_manage, can_read
 from app.utilities.problems import conflict, forbidden, not_found
@@ -87,7 +88,9 @@ async def create_company(
     key = company_key(body.name)
     if any(c.key == key for c in view.companies.values()):
         raise conflict("duplicate_label", f"a company with key {key!r} already exists")
-    company = await add_company(session, view, body.name, body.sub, is_home=not view.companies)
+    company = await add_company(
+        session, view, body.name, body.sub, is_home=not view.companies, language=body.language
+    )
     root = view.root_of(company.id)
     assert root is not None
     await audit_service.record(
@@ -124,7 +127,13 @@ async def create_company(
 
 
 async def add_company(
-    session: AsyncSession, view: OntologyView, name: str, sub: str, *, is_home: bool
+    session: AsyncSession,
+    view: OntologyView,
+    name: str,
+    sub: str,
+    *,
+    is_home: bool,
+    language: Language = "en",
 ) -> Company:
     """Write the company, a domain product per tenant domain and its root cell; no proposal."""
     position = await company_repository.next_position(session, view.tenant_id)
@@ -136,6 +145,7 @@ async def add_company(
         sub=sub,
         position=position,
         is_home=is_home,
+        language=language,
     )
     view.register_company(company)
     for domain in view.domains.values():
@@ -186,6 +196,42 @@ async def propose_starter_vocabulary(
             )
         )
     return created
+
+
+async def set_language(
+    session: AsyncSession, caller: Caller, company_id: uuid.UUID, body: CompanyLanguage
+) -> CompanyDto:
+    """The company's model language: immediate and audited (kind `company`), a company setting
+    and not a proposal; Administrator only. Existing concepts keep their labels. A language the
+    company already has changes nothing and writes no entry."""
+    if not can_manage(caller.grants):
+        raise forbidden("Changing a company's language requires Administrator")
+    view = await load_view(session, caller.tenant_id)
+    company = view.companies.get(company_id)
+    if company is None or company.dying_at is not None:
+        raise not_found("company")
+    if company.language == body.language:
+        return view.company_dto(company)
+    await company_repository.set_language(session, company, body.language)
+    dto = view.company_dto(company)
+    await audit_service.record(
+        session,
+        caller.tenant_id,
+        caller.actor,
+        "company",
+        f"{company.name} language set to {LANGUAGE_NAMES[body.language]}",
+        True,
+        company_ids=[company.id],
+    )
+    await outbox_service.emit(
+        session,
+        caller.tenant_id,
+        caller.actor,
+        "company.updated",
+        {"company": dto.model_dump(mode="json", by_alias=True), "fields": ["language"]},
+        company_ids=[company.id],
+    )
+    return dto
 
 
 async def propose_remove_company(

@@ -5,6 +5,7 @@
  */
 import { useState, type CSSProperties, type ReactNode } from 'react';
 
+import { useT } from '../i18n/i18n';
 import { countText, EMPTY_QUERY, filterValues, toggleSort, viewList, type ListQuery, type Row } from './listModel';
 
 export interface Column {
@@ -40,6 +41,7 @@ const thStyle = (c: Column): CSSProperties => ({
 });
 
 export function List<R extends Row>({ columns, rows, rowKey, searchKeys, filterKey, pageSize = 50, renderRow, footer, height, extra, onRowClick }: ListProps<R>) {
+  const t = useT();
   const [query, setQuery] = useState<ListQuery>(EMPTY_QUERY);
 
   const view = viewList(rows, { searchKeys, filterKey, pageSize }, query);
@@ -49,7 +51,7 @@ export function List<R extends Row>({ columns, rows, rowKey, searchKeys, filterK
       <div className="lst-top">
         <input
           className="search"
-          placeholder="Search…"
+          placeholder={t('admin.list.searchPlaceholder')}
           value={query.q}
           onChange={(e) => setQuery({ ...query, q: e.target.value, page: 0 })}
         />
@@ -57,7 +59,7 @@ export function List<R extends Row>({ columns, rows, rowKey, searchKeys, filterK
           {filters.length > 1
             ? [
                 <button key="" data-f="" className={query.filter === null ? 'on' : undefined} onClick={() => setQuery({ ...query, filter: null, page: 0 })}>
-                  All
+                  {t('admin.list.all')}
                 </button>,
                 ...filters.map((f) => (
                   <button key={f} data-f={f} className={query.filter === f ? 'on' : undefined} onClick={() => setQuery({ ...query, filter: f, page: 0 })}>
@@ -98,7 +100,7 @@ export function List<R extends Row>({ columns, rows, rowKey, searchKeys, filterK
             ) : (
               <tr>
                 <td colSpan={columns.length} style={{ color: 'var(--ink-3)' }}>
-                  Nothing matches.
+                  {t('admin.list.nothingMatches')}
                 </td>
               </tr>
             )}

@@ -7,6 +7,7 @@
  */
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 
+import { useT } from '../i18n/i18n';
 import { useBusyAction } from './busy';
 import { useStore } from './dom';
 
@@ -89,6 +90,7 @@ interface FrameProps {
 
 /** The `.dlg-back > .dlg` frame; focuses the first input, select or button 30 ms after opening. */
 export function DialogFrame({ title, sub, small, large, onClose, children, footer, backRef }: FrameProps) {
+  const t = useT();
   const own = useRef<HTMLDivElement>(null);
   const back = backRef || own;
   const titleId = useId();
@@ -135,7 +137,7 @@ export function DialogFrame({ title, sub, small, large, onClose, children, foote
         <div className="dh">
           <b id={titleId}>{title}</b>
           {sub ? <span>{sub}</span> : null}
-          <button className="x" aria-label="Close" onClick={onClose}>
+          <button className="x" aria-label={t('common.close')} onClick={onClose}>
             ×
           </button>
         </div>

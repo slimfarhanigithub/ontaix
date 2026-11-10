@@ -4,6 +4,7 @@
  * choose any other in the `#imAs` dialog.
  */
 import type { ImportDetection, OntologyFormat } from '../api/types';
+import { t, type MessageKey } from '../i18n/i18n';
 
 export type ImportReading = 'whole' | 'sentences' | OntologyFormat;
 
@@ -13,18 +14,26 @@ export interface LastImport {
   reading: ImportReading;
 }
 
+/** A reading whose label is read in the portal language of the moment. */
+const named = (reading: ImportReading, key: MessageKey): { reading: ImportReading; label: string } => ({
+  reading,
+  get label(): string {
+    return t(key);
+  },
+});
+
 /** Every reading, in the order the `#imAs` dialog lists them, with its label. */
 export const READINGS: { reading: ImportReading; label: string }[] = [
-  { reading: 'whole', label: 'Document (whole)' },
-  { reading: 'sentences', label: 'Document (sentences)' },
-  { reading: 'turtle', label: 'Ontology (Turtle)' },
-  { reading: 'rdf_xml', label: 'Ontology (RDF/XML)' },
-  { reading: 'json_ld', label: 'Ontology (JSON-LD)' },
-  { reading: 'owl_xml', label: 'Ontology (OWL/XML)' },
-  { reading: 'n_triples', label: 'Ontology (N-Triples)' },
-  { reading: 'obo', label: 'Ontology (OBO)' },
-  { reading: 'csv', label: 'Ontology (CSV)' },
-  { reading: 'xlsx', label: 'Ontology (XLSX)' },
+  named('whole', 'teach.reading.whole'),
+  named('sentences', 'teach.reading.sentences'),
+  named('turtle', 'teach.reading.turtle'),
+  named('rdf_xml', 'teach.reading.rdfXml'),
+  named('json_ld', 'teach.reading.jsonLd'),
+  named('owl_xml', 'teach.reading.owlXml'),
+  named('n_triples', 'teach.reading.nTriples'),
+  named('obo', 'teach.reading.obo'),
+  named('csv', 'teach.reading.csv'),
+  named('xlsx', 'teach.reading.xlsx'),
 ];
 
 export const readingLabel = (reading: ImportReading): string => READINGS.find((r) => r.reading === reading)?.label ?? reading;

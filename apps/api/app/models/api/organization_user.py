@@ -44,6 +44,11 @@ class OrganizationUserCreate(ApiModel):
     group_ids: list[uuid.UUID] = Field(max_length=MAX_GROUPS)
 
 
+class MembershipCreate(ApiModel):
+    email: str = Field(min_length=3, max_length=254)
+    group_ids: list[uuid.UUID] = Field(max_length=MAX_GROUPS)
+
+
 class OrganizationUserUpdate(ApiModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     department: str | None = Field(default=None, max_length=120)

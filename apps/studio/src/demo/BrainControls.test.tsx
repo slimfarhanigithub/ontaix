@@ -1,10 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
+import { applyLanguage } from '../i18n/language';
 import { useKeyboard } from '../shell/useKeyboard';
 import { Tools } from '../shell/Tools';
 import { store } from '../store/store';
 import { finishBrain } from './brainDemo';
-import { BrainBar } from './BrainControls';
+import { BrainStatus } from './BrainControls';
 
 function Keys() {
   useKeyboard();
@@ -16,7 +17,7 @@ function Studio() {
     <>
       <Keys />
       <Tools />
-      <BrainBar />
+      <BrainStatus />
     </>
   );
 }
@@ -25,35 +26,35 @@ afterEach(() => {
   act(() => {
     finishBrain(store.s);
     store.bump();
+    applyLanguage('en');
   });
 });
 
 describe('the demo brain controls', () => {
-  it('starts from the brain button, shows the demo bar and stops from its Stop button', () => {
+  it('starts and stops from the brain button, with nothing shown over the canvas', () => {
     render(<Studio />);
     const button = screen.getByRole('button', { name: 'Grow a demo brain' });
     expect(button).toHaveAttribute('aria-pressed', 'false');
-    expect(document.getElementById('brainBar')).toBeNull();
     act(() => fireEvent.click(button));
     expect(screen.getByRole('button', { name: 'Grow a demo brain', pressed: true })).toBe(button);
     expect(button).toHaveAttribute('title', 'Stop the demo brain (Esc)');
-    const bar = screen.getByRole('region', { name: 'Demo brain' });
-    expect(bar).toHaveTextContent('Starting a demo brain');
-    expect(bar).toHaveTextContent('not saved');
-    expect(screen.getByRole('progressbar', { name: 'Growth' })).toHaveAttribute('aria-valuenow', '0');
-    act(() => fireEvent.click(document.getElementById('brainStop') as HTMLElement));
-    expect(document.getElementById('brainBar')).toBeNull();
+    expect(screen.queryByRole('region')).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    const status = document.getElementById('brainStatus') as HTMLElement;
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toHaveClass('sr');
+    expect(status).toHaveTextContent('');
+    act(() => fireEvent.click(button));
+    expect(document.getElementById('brainStatus')).toBeNull();
     expect(screen.getByRole('button', { name: 'Grow a demo brain' })).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('pauses and resumes from the demo bar', () => {
+  it('reads in German when the portal language is German', () => {
+    act(() => applyLanguage('de'));
     render(<Studio />);
-    act(() => fireEvent.click(screen.getByRole('button', { name: 'Grow a demo brain' })));
-    act(() => fireEvent.click(screen.getByRole('button', { name: 'Pause the demo brain' })));
-    expect(screen.getByRole('region', { name: 'Demo brain' })).toHaveTextContent('Demo brain paused');
-    expect(store.s.brain?.pausedAt).not.toBeNull();
-    act(() => fireEvent.click(screen.getByRole('button', { name: 'Resume the demo brain' })));
-    expect(store.s.brain?.pausedAt).toBeNull();
+    const button = screen.getByRole('button', { name: 'Ein Demo-Gehirn wachsen lassen' });
+    act(() => fireEvent.click(button));
+    expect(button).toHaveAttribute('title', 'Das Demo-Gehirn anhalten (Esc)');
   });
 
   it('stops on Escape', () => {
@@ -62,19 +63,17 @@ describe('the demo brain controls', () => {
     act(() => {
       fireEvent.keyDown(window, { key: 'Escape' });
     });
-    expect(document.getElementById('brainBar')).toBeNull();
+    expect(document.getElementById('brainStatus')).toBeNull();
     expect(store.s.brain?.ending).not.toBeNull();
   });
 
-  it('offers Replay once the brain has grown', () => {
+  it('tells a screen reader once the brain has grown', () => {
     store.ui.skipAnimation = true;
     store.syncSkip();
     try {
       render(<Studio />);
       act(() => fireEvent.click(screen.getByRole('button', { name: 'Grow a demo brain' })));
-      expect(screen.getByRole('region', { name: 'Demo brain' })).toHaveTextContent('Demo brain grown');
-      expect(screen.getByRole('button', { name: 'Grow the demo brain again' })).toBeInTheDocument();
-      expect(screen.getByRole('progressbar', { name: 'Growth' })).toHaveAttribute('aria-valuenow', '100');
+      expect(document.getElementById('brainStatus')).toHaveTextContent(/^The demo brain has grown: [\d,]+ concepts\.$/);
     } finally {
       store.ui.skipAnimation = false;
       store.syncSkip();

@@ -2,10 +2,11 @@
 
 A session is a random 256-bit token in the `__Host-ontaix_session` cookie; the database keeps
 only its SHA-256. It lives 30 minutes after the last authenticated call and never more than 12
-hours after sign-in. Sign-in, a password change, the start or end of a support session and
-entering or leaving an organization each issue a new token and end the old row, so a token
-never survives a change of privilege. An
-account has at most 10 live sessions; the oldest ends first.
+hours after sign-in. A member session is inside one organization (`auth_session.tenant_id`),
+or inside none until the member chooses one of several. Sign-in, a password change, the choice
+of an organization, the start or end of a support session and entering or leaving an
+organization each issue a new token and end the old row, so a token never survives a change of
+privilege. An account has at most 10 live sessions; the oldest ends first.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from app.models.storage.auth_session import AuthSession
 from app.models.storage.base import PlatformRoleName
 from app.models.storage.tenant import Tenant
 from app.repositories import (
+    account_membership_repository,
     account_repository,
     auth_session_repository,
     password_credential_repository,
@@ -84,12 +86,14 @@ async def issue(
     client_ip: str | None,
     user_agent: str | None,
     rotates: AuthSession | None = None,
+    tenant_id: uuid.UUID | None = None,
     support_tenant_id: uuid.UUID | None = None,
     acting_tenant_id: uuid.UUID | None = None,
     acting_until: datetime | None = None,
 ) -> IssuedSession:
-    """A new session for the account. `rotates` is the session it replaces, which the caller
-    has ended: the new one keeps its absolute expiry, so rotation never lengthens a session."""
+    """A new session for the account, inside the organization `tenant_id` for a member.
+    `rotates` is the session it replaces, which the caller has ended: the new one keeps its
+    absolute expiry, so rotation never lengthens a session."""
     ended = await auth_session_repository.end_beyond_limit(
         session, account.id, MAX_LIVE_SESSIONS - 1
     )
@@ -108,6 +112,7 @@ async def issue(
         client_ip=client_ip,
         user_agent=user_agent,
         absolute_expires_at=rotates.absolute_expires_at if rotates is not None else None,
+        tenant_id=tenant_id,
         support_tenant_id=support_tenant_id,
         acting_tenant_id=acting_tenant_id,
         acting_until=acting_until,
@@ -116,12 +121,22 @@ async def issue(
 
 
 async def describe(session: AsyncSession, row: AuthSession, account: Account) -> SessionDto:
-    """The `Session` of the contract for a live row."""
+    """The `Session` of the contract for a live row. A member session lists the account's
+    organizations (its active memberships in enabled organizations) and names the one it is
+    inside, with the directory user there, once one is chosen."""
     credential = await password_credential_repository.get(session, account.id)
+    organizations = None
     organization = None
-    if account.tenant_id is not None:
-        tenant = await tenant_repository.get(session, account.tenant_id)
-        organization = _ref(tenant) if tenant is not None else None
+    user_id = None
+    if not account.is_platform:
+        tenants = await account_membership_repository.active_tenants(session, account.id)
+        organizations = [_ref(t) for t in tenants]
+        inside = next((t for t in tenants if t.id == row.tenant_id), None)
+        if inside is not None:
+            membership = await account_membership_repository.get(session, account.id, inside.id)
+            if membership is not None:
+                organization = _ref(inside)
+                user_id = membership.user_id
     support = None
     if row.support_tenant_id is not None and row.support_until is not None:
         support_tenant = await tenant_repository.get(session, row.support_tenant_id)
@@ -149,9 +164,12 @@ async def describe(session: AsyncSession, row: AuthSession, account: Account) ->
             )
     return SessionDto(
         kind="platform" if account.is_platform else "member",
-        account=SessionAccount(id=account.id, email=account.email, name=account.name),
+        account=SessionAccount(
+            id=account.id, email=account.email, name=account.name, language=account.language
+        ),
         organization=organization,
-        user_id=account.user_id,
+        organizations=organizations,
+        user_id=user_id,
         platform_roles=[r.value for r in roles] if roles is not None else None,
         support=support,
         acting=acting,

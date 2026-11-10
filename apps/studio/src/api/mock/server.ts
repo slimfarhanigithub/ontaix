@@ -3085,6 +3085,13 @@ export function createMockServer(bus: EventBus = liveEvents, hooks: MockHooks = 
     if (is('GET', 'export')) throw new Refusal(503, 'unavailable', 'export needs the Ontology Builder API');
     if (is('POST', 'import', 'sentences'))
       throw new Refusal(422, 'validation_failed', 'the document is sent as multipart form data in the field file');
+    if (is('PUT', 'auth', 'session', 'language')) {
+      // The mock keeps no session: the body is checked as the API checks it, then there is no session to bind it to.
+      const language = (body as { language?: unknown } | undefined)?.language;
+      if (language !== null && language !== 'en' && language !== 'fr' && language !== 'de')
+        throw new Refusal(422, 'validation_failed', 'language must be en, fr, de or null');
+      throw new Refusal(401, 'no_session', 'the mock API has no session');
+    }
     if (is('GET', 'healthz')) return json(200, { status: 'ok' });
     throw new Refusal(404, 'not_found', `${method} ${path} is not part of the mock API`);
   }

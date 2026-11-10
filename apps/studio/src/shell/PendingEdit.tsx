@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { Proposal } from '../api/types';
+import { useT } from '../i18n/i18n';
 import { BusyButton } from './busy';
 import { useStore } from './dom';
 
@@ -26,6 +27,7 @@ export const currentAction = (p: Proposal): string => p.artefacts?.relations?.[0
 
 export function PendingEdit({ p: current, onDone }: { p: Proposal; onDone: () => void }) {
   const st = useStore();
+  const t = useT();
   /** The proposal as the editor opened it: its revision is the one the save carries, so an edit made elsewhere meanwhile is refused, never overwritten. */
   const [p] = useState(current);
   const fields = editableFields(p) || { label: false, action: false };
@@ -68,13 +70,13 @@ export function PendingEdit({ p: current, onDone }: { p: Proposal; onDone: () =>
     <>
       <div className="form" data-ox-new="" style={{ gridTemplateColumns: '1fr', margin: '6px 0 0' }}>
         {fields.label ? (
-          <input ref={first} aria-label="Label" placeholder="label" maxLength={120} value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={onKey} />
+          <input ref={first} aria-label={t('shell.edit.label')} placeholder={t('shell.edit.labelPlaceholder')} maxLength={120} value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={onKey} />
         ) : null}
         {fields.action ? (
           <input
             ref={fields.label ? undefined : first}
-            aria-label="Action"
-            placeholder="action, e.g. produces"
+            aria-label={t('shell.edit.action')}
+            placeholder={t('shell.edit.actionPlaceholder')}
             maxLength={60}
             value={action}
             onChange={(e) => setAction(e.target.value)}
@@ -84,9 +86,9 @@ export function PendingEdit({ p: current, onDone }: { p: Proposal; onDone: () =>
       </div>
       <div className="act" data-ox-new="">
         <BusyButton className="ok" onClick={save}>
-          Save
+          {t('common.save')}
         </BusyButton>
-        <button onClick={onDone}>Cancel</button>
+        <button onClick={onDone}>{t('common.cancel')}</button>
       </div>
     </>
   );

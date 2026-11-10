@@ -8,6 +8,7 @@ import { random } from '../runtime/rng';
 import { clamp, ease, mix } from './colour';
 import { MOTION } from './constants';
 import { domainCentre, shown, type SceneState } from './state';
+import type { Node } from './types';
 import { panelW, type View } from './view';
 
 export function step(s: SceneState, v: View, dt: number): void {
@@ -59,36 +60,7 @@ export function step(s: SceneState, v: View, dt: number): void {
       }
     }
   }
-  for (let i = 0; i < nodes.length; i++) {
-    const a = nodes[i];
-    for (let j = i + 1; j < nodes.length; j++) {
-      const b = nodes[j];
-      if ((a.split && a.split.from === b) || (b.split && b.split.from === a)) continue;
-      let dx = b.x - a.x,
-        dy = b.y - a.y,
-        d2 = dx * dx + dy * dy;
-      if (d2 < 1) {
-        dx = random() - 0.5;
-        dy = random() - 0.5;
-        d2 = 1;
-      }
-      const d = Math.sqrt(d2);
-      const want = (a.rt + b.rt) * 3.6;
-      if (d < want) {
-        const f = ((want - d) / want) * 950,
-          fx = (dx / d) * f,
-          fy = (dy / d) * f;
-        if (!a.fixed && !a.drag) {
-          a.vx -= fx * dt;
-          a.vy -= fy * dt;
-        }
-        if (!b.fixed && !b.drag) {
-          b.vx += fx * dt;
-          b.vy += fy * dt;
-        }
-      }
-    }
-  }
+  repel(nodes, dt);
   for (const l of links) {
     const a = l.a,
       b = l.b;
@@ -188,4 +160,73 @@ export function step(s: SceneState, v: View, dt: number): void {
   cam.s += (cam.ts - cam.s) * Math.min(1, dt * 2.4);
   cam.x += (cam.tx - cam.x) * Math.min(1, dt * 2.4);
   cam.y += (cam.ty - cam.y) * Math.min(1, dt * 2.4);
+}
+
+/** Grid keys are packed into one number; the offset keeps a cell index positive. */
+const GRID_OFFSET = 32768;
+const GRID_SPAN = 65536;
+
+/**
+ * Pushes apart every two cells closer than 3.6 times their radii added. A uniform grid, its
+ * cells as wide as the widest such distance, holds every node, so a node only meets the nodes of
+ * the nine cells around its own: the ones it can be close to. Each node takes its partners of
+ * higher index in ascending order, so the velocities add up in exactly the order a pass over
+ * every pair of nodes takes, and the random nudges of coincident cells go to the same pairs.
+ */
+export function repel(nodes: Node[], dt: number): void {
+  const count = nodes.length;
+  if (count < 2) return;
+  let maxRt = 0;
+  for (const n of nodes) if (n.rt > maxRt) maxRt = n.rt;
+  const cell = Math.max(1, maxRt * 2 * 3.6);
+  const gx = new Int32Array(count),
+    gy = new Int32Array(count);
+  const grid = new Map<number, number[]>();
+  for (let i = 0; i < count; i++) {
+    gx[i] = Math.floor(nodes[i].x / cell);
+    gy[i] = Math.floor(nodes[i].y / cell);
+    const key = (gx[i] + GRID_OFFSET) * GRID_SPAN + (gy[i] + GRID_OFFSET);
+    const list = grid.get(key);
+    if (list) list.push(i);
+    else grid.set(key, [i]);
+  }
+  const partners: number[] = [];
+  for (let i = 0; i < count; i++) {
+    partners.length = 0;
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++) {
+        const list = grid.get((gx[i] + dx + GRID_OFFSET) * GRID_SPAN + (gy[i] + dy + GRID_OFFSET));
+        if (!list) continue;
+        for (const j of list) if (j > i) partners.push(j);
+      }
+    if (partners.length > 1) partners.sort((p, q) => p - q);
+    const a = nodes[i];
+    for (const j of partners) {
+      const b = nodes[j];
+      if ((a.split && a.split.from === b) || (b.split && b.split.from === a)) continue;
+      let dx = b.x - a.x,
+        dy = b.y - a.y,
+        d2 = dx * dx + dy * dy;
+      if (d2 < 1) {
+        dx = random() - 0.5;
+        dy = random() - 0.5;
+        d2 = 1;
+      }
+      const d = Math.sqrt(d2);
+      const want = (a.rt + b.rt) * 3.6;
+      if (d < want) {
+        const f = ((want - d) / want) * 950,
+          fx = (dx / d) * f,
+          fy = (dy / d) * f;
+        if (!a.fixed && !a.drag) {
+          a.vx -= fx * dt;
+          a.vy -= fy * dt;
+        }
+        if (!b.fixed && !b.drag) {
+          b.vx += fx * dt;
+          b.vy += fy * dt;
+        }
+      }
+    }
+  }
 }

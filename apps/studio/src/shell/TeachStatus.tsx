@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 
+import { useT } from '../i18n/i18n';
 import { BUSY_DELAY_MS } from './busy';
 import { useStore } from './dom';
 
@@ -34,15 +35,16 @@ export function useShownAtLeast(active: boolean, delay: number = BUSY_DELAY_MS, 
 
 export function TeachStatus() {
   const st = useStore();
+  const t = useT();
   const pending = st.ui.processing;
   const shown = useShownAtLeast(pending > 0);
-  const queued = pending > 1 ? ` · ${pending - 1} queued` : '';
+  const label = pending > 1 ? t('teach.bar.processingQueued', { n: pending - 1 }) : t('teach.bar.processing');
   return (
     <span id="teachStatus" className="status2" role="status">
       {shown ? (
         <>
           <span className="spin"></span>
-          <span className="lbl">{`Processing${queued}`}</span>
+          <span className="lbl">{label}</span>
         </>
       ) : null}
     </span>

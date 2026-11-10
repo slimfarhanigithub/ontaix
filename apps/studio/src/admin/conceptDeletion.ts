@@ -8,6 +8,7 @@ import type { DeletionImpact } from '../api/types';
 import { descendantsOf } from '../canvas/lineage';
 import type { SceneState } from '../canvas/state';
 import type { Node } from '../canvas/types';
+import { t } from '../i18n/i18n';
 
 /** Names listed in the confirmation before the rest collapse into `and N more`. */
 export const LISTED_NAMES = 6;
@@ -20,10 +21,12 @@ export interface ConceptDeletion {
 /** True when the drawer offers Delete, Rename and Move to domain: an approved, live concept the server knows. */
 export const canDeleteFromDrawer = (n: Node): boolean => n.kind === 'concept' && !n.pending && !n.dying && !!n.sid;
 
-const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-
 /** `a, b and c`. */
-const listOf = (parts: string[]) => (parts.length < 2 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`);
+const listOf = (parts: string[]) =>
+  parts.length < 2 ? parts.join('') : `${parts.slice(0, -1).join(t('admin.impact.listSeparator'))}${t('admin.impact.listAnd')}${parts[parts.length - 1]}`;
+
+/** ` and 3 more`, the names a confirmation does not list; empty when every name is listed. */
+const moreText = (hidden: number): string => (hidden > 0 ? t('admin.impact.more', { n: hidden }) : '');
 
 /**
  * The confirmation body of a company, domain or bulk deletion, from the API's deletion impact,
@@ -34,17 +37,16 @@ const listOf = (parts: string[]) => (parts.length < 2 ? parts.join('') : `${part
  */
 export function impactText(i: DeletionImpact, wholeCompany: boolean): string {
   const total = i.concepts + i.descendants;
-  const more = total > i.names.length ? ` and ${total - i.names.length} more` : '';
-  const named = i.names.length ? ` (${i.names.join(', ')}${more})` : '';
+  const named = i.names.length ? t('admin.impact.named', { names: i.names.join(t('admin.impact.listSeparator')), more: moreText(total - i.names.length) }) : '';
   const parts = [
-    `${count(i.concepts, 'concept')}${named}`,
-    count(i.descendants, 'descendant'),
-    `${count(i.relations, 'relation')}${i.crossCompanyRelations ? ` (${i.crossCompanyRelations} across companies)` : ''}`,
+    `${t('admin.impact.concepts', { n: i.concepts })}${named}`,
+    t('admin.impact.descendants', { n: i.descendants }),
+    `${t('admin.impact.relations', { n: i.relations })}${i.crossCompanyRelations ? t('admin.impact.acrossCompanies', { n: i.crossCompanyRelations }) : ''}`,
   ];
-  if (wholeCompany) parts.push(count(i.sources, 'source'));
-  parts.push(count(i.bindings, 'binding'), count(i.attributes, 'attribute'));
-  const cascade = i.cascadedProposals ? ` ${count(i.cascadedProposals, 'open proposal')} ${i.cascadedProposals === 1 ? 'is' : 'are'} rejected with them.` : '';
-  return `Its ${listOf(parts)} go with it.${cascade} This proposes a change for approval.`;
+  if (wholeCompany) parts.push(t('admin.impact.sources', { n: i.sources }));
+  parts.push(t('admin.impact.bindings', { n: i.bindings }), t('admin.impact.attributes', { n: i.attributes }));
+  const cascade = i.cascadedProposals ? t('admin.impact.cascade', { n: i.cascadedProposals }) : '';
+  return t('admin.impact.body', { list: listOf(parts), cascade });
 }
 
 export function conceptDeletion(s: SceneState, n: Node): ConceptDeletion {
@@ -56,11 +58,7 @@ export function conceptDeletion(s: SceneState, n: Node): ConceptDeletion {
 
 /** The confirmation body, for example `Its 4 descendants (Offerings, Apps, Data, AI) and 5 relations go with it. …`. */
 export function deletionText(names: string[], relations: number): string {
-  const rels = `${relations} relation${relations === 1 ? '' : 's'}`;
-  const tail = 'This proposes a change for approval.';
-  if (!names.length) return `Its ${rels} ${relations === 1 ? 'goes' : 'go'} with it. ${tail}`;
-  const shown = names.slice(0, LISTED_NAMES).join(', ');
-  const more = names.length > LISTED_NAMES ? ` and ${names.length - LISTED_NAMES} more` : '';
-  const desc = `${names.length} descendant${names.length === 1 ? '' : 's'}`;
-  return `Its ${desc} (${shown}${more}) and ${rels} go with it. ${tail}`;
+  if (!names.length) return t('admin.deletion.relationsOnly', { n: relations });
+  const shown = names.slice(0, LISTED_NAMES).join(t('admin.impact.listSeparator'));
+  return t('admin.deletion.withDescendants', { n: names.length, names: shown, more: moreText(names.length - LISTED_NAMES), r: relations });
 }

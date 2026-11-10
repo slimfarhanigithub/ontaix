@@ -6,10 +6,12 @@
  */
 import { liveOf } from '../canvas/state';
 import { themedColour } from '../design/tokens';
+import { useT } from '../i18n/i18n';
 import { refStyle, useStore } from './dom';
 
 export function DomainsCard() {
   const st = useStore();
+  const t = useT();
   const s = st.s;
   const off = st.ui.domainsOff;
   const allOn = s.DOMAINS.every((d) => !d.hidden);
@@ -20,16 +22,16 @@ export function DomainsCard() {
         id="domainsToggle"
         aria-expanded={!off}
         aria-controls="domains"
-        title="Show or hide the domain list (D)"
+        title={t('shell.domains.toggleTitle')}
         onClick={() => st.toggleDomainsCard()}
       >
-        {off ? 'Show domains' : 'Hide domains'}
+        {off ? t('shell.domains.show') : t('shell.domains.hide')}
       </button>
-      <nav className={`domains${off ? ' off' : ''}`} id="domains" aria-label="Domain products">
+      <nav className={`domains${off ? ' off' : ''}`} id="domains" aria-label={t('shell.domains.title')}>
         <div className="title">
-          <span>Domain products</span>
+          <span>{t('shell.domains.title')}</span>
           <button id="domAll" onClick={() => st.toggleAllDomains()}>
-            {allOn ? 'disable all' : 'enable all'}
+            {allOn ? t('shell.domains.disableAll') : t('shell.domains.enableAll')}
           </button>
         </div>
         {s.companies.map((c) => {
@@ -53,6 +55,7 @@ function CompanyRows({
   multi: boolean;
 }) {
   const st = useStore();
+  const t = useT();
   const s = st.s;
   return (
     <>
@@ -63,7 +66,7 @@ function CompanyRows({
             className="sw"
             role="switch"
             aria-checked={live.length && live.every((d) => d.hidden) ? 'false' : 'true'}
-            aria-label={`Enable ${c.name}`}
+            aria-label={t('shell.domains.enable', { name: c.name })}
             onClick={() => st.toggleCompanyDomains(c)}
           ></button>
         </div>
@@ -71,7 +74,7 @@ function CompanyRows({
       {!live.length ? (
         <div className="row">
           <i ref={refStyle('opacity:0')}></i>
-          <span ref={refStyle('text-align:left')}>no domain products yet</span>
+          <span ref={refStyle('text-align:left')}>{t('shell.domains.none')}</span>
         </div>
       ) : null}
       {live.map((d) => {
@@ -82,7 +85,7 @@ function CompanyRows({
             <i></i>
             <button
               className={`name${focus ? ' focus' : ''}`}
-              title={focus ? 'Click again to show all' : 'Show ' + d.name + ' with the domain products it relates to'}
+              title={focus ? t('shell.domains.showAll') : t('shell.domains.showOne', { name: d.name })}
               onClick={() => st.focusDomainFromCard(d)}
             >
               {d.name}
@@ -92,7 +95,7 @@ function CompanyRows({
               className="sw"
               role="switch"
               aria-checked={d.hidden ? 'false' : 'true'}
-              aria-label={`Enable ${d.name}`}
+              aria-label={t('shell.domains.enable', { name: d.name })}
               onClick={() => st.toggleDomainHidden(d)}
             ></button>
           </div>

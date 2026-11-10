@@ -24,6 +24,7 @@ import { bySid } from '../canvas/state';
 import type { Node } from '../canvas/types';
 import { singular } from '../nl/parser';
 import { random } from '../runtime/rng';
+import { t, type MessageKey } from '../i18n/i18n';
 import { store } from '../store/store';
 import { beginProcessing } from './processing';
 import { readWholeDocument } from './wholeDocument';
@@ -37,11 +38,11 @@ const BATCH_RETRY_MAX_S = 60;
 
 /** Why a typed or spoken sentence drafted nothing when the model step is on but did not answer;
  * the sentence stays in the teach bar to be sent again. */
-const MODEL_REFUSALS: Partial<Record<TeachResult['llmOutcome'], string>> = {
-  budget_exhausted: 'The monthly model allowance is used up. Ask an administrator to raise it.',
-  rate_limited: 'The model is busy. Try again in a moment.',
-  timeout: 'The model is unavailable right now. Your sentence is kept, send it again.',
-  provider_error: 'The model is unavailable right now. Your sentence is kept, send it again.',
+const MODEL_REFUSALS: Partial<Record<TeachResult['llmOutcome'], MessageKey>> = {
+  budget_exhausted: 'teach.model.budgetExhausted',
+  rate_limited: 'teach.model.rateLimited',
+  timeout: 'teach.model.unavailable',
+  provider_error: 'teach.model.unavailable',
 };
 
 /** The teach bar session: a new one when the Studio loads and whenever the taught company changes. */
@@ -276,13 +277,13 @@ async function teachSpoken(request: TeachRequest): Promise<void> {
 /** Shows why a spoken sentence was not taught; a failure that is not an API refusal shows its message, so the queue never stops. */
 function showSpeechRefusal(err: unknown): void {
   if (err instanceof ApiError) store.refused(err);
-  else store.toast2('Refused', err instanceof Error ? err.message : String(err));
+  else store.toast2(t('common.lead.refused'), err instanceof Error ? err.message : String(err));
 }
 
 /** The promise's outcome, or a refusal when it takes longer than `ms`. */
 function withTimeout<R>(promise: Promise<R>, ms: number): Promise<R> {
   return new Promise<R>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('The model did not answer in time')), ms);
+    const timer = setTimeout(() => reject(new Error(t('teach.model.noAnswer'))), ms);
     promise.then(
       (value) => {
         clearTimeout(timer);
@@ -354,14 +355,14 @@ async function propose(result: TeachResult, early: EarlyDrafts = new EarlyDrafts
   }
   if (result.outcome === 'understood') {
     const n = result.statements?.length ?? result.drafts.length;
-    store.caption(`Understood ${n === 1 ? 'one statement' : n + ' statements'}`, result.caption);
+    store.caption(t('teach.caption.understood', { n }), result.caption);
     return accepted;
   }
   if (result.outcome === 'partly_understood') {
-    store.caption('Partly understood', result.caption);
+    store.caption(t('teach.caption.partlyUnderstood'), result.caption);
     return accepted;
   }
-  store.caption('Not understood', notUnderstoodText(result));
+  store.caption(t('teach.caption.notUnderstood'), notUnderstoodText(result));
   return false;
 }
 
@@ -370,7 +371,7 @@ async function propose(result: TeachResult, early: EarlyDrafts = new EarlyDrafts
 export function notUnderstoodText(result: TeachResult): string {
   const live = result.origin === 'text' || result.origin === 'speech';
   const why = live && result.degraded && !result.drafts.length ? MODEL_REFUSALS[result.llmOutcome] : undefined;
-  return why ?? result.caption;
+  return why ? t(why) : result.caption;
 }
 
 /** The refusals of a batch that name a fact the model already holds. */
@@ -399,7 +400,7 @@ async function submitBatch(drafts: ProposalDraft[], parseId: string | null): Pro
         store.refused(e);
         return false;
       }
-      store.toast2('Already there', leftOutText(plan));
+      store.toast2(t('teach.caption.alreadyThere'), leftOutText(plan));
       return true;
     }
     const wait = err instanceof ApiError && err.status === 429 ? err.retryAfter : null;
@@ -527,16 +528,14 @@ function draftName(d: ProposalDraft): string {
 
 /** The toast text naming what a resubmission left out. */
 export function leftOutText(plan: DuplicatePlan): string {
-  const known = `Left out, already in the model: ${plan.known.join(', ')}.`;
-  return plan.orphaned.length
-    ? `${known} Also left out, as the existing concept stands under another parent: ${plan.orphaned.join(', ')}.`
-    : known;
+  const known = t('teach.leftOut.known', { names: plan.known.join(', ') });
+  return plan.orphaned.length ? `${known} ${t('teach.leftOut.orphaned', { names: plan.orphaned.join(', ') })}` : known;
 }
 
 /** The import caption's note on the text pieces the API left out, empty when there are none. */
 export function skippedText(skipped: number): string {
   if (!(skipped > 0)) return '';
-  return ` ${skipped} short fragment${skipped === 1 ? '' : 's'} skipped.`;
+  return t('teach.import.skipped', { n: skipped });
 }
 
 /** How an imported document is read: sentence by sentence, or as a whole by the model. */
@@ -567,10 +566,7 @@ export async function importDocument(
     }
     const sents = imported.sentences;
     const before = store.ui.proposals.length;
-    store.caption(
-      'Importing ' + imported.fileName,
-      `${sents.length} sentences found. Each one is read the way a spoken sentence is; what the model understands becomes a proposal.`,
-    );
+    store.caption(t('teach.import.importing', { file: imported.fileName }), t('teach.import.sentencesFound', { n: sents.length }));
     for (let i = 0; i < sents.length; i++) {
       await teachSentence({ importId: imported.importId, sentenceIndex: i });
       await wait(IMPORT_PACE_MS);
@@ -578,12 +574,12 @@ export async function importDocument(
     await store.refreshProposals();
     const added = store.ui.proposals.length - before;
     store.caption(
-      'Import finished',
-      `${imported.fileName}: ${sents.length} sentences read, ${added} proposal${added === 1 ? '' : 's'} waiting for approval on the right.${skippedText(imported.skipped)}`,
+      t('teach.import.finished'),
+      t('teach.import.finishedText', { file: imported.fileName, n: sents.length, added, skipped: skippedText(imported.skipped) }),
     );
   } catch (err) {
     const reason = err instanceof ApiError ? err.problem.detail || err.problem.title : (err as Error).message;
-    store.caption('Import failed', `${file.name} could not be read (${reason}). Text, Markdown, CSV, Word and PDF are supported.`);
+    store.caption(t('teach.import.failed'), t('teach.import.unreadableTypes', { file: file.name, reason }));
   } finally {
     store.ui.importing = false;
     end();

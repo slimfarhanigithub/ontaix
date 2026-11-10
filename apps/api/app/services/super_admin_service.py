@@ -21,6 +21,7 @@ from app.models.storage.base import (
     ThrottleKeyKind,
 )
 from app.repositories import (
+    account_membership_repository,
     account_repository,
     auth_session_repository,
     password_credential_repository,
@@ -61,8 +62,7 @@ async def create_super_admin(session: AsyncSession, email: str, password: str) -
         account_id=uuid.uuid4(),
         email=normalized,
         name=normalized.split("@", 1)[0],
-        tenant_id=None,
-        user_id=None,
+        is_platform=True,
         created_by=None,
     )
     await platform_role_repository.grant(session, account.id, PlatformRoleName.SUPER_ADMIN, None)
@@ -86,7 +86,8 @@ async def create_super_admin(session: AsyncSession, email: str, password: str) -
 
 async def set_password(session: AsyncSession, email: str, password: str) -> None:
     """Set any account's password and end its sessions. A platform account's password needs no
-    change at next sign-in; a member's, set by someone else, does."""
+    change at next sign-in; a member's, set by someone else, does. The event is mirrored into
+    every organization the member belongs to."""
     normalized = normalize_email(email)
     account = await account_repository.get_by_email(session, normalized)
     if account is None:
@@ -112,14 +113,10 @@ async def set_password(session: AsyncSession, email: str, password: str) -> None
         session, ended, organization_access_audit_service.PASSWORD_RESET_WHAT, SYSTEM
     )
     await sign_in_throttle_repository.clear(session, ThrottleKeyKind.EMAIL, key_digest(normalized))
-    copy = None
-    if account.tenant_id is not None:
-        copy = OrganizationCopy(tenant_id=account.tenant_id, actor=SYSTEM, kind="platform")
+    what = f"Password of {normalized} set from the admin command line"
     await platform_audit_service.record(
-        session,
-        "super_admin_password_set",
-        True,
-        f"Password of {normalized} set from the admin command line",
-        target_account_id=account.id,
-        organization=copy,
+        session, "super_admin_password_set", True, what, target_account_id=account.id
     )
+    for membership in await account_membership_repository.list_for_account(session, account.id):
+        copy = OrganizationCopy(tenant_id=membership.tenant_id, actor=SYSTEM, kind="platform")
+        await platform_audit_service.mirror(session, copy, what, True)

@@ -7,6 +7,7 @@
 import { api } from '../api/client';
 import { liveEvents } from '../api/events';
 import type { DocumentExtraction, ImportResult } from '../api/types';
+import { t } from '../i18n/i18n';
 import { store } from '../store/store';
 
 /** How often a running job is read. */
@@ -18,7 +19,7 @@ const FINAL = new Set<DocumentExtraction['state']>(['succeeded', 'failed', 'canc
 export type WholeDocumentOutcome = 'proposed' | 'nothing' | 'unavailable';
 
 export async function readWholeDocument(imported: ImportResult, companyId: string): Promise<WholeDocumentOutcome> {
-  const kicker = `Reading ${imported.fileName}`;
+  const kicker = t('teach.import.reading', { file: imported.fileName });
   let job: DocumentExtraction;
   try {
     job = await api.startDocumentExtraction(imported.importId, companyId);
@@ -28,21 +29,21 @@ export async function readWholeDocument(imported: ImportResult, companyId: strin
       job = await api.getDocumentExtraction(job.id);
     }
   } catch {
-    store.caption(kicker, 'Whole-document reading is not available');
+    store.caption(kicker, t('teach.import.unavailable'));
     return 'unavailable';
   }
   if (job.state === 'failed' && job.failureReason === 'no_drafts') {
-    store.caption(kicker, `Nothing to propose from ${imported.fileName}`);
+    store.caption(kicker, t('teach.import.nothing', { file: imported.fileName }));
     return 'nothing';
   }
   if (job.state !== 'succeeded') {
-    store.caption(kicker, 'Whole-document reading is not available');
+    store.caption(kicker, t('teach.import.unavailable'));
     return 'unavailable';
   }
   try {
     const result = await api.getDocumentExtractionResult(job.id);
     if (!result.drafts.length) {
-      store.caption(kicker, `Nothing to propose from ${imported.fileName}`);
+      store.caption(kicker, t('teach.import.nothing', { file: imported.fileName }));
       return 'nothing';
     }
     const made = await api.proposeDocumentExtraction(
@@ -50,18 +51,18 @@ export async function readWholeDocument(imported: ImportResult, companyId: strin
       result.drafts.map((_, i) => i),
     );
     await store.refreshProposals();
-    store.caption(kicker, `${made.length} proposals from ${imported.fileName}`);
+    store.caption(kicker, t('teach.import.proposals', { n: made.length, file: imported.fileName }));
     return 'proposed';
   } catch (err) {
     store.refused(err);
-    store.caption(kicker, `Nothing to propose from ${imported.fileName}`);
+    store.caption(kicker, t('teach.import.nothing', { file: imported.fileName }));
     return 'nothing';
   }
 }
 
 /** The caption text of a running job. */
 export function progressText(job: DocumentExtraction): string {
-  return `Outline ${job.outlineChunksDone} of ${job.chunks} · sections ${job.sectionChunksDone} of ${job.chunks}`;
+  return t('teach.import.progress', { outline: job.outlineChunksDone, chunks: job.chunks, sections: job.sectionChunksDone });
 }
 
 /** Waits for the next poll, or less when an event about the job arrives. */

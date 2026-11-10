@@ -1,12 +1,14 @@
 /**
  * The screen for the browser's session against a real API: nothing while the session is read,
- * then the sign-in page, the "Choose a new password" page, the platform portal or the Studio.
+ * then the sign-in page, the "Choose a new password" page, the "Choose an organization" page,
+ * the platform portal or the Studio.
  */
 import { useEffect } from 'react';
 
 import { App } from '../App';
 import { PlatformPortal } from '../platform/PlatformPortal';
 import { auth, useAuth } from './authStore';
+import { ChooseOrganization } from './ChooseOrganization';
 import { ChoosePassword } from './ChoosePassword';
 import { SignIn } from './SignIn';
 
@@ -22,6 +24,8 @@ export function Gate() {
       return <SignIn />;
     case 'password':
       return <ChoosePassword />;
+    case 'organization':
+      return <ChooseOrganization />;
     case 'platform':
       return <PlatformPortal />;
     case 'studio':

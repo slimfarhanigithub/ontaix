@@ -629,6 +629,42 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Problem'
+  /companies/{companyId}/language:
+    parameters:
+      - $ref: '#/components/parameters/CompanyId'
+    patch:
+      tags: [Companies]
+      summary: Set the model language of a company
+      description: |
+        The company's model language (`en`, `fr`, `de`): the speech recognition locale and phrase list, the language the teach, document extraction and Expand models write new labels, specs and relation verbs in, the instant grammar drafts, and the language tags and fixed text of an export. Immediate and audited (kind `company`, `<company> language set to French`); a company setting, not a proposal. Administrator at tenant scope only (`settings.write`); `404` for a company of another tenant. Emits `company.updated` with `fields: [language]`. Existing concepts keep their labels: a company whose concepts were taught in another language holds a mixed model until people rename them. The same language again changes nothing and writes no entry.
+      operationId: setCompanyLanguage
+      x-ontaix-permission: settings.write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [language]
+              properties:
+                language:
+                  $ref: '#/components/schemas/Language'
+      responses:
+        '200':
+          description: The company, its language updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
   /companies/{companyId}/learning:
     parameters:
       - $ref: '#/components/parameters/CompanyId'
@@ -3541,7 +3577,9 @@ paths:
       description: |
         The only way to start a session; there is no sign-up and no self-service password recovery (ADR 0017). Checks run in this order: the client IP's and the email's throttle (`429`), then the argon2id verification. An unknown email is verified against a fixed dummy hash, so every refusal takes the same time. A wrong password, an unknown email, a disabled account and a disabled organization all answer the same `401 invalid_credentials`; five failures within 15 minutes lock that email, and that IP, for 15 minutes (`429 sign_in_locked`), whether or not an account has the email.
 
-        On success the response sets the session cookie `__Host-ontaix_session` (`Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`, no `Max-Age`) holding a new 256-bit token, ends any session the request presented, and returns the session with its CSRF token. When `mustChangePassword` is true the session may only call `GET /auth/session`, `PUT /auth/password` and `POST /auth/sign-out` until the password is changed; every other call answers `403 password_change_required`. The request must carry an `Origin` header naming an allowed origin (login CSRF). Every attempt is audited.
+        On success the response sets the session cookie `__Host-ontaix_session` (`Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`, no `Max-Age`) holding a new 256-bit token, ends any session the request presented, and returns the session with its CSRF token. When `mustChangePassword` is true the session may only call `GET /auth/session`, `PUT /auth/password`, `PUT /auth/session/organization` and `POST /auth/sign-out` until the password is changed; every other call answers `403 password_change_required`. The request must carry an `Origin` header naming an allowed origin (login CSRF). Every attempt is audited.
+
+        A member account belongs to organizations through memberships (ADR 0020). After the password check, an account with exactly one active membership in an enabled organization enters it: `organization` and `userId` are set. An account with several gets a session inside none: `organization` is null, `organizations` lists them, every organization endpoint answers `403 organization_not_chosen`, and the Studio shows Choose an organization, which calls `PUT /auth/session/organization`. An account with no membership at all is refused with `403 no_organization` (`detail` `Your account belongs to no organization. Ask your administrator.`), audited as a failed sign-in without counting toward the lock; an account whose memberships are all disabled, or all in disabled organizations, is refused with `401 invalid_credentials` like a disabled account. A platform account's session is inside no organization and lists none.
       operationId: signIn
       x-ontaix-permission: none
       security: []
@@ -3566,7 +3604,11 @@ paths:
         '401':
           $ref: '#/components/responses/InvalidCredentials'
         '403':
-          $ref: '#/components/responses/CsrfFailed'
+          description: '`csrf_failed` when the `Origin` header is missing or not allowed; `no_organization` when the password is right but the account belongs to no organization (no cookie is set).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
@@ -3605,6 +3647,83 @@ paths:
                 $ref: '#/components/schemas/Session'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /auth/session/organization:
+    put:
+      tags: [Authentication]
+      summary: Choose or switch the organization of a member session
+      description: |
+        A member with several organizations chooses the one to enter after sign-in, or switches to another one from the account menu (Switch organization returns to the choice screen first). `organizationId` must be one of the account's `organizations`: an active membership in an enabled organization, else `403 forbidden`; a platform account answers `403 forbidden` too (it enters an organization through `POST /admin/organizations/{organizationId}/enter`). The presented session ends and a new token is issued (`Set-Cookie`) inside the organization, so the body's `csrfToken` replaces the old one; every organization endpoint then answers for that organization and its directory user (`userId`). A session whose password must be changed answers `403 password_change_required` first. Needs `X-CSRF-Token` and an allowed `Origin`. Answers `409 session_changed` when another request replaced the session first. Audited as `organization_chosen` in the platform log and as kind `auth` in the organization's log. No organization is remembered between sign-ins; an account with several chooses at every sign-in.
+      operationId: chooseSessionOrganization
+      x-ontaix-permission: authenticated
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationChoice'
+      responses:
+        '200':
+          description: The new session, inside the organization. `Set-Cookie` carries the new token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: '`csrf_failed`, `password_change_required`, or `forbidden` when the organization is not one of the account''s active memberships.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /auth/session/language:
+    put:
+      tags: [Authentication]
+      summary: Choose my portal language
+      description: |
+        The signed-in account sets its own portal language (`en`, `fr`, `de`), the language of every Studio and admin portal label, or `null` to follow the browser's language (English when the browser's is none of the three). Any account, member or platform, sets its own and nobody else's. It never changes ontology content; the model language of a company is `PATCH /companies/{companyId}/language`. The session keeps its token: the body is the current session with `account.language` updated. A session whose password must be changed answers `403 password_change_required` first. Needs `X-CSRF-Token` and an allowed `Origin`. Audited as `account_updated` in the platform log and as kind `auth` in the organization's log.
+      operationId: setSessionLanguage
+      x-ontaix-permission: authenticated
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [language]
+              properties:
+                language:
+                  oneOf:
+                    - $ref: '#/components/schemas/Language'
+                    - type: 'null'
+      responses:
+        '200':
+          description: The current session, its account's language updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: '`csrf_failed` or `password_change_required`.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   /auth/password:
     put:
@@ -3841,7 +3960,8 @@ paths:
       - $ref: '#/components/parameters/OrganizationId'
     get:
       tags: [Platform]
-      summary: List an organization's accounts (super admin)
+      summary: List an organization's members (super admin)
+      description: 'The organization''s members, one per membership of an account: disabled ones included, members removed from the organization (`DELETE /admin/organizations/{organizationId}/users/{userId}`) excluded.'
       operationId: listOrganizationUsers
       x-ontaix-permission: platform.admin
       security:
@@ -3879,7 +3999,7 @@ paths:
     post:
       tags: [Platform]
       summary: Create an account in an organization (super admin)
-      description: 'Creates the account, its directory user (issuer `local`) and its password credential in one transaction, and adds the user to `groupIds` (groups of this organization only, `422` otherwise). The initial password passes the same policy as a change (`422 password_rejected`) and must be changed at first sign-in. The password is never returned, logged or audited. The email is unique across the deployment (`409 duplicate_email`), because the sign-in page has no organization field. Refused with `409 organization_disabled` on a disabled organization. Audited `account_created` in both logs, and as kind `groups` for each membership.'
+      description: 'Add user: creates the account, its first membership with its directory user (issuer `local`, subject `<account id>:<tenant id>`) and its password credential in one transaction, and adds the user to `groupIds` (groups of this organization only, `422` otherwise). The initial password passes the same policy as a change (`422 password_rejected`) and must be changed at first sign-in. The password is never returned, logged or audited. The email is unique across the deployment, because the sign-in page has no organization field: an email that already has an account is refused with `409 email_taken`, whose `detail` points to Add existing account (`POST /admin/organizations/{organizationId}/memberships`); an email a directory user of this organization already has is refused with `409 duplicate_email`. Refused with `409 organization_disabled` on a disabled organization. Audited `account_created` in both logs, and as kind `groups` for each group membership.'
       operationId: createOrganizationUser
       x-ontaix-permission: platform.admin
       security:
@@ -3914,7 +4034,8 @@ paths:
       - $ref: '#/components/parameters/UserId'
     get:
       tags: [Platform]
-      summary: Get one account of an organization (super admin)
+      summary: Get one member of an organization (super admin)
+      description: '`404` for a user who is no member of the organization, or one removed from it.'
       operationId: getOrganizationUser
       x-ontaix-permission: platform.admin
       security:
@@ -3934,8 +4055,8 @@ paths:
           $ref: '#/components/responses/NotFound'
     patch:
       tags: [Platform]
-      summary: Rename an account or change its groups (super admin)
-      description: '`groupIds` replaces the user''s memberships (groups of this organization only). Membership changes are immediate and audited as kind `groups` in the organization''s log, like the Groups page. The email never changes; create a new account instead.'
+      summary: Rename a member or change its groups (super admin)
+      description: '`name` and `department` are the directory user''s, so they are per organization: a rename here changes nothing in the account''s other organizations. `groupIds` replaces the user''s group memberships (groups of this organization only). Group changes are immediate and audited as kind `groups` in the organization''s log, like the Groups page. The email never changes; create a new account instead.'
       operationId: updateOrganizationUser
       x-ontaix-permission: platform.admin
       security:
@@ -3961,6 +4082,62 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+    delete:
+      tags: [Platform]
+      summary: Remove a member from the organization (super admin)
+      description: 'Remove from organization: the membership is marked removed, the user''s group memberships are dropped (each audited as kind `groups`) and every session of the account inside this organization ends (`membership_removed`); the account''s sessions inside its other organizations stay. The directory user stays, because proposals, approvals and audit rows name it, but it is no longer listed and answers `404` here. The account and its other memberships stay; an account left with no membership remains and can be added again with Add existing account, which gives it the same directory user back. Idempotent in effect: a removed member answers `404`. Audited `membership_removed` in both logs.'
+      operationId: removeOrganizationUser
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      responses:
+        '204':
+          description: Removed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/organizations/{organizationId}/memberships:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    post:
+      tags: [Platform]
+      summary: Add an existing account to an organization (super admin)
+      description: 'Add existing account: a membership of this organization for an account that already exists, with a directory user (issuer `local`, subject `<account id>:<tenant id>`) named after the account and added to `groupIds` (groups of this organization only, `422` otherwise). An unknown email and a platform account answer `404 account_not_found`; an account already a member answers `409 already_member`; an email a directory user of this organization already has answers `409 duplicate_email`; a disabled organization answers `409 organization_disabled`. An account removed from this organization earlier gets its membership and the same directory user back (same `id`), enabled, with the groups chosen now, so its history stays one user. The account''s password is unchanged. Audited `membership_added` in both logs, and as kind `groups` for each group membership. Moving someone between organizations is Remove from organization in one and Add existing account in the other.'
+      operationId: addOrganizationMembership
+      x-ontaix-permission: platform.admin
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MembershipCreate'
+      responses:
+        '201':
+          description: The member.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No such organization (`not_found`), or no member account has this email (`account_not_found`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   /admin/organizations/{organizationId}/users/{userId}/disable:
     parameters:
@@ -3968,8 +4145,8 @@ paths:
       - $ref: '#/components/parameters/UserId'
     post:
       tags: [Platform]
-      summary: Disable an account (super admin)
-      description: The account can no longer sign in and every session of it ends (`account_disabled`). Its directory user, memberships and history stay. Idempotent. Audited in both logs.
+      summary: Disable a member (super admin)
+      description: Acts on the membership of this organization alone. The member can no longer enter this organization and every session of the account inside it ends (`account_disabled`); the person keeps access to their other organizations. The directory user, group memberships and history stay. Idempotent. Audited in both logs.
       operationId: disableOrganizationUser
       x-ontaix-permission: platform.admin
       security:
@@ -3994,8 +4171,8 @@ paths:
       - $ref: '#/components/parameters/UserId'
     post:
       tags: [Platform]
-      summary: Enable a disabled account (super admin)
-      description: Idempotent. Audited in both logs.
+      summary: Enable a disabled member (super admin)
+      description: Acts on the membership of this organization alone. Idempotent. Audited in both logs.
       operationId: enableOrganizationUser
       x-ontaix-permission: platform.admin
       security:
@@ -4021,7 +4198,7 @@ paths:
     put:
       tags: [Platform]
       summary: Reset an account's password (super admin)
-      description: The only password recovery. Sets `newPassword` (same policy, `422 password_rejected`) with a forced change at the next sign-in, ends every session of the account (`password_reset`) and clears the throttle of its email. The super admin passes the password to the user outside Ontaix; it is never returned, logged or audited. Audited `password_reset` in both logs.
+      description: The only password recovery. The password is the account's one password, so the reset applies to every organization of the account, and the dialog says so. Sets `newPassword` (same policy, `422 password_rejected`) with a forced change at the next sign-in, ends every session of the account in every organization (`password_reset`) and clears the throttle of its email. The super admin passes the password to the user outside Ontaix; it is never returned, logged or audited. Audited `password_reset` in both logs, the organization's copy in this organization.
       operationId: resetOrganizationUserPassword
       x-ontaix-permission: platform.admin
       security:
@@ -4367,7 +4544,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Forbidden:
-      description: The caller's roles do not allow this action in this scope (code `forbidden`). `detail` names what is missing in human-readable words, for example `Only a Governor or Owner can approve`.
+      description: The caller's roles do not allow this action in this scope (code `forbidden`). `detail` names what is missing in human-readable words, for example `Only a Governor or Owner can approve`. Every organization endpoint also answers `organization_not_chosen` for a member session with several organizations that has not chosen one yet (`PUT /auth/session/organization`), and `password_change_required` while the session's password must be changed.
       content:
         application/problem+json:
           schema:
@@ -4519,6 +4696,12 @@ components:
             - password_rejected
             - current_password_incorrect
             - duplicate_email
+            - email_taken
+            - account_not_found
+            - already_member
+            - no_organization
+            - organization_not_chosen
+            - session_changed
             - duplicate_organization
             - organization_disabled
             - company_limit
@@ -4589,7 +4772,7 @@ components:
 
     Company:
       type: object
-      required: [id, key, name, sub, position, isHome, rootId, domainProducts, counts]
+      required: [id, key, name, sub, position, isHome, rootId, language, domainProducts, counts]
       properties:
         id:
           $ref: '#/components/schemas/Id'
@@ -4606,6 +4789,10 @@ components:
           type: boolean
         rootId:
           $ref: '#/components/schemas/Id'
+        language:
+          allOf:
+            - $ref: '#/components/schemas/Language'
+          description: The model language (`PATCH /companies/{companyId}/language`). The teach bar shows it next to the microphone.
         domainProducts:
           type: array
           items:
@@ -4646,6 +4833,16 @@ components:
           type: string
           enum: [starter_vocabulary, one_cell]
           description: '`starter_vocabulary` proposes the thirteen starter concepts; `one_cell` creates the root only.'
+        language:
+          allOf:
+            - $ref: '#/components/schemas/Language'
+          default: en
+          description: The model language of the new company.
+
+    Language:
+      type: string
+      enum: [en, fr, de]
+      description: One of the three languages Ontaix speaks. `company.language` is the model language of a company (speech, extraction, expansion, drafts, export); `account.language` is a person's portal language (the Studio's own labels), null to follow the browser.
 
     CompanyCreated:
       type: object
@@ -6491,7 +6688,8 @@ components:
           description: When the Speech token expires, about 10 minutes after it is issued. The Studio requests a new token at least 5 minutes before, and at every microphone start, and sets it on the running recogniser.
         language:
           type: string
-          enum: [en-GB, en-US]
+          enum: [en-GB, en-US, fr-FR, de-DE]
+          description: The recognition locale of the requested company's model language - `fr-FR` or `de-DE` for a French or German company, else the deployment's English locale (`ONTAIX_SPEECH_LANGUAGE`). The Studio passes it to the Speech SDK with the company's labels as the phrase list; no automatic language detection.
           description: The recognition language the deployment is configured for (`ONTAIX_SPEECH_LANGUAGE`, default `en-GB`). English only.
 
     TenantDomain:
@@ -6619,7 +6817,7 @@ components:
 
     Session:
       type: object
-      description: The live session of the browser. A member session names its organization and directory user; a platform session names no organization unless a support session is open (`support`) or the super admin entered one (`acting`), never both.
+      description: The live session of the browser. A member session lists the account's organizations (`organizations`) and, once inside one, names it and the account's directory user there (`organization`, `userId`); until a member with several has chosen one, both are null and every organization endpoint answers `403 organization_not_chosen`. A platform session names no organization unless a support session is open (`support`) or the super admin entered one (`acting`), never both.
       required: [kind, account, csrfToken, mustChangePassword, idleExpiresAt, absoluteExpiresAt]
       properties:
         kind:
@@ -6636,15 +6834,25 @@ components:
               format: email
             name:
               type: string
+            language:
+              oneOf:
+                - $ref: '#/components/schemas/Language'
+                - type: 'null'
+              description: The portal language the person chose (`PUT /auth/session/language`); null follows the browser's language when it is one of the three, else English.
         organization:
           oneOf:
             - $ref: '#/components/schemas/OrganizationRef'
             - type: 'null'
-          description: The member's organization; null for a platform session.
+          description: The organization the member session is inside; null until a member with several organizations has chosen one (`PUT /auth/session/organization`), and null for a platform session.
+        organizations:
+          type: [array, 'null']
+          items:
+            $ref: '#/components/schemas/OrganizationRef'
+          description: Always an array on a member session - the account's active memberships in enabled organizations, by name. One entry means the session entered it at sign-in; more than one shows Choose an organization after sign-in and Switch organization in the account menu; an account with none is refused at sign-in. Null on a platform session.
         userId:
           type: [string, 'null']
           format: uuid
-          description: The member's directory user (`GET /me` returns its roles); null for a platform session.
+          description: The member's directory user in `organization` (`GET /me` returns its roles); a member is a different directory user in each of its organizations. Null while no organization is chosen, and for a platform session.
         platformRoles:
           type: array
           items:
@@ -6697,6 +6905,15 @@ components:
           type: string
           format: date-time
           description: 12 hours after sign-in; the session then ends whatever the activity.
+
+    OrganizationChoice:
+      type: object
+      required: [organizationId]
+      additionalProperties: false
+      properties:
+        organizationId:
+          $ref: '#/components/schemas/Id'
+          description: One of the session's `organizations`.
 
     PasswordChange:
       type: object
@@ -6764,7 +6981,7 @@ components:
         users:
           type: integer
           minimum: 0
-          description: Accounts of the organization, disabled included.
+          description: Members of the organization (memberships of accounts), disabled included and removed excluded.
         createdAt:
           type: string
           format: date-time
@@ -6799,10 +7016,12 @@ components:
 
     OrganizationUser:
       type: object
+      description: A member of an organization - an account's membership of it, seen through the organization's directory user. The email, the password state and the lock are the account's, shared by every organization of it; the name, the department, the status and the groups are this organization's.
       required: [id, accountId, email, name, status, mustChangePassword, locked, groups, createdAt]
       properties:
         id:
           $ref: '#/components/schemas/Id'
+          description: The directory user in this organization; the same account has another id in each of its other organizations.
         accountId:
           $ref: '#/components/schemas/Id'
         email:
@@ -6810,11 +7029,13 @@ components:
           format: email
         name:
           type: string
+          description: The directory user's name in this organization.
         department:
           type: [string, 'null']
         status:
           type: string
           enum: [active, disabled]
+          description: Of the membership of this organization.
         mustChangePassword:
           type: boolean
         locked:
@@ -6833,9 +7054,11 @@ components:
         createdAt:
           type: string
           format: date-time
+          description: When the account joined this organization.
         lastSignInAt:
           type: [string, 'null']
           format: date-time
+          description: When the account last entered this organization.
 
     OrganizationUserCreate:
       type: object
@@ -6846,7 +7069,7 @@ components:
           type: string
           format: email
           maxLength: 254
-          description: Stored lower-case; unique across the deployment.
+          description: Stored lower-case; unique across the deployment (`409 email_taken` for an email that already has an account).
         name:
           type: string
           minLength: 1
@@ -6863,6 +7086,24 @@ components:
           items:
             $ref: '#/components/schemas/Id'
           description: Groups of this organization; may be empty, and a user with no group can read nothing.
+
+    MembershipCreate:
+      type: object
+      required: [email, groupIds]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: The email of an existing member account, any case (`404 account_not_found` otherwise).
+        groupIds:
+          type: array
+          uniqueItems: true
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/Id'
+          description: Groups of this organization; may be empty.
 
     OrganizationUserUpdate:
       type: object
@@ -6916,7 +7157,8 @@ components:
           description: The account that acted; null for a failed sign-in with an unknown email and for the system (an expired support session).
         action:
           type: string
-          enum: [sign_in, sign_in_failed, sign_in_locked, sign_out, session_expired, password_changed, password_change_failed, password_reset, account_created, account_updated, account_disabled, account_enabled, organization_created, organization_renamed, organization_company_mode, organization_disabled, organization_enabled, support_session_started, support_session_ended, organization_entered, organization_exited, super_admin_created, super_admin_password_set]
+          enum: [sign_in, sign_in_failed, sign_in_locked, organization_chosen, sign_out, session_expired, password_changed, password_change_failed, password_reset, account_created, account_updated, account_disabled, account_enabled, membership_added, membership_removed, organization_created, organization_renamed, organization_company_mode, organization_disabled, organization_enabled, support_session_started, support_session_ended, organization_entered, organization_exited, super_admin_created, super_admin_password_set]
+          description: '`organization_chosen` - a member entered one of its organizations after sign-in or switched to it; `membership_added` and `membership_removed` - an account was added to or removed from an organization; `account_disabled`, `account_enabled` and `password_reset` name the membership''s organization. Each is mirrored into the organization''s own audit log.'
         ok:
           type: boolean
         organization:
@@ -7317,7 +7559,7 @@ components:
     LlmUsage:
       type: object
       additionalProperties: false
-      description: Language model calls Ontaix itself made for the tenant in the month (teach extraction, concept expansion, whole-document extraction and OCR of scanned documents), from the `llm_call` cost records. Separate from the agent figures - `measuredEur` and `byPlatform` stay agent reads through the gateway. The Studio's Cost management page shows it: model calls, tokens against the cap, OCR pages against the cap and the cost by purpose.
+      description: 'Language model calls Ontaix itself made for the tenant in the month (teach extraction, concept expansion, whole-document extraction and OCR of scanned documents), from the `llm_call` cost records. Separate from the agent figures - `measuredEur` and `byPlatform` stay agent reads through the gateway. The Studio''s Cost management page shows it: model calls, tokens against the cap, OCR pages against the cap and the cost by purpose.'
       required: [calls, inputTokens, outputTokens, tokensUsed, tokenCap, costEur, byPurpose]
       properties:
         calls:

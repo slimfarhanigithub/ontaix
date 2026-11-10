@@ -40,7 +40,7 @@ CREATE TYPE binding_freshness AS ENUM ('2 min', '4 min', '11 min', '1 h', 'pause
 CREATE TYPE company_mode AS ENUM ('single', 'multiple');
 CREATE TYPE platform_role_name AS ENUM ('super_admin');
 CREATE TYPE password_set_reason AS ENUM ('bootstrap', 'initial', 'reset', 'change');
-CREATE TYPE session_end_reason AS ENUM ('sign_out', 'password_changed', 'password_reset', 'account_disabled', 'organization_disabled', 'session_limit', 'support_changed', 'access_changed');
+CREATE TYPE session_end_reason AS ENUM ('sign_out', 'password_changed', 'password_reset', 'account_disabled', 'organization_disabled', 'session_limit', 'support_changed', 'access_changed', 'membership_removed');
 CREATE TYPE throttle_key_kind AS ENUM ('email', 'ip');
 
 -- ---------------------------------------------------------------------------
@@ -126,6 +126,7 @@ CREATE TABLE company (
   position    integer NOT NULL,
   is_home     boolean NOT NULL DEFAULT false,
   learning    boolean NOT NULL DEFAULT true,
+  language    text NOT NULL DEFAULT 'en' CHECK (language IN ('en', 'fr', 'de')),
   dying_at    timestamptz,
   created_at  timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id, id),
@@ -134,6 +135,7 @@ CREATE TABLE company (
 );
 CREATE UNIQUE INDEX company_one_home_per_tenant ON company (tenant_id) WHERE is_home;
 COMMENT ON TABLE company IS 'A business-as-a-product in the tenant; the home company (position 0) cannot be removed. learning turns usage learning on or off for the company (ADR 0014; Administrator only, audited).';
+COMMENT ON COLUMN company.language IS 'The model language of the company (en, fr or de): the speech recognition locale and phrase list, the language the teach, document extraction and expansion models write new labels, specs and relation verbs in, the instant grammar drafts, and the language tags and fixed text of an export. Chosen at creation and changed by an Administrator (PATCH /companies/{id}/language), immediately and audited; a company setting, not a proposal. Changing it never translates existing concepts.';
 
 CREATE TABLE domain_template (
   key         text PRIMARY KEY,
@@ -366,7 +368,7 @@ CREATE TABLE app_user (
   FOREIGN KEY (tenant_id, company_id) REFERENCES company(tenant_id, id) ON DELETE SET NULL (company_id)
 );
 CREATE UNIQUE INDEX app_user_email_unique_per_tenant ON app_user (tenant_id, lower(email));
-COMMENT ON TABLE app_user IS 'The native user directory of an organization. A user who signs in with a password has issuer ''local'' and the id of its account as subject, and is created with its account by a super admin; a user signing in through OIDC is provisioned on first sign-in into the tenant that owns the token issuer; the development seed''s users have issuer ''dev''. A super admin who enters the organization acts through a directory user with issuer ''platform'' and subject ''<account id>:<tenant id>'', created at the first entry, so that proposals, approvals and every other row he writes name a user of the organization; it belongs to no group and its roles come from the platform access alone. How a user authenticates never decides what the user may do.';
+COMMENT ON TABLE app_user IS 'The native user directory of an organization. A user who signs in with a password has issuer ''local'' and subject ''<account id>:<tenant id>'', and is created by a super admin with the account''s membership of the organization (account_membership); one account is one such user in each of its organizations, and a removed member''s user stays so that its proposals, approvals and audit rows keep naming it. A user signing in through OIDC is provisioned on first sign-in into the tenant that owns the token issuer; the development seed''s users have issuer ''dev''. A super admin who enters the organization acts through a directory user with issuer ''platform'' and subject ''<account id>:<tenant id>'', created at the first entry, so that proposals, approvals and every other row he writes name a user of the organization; it belongs to no group and its roles come from the platform access alone. How a user authenticates never decides what the user may do.';
 
 CREATE TABLE user_group (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1030,21 +1032,33 @@ CREATE TABLE account (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email            text NOT NULL CHECK (char_length(email) BETWEEN 3 AND 254 AND email = lower(email) AND email ~ '^[^@\s]+@[^@\s]+$'),
   name             text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 120),
-  tenant_id        uuid,
-  user_id          uuid,
-  is_platform      boolean GENERATED ALWAYS AS (tenant_id IS NULL) STORED,
+  is_platform      boolean NOT NULL DEFAULT false,
+  language         text CHECK (language IN ('en', 'fr', 'de')),
   disabled_at      timestamptz,
   created_at       timestamptz NOT NULL DEFAULT now(),
   created_by       uuid,
   last_sign_in_at  timestamptz,
   UNIQUE (email),
-  UNIQUE (id, is_platform),
+  UNIQUE (id, is_platform)
+);
+COMMENT ON TABLE account IS 'A sign-in identity: a person with one email and one password across the deployment. A member account (is_platform false) belongs to organizations through account_membership rows, one per organization, each linked to that organization''s app_user row; a platform account (is_platform true) belongs to no organization and holds platform roles. The email is stored lower-case and is unique across the deployment, so the sign-in page needs no organization field. disabled_at disables a platform account; a member is disabled per organization on its membership. Authentication only: what a member may do comes from the organization''s groups, what a platform account may do from platform_role_assignment.';
+COMMENT ON COLUMN account.language IS 'The portal language the person chose (en, fr or de): every label of the Studio and the admin portal, dates and numbers, never ontology content. Null follows the browser''s language when it is one of the three, else English. Set by the person alone (PUT /auth/session/language).';
+
+CREATE TABLE account_membership (
+  account_id   uuid NOT NULL,
+  tenant_id    uuid NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  user_id      uuid NOT NULL,
+  is_platform  boolean NOT NULL DEFAULT false CHECK (NOT is_platform),
+  disabled_at  timestamptz,
+  removed_at   timestamptz,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (account_id, tenant_id),
   UNIQUE (user_id),
-  CONSTRAINT account_member_or_platform CHECK ((tenant_id IS NULL) = (user_id IS NULL)),
-  FOREIGN KEY (tenant_id) REFERENCES tenant(id) ON DELETE CASCADE,
+  FOREIGN KEY (account_id, is_platform) REFERENCES account(id, is_platform) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, user_id) REFERENCES app_user(tenant_id, id) ON DELETE CASCADE
 );
-COMMENT ON TABLE account IS 'A sign-in identity. A member account belongs to exactly one organization and is linked one to one to its app_user row (issuer ''local'', subject the account id); a platform account (tenant_id null) belongs to no organization and holds platform roles. The email is stored lower-case and is unique across the deployment, so the sign-in page needs no organization field. Authentication only: what a member may do comes from the organization''s groups, what a platform account may do from platform_role_assignment.';
+CREATE INDEX account_membership_by_tenant ON account_membership (tenant_id) WHERE removed_at IS NULL;
+COMMENT ON TABLE account_membership IS 'An account''s membership of one organization, through that organization''s directory user (app_user, issuer ''local'', subject ''<account id>:<tenant id>''). One row per account and organization; only member accounts hold one (the composite foreign key refuses a platform account). disabled_at disables the member in this organization alone. removed_at records a removal from the organization: a removed member is not listed, signs into no session of this organization and loses its groups, while the directory user and the row stay so that history keeps naming one user; adding the account again clears removed_at and keeps the same user. A membership is active while neither is set and the organization is enabled. Read only by the platform role, like every sign-in table; it carries tenant_id and so row-level security like every other such table.';
 
 CREATE TABLE password_credential (
   account_id  uuid PRIMARY KEY REFERENCES account(id) ON DELETE CASCADE,
@@ -1073,6 +1087,7 @@ CREATE TABLE auth_session (
   token_hash           bytea NOT NULL UNIQUE CHECK (octet_length(token_hash) = 32),
   csrf_token           text NOT NULL CHECK (char_length(csrf_token) = 43),
   account_id           uuid NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+  tenant_id            uuid REFERENCES tenant(id) ON DELETE CASCADE,
   support_tenant_id    uuid REFERENCES tenant(id) ON DELETE CASCADE,
   support_until        timestamptz,
   acting_tenant_id     uuid REFERENCES tenant(id) ON DELETE CASCADE,
@@ -1094,7 +1109,7 @@ CREATE TABLE auth_session (
   CONSTRAINT auth_session_expiry_order CHECK (idle_expires_at <= absolute_expires_at AND created_at < absolute_expires_at)
 );
 CREATE INDEX auth_session_by_account ON auth_session (account_id) WHERE ended_at IS NULL;
-COMMENT ON TABLE auth_session IS 'A server-side browser session. The cookie carries a 256-bit random token; only its SHA-256 is stored, so a database read never yields a usable cookie. A session is valid while ended_at is null, now() is before idle_expires_at (30 minutes, slid forward on use) and absolute_expires_at (12 hours after sign-in), the account is enabled and, for a member, the organization is enabled. Sign-in, a password change, the start or end of a support session and entering or leaving an organization each issue a new token and end the old row, so a token never survives a change of privilege. support_tenant_id is set only on a super admin''s session during an audited read-only support session in that organization, until support_until. acting_tenant_id is set only on a super admin''s session after he entered that organization: until acting_until (60 minutes, never past the absolute expiry), until he leaves it or until the session ends, every organization request of the session acts inside it with every tenant role, on the application role and under its row-level security, and is audited as platform access. acting_exited_at records that the end of that access has been written to both audit logs, whichever way it ended, so it is audited exactly once; the sign-in upkeep audits the ends no request saw. A session holds a support organization or an acting organization, never both.';
+COMMENT ON TABLE auth_session IS 'A server-side browser session. The cookie carries a 256-bit random token; only its SHA-256 is stored, so a database read never yields a usable cookie. A session is valid while ended_at is null, now() is before idle_expires_at (30 minutes, slid forward on use) and absolute_expires_at (12 hours after sign-in), the account is enabled and, for a member session inside an organization, its membership of that organization is active and the organization enabled. tenant_id is the organization a member session is inside: set at sign-in when the account has exactly one active membership, otherwise null until the member chooses one (PUT /auth/session/organization, which issues a new token); always null on a platform account''s session. Sign-in, a password change, the choice of an organization, the start or end of a support session and entering or leaving an organization each issue a new token and end the old row, so a token never survives a change of privilege. support_tenant_id is set only on a super admin''s session during an audited read-only support session in that organization, until support_until. acting_tenant_id is set only on a super admin''s session after he entered that organization: until acting_until (60 minutes, never past the absolute expiry), until he leaves it or until the session ends, every organization request of the session acts inside it with every tenant role, on the application role and under its row-level security, and is audited as platform access. acting_exited_at records that the end of that access has been written to both audit logs, whichever way it ended, so it is audited exactly once; the sign-in upkeep audits the ends no request saw. A session holds a support organization or an acting organization, never both.';
 COMMENT ON COLUMN auth_session.csrf_token IS 'The synchronizer token the Studio echoes in X-CSRF-Token on every unsafe request; returned only by sign-in, GET /auth/session and the calls that issue a new session token. It is useless without the session cookie, so it is stored as issued.';
 
 CREATE TABLE sign_in_throttle (
@@ -1112,9 +1127,10 @@ CREATE TABLE platform_audit_entry (
   at                 timestamptz NOT NULL DEFAULT now(),
   actor_account_id   uuid,
   action             text NOT NULL CHECK (action IN (
-                       'sign_in', 'sign_in_failed', 'sign_in_locked', 'sign_out', 'session_expired',
+                       'sign_in', 'sign_in_failed', 'sign_in_locked', 'organization_chosen', 'sign_out', 'session_expired',
                        'password_changed', 'password_change_failed', 'password_reset',
                        'account_created', 'account_updated', 'account_disabled', 'account_enabled',
+                       'membership_added', 'membership_removed',
                        'organization_created', 'organization_renamed', 'organization_company_mode',
                        'organization_disabled', 'organization_enabled',
                        'support_session_started', 'support_session_ended',
@@ -1161,7 +1177,6 @@ BEGIN
      SET last_seen_at = now(),
          idle_expires_at = least(now() + interval '30 minutes', s.absolute_expires_at)
     FROM ontaix.account a
-    LEFT JOIN ontaix.tenant t ON t.id = a.tenant_id
     LEFT JOIN ontaix.password_credential pc ON pc.account_id = a.id
    WHERE s.token_hash = p_token_hash
      AND s.account_id = a.id
@@ -1169,8 +1184,14 @@ BEGIN
      AND now() < s.idle_expires_at
      AND now() < s.absolute_expires_at
      AND a.disabled_at IS NULL
-     AND (a.tenant_id IS NULL OR t.disabled_at IS NULL)
-  RETURNING s.id, a.id, a.tenant_id, a.user_id, a.is_platform,
+     AND (s.tenant_id IS NULL OR EXISTS (
+           SELECT 1 FROM ontaix.account_membership m
+           JOIN ontaix.tenant t ON t.id = m.tenant_id
+          WHERE m.account_id = a.id AND m.tenant_id = s.tenant_id
+            AND m.disabled_at IS NULL AND m.removed_at IS NULL AND t.disabled_at IS NULL))
+  RETURNING s.id, a.id, s.tenant_id,
+            (SELECT m.user_id FROM ontaix.account_membership m WHERE m.account_id = a.id AND m.tenant_id = s.tenant_id),
+            a.is_platform,
             CASE WHEN s.support_until > now() THEN s.support_tenant_id END,
             CASE WHEN a.is_platform AND s.acting_until > now()
                       AND (SELECT x.disabled_at FROM ontaix.tenant x WHERE x.id = s.acting_tenant_id) IS NULL
@@ -1179,7 +1200,7 @@ BEGIN
             coalesce(pc.must_change, false), s.csrf_token;
 END;
 $$;
-COMMENT ON FUNCTION resolve_session(bytea) IS 'The only way the application role reads a session: given the SHA-256 of a presented cookie token, returns the live session''s account, organization, user, platform flag, active support organization, the organization a super admin entered (null once its 60 minutes passed, when it is disabled, or when the account no longer holds super_admin), forced-change flag and CSRF token, and slides the 30-minute idle expiry (never past the absolute expiry). Returns no row for an unknown, ended, expired or disabled session, account or organization. The caller then sets ontaix.tenant_id for the transaction; a session with must_change_password true may only read GET /auth/session, change its password and sign out.';
+COMMENT ON FUNCTION resolve_session(bytea) IS 'The only way the application role reads a session: given the SHA-256 of a presented cookie token, returns the live session''s account, the organization the session is inside and the account''s directory user there (both null for a member who has not chosen an organization yet, and for a platform account), platform flag, active support organization, the organization a super admin entered (null once its 60 minutes passed, when it is disabled, or when the account no longer holds super_admin), forced-change flag and CSRF token, and slides the 30-minute idle expiry (never past the absolute expiry). Returns no row for an unknown, ended or expired session, a disabled account, or a member session whose membership of its organization is disabled or removed or whose organization is disabled, so a removal or a disable takes effect at the next request. The caller then sets ontaix.tenant_id for the transaction; a session with must_change_password true may only read GET /auth/session, change its password and sign out.';
 
 CREATE TABLE outbox (
   id            bigserial PRIMARY KEY,
@@ -1357,7 +1378,6 @@ BEGIN
      WHERE c.table_schema = 'ontaix'
        AND c.column_name = 'tenant_id'
        AND tb.table_type = 'BASE TABLE'
-       AND c.table_name NOT IN ('account')
   LOOP
     EXECUTE format('ALTER TABLE ontaix.%I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format(
@@ -1376,7 +1396,7 @@ GRANT USAGE ON SCHEMA ontaix TO ontaix_app, ontaix_platform;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ontaix TO ontaix_app, ontaix_platform;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA ontaix TO ontaix_app, ontaix_platform;
 REVOKE UPDATE, DELETE ON audit_entry, platform_audit_entry FROM ontaix_app, ontaix_platform;
-REVOKE ALL ON account, password_credential, platform_role_assignment, auth_session, sign_in_throttle, platform_audit_entry FROM ontaix_app;
+REVOKE ALL ON account, account_membership, password_credential, platform_role_assignment, auth_session, sign_in_throttle, platform_audit_entry FROM ontaix_app;
 REVOKE INSERT, UPDATE, DELETE ON tenant, organization_settings, domain_template, connector_type FROM ontaix_app;
 REVOKE INSERT, UPDATE, DELETE ON platform_role_assignment, domain_template, connector_type FROM ontaix_platform;
 REVOKE ALL ON FUNCTION resolve_session(bytea) FROM PUBLIC;
@@ -1390,7 +1410,7 @@ BEGIN
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'tenant_id' AND NOT a.attisdropped
-   WHERE n.nspname = 'ontaix' AND c.relkind = 'r' AND c.relname <> 'account' AND NOT c.relrowsecurity;
+   WHERE n.nspname = 'ontaix' AND c.relkind = 'r' AND NOT c.relrowsecurity;
   IF missing IS NOT NULL THEN
     RAISE EXCEPTION 'tables with tenant_id but no row-level security: %', missing;
   END IF;

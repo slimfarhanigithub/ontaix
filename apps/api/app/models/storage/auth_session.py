@@ -26,6 +26,9 @@ class AuthSession(Base):
     account_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("account.id", ondelete="CASCADE")
     )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("tenant.id", ondelete="CASCADE")
+    )
     support_tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("tenant.id", ondelete="CASCADE")
     )

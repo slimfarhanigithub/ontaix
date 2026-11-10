@@ -35,6 +35,8 @@ import { GREEN, RED, DEFAULT_BRASS, DEFAULT_COLORS, DOMAIN_TEMPLATES } from '../
 import { divide, type BirthDraws } from '../canvas/division';
 import { focusOnCell, focusOnDomain } from '../canvas/focus';
 import { DEFAULT_ACCENT } from '../design/tokens';
+import { formatDate, formatTime, t } from '../i18n/i18n';
+import { languageStore } from '../i18n/language';
 import { hideLineageState, showLineageState } from '../canvas/lineage';
 import type { LastImport } from '../teach/importReading';
 import type { Renderer } from '../canvas/renderer';
@@ -58,9 +60,6 @@ import type { CustomDialog, DialogEntry, DialogSpec } from '../shell/Dialog';
 import {
   brainDomains,
   finishBrain,
-  pauseBrain,
-  replayBrain,
-  resumeBrain,
   SPACING_LARGE,
   SPACING_SMALL,
   startBrain,
@@ -208,6 +207,8 @@ class StudioStore {
       domainsChanged: () => this.bump(),
       companiesChanged: () => this.renderCompanies(),
     });
+    // The teach placeholder is kept as text, so it is written again in the new language.
+    languageStore.subscribe(() => this.renderCompanies());
     this.ui = {
       status: 'loading',
       proposals: [],
@@ -449,7 +450,7 @@ class StudioStore {
           a.conflict = b.conflict = true;
           const l = addLink(this.s, a, b, 'clash', p.relation.rest, p.relation.label);
           l.sid = p.relation.id;
-          this.caption('The model noticed', p.caption);
+          this.caption(t('teach.caption.modelNoticed'), p.caption);
         }
         break;
       }
@@ -718,7 +719,7 @@ class StudioStore {
   applyApproved(payload: ProposalEventPayload, bulk: boolean): void {
     const s = this.s;
     const p = payload.proposal;
-    if (!bulk) this.toast2('Approved', p.title);
+    if (!bulk) this.toast2(t('common.lead.approved'), p.title);
     const node = bySid(s, p.conceptId);
     if (node && p.type !== 'attr' && p.type !== 'change') {
       node.pending = false;
@@ -737,7 +738,7 @@ class StudioStore {
       if (q.state === 'pending') this.applyCreated(q);
       else if (q.state === 'approved' && q.artefacts) this.reconcile(q.artefacts, false);
     }
-    if (p.caption) this.caption('Approved', p.caption);
+    if (p.caption) this.caption(t('common.lead.approved'), p.caption);
     this.pruneSelection();
     this.bump();
   }
@@ -769,7 +770,7 @@ class StudioStore {
     };
     for (const q of payload.cascaded) apply(q);
     apply(payload.proposal);
-    if (payload.caption) this.caption('Rejected', payload.caption);
+    if (payload.caption) this.caption(t('common.lead.rejected'), payload.caption);
     this.pruneSelection();
     this.bump();
   }
@@ -915,7 +916,7 @@ class StudioStore {
 
   caption(kicker: string, text: string): void {
     this.ui.caption = { kicker, text, seq: this.ui.caption.seq + 1 };
-    this.remember(kicker, text, kicker === 'Not understood');
+    this.remember(kicker, text, kicker === t('teach.caption.notUnderstood'));
     this.bump();
   }
 
@@ -940,7 +941,7 @@ class StudioStore {
   /** Company selector and teach placeholder follow the active company, whatever the number of companies. */
   renderCompanies(): void {
     const s = this.s;
-    this.ui.sayPlaceholder = s.activeCompany ? `Teach ${s.activeCompany.name}…` : '';
+    this.ui.sayPlaceholder = s.activeCompany ? t('teach.bar.placeholder', { company: s.activeCompany.name }) : '';
     this.bump();
   }
 
@@ -970,9 +971,9 @@ class StudioStore {
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.problem.code === 'cross_company_disabled')
-          this.toast2('Not allowed', 'companies may not interact · enable it in the admin portal');
+          this.toast2(t('common.lead.notAllowed'), t('teach.toast.noInteraction'));
         else if (err.problem.code === 'duplicate_relation' || err.problem.code === 'duplicate_label')
-          this.caption('Already there', err.problem.detail || err.problem.title);
+          this.caption(t('teach.caption.alreadyThere'), err.problem.detail || err.problem.title);
         else this.refused(err);
         return null;
       }
@@ -1001,7 +1002,7 @@ class StudioStore {
       this.applyChanged(next);
       return true;
     } catch (err) {
-      if (err instanceof ApiError && err.problem.code === 'duplicate_label') this.caption('Already there', err.problem.detail || err.problem.title);
+      if (err instanceof ApiError && err.problem.code === 'duplicate_label') this.caption(t('teach.caption.alreadyThere'), err.problem.detail || err.problem.title);
       else if (err instanceof ApiError && err.status === 409 && err.problem.code === 'proposal_changed') {
         this.refused(err);
         await this.refreshProposals();
@@ -1032,7 +1033,7 @@ class StudioStore {
   async approveAll(): Promise<void> {
     try {
       const res = await api.approveAll();
-      this.caption('Approved', res.caption || 'All pending proposals are now part of the model.');
+      this.caption(t('common.lead.approved'), res.caption || t('teach.caption.approvedAll'));
     } catch (err) {
       this.refused(err);
     }
@@ -1056,7 +1057,7 @@ class StudioStore {
   async rejectAll(): Promise<void> {
     try {
       const res = await api.rejectAll();
-      this.caption('Rejected', res.caption || 'All pending proposals were discarded.');
+      this.caption(t('common.lead.rejected'), res.caption || t('teach.caption.rejectedAll'));
     } catch (err) {
       this.refused(err);
     }
@@ -1067,8 +1068,9 @@ class StudioStore {
   refused(err: unknown): void {
     if (!(err instanceof ApiError)) throw err;
     const text = err.problem.detail || err.problem.title;
-    this.remember('Refused', text, true);
-    this.toast2('Refused', text);
+    const lead = t('common.lead.refused');
+    this.remember(lead, text, true);
+    this.toast2(lead, text);
   }
 
   // ------------------------------------------------------------ toggles
@@ -1122,12 +1124,12 @@ class StudioStore {
   arrangeTitle(): string {
     const s = this.s;
     return s.lineageNode
-      ? `Arrange the lineage of ${s.lineageNode.label} (A)`
+      ? t('teach.arrange.lineage', { label: s.lineageNode.label })
       : s.cellFocus
-        ? `Arrange ${s.cellFocus.label} and its relations (A)`
+        ? t('teach.arrange.cell', { label: s.cellFocus.label })
         : s.domainFocus
-          ? `Arrange ${s.domainFocus.name} and what it relates to (A)`
-          : 'Lay the model out for reading (A)';
+          ? t('teach.arrange.domain', { name: s.domainFocus.name })
+          : t('teach.arrange.all');
   }
 
   openAdmin(page?: string): void {
@@ -1285,7 +1287,7 @@ class StudioStore {
   openLinkBox(a: Node, b: Node, sx: number, sy: number, link: Link | null = null): void {
     const st = this.ui.settings;
     if (!link && a.company !== b.company && st && !st.crossCompany) {
-      this.toast2('Not allowed', 'companies may not interact · enable it in the admin portal');
+      this.toast2(t('common.lead.notAllowed'), t('teach.toast.noInteraction'));
       return;
     }
     this.closeNewBox();
@@ -1379,23 +1381,6 @@ class StudioStore {
     this.bump();
   }
 
-  /** Pauses the growing brain, or lets it grow on. */
-  toggleBrainPause(): void {
-    const d = this.s.brain;
-    if (!d || d.ending !== null) return;
-    if (d.pausedAt === null) pauseBrain(d, now());
-    else resumeBrain(d, now());
-    this.bump();
-  }
-
-  /** Grows the brain again from its seeds. */
-  replayBrain(): void {
-    const d = this.s.brain;
-    if (!d || d.ending !== null) return;
-    replayBrain(this.s, d, now());
-    this.bump();
-  }
-
   /** Stops the demo: it fades out and the real model goes back where it stood. */
   stopBrain(): void {
     if (!this.s.brain) return;
@@ -1418,13 +1403,9 @@ class StudioStore {
     this.clearSelection();
   }
 
-  /** Label of a lineage stamp, `dd MMM HH:mm` in en-GB. */
+  /** Label of a lineage stamp, `dd MMM HH:mm` in the portal language. */
   when(x: Node): string {
-    return x.bornAt
-      ? x.bornAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) +
-          ' ' +
-          x.bornAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-      : '';
+    return x.bornAt ? formatDate(x.bornAt, { day: '2-digit', month: 'short' }) + ' ' + formatTime(x.bornAt, { hour: '2-digit', minute: '2-digit' }) : '';
   }
 
   /** Opens a dialog on top of any open one and returns its id. */

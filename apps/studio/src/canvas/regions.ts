@@ -5,6 +5,7 @@
  */
 import { hex, mix } from './colour';
 import { FONT_SANS, themedColour, token } from '../design/tokens';
+import { t } from '../i18n/i18n';
 import { OFFS } from './constants';
 import { hull, type Pt } from './hulls';
 import { shown, type SceneState } from './state';
@@ -105,7 +106,7 @@ export function drawCompanies(s: SceneState, v: View, _t: number): void {
     ctx.fillStyle = `rgba(${TH.INK2},0.85)`;
     ctx.font = `300 ${Math.round(11 * k)}px ${FONT_SANS}`;
     ctx.fillText(
-      `${c.sub ? c.sub + ' · ' : ''}business as a product · ${doms} domain product${doms === 1 ? '' : 's'} · ${concepts} concept${concepts === 1 ? '' : 's'}${src ? ` · ${src} source${src === 1 ? '' : 's'}` : ''}${s.COVERAGE ? ` · ${concepts ? Math.round((bound / concepts) * 100) : 0} % bound` : ''}`,
+      `${c.sub ? c.sub + ' · ' : ''}${t('canvas.company.sub', { domains: doms, concepts })}${src ? t('canvas.company.sources', { n: src }) : ''}${s.COVERAGE ? t('canvas.company.bound', { pct: concepts ? Math.round((bound / concepts) * 100) : 0 }) : ''}`,
       cx,
       minY - pad - 8,
     );
@@ -141,7 +142,7 @@ export function drawDomains(s: SceneState, v: View, _t: number): void {
     ctx.fillStyle = `rgba(${TH.INK2},0.85)`;
     ctx.font = `300 10.5px ${FONT_SANS}`;
     ctx.fillText(
-      `domain product · ${d.owner} · v${d.version.toFixed(1)} · ${members.length - pending} concept${members.length - pending === 1 ? '' : 's'}${pending ? ` · ${pending} pending` : ''}${s.COVERAGE ? ` · ${bnd} of ${members.length} bound` : ''}`,
+      `${t('canvas.domain.sub', { owner: d.owner, version: d.version.toFixed(1), n: members.length - pending })}${pending ? t('canvas.domain.pending', { n: pending }) : ''}${s.COVERAGE ? t('canvas.domain.bound', { bound: bnd, total: members.length }) : ''}`,
       cx,
       minY - pad - 3,
     );

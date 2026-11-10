@@ -9,43 +9,45 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../../api/client';
 import type { CostSummary, LlmPurpose } from '../../api/types';
+import { formatNumber, formatTime, t, useT, type MessageKey } from '../../i18n/i18n';
 import { useStore } from '../../shell/dom';
 import { directory, failed } from '../adminData';
-import { en } from '../listModel';
+import { num } from '../listModel';
 
-/** The purposes in the order the table lists them, with their labels. */
-export const PURPOSE_LABEL: Record<LlmPurpose, string> = {
-  teach_extraction: 'Teach extraction',
-  concept_expansion: 'Concept expansion',
-  document_extraction: 'Document extraction',
-  document_ocr: 'Document OCR',
+/** The key of each purpose's label. */
+export const PURPOSE_LABEL: Record<LlmPurpose, MessageKey> = {
+  teach_extraction: 'admin.cost.purpose.teach',
+  concept_expansion: 'admin.cost.purpose.expansion',
+  document_extraction: 'admin.cost.purpose.document',
+  document_ocr: 'admin.cost.purpose.ocr',
 };
 
 /** An amount in euro with two decimals, `€ 1.87`. */
-export const eur = (n: number): string => `€ ${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export const eur = (n: number): string => t('admin.cost.eur', { amount: formatNumber(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) });
 
 export function AuditLog() {
   useStore();
+  const t = useT();
   const rows = directory.audit;
   return (
     <>
-      <h2>Audit log</h2>
-      <p className="lead">Every approval, rejection, setting change and connection, append-only.</p>
+      <h2>{t('admin.nav.audit')}</h2>
+      <p className="lead">{t('admin.audit.lead')}</p>
       <div className="log">
         {rows.length ? (
           rows.map((e) => (
             <div key={e.id}>
-              <span>{new Date(e.at).toLocaleTimeString('en-GB')}</span>
+              <span>{formatTime(e.at)}</span>
               <span>{e.kind}</span>
-              <span>{e.actor.platformAccountId ? `${e.what} · platform super admin` : e.what}</span>
-              <span className={e.ok ? 'ok' : 'no'}>{e.ok ? 'approved' : 'rejected'}</span>
+              <span>{e.actor.platformAccountId ? t('admin.audit.platformSuperAdmin', { what: e.what }) : e.what}</span>
+              <span className={e.ok ? 'ok' : 'no'}>{e.ok ? t('admin.state.approved') : t('admin.state.rejected')}</span>
             </div>
           ))
         ) : (
           <div>
             <span></span>
             <span></span>
-            <span style={{ color: 'var(--ink-3)' }}>Nothing yet.</span>
+            <span style={{ color: 'var(--ink-3)' }}>{t('admin.audit.nothing')}</span>
             <span></span>
           </div>
         )}
@@ -65,7 +67,7 @@ function useAdminResource<T>(load: () => Promise<T>): T | null {
       (v) => {
         if (live) setValue(v);
       },
-      (err: unknown) => failed(err, 'Unavailable'),
+      (err: unknown) => failed(err, t('common.lead.unavailable')),
     );
     return () => {
       live = false;
@@ -77,45 +79,44 @@ function useAdminResource<T>(load: () => Promise<T>): T | null {
 const loadCost = () => api.getCost();
 
 /** The caption under a used count: the monthly cap it counts against, or that a cap of 0 turned the step off. */
-export const capText = (cap: number, unit: string, off: string): string => (cap ? `${unit} of ${en(cap)} this month` : `${unit} · ${off}`);
+export const capText = (cap: number, unit: string, off: string): string =>
+  cap ? t('admin.cost.capOf', { unit, cap: num(cap) }) : t('admin.cost.capOff', { unit, off });
 
 export function CostManagement() {
+  const t = useT();
   const cost: CostSummary | null = useAdminResource(loadCost);
   const llm = cost ? cost.llm : null;
   const rows = llm ? llm.byPurpose : [];
   return (
     <>
-      <h2>Cost management</h2>
-      <p className="lead">
-        What the model costs this month: every sentence, suggestion and document read by the language model, and every scanned page the OCR read,
-        measured against the tenant’s monthly caps.
-      </p>
+      <h2>{t('admin.nav.cost')}</h2>
+      <p className="lead">{t('admin.cost.lead')}</p>
       <div className="kpis">
         <div>
-          <b>{en(llm ? llm.calls : 0)}</b>
-          <span>model calls this month</span>
+          <b>{num(llm ? llm.calls : 0)}</b>
+          <span>{t('admin.cost.calls')}</span>
         </div>
         <div>
-          <b>{en(llm ? llm.tokensUsed : 0)}</b>
-          <span>{capText(llm ? llm.tokenCap : 0, 'tokens', 'the model step is off')}</span>
+          <b>{num(llm ? llm.tokensUsed : 0)}</b>
+          <span>{capText(llm ? llm.tokenCap : 0, t('admin.cost.tokens'), t('admin.cost.tokensOff'))}</span>
         </div>
         <div>
-          <b>{en(llm ? llm.ocrPagesUsed : 0)}</b>
-          <span>{capText(llm ? llm.ocrPageCap : 0, 'OCR pages', 'OCR is off')}</span>
+          <b>{num(llm ? llm.ocrPagesUsed : 0)}</b>
+          <span>{capText(llm ? llm.ocrPageCap : 0, t('admin.cost.ocrPages'), t('admin.cost.ocrOff'))}</span>
         </div>
         <div>
           <b>{eur(llm ? llm.costEur : 0)}</b>
-          <span>{`estimated · ${en(llm ? llm.inputTokens : 0)} in · ${en(llm ? llm.outputTokens : 0)} out`}</span>
+          <span>{t('admin.cost.estimated', { input: num(llm ? llm.inputTokens : 0), output: num(llm ? llm.outputTokens : 0) })}</span>
         </div>
       </div>
-      <h3>By purpose</h3>
+      <h3>{t('admin.cost.byPurpose')}</h3>
       <table className="tbl">
         <thead>
           <tr>
-            <th>Purpose</th>
-            <th className="num">Calls</th>
-            <th className="num">Pages</th>
-            <th className="num">Cost · month</th>
+            <th>{t('admin.cost.purpose')}</th>
+            <th className="num">{t('admin.cost.callsCol')}</th>
+            <th className="num">{t('admin.cost.pages')}</th>
+            <th className="num">{t('admin.cost.costMonth')}</th>
           </tr>
         </thead>
         <tbody>
@@ -123,17 +124,17 @@ export function CostManagement() {
             rows.map((p) => (
               <tr key={p.purpose}>
                 <td>
-                  <b>{PURPOSE_LABEL[p.purpose] || p.purpose}</b>
+                  <b>{PURPOSE_LABEL[p.purpose] ? t(PURPOSE_LABEL[p.purpose]) : p.purpose}</b>
                 </td>
-                <td className="num">{en(p.calls)}</td>
-                <td className="num">{p.pages === undefined || p.pages === null ? '—' : en(p.pages)}</td>
+                <td className="num">{num(p.calls)}</td>
+                <td className="num">{p.pages === undefined || p.pages === null ? '—' : num(p.pages)}</td>
                 <td className="num">{eur(p.costEur)}</td>
               </tr>
             ))
           ) : (
             <tr>
               <td colSpan={4} style={{ color: 'var(--ink-3)' }}>
-                No model call this month.
+                {t('admin.cost.none')}
               </td>
             </tr>
           )}

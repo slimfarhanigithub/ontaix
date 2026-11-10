@@ -9,6 +9,7 @@ import { AUDIT_SHOWN, failed } from '../admin/adminData';
 import { List, type Column } from '../admin/List';
 import { api } from '../api/client';
 import type { PlatformAuditEntry } from '../api/types';
+import { formatDate, formatTime, t, useT } from '../i18n/i18n';
 
 interface AuditRow extends Record<string, unknown> {
   id: number;
@@ -18,12 +19,13 @@ interface AuditRow extends Record<string, unknown> {
   action: string;
   organization: string;
   what: string;
-  result: 'ok' | 'refused';
+  ok: boolean;
+  /** `ok` or `refused` in the portal language; the filter pills and the search read it. */
+  result: string;
 }
 
-/** `dd Mon yyyy, hh:mm:ss` in en-GB. */
-export const whenText = (iso: string): string =>
-  `${new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}, ${new Date(iso).toLocaleTimeString('en-GB')}`;
+/** `dd Mon yyyy, hh:mm:ss` in the portal language. */
+export const whenText = (iso: string): string => `${formatDate(iso)}, ${formatTime(iso)}`;
 
 export function auditRow(e: PlatformAuditEntry): AuditRow {
   return {
@@ -34,11 +36,13 @@ export function auditRow(e: PlatformAuditEntry): AuditRow {
     action: e.action,
     organization: e.organization?.name || '—',
     what: e.what,
-    result: e.ok ? 'ok' : 'refused',
+    ok: e.ok,
+    result: e.ok ? t('platform.audit.ok') : t('platform.audit.refused'),
   };
 }
 
 export function PlatformAudit() {
+  const t = useT();
   const [entries, setEntries] = useState<PlatformAuditEntry[] | null>(null);
   useEffect(() => {
     let live = true;
@@ -47,7 +51,7 @@ export function PlatformAudit() {
         if (live) setEntries(page.items);
       },
       (err: unknown) => {
-        failed(err, 'Unavailable');
+        failed(err, t('common.lead.unavailable'));
         if (live) setEntries([]);
       },
     );
@@ -57,17 +61,17 @@ export function PlatformAudit() {
   }, []);
   const rows = (entries || []).map(auditRow);
   const columns: Column[] = [
-    { label: 'When', key: 'at' },
-    { label: 'Who', key: 'who' },
-    { label: 'Action', key: 'action' },
-    { label: 'Organization', key: 'organization' },
-    { label: 'What', key: 'what' },
-    { label: 'Result', key: 'result' },
+    { label: t('platform.audit.column.when'), key: 'at' },
+    { label: t('platform.audit.column.who'), key: 'who' },
+    { label: t('platform.audit.column.action'), key: 'action' },
+    { label: t('platform.audit.column.organization'), key: 'organization' },
+    { label: t('platform.audit.column.what'), key: 'what' },
+    { label: t('platform.audit.column.result'), key: 'result' },
   ];
   return (
     <>
-      <h2>Platform audit log</h2>
-      <p className="lead">Every sign-in, password, account, organization and support-session event, append-only.</p>
+      <h2>{t('platform.audit.heading')}</h2>
+      <p className="lead">{t('platform.audit.lead')}</p>
       <div className="lst-host" id="lstPlatformAudit" style={{ height: 'calc(100% - 80px)' }}>
         {entries ? (
           <List
@@ -84,10 +88,10 @@ export function PlatformAudit() {
                 <td>{r.action}</td>
                 <td>{r.organization}</td>
                 <td style={{ whiteSpace: 'normal' }}>{r.what}</td>
-                <td style={{ color: r.result === 'ok' ? 'var(--good)' : 'var(--conflict)' }}>{r.result}</td>
+                <td style={{ color: r.ok ? 'var(--good)' : 'var(--conflict)' }}>{r.result}</td>
               </>
             )}
-            footer={(l) => `${l.filter((r) => r.result === 'refused').length} refused`}
+            footer={(l) => t('platform.audit.footer', { n: l.filter((r) => !r.ok).length })}
           />
         ) : null}
       </div>

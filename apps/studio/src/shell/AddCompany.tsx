@@ -4,6 +4,7 @@
  */
 import { api } from '../api/client';
 import type { Company } from '../canvas/types';
+import { t } from '../i18n/i18n';
 import { store } from '../store/store';
 import { refStyle } from './dom';
 
@@ -20,37 +21,37 @@ async function addCompany(name: string, sub: string, seed: boolean): Promise<Com
 
 export function openAddCompany(): void {
   store.openDialog({
-    title: 'Add a company',
-    sub: 'a new business-as-a-product in the same view',
+    title: t('shell.addCompany.title'),
+    sub: t('shell.addCompany.sub'),
     body: (
       <div className="form">
-        <label>Company name</label>
-        <input id="acName" placeholder="e.g. Aurora Valves" />
-        <label>One line of context</label>
-        <input id="acSub" placeholder="e.g. valve manufacturer · 2 plants · 640 people" />
-        <label>Start with</label>
+        <label>{t('shell.addCompany.name')}</label>
+        <input id="acName" placeholder={t('shell.addCompany.namePlaceholder')} />
+        <label>{t('shell.addCompany.context')}</label>
+        <input id="acSub" placeholder={t('shell.addCompany.contextPlaceholder')} />
+        <label>{t('shell.addCompany.startWith')}</label>
         <div ref={refStyle('display:grid;gap:8px')}>
           <label className="chk">
             <input type="radio" name="acSeed" value="seed" defaultChecked />
             <span>
-              <b>Its own starter vocabulary</b>
-              <small>13 concepts across the domain products, in its own words, waiting for approval</small>
+              <b>{t('shell.addCompany.seed')}</b>
+              <small>{t('shell.addCompany.seedDesc')}</small>
             </span>
           </label>
           <label className="chk">
             <input type="radio" name="acSeed" value="empty" />
             <span>
-              <b>One cell</b>
-              <small>Teach it, import its documents, or grow it by hand</small>
+              <b>{t('shell.addCompany.oneCell')}</b>
+              <small>{t('shell.addCompany.oneCellDesc')}</small>
             </span>
           </label>
         </div>
       </div>
     ),
     buttons: [
-      { label: 'Cancel' },
+      { label: t('common.cancel') },
       {
-        label: 'Add company',
+        label: t('shell.addCompany.add'),
         cls: 'primary',
         onClick: (bk) => {
           const nameInput = bk.querySelector<HTMLInputElement>('#acName');
@@ -64,10 +65,10 @@ export function openAddCompany(): void {
           return addCompany(name, sub, seed).then((c) => {
             if (!c) return;
             store.caption(
-              `${c.name} joins the view`,
-              `A second company, with its own domain products, its own owners and its own words. ${seed ? 'Its starter vocabulary is waiting for approval.' : 'Teach it, import its documents, or click its cell to grow it.'}`,
+              t('shell.addCompany.joins', { name: c.name }),
+              t('shell.addCompany.joinsText', { next: seed ? t('shell.addCompany.seedNext') : t('shell.addCompany.emptyNext') }),
             );
-            store.toast2('Added', `${name}${seed ? ' · 13 proposals waiting on the canvas' : ''}`);
+            store.toast2(t('shell.addCompany.added'), `${name}${seed ? t('shell.addCompany.addedSeed') : ''}`);
             if (store.ui.adminOpen) store.renderAdmin();
           });
         },

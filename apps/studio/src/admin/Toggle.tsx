@@ -5,6 +5,7 @@
 import type { ButtonHTMLAttributes } from 'react';
 
 import type { Settings } from '../api/types';
+import { useT } from '../i18n/i18n';
 import { useBusyAction } from '../shell/busy';
 import { useStore } from '../shell/dom';
 import { changeSetting } from './actions';
@@ -20,6 +21,7 @@ type TgProps = { on: boolean; locked?: boolean; onClick?: () => unknown } & Omit
  * in the dot's place so the label keeps the toggle's fixed width.
  */
 export function Tg({ on, locked, onClick, ...rest }: TgProps) {
+  const t = useT();
   const { shown, run } = useBusyAction();
   return (
     <button
@@ -27,12 +29,12 @@ export function Tg({ on, locked, onClick, ...rest }: TgProps) {
       {...rest}
       disabled={locked || shown || undefined}
       aria-busy={shown ? 'true' : undefined}
-      title={locked ? 'Always on' : undefined}
+      title={locked ? t('admin.toggle.alwaysOn') : undefined}
       aria-pressed={on ? 'true' : 'false'}
       onClick={onClick ? () => run(onClick) : undefined}
     >
       {shown ? <span className="spin"></span> : <i></i>}
-      {on ? 'Disable' : 'Enable'}
+      {on ? t('common.disable') : t('common.enable')}
     </button>
   );
 }

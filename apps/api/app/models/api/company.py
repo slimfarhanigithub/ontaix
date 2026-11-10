@@ -12,6 +12,7 @@ from app.models.api.base import ApiModel
 from app.models.api.concept import Concept
 from app.models.api.domain_product import DomainProduct
 from app.models.api.proposal import Proposal
+from app.utilities.language import Language
 
 
 class CompanyCounts(ApiModel):
@@ -31,6 +32,8 @@ class Company(ApiModel):
     position: int
     is_home: bool
     root_id: uuid.UUID
+    # The model language: speech, extraction, expansion, drafts and export.
+    language: Language
     domain_products: list[DomainProduct]
     counts: CompanyCounts
     dying_at: datetime | None = None
@@ -40,6 +43,13 @@ class CompanyCreate(ApiModel):
     name: str = Field(min_length=1, max_length=120)
     sub: str = Field(default="", max_length=200)
     start: Literal["starter_vocabulary", "one_cell"]
+    language: Language = "en"
+
+
+class CompanyLanguage(ApiModel):
+    """`PATCH /companies/{company_id}/language`: the company's model language."""
+
+    language: Language
 
 
 class CompanyCreated(ApiModel):

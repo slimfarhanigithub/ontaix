@@ -7,25 +7,27 @@ import { useState } from 'react';
 
 import { api, type ExportFormat, type ExportRequest } from '../api/client';
 import type { Company } from '../canvas/types';
+import { t, useT, type MessageKey } from '../i18n/i18n';
 import { store } from '../store/store';
 import { useStore } from '../shell/dom';
 import { attempt } from './adminData';
 
 type ExportScope = ExportRequest['scope'];
 
-export const EXPORT_FORMATS: [ExportFormat, string][] = [
-  ['owl', 'OWL 2 · RDF/XML (.owl)'],
-  ['owx', 'OWL 2 · OWL/XML (.owx)'],
-  ['turtle', 'OWL 2 · Turtle (.ttl)'],
-  ['jsonld', 'OWL 2 · JSON-LD (.jsonld)'],
-  ['skos', 'SKOS · Turtle (.skos.ttl)'],
-  ['docx', 'Word document (.docx)'],
+/** The formats in the order the select lists them, each with the key of its label. */
+export const EXPORT_FORMATS: [ExportFormat, MessageKey][] = [
+  ['owl', 'admin.export.format.owl'],
+  ['owx', 'admin.export.format.owx'],
+  ['turtle', 'admin.export.format.turtle'],
+  ['jsonld', 'admin.export.format.jsonld'],
+  ['skos', 'admin.export.format.skos'],
+  ['docx', 'admin.export.format.docx'],
 ];
 
-export const EXPORT_SCOPES: [ExportScope, string][] = [
-  ['all', 'Everything I can read'],
-  ['company', 'One company'],
-  ['domain', 'One domain product'],
+export const EXPORT_SCOPES: [ExportScope, MessageKey][] = [
+  ['all', 'admin.export.scope.all'],
+  ['company', 'admin.export.scope.company'],
+  ['domain', 'admin.export.scope.domain'],
 ];
 
 /** Domain products of the company that hold a concept, in ring order. */
@@ -36,6 +38,7 @@ function domainsOf(c: Company | undefined) {
 
 function ExportForm() {
   const st = useStore();
+  const t = useT();
   const companies = st.s.companies.filter((c) => c.sid);
   const active = st.s.activeCompany && st.s.activeCompany.sid ? st.s.activeCompany : companies[0];
   const [scope, setScope] = useState<ExportScope>('all');
@@ -43,25 +46,25 @@ function ExportForm() {
   const company = companies.find((c) => c.sid === companySid);
   return (
     <div className="form">
-      <label>Format</label>
+      <label>{t('admin.export.format')}</label>
       <select id="exFormat" defaultValue="owl">
         {EXPORT_FORMATS.map(([value, label]) => (
           <option key={value} value={value}>
-            {label}
+            {t(label)}
           </option>
         ))}
       </select>
-      <label>Scope</label>
+      <label>{t('admin.export.scope')}</label>
       <select id="exScope" value={scope} onChange={(e) => setScope(e.target.value as ExportScope)}>
         {EXPORT_SCOPES.map(([value, label]) => (
           <option key={value} value={value}>
-            {label}
+            {t(label)}
           </option>
         ))}
       </select>
       {scope !== 'all' ? (
         <>
-          <label>Company</label>
+          <label>{t('admin.col.company')}</label>
           <select id="exCompany" value={companySid} onChange={(e) => setCompanySid(e.target.value)}>
             {companies.map((c) => (
               <option key={c.sid} value={c.sid || ''}>
@@ -73,7 +76,7 @@ function ExportForm() {
       ) : null}
       {scope === 'domain' ? (
         <>
-          <label>Domain product</label>
+          <label>{t('admin.col.domain')}</label>
           <select id="exDomain" key={companySid}>
             {domainsOf(company).map((d) => (
               <option key={d.sid} value={d.sid || ''}>
@@ -115,12 +118,12 @@ function save(blob: Blob, fileName: string): void {
 
 export function openExport(): void {
   store.openDialog({
-    title: 'Export the ontology',
-    sub: 'the approved model as OWL, SKOS or a Word document',
+    title: t('admin.export.title'),
+    sub: t('admin.export.sub'),
     body: <ExportForm />,
     buttons: [
       {
-        label: 'Export',
+        label: t('admin.export.action'),
         cls: 'primary',
         onClick: (bk) => {
           const request = exportRequest(bk);
@@ -128,7 +131,7 @@ export function openExport(): void {
           return attempt(() => api.exportOntology(request)).then((file) => {
             if (!file) return false;
             save(file.blob, file.fileName);
-            store.toast2('Exported', file.fileName);
+            store.toast2(t('admin.export.exportedLead'), file.fileName);
           });
         },
       },

@@ -9,10 +9,10 @@ import { FONT_SANS, themedColour, token } from '../design/tokens';
 import { clamp, ease, hex } from './colour';
 import { C, MOTION } from './constants';
 import { dimOf } from './focus';
-import { labelScale, roundRect } from './labels';
+import { labelScale, MAX_GLYPH_EM, roundRect } from './labels';
 import { shown, type SceneState } from './state';
 import type { Link } from './types';
-import type { View } from './view';
+import { inView, type View } from './view';
 
 /** Point on the quadratic curve of a link at parameter `u`. */
 export const qp = (l: Link, cx: number, cy: number, u: number): [number, number] => [
@@ -38,9 +38,20 @@ export const curve = (l: Link): { cx: number; cy: number } => {
 
 export function drawLinks(s: SceneState, v: View, t: number): void {
   const { ctx, TH } = v;
+  const k = labelScale(s.cam.s);
   for (const l of s.links) {
     if (l.a.split || l.b.split || !shown(l.a) || !shown(l.b)) continue;
     const { cx, cy } = curve(l);
+    if (!linkInView(v, l, cx, cy, k)) {
+      // The chip follows the link while it is out of sight, so a click never finds it where the link was.
+      if (l._chip) {
+        const chord = Math.hypot(l.b.x - l.a.x, l.b.y - l.a.y) || 1;
+        const u0 = clamp((l.a.r * 1.05) / chord, 0, 0.45),
+          u1 = clamp(1 - (l.b.r * 1.05 + 10) / chord, 0.55, 1);
+        [l._chip.x, l._chip.y] = qp(l, cx, cy, (u0 + u1) / 2);
+      }
+      continue;
+    }
     const isa = l.kind === 'isa',
       clash = l.kind === 'clash';
     let g = 1;
@@ -174,4 +185,18 @@ export function drawLinks(s: SceneState, v: View, t: number): void {
       ctx.restore();
     }
   }
+}
+
+/**
+ * True when some pixel of the link can fall on the canvas. The curve stays inside the box of
+ * its ends and its control point; the box grows by the widest the chip can be at label scale
+ * `k`, the arrow head, the clash jitter and the line itself.
+ */
+function linkInView(v: View, l: Link, cx: number, cy: number, k: number): boolean {
+  const x0 = Math.min(l.a.x, l.b.x, cx),
+    x1 = Math.max(l.a.x, l.b.x, cx),
+    y0 = Math.min(l.a.y, l.b.y, cy),
+    y1 = Math.max(l.a.y, l.b.y, cy);
+  const chip = l.label ? (l.label.length * 10.5 * k * MAX_GLYPH_EM + 16 * k) / 2 + 9 * k : 0;
+  return inView(v, x0, y0, x1, y1, Math.max(chip, 12) + 12);
 }

@@ -37,6 +37,7 @@ export function session(over: Partial<Session> = {}): Session {
     kind: 'member',
     account: { id: 'acc-1', email: 'ana@acme.example', name: 'Ana' },
     organization: { id: 'org-1', name: 'Acme', slug: 'acme' },
+    organizations: [{ id: 'org-1', name: 'Acme', slug: 'acme' }],
     userId: 'u-1',
     support: null,
     acting: null,
@@ -49,7 +50,15 @@ export function session(over: Partial<Session> = {}): Session {
 }
 
 export function platformSession(over: Partial<Session> = {}): Session {
-  return session({ kind: 'platform', account: { id: 'acc-sa', email: 'admin@platform.example', name: 'Admin' }, organization: null, userId: null, platformRoles: ['super_admin'], ...over });
+  return session({
+    kind: 'platform',
+    account: { id: 'acc-sa', email: 'admin@platform.example', name: 'Admin' },
+    organization: null,
+    organizations: [],
+    userId: null,
+    platformRoles: ['super_admin'],
+    ...over,
+  });
 }
 
 /** Installs the stub on `window.fetch` for the test; `vi.unstubAllGlobals()` removes it. */
