@@ -3,25 +3,25 @@
  * in three acts. It is drawn only: nothing goes to the API, nothing is saved, and a reload or
  * Stop brings the real model back where it was.
  *
- * Nothing grows unplugged: example data sources connect first, and the brain grows while they
- * are plugged into it (the rig, `brainRig.ts`: cores under the brain, cables, the data run and the
- * agents at the end).
+ * Nothing grows unconnected: example data sources connect first, and the brain grows while they
+ * are connected to it (the rig, `brainRig.ts`: the sources over the brain and their connections,
+ * the brain firing once grown, and the agents at the end).
  *
  * A company that already holds concepts is the brain's starting point: its model stands as it
  * is, close up; then the sources light up under the model one after another and map to its
  * concepts, and new concepts bud from its concepts, each mapped to the source nearest it; then
  * the root moves to the top of the brain stem, every concept joins the lobe of its domain, the
- * new concepts fly to their lobes and the sources, grown into data cores, to their places under
- * the brain while the camera pulls back; the cores plug their cables into the brain, and the
- * brain grows on from them while more cores slide in and plug in. A company with no
+ * new concepts fly to their lobes and the sources to their places over the brain while the camera
+ * pulls back; the brain grows on from them, the sources connecting to it as it grows, while more
+ * sources join and connect. A company with no
  * concept yet stands alone at the top of the brain stem, close up; the sources light up under it,
  * then three domains bud from its root one after another, each with a few named concepts, their
  * relations drawn one by one and a few relations across the domains, while the camera stays close
  * enough to read every name; then the camera pulls back and the story cells fly to the cores of
  * their lobes. Either way the rest of the brain grows fast, faster and faster, every domain filling one lobe of a side view of a
- * brain whose faint outline shows from the start of the pull-back. Once grown, data runs up the
- * cables into one lobe after another, then into the whole brain, which stays glowing; then the
- * agents work on it. Cells of other companies fade out and stay set aside until Stop.
+ * brain whose faint outline shows from the start of the pull-back. Once grown, light comes down
+ * from the sources and fires through one lobe after another, then through the whole brain, which
+ * then twinkles; then the agents work on it. Cells of other companies fade out and stay set aside until Stop.
  */
 import { CELL, C, DOMAIN_TEMPLATES, REDUCED } from '../canvas/constants';
 import { clamp, ease } from '../canvas/colour';
@@ -29,7 +29,7 @@ import type { SceneState } from '../canvas/state';
 import type { Company, Node } from '../canvas/types';
 import { panelW, type View } from '../canvas/view';
 import { brainPoints, growthOrder, LOBE_CENTRES, lobesOf, neighboursOf, seeded, STEM_TOP, type BrainPoint } from './brainShape';
-import { BACK, FOCUS_IN, planRig, PLUG, type BrainRig } from './brainRig';
+import { BACK, FOCUS_IN, planRig, type BrainRig } from './brainRig';
 import { CORE_KEY, namesFor, SOURCE_KEY, SOURCES } from './brainVocabulary';
 
 /** A domain the brain gives a lobe to. */
@@ -98,7 +98,7 @@ export interface BrainDemo {
   links: BrainLink[];
   /** Mappings from the example sources to concepts, in the order they are drawn. */
   binds: BrainBind[];
-  /** The cores and cables under the brain, the data run and the agents; null with no source. */
+  /** The sources over the brain and their connections, the firing and the agents; null with no source. */
   rig: BrainRig | null;
   /** Cell radius and distance between neighbours in the brain, in world units. */
   radius: number;
@@ -116,7 +116,7 @@ export interface BrainDemo {
   duration: number;
   /** Bounds of the whole grown brain, the root included: x0, y0, x1, y1. */
   box: [number, number, number, number];
-  /** What the camera shows once pulled back: the brain, the cores under it and the agents around it. */
+  /** What the camera shows once pulled back: the brain, the sources over it and the agents around it. */
   frame: [number, number, number, number];
   start: number;
   /** When the demo was turned on: the other real cells fade out from then. */
@@ -560,8 +560,8 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
   const { order, parent } = growthOrder(pts, near, seeds, seed + 4);
   const grown = order.filter((i) => !taken.has(i));
   const total = grown.length;
-  // Joined concepts reach their places, and the first cores plug in, before the first brain cell buds.
-  const g0 = act3 + Math.max(joined.size ? JOIN : GROW_DELAY, first.length ? MIGRATE + PLUG : 0);
+  // Joined concepts reach their places before the first brain cell buds from them.
+  const g0 = act3 + (joined.size ? JOIN : GROW_DELAY);
   for (const [k, i] of grown.entries()) {
     const lobe = lobes[i];
     const d = lobe >= 0 ? domains[lobe] : null;
@@ -631,11 +631,11 @@ export function startBrain(s: SceneState, domains: BrainDomain[], t: number, o: 
   const rig = first.length
     ? planRig({
         cells,
+        links,
         joined,
         domains: domains.map((x) => x.key),
         box: [x0, y0, x1, y1],
         spacing: WORLD_SPACING,
-        radius: BRAIN_CELL,
         small: !!o.small,
         arrive: act3 + MIGRATE,
         grown: grownAt,
@@ -813,6 +813,12 @@ export function joinPlaces(pts: BrainPoint[], lobes: number[], taken: Set<number
   };
 }
 
+/** How far the camera has closed in on the first agent after `e` seconds, 0 to 1. */
+export function brainFocus(d: BrainDemo, e: number): number {
+  const rig = d.rig;
+  return rig ? ease(clamp((e - rig.focusAt) / FOCUS_IN, 0, 1)) * (1 - ease(clamp((e - rig.backAt) / BACK, 0, 1))) : 0;
+}
+
 /** Seconds of the demo so far. */
 export const brainElapsed = (d: BrainDemo, t: number): number => t - d.start;
 
@@ -938,7 +944,7 @@ export function brainStep(s: SceneState, v: View, t: number): void {
     ty += ((by0 + by1) / 2 - ty) * w;
     // While the first agent works, the camera closes in on it, then pulls back to every agent.
     const rig = d.rig;
-    const k = rig ? ease(clamp((e - rig.focusAt) / FOCUS_IN, 0, 1)) * (1 - ease(clamp((e - rig.backAt) / BACK, 0, 1))) : 0;
+    const k = brainFocus(d, e);
     if (rig && k > 0) {
       const [fx0, fy0, fx1, fy1] = rig.focus;
       const zf = Math.max(zb, Math.min(FOCUS_MAX_ZOOM, fitZoom(rig.focus, v, d.spacing * 2)));
@@ -993,7 +999,7 @@ function storyView(d: BrainDemo, v: View, e: number): [number, number, number] {
   return [ts, (x0 + x1) / 2, (y0 + y1) / 2];
 }
 
-/** The zoom that shows the whole grown brain, its cores and its agents, in the room the camera leaves free. */
+/** The zoom that shows the whole grown brain, the sources over it and its agents, in the room the camera leaves free. */
 export const brainFitZoom = (d: BrainDemo, v: View): number => fitZoom(d.frame, v, d.spacing * 2);
 
 /** The zoom that shows a world rectangle, `pad` around it, in the room the camera leaves free. */
