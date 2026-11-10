@@ -12,8 +12,8 @@ export const CORE_KEY = 'core';
 /** Domain key of the demo's example data sources, which belong to no domain. */
 export const SOURCE_KEY = 'source';
 
-/** Names of the example data sources the model maps to, in the order they appear. */
-export const SOURCES = ['ERP', 'CRM', 'Data warehouse', 'Manufacturing execution', 'HR system'];
+/** Names of the example data sources that feed the brain, in the order they appear. */
+export const SOURCES = ['ERP', 'CRM', 'Data warehouse', 'HR system', 'Manufacturing execution', 'Data lake', 'E-commerce', 'IoT platform'];
 
 const NOUNS: Record<string, string[]> = {
   [CORE_KEY]: ['Business capability', 'Value stream', 'Site', 'Legal entity', 'Business unit', 'Strategic goal', 'Company policy', 'Business rule', 'Product family', 'Market', 'Brand', 'Programme'],
